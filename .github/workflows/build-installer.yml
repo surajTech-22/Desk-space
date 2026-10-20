@@ -25,6 +25,7 @@ on:
       - "r14/**"
       - "r15/**"
       - "r16/**"
+      - "r16/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -323,6 +324,21 @@ jobs:
           if(!$widget.Contains('OpenInWidget("Excel")')){throw 'Excel module navigation missing'}
           $shelf=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
           if($shelf.Contains('if(effect==DragDropEffects.Copy)Remove(item);')){throw 'Premature file deletion still present'}
+
+      - name: Integrate workbook-backed Excel capture and autofill
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r16/apply-r16.ps1
+          $xaml=[xml](Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml' -Raw)
+          $main=Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs' -Raw
+          $logic=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelEngineV16.cs' -Raw
+          $view=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelModuleV16.cs' -Raw
+          if(!$main.Contains('ExcelModuleSlot.Children.Add') -or !$view.Contains('DeskSpaceExcelStorageV16.Save')){throw 'Excel tab or persistence not wired'}
+          foreach($required in @('CryptProtectData','CryptUnprotectData','PlanOnSheet','ApplyCopy','File.Copy(target,output,false)','ActiveSelection'))
+          {
+            if(!$logic.Contains($required)){throw "Excel capture/autofill safety gate missing: $required"}
+          }
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
