@@ -33,3 +33,11 @@ $replacement=@'
 '@
 [IO.File]::WriteAllText($source,$s.Substring(0,$start)+$replacement,[Text.UTF8Encoding]::new($false))
 Write-Host 'R3 safe recursive search iterator compiled with no iterator yield in catch scope.'
+
+$main='DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs'
+$source=[IO.File]::ReadAllText($main)
+$old='if (WidgetPreferences.Load().ShowAtLaunch)'
+if (!$source.Contains($old)) { throw 'R3 main startup preference anchor missing' }
+$source=$source.Replace($old,'if (WidgetSettingsV3.Load().ShowAtLaunch)')
+[IO.File]::WriteAllText($main,$source,[Text.UTF8Encoding]::new($false))
+Write-Host 'R3 startup now respects its own widget preferences.'
