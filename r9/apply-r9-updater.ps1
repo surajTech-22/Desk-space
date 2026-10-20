@@ -1,8 +1,10 @@
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $src='DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs'
-$text=[IO.File]::ReadAllText($src)
+$text=[IO.File]::ReadAllText($src).Replace("`r`n","`n")
 function ReplaceExact([string]$a,[string]$b) {
+    $a=$a.Replace("`r`n","`n")
+    $b=$b.Replace("`r`n","`n")
     if(!$script:text.Contains($a)){throw "R9 updater anchor missing: $a"}
     $script:text=$script:text.Replace($a,$b)
 }
