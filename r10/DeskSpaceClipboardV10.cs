@@ -50,6 +50,26 @@ public static class DeskSpaceClipboardV10
         }
         catch(System.Runtime.InteropServices.COMException){}
     }
+    // Keep secrets copied from DeskSpace Vault out of visible clipboard history.
+    // Windows clipboard itself is still shared with destination applications.
+    public static void CopySensitive(string secret)
+    {
+        try
+        {
+            lastContent=secret;
+            Clipboard.SetText(secret);
+            var timeout=new System.Windows.Threading.DispatcherTimer{
+                Interval=TimeSpan.FromSeconds(30)
+            };
+            timeout.Tick+=(_,_)=>{
+                timeout.Stop();
+                try{if(Clipboard.ContainsText() && Clipboard.GetText()==secret)Clipboard.Clear();}
+                catch(System.Runtime.InteropServices.COMException){}
+            };
+            timeout.Start();
+        }
+        catch(System.Runtime.InteropServices.COMException){}
+    }
     public static void ClearShelf()=>HeldFiles.Clear();
     public static void ClearHistory(){Entries.Clear();lastContent="";}
 }
