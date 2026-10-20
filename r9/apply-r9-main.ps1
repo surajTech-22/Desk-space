@@ -8,7 +8,7 @@ function EditMain([string]$before,[string]$after) {
     if (!$script:main.Contains($before)) { throw "R9 main XAML anchor missing: $before" }
     $script:main = $script:main.Replace($before,$after)
 }
-EditMain 'Title="DeskSpace — Windows workspace preview"' 'Title="DeskSpace — Workspace"'
+EditMain 'Title="DeskSpace — Windows workspace R2"' 'Title="DeskSpace — Workspace"'
 EditMain 'WINDOWS WORKSPACE  ·  LOCAL PREVIEW · DO NOT STORE PASSWORDS' 'YOUR WORKSPACE  ·  PRIVATE LOCAL DATA  ·  NO PASSWORD VAULT YET'
 EditMain '<TabControl x:Name="MainTabs" Margin="10" Background="White">' @'
 <TabControl x:Name="MainTabs" Margin="10" Background="White" TabStripPlacement="Left">
