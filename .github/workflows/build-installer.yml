@@ -19,6 +19,7 @@ on:
       - "r10/**"
       - "r11/**"
       - "r12/**"
+      - "r13/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -264,6 +265,19 @@ jobs:
           foreach($needed in @('TimeSpan.FromSeconds(18)','Motion(-d*.065,d*.075,5.2)','Motion(-d*.11,d*.14,1.6)')) {
             if(!$scene.Contains($needed)) {throw "R12 weather animation missing: $needed"}
           }
+
+      - name: Apply R13 full-drive search and adaptive weather/widget corrections
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r13/apply-r13.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
+          if(!$widget.Contains('ModuleArea()') -or !$widget.Contains('AddWeatherScene(53,6,185)')) { throw 'R13 adaptive size/weather gate missing' }
+          if(!$search.Contains('DriveInfo.GetDrives()') -or !$search.Contains('Installed app / Start menu')) { throw 'R13 broad search/app gate missing' }
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs')) {throw 'R13 index missing'}
+          $inline=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInlineV11.cs' -Raw
+          if(!$inline.Contains('MaxHeight=122') -or !$inline.Contains('MaxHeight=115')) {throw 'R13 inline-size gate missing'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
