@@ -1,0 +1,1 @@
+Verify R5 updater and main branch release publication receipt changes.
