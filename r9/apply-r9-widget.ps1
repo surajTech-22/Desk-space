@@ -1,8 +1,10 @@
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $path='DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs'
-$text=[IO.File]::ReadAllText($path)
+$text=[IO.File]::ReadAllText($path).Replace("`r`n","`n")
 function Change([string]$before,[string]$after) {
+    $before=$before.Replace("`r`n","`n")
+    $after=$after.Replace("`r`n","`n")
     if(!$script:text.Contains($before)){throw "R9 widget anchor missing: $before"}
     $script:text=$script:text.Replace($before,$after)
 }
