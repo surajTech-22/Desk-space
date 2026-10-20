@@ -14,6 +14,7 @@ internal sealed class DeskSpaceExcelChangeV16
     public int Column {get;set;}
     public string CellAddress {get;set;}="";
     public string Previous {get;set;}="";
+    public string PreviousRaw {get;set;}="";
     public string NewValue {get;set;}="";
     public string Decision {get;set;}="";
     public DeskSpaceExcelCellV16 Source {get;set;}=new();
@@ -26,6 +27,7 @@ internal sealed class DeskSpaceExcelProposalV16
     public int StartRow {get;set;}
     public int StartColumn {get;set;}
     public string SheetName {get;set;}="";
+    public string WorkbookFullName {get;set;}="";
     public string Reason {get;set;}="";
     public bool Verified {get;set;}
     public List<DeskSpaceExcelChangeV16> Changes {get;set;}=new();
@@ -228,6 +230,7 @@ internal static class DeskSpaceExcelBridgeV16
         }
         var preview=new DeskSpaceExcelProposalV16 {
             StartRow=r,StartColumn=c,SheetName=Text(sheet.Name),
+            WorkbookFullName=Text(app.ActiveWorkbook.FullName),
             Verified=verified,Reason=reason
         };
         foreach(var source in entry.Cells)
@@ -251,7 +254,7 @@ internal static class DeskSpaceExcelBridgeV16
             var address=Text(cell.Address);
             preview.Changes.Add(new DeskSpaceExcelChangeV16 {
                 Row=destRow,Column=destCol,CellAddress=address,
-                Previous=oldText,NewValue=source.Display,
+                Previous=oldText,PreviousRaw=Text(old),NewValue=source.Display,
                 Decision=decision,Source=source
             });
         }
@@ -268,7 +271,10 @@ internal static class DeskSpaceExcelBridgeV16
                 throw new InvalidDataException("Invalid saved Excel number.");
             return value;
         }
-        return cell.RawValue;
+        // Force a saved literal that resembles an Excel formula to stay text.
+        // Formulas are written separately only when expressly captured as formulas.
+        return cell.RawValue.StartsWith("=",StringComparison.Ordinal)
+            ? "'"+cell.RawValue : cell.RawValue;
     }
     public static string Apply(DeskSpaceExcelProposalV16 preview,
         DeskSpaceExcelTemplateV16 entry,bool overwrite)
@@ -279,10 +285,21 @@ internal static class DeskSpaceExcelBridgeV16
         // being applied after switching workbooks or sheets.
         dynamic app=Excel();
         dynamic sheet=app.ActiveSheet;
-        if(!string.Equals(Text(sheet.Name),preview.SheetName,StringComparison.Ordinal))
-            throw new InvalidOperationException("The active Excel sheet changed. Preview again.");
+        if(!string.Equals(Text(sheet.Name),preview.SheetName,StringComparison.Ordinal) ||
+           !string.Equals(Text(app.ActiveWorkbook.FullName),preview.WorkbookFullName,
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The active Excel workbook or sheet changed. Preview again.");
         if((bool)sheet.ProtectContents)
             throw new InvalidOperationException("The destination worksheet is protected.");
+        // Detect modifications made since the preview before touching the workbook.
+        foreach(var change in preview.Changes.Where(x=>x.CanApply))
+        {
+            dynamic destination=sheet.Cells[change.Row,change.Column];
+            if(Formula(destination) ||
+               !string.Equals(Text((object?)destination.Value2),change.PreviousRaw,StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Destination "+change.CellAddress+" changed since preview. Preview again.");
+        }
         // Save an independent workbook backup before *any* COM edits.
         var folder=Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
