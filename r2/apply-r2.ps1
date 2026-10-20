@@ -79,15 +79,9 @@ Rewrite $app '    private void SafeSave()' @'
 '@
 Rewrite $app '        saveTimer.Stop(); SaveGridInternal(); SafeSave(); tray.Dispose();' '        desktopWidget?.Close(); saveTimer.Stop(); SaveGridInternal(); SafeSave(); tray.Dispose();'
 Rewrite $app 'var window = new FloatingNoteWindow(note, () => { NotesList.Items.Refresh(); SafeSave(); }) { Owner = this };' 'var window = new FloatingNoteWindow(note, () => { NotesList.Items.Refresh(); SafeSave(); });'
-Rewrite $app @'
-        window.Show();
-    }
-    private void CalendarSelection_Changed
-'@ @'
+Rewrite $app '        window.Show();' @'
         window.Show();
         desktopWidget?.ReloadNotes(note);
-    }
-    private void CalendarSelection_Changed
 '@
 Rewrite $app 'data.Notes.Remove(item); NotesList.Items.Refresh(); SafeSave(); RefreshDashboard();' 'data.Notes.Remove(item); NotesList.Items.Refresh(); desktopWidget?.ReloadNotes(); SafeSave(); RefreshDashboard();'
 Rewrite $app ') { Owner = this }.Show();' ').Show();'
