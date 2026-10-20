@@ -1,0 +1,41 @@
+name: Build DeskSpace Windows Installer
+on:
+  push:
+    branches: [main]
+    paths:
+      - "assets/deskspace_source.tar.xz"
+      - ".github/workflows/build-installer.yml"
+  workflow_dispatch:
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Install Inno Setup on build runner
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Extract verified DeskSpace R1 build source
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'assets/deskspace_source.tar.xz')) { throw 'DeskSpace source archive missing' }
+          tar -xJf assets/deskspace_source.tar.xz
+          if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
+          if (-not (Test-Path './BUILD_DESKSPACE_SETUP.ps1')) { throw 'Build script missing' }
+      - name: Build and test app, publish self-contained setup.exe
+        shell: pwsh
+        run: ./BUILD_DESKSPACE_SETUP.ps1
+      - name: Upload real Windows installer and SHA256
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-Windows-Installer
+          path: |
+            release/DeskSpace_Setup.exe
+            release/DeskSpace_Setup.sha256.txt
+          if-no-files-found: error
