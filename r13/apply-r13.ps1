@@ -47,9 +47,11 @@ ReplaceRequired 'status.Text=found.Count+" results · Hover a row for actions";'
 ReplaceRequired 'field.TextChanged+=(_,_)=>{debounce.Stop();debounce.Start();};' @'
         indexRefresh=new DispatcherTimer {Interval=TimeSpan.FromSeconds(1.7)};
         indexRefresh.Tick+=(_,_)=>{
-            if(disposed || !DeskSpaceSearchIndexV13.IsIndexing || string.IsNullOrWhiteSpace(field.Text))
+            if(disposed || string.IsNullOrWhiteSpace(field.Text))
             {indexRefresh.Stop();return;}
+            // One final refresh is required after the index completes.
             debounce.Stop();debounce.Start();
+            if(!DeskSpaceSearchIndexV13.IsIndexing)indexRefresh.Stop();
         };
         field.TextChanged+=(_,_)=>{
             debounce.Stop();debounce.Start();

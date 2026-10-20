@@ -172,7 +172,9 @@ internal static class DeskSpaceSearchIndexV13
         {
             if(results.Count<150 && seen.Add(hit.OpenTarget ?? ""))results.Add(hit);
         }
-        foreach(var app in Applications)
+        List<SearchHit> appSnapshot;
+        lock(Gate)appSnapshot=Applications.ToList();
+        foreach(var app in appSnapshot)
         {
             cancellation.ThrowIfCancellationRequested();
             if(!Matches(app.Name,term))continue;
