@@ -99,6 +99,16 @@ ReplaceOnce @'
             StartShortcutDrag();
             return;
         }
+        if(ringExpanded && SectorAt(e.GetPosition(this))>=0)
+        {
+            holdTimer.Stop();
+            holdPending=false;
+            ringGesture=true;
+            draggingGesture=false;
+            CaptureMouse();
+            e.Handled=true;
+            return;
+        }
         if(!CanDragFrom(e))return;
 '@
 # Remove automatic motion-to-drag entirely. Movement outside of ring during
