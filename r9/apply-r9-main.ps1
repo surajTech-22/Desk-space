@@ -1,8 +1,10 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $xaml = 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml'
-$main = [IO.File]::ReadAllText($xaml)
+$main = [IO.File]::ReadAllText($xaml).Replace("`r`n","`n")
 function EditMain([string]$before,[string]$after) {
+    $before=$before.Replace("`r`n","`n")
+    $after=$after.Replace("`r`n","`n")
     if (!$script:main.Contains($before)) { throw "R9 main XAML anchor missing: $before" }
     $script:main = $script:main.Replace($before,$after)
 }
@@ -103,7 +105,7 @@ if (!$main.Contains('    </TabControl>')) {throw 'Cannot insert R9 module naviga
 $main=$main.Replace('    </TabControl>', $additional + '    </TabControl>')
 [IO.File]::WriteAllText($xaml,$main,[Text.UTF8Encoding]::new($false))
 $source='DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs'
-$cs=[IO.File]::ReadAllText($source)
+$cs=[IO.File]::ReadAllText($source).Replace("`r`n","`n")
 $anchor='    private void SafeSave()'
 if(!$cs.Contains($anchor)){throw 'R9 MainWindow event anchor missing'}
 $handlers=@'
