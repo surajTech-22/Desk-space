@@ -255,7 +255,7 @@ jobs:
           $ErrorActionPreference='Stop'
           ./r12/apply-r12.ps1
           $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
-          foreach($required in @('OnShortcutRightMouseDown','StartShortcutDrag()','ModifierKeys.Shift','Mouse.RightButton==MouseButtonState.Pressed','rightClickOpenedUntil','SectorAt(e.GetPosition(this))>=0','Width=240,Height=122')) {
+          foreach($required in @('OnShortcutRightMouseDown','StartShortcutDrag()','ModifierKeys.Shift','Mouse.RightButton==MouseButtonState.Pressed','rightClickOpenedUntil','SectorAt(e.GetPosition(this))>=0','Width=216,Height=116')) {
             if(!$widget.Contains($required)) {throw "R12 expected widget behavior missing: $required"}
           }
           if($widget.Contains('Leaving the outermost circle means MOVE WIDGET')) {throw 'R12 unwanted outside-ring drag still exists'}
