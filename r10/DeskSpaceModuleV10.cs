@@ -236,6 +236,7 @@ public sealed class DeskSpaceModuleV10 : IDisposable
     {
         body.Children.Add(Label("Planner · Day / Week / Month / Agenda",21));
         var row=Row();body.Children.Add(row);
+        DateTime cursor=DateTime.Today;
         var view=new ComboBox{ItemsSource=new[]{"Month","Week","Day","Agenda"},SelectedIndex=0,Width=130,Margin=new Thickness(0,0,10,0)};
         var previous=Btn("◀",()=>{cursor=cursor.AddDays(view.SelectedItem as string=="Month"?-30:view.SelectedItem as string=="Week"?-7:-1);Reload();});
         var next=Btn("▶",()=>{cursor=cursor.AddDays(view.SelectedItem as string=="Month"?30:view.SelectedItem as string=="Week"?7:1);Reload();});
@@ -248,7 +249,6 @@ public sealed class DeskSpaceModuleV10 : IDisposable
         var date=new DatePicker{SelectedDate=DateTime.Today};body.Children.Add(date);
         var repeat=new ComboBox{ItemsSource=new[]{"None","Daily","Weekly","Monthly","Yearly"},SelectedIndex=0,Margin=new Thickness(0,7,0,7)};
         body.Children.Add(Label("Repeat"));body.Children.Add(repeat);
-        DateTime cursor=DateTime.Today;
         IEnumerable<EventItem> Occurrences(DateTime from,DateTime to)
         {
             foreach(var item in Load().Events)
