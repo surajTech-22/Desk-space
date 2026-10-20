@@ -27,7 +27,7 @@ public static class DeskSpaceWeather
 
     public static async Task RefreshAsync(string city)
     {
-        if (DateTime.UtcNow < nextAttempt) return;
+        if (DateTime.UtcNow < nextAttempt && Latest?.City == city) return;
         if (!await Gate.WaitAsync(0)) return;
         try
         {
