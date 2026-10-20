@@ -275,8 +275,6 @@ jobs:
           ./r13/apply-r13.ps1
           $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
           $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
-          $clipboard=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceClipboardV10.cs' -Raw
-          if(!$clipboard.Contains('DeskSpaceDropShelfV15.ActivePaths')) {throw 'R15 Clipboard uses a separate shelf'}
           if(!$widget.Contains('ModuleArea()') -or !$widget.Contains('AddWeatherScene(53,6,185)')) { throw 'R13 adaptive size/weather gate missing' }
           if(!$search.Contains('DriveInfo.GetDrives()') -or !$search.Contains('Installed app / Start menu')) { throw 'R13 broad search/app gate missing' }
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs')) {throw 'R13 index missing'}
@@ -301,6 +299,8 @@ jobs:
           $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
           $weather=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWeatherSceneV11.cs' -Raw
           if(!$widget.Contains('attachedShelf.Enable()')) {throw 'R15 shelf not attached to main widget'}
+          $clipboard=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceClipboardV10.cs' -Raw
+          if(!$clipboard.Contains('DeskSpaceDropShelfV15.ActivePaths')) {throw 'R15 Clipboard uses a separate shelf'}
           if(!$shelf.Contains('PreviewDrop+=Receive') -or !$shelf.Contains('DragDrop.DoDragDrop') -or !$shelf.Contains('File.Copy(source,destination,false)')) {throw 'R15 temporary file drag/copy paths missing'}
           if(!$search.Contains('ScanVolume(root)') -or !$search.Contains('RegistryKey.OpenBaseKey')) {throw 'R15 full-drive/app discovery not linked'}
           if(!$weather.Contains('nightAnimations') -or !$weather.Contains('moonGlow')) {throw 'R15 night motion missing'}
