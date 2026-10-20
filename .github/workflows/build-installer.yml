@@ -26,6 +26,7 @@ on:
       - "r15/**"
       - "r16/**"
       - "r17/**"
+      - "r18/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -335,6 +336,21 @@ jobs:
           {
             if(!$source.Contains($required)) {throw "R17 selection gate missing: $required"}
           }
+
+      - name: Apply R18 whole-system index and native Windows playback mode
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r18/apply-r18.ps1
+          $project=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -Raw
+          $media=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMediaV18.cs' -Raw
+          $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
+          $os=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWindowsSearchV18.cs' -Raw
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          if(!$project.Contains('net8.0-windows10.0.19041.0')) {throw 'R18 Windows Runtime targeting missing'}
+          if(!$media.Contains('GlobalSystemMediaTransportControlsSessionManager') -or !$widget.Contains('OnMediaVisibility')) {throw 'R18 media integration missing'}
+          if(!$search.Contains('DeskSpaceWindowsSearchV18.Query') -or !$os.Contains('Search.CollatorDSO.1')) {throw 'R18 integrated Windows Search missing'}
+          if(!$widget.Contains('LeaveMediaMode')){throw 'R18 widget cannot return to circle'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
