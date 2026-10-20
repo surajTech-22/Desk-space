@@ -60,6 +60,23 @@ if($a -lt 0 -or $b -lt $a){throw 'R8 invisible ring button anchors missing'}
 $b += $lastMarker.Length
 $text=$text.Substring(0,$a) + '            // No button overlay: merely pointing at a module cannot open it.' + $text.Substring($b)
 [IO.File]::WriteAllText($w,$text,[Text.UTF8Encoding]::new($false))
+# A circle is not its rectangular HWND. Leaving the round boundary inside
+# the square window must collapse the ring even before MouseLeave occurs.
+Edit $w '        if (Mouse.LeftButton != MouseButtonState.Pressed || draggingGesture) return;' @'
+        if (ringExpanded && !ringGesture && !draggingGesture &&
+            Mouse.LeftButton != MouseButtonState.Pressed)
+        {
+            var location = e.GetPosition(this);
+            var centre = new Point(Width / 2, Height / 2);
+            if ((location - centre).Length >
+                Math.Min(Width, Height) * 137.0 / 292.0 + 3)
+            {
+                CollapseRing();
+                return;
+            }
+        }
+        if (Mouse.LeftButton != MouseButtonState.Pressed || draggingGesture) return;
+'@
 Edit $w '            ClickSegment(Segments[selection]);' @'
             Dispatcher.BeginInvoke(new Action(() => ClickSegment(Segments[selection])));
 '@
