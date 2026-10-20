@@ -19,15 +19,12 @@ Rewrite $app '        tray.DoubleClick += (_, _) => Dispatcher.Invoke(() => { Sh
         trayMenu.Items.Add("GitHub Builds", null, (_, _) => Dispatcher.Invoke(OpenGitHubBuilds));
         tray.ContextMenuStrip = trayMenu;
 '@
-Rewrite $app @'
-        Tick();
-    }
-    private void SafeSave()
-'@ @'
+Rewrite $app '        Tick();' @'
         Tick();
         if (WidgetPreferences.Load().ShowAtLaunch)
             Dispatcher.BeginInvoke(new Action(ShowFloatingWidget), DispatcherPriority.ApplicationIdle);
-    }
+'@
+Rewrite $app '    private void SafeSave()' @'
     private void ShowMainWindow()
     {
         Show();
