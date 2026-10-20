@@ -331,7 +331,7 @@ jobs:
           $ErrorActionPreference='Stop'
           ./r17/apply-r17.ps1
           $source=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelV16.cs' -Raw
-          foreach($required in @('selectedCells','SaveCheckedCells','CellReference','pendingSelection.Cells=chosen','unchecked cells'))
+          foreach($required in @('selectedCells','SaveCheckedCells','CellReference','pendingSelection.Cells=chosen','Unchecked cells were excluded'))
           {
             if(!$source.Contains($required)) {throw "R17 selection gate missing: $required"}
           }
