@@ -1,0 +1,1 @@
+Validate GitHub Actions monotonic version and private automatic release publication.
