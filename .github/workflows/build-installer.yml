@@ -25,6 +25,7 @@ on:
       - "r14/**"
       - "r15/**"
       - "r16/**"
+      - "r17/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -323,6 +324,17 @@ jobs:
           if(!$widget.Contains('OpenInWidget("Excel")')){throw 'Excel module navigation missing'}
           $shelf=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
           if($shelf.Contains('if(effect==DragDropEffects.Copy)Remove(item);')){throw 'Premature file deletion still present'}
+
+      - name: Add Excel cell-by-cell capture selection
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r17/apply-r17.ps1
+          $source=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelV16.cs' -Raw
+          foreach($required in @('selectedCells','SaveCheckedCells','CellReference','pendingSelection.Cells=chosen','Unchecked cells were excluded'))
+          {
+            if(!$source.Contains($required)) {throw "R17 selection gate missing: $required"}
+          }
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
