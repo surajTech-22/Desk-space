@@ -166,15 +166,15 @@ ReplaceOnce @'
         if(liveClock)
         {
             var plate=new Border {
-                Width=240,Height=122,CornerRadius=new CornerRadius(45),
+                Width=216,Height=116,CornerRadius=new CornerRadius(52),
                 Background=new LinearGradientBrush(
                     Color.FromArgb(202,18,35,66),Color.FromArgb(225,39,33,83),90),
                 IsHitTestVisible=false
             };
-            Canvas.SetLeft(plate,26);Canvas.SetTop(plate,145);
+            Canvas.SetLeft(plate,38);Canvas.SetTop(plate,139);
             canvas.Children.Add(plate);
-            content.Width=226;content.Height=114;
-            Canvas.SetLeft(content,33);Canvas.SetTop(content,147);
+            content.Width=208;content.Height=110;
+            Canvas.SetLeft(content,42);Canvas.SetTop(content,142);
         }
         else
         {
