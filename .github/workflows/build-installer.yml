@@ -15,6 +15,7 @@ on:
       - "r6/**"
       - "r7/**"
       - "r8/**"
+      - "r9/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -177,6 +178,27 @@ jobs:
           $version = Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml' -Raw
           if (!$version.Contains('VersionButton')) { throw 'R8 version control missing' }
           if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.ico')) { throw 'R8 logo generation failed' }
+
+      - name: Apply and verify R9 widget, updater and module navigation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r9/apply-r9-widget.ps1
+          ./r9/apply-r9-updater.ps1
+          ./r9/apply-r9-main.ps1
+          $widget = Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          foreach($required in @('PreviewMouseRightButtonUp', 'IsNearScreenEdge()', 'DockToEdge(manual: true)', 'DeskSpaceUpdateProgress.Changed', 'AddWeatherHalo()', 'SegmentIcons')) {
+            if(!$widget.Contains($required)){throw "R9 widget gate failed: $required"}
+          }
+          foreach($prohibited in @('var change=new Button { Content="◉"', 'var expand=new Button { Content="⤢"', 'var collapse = new Button { Content = "⌄"', 'var hide=new Button { Content="–"')) {
+            if($widget.Contains($prohibited)){throw "R9 leftover button: $prohibited"}
+          }
+          $xml = [xml](Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml' -Raw)
+          $version = Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs' -Raw
+          if (!$version.Contains('ModuleNavigate_Click') -or !$version.Contains('RecentFiles_Click')) {throw 'R9 modules not connected'}
+          $updater=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs' -Raw
+          if (!$updater.Contains('DeskSpaceUpdateProgress.Publish("Downloading"') -or !$updater.Contains('DeskSpaceUpdateProgress.Publish("Restarting"')) {throw 'R9 progress gates missing'}
+          if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdateProgress.cs')) {throw 'R9 progress source missing'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
