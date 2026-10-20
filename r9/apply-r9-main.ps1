@@ -153,10 +153,22 @@ $needle='        VersionButton.Content = "v" + DeskSpaceUpdater.CurrentVersion;'
 if(!$cs.Contains($needle)){throw 'R8 main-version control not found'}
 $cs=$cs.Replace($needle,$needle+[Environment]::NewLine+
 '        SettingsVersionText.Text = "DeskSpace version " + DeskSpaceUpdater.CurrentVersion;')
+$cacheAnchor='    private DateTime? timerDeadline;'
+if(!$cs.Contains($cacheAnchor)){throw 'R9 cache fields anchor missing'}
+$cs=$cs.Replace($cacheAnchor,@'
+    private DateTime? timerDeadline;
+    private WidgetSettingsV3? _settingsCache;
+    private DateTime _nextSettingsRead = DateTime.MinValue;
+'@)
 $needle='        ClockText.Text = DateTime.Now.ToString("dddd, dd MMM yyyy\nHH:mm:ss", CultureInfo.CurrentCulture);'
 if(!$cs.Contains($needle)){throw 'R9 original clock tick not found'}
 $cs=$cs.Replace($needle,$needle+[Environment]::NewLine+@'
-        var local=WidgetSettingsV3.Load();
+        if (_settingsCache == null || DateTime.UtcNow >= _nextSettingsRead)
+        {
+            _settingsCache = WidgetSettingsV3.Load();
+            _nextSettingsRead = DateTime.UtcNow.AddMinutes(1);
+        }
+        var local=_settingsCache;
         if (local.ShowWeather)
         {
             var weather=DeskSpaceWeather.Latest;
