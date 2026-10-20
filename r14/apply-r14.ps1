@@ -79,7 +79,7 @@ $p="$root/DeskSpaceInlineV11.cs";$s=Load $p
 Must 'var header=new Grid{Height=52,Margin=new Thickness(12,3,8,3)};' 'var header=new Grid{Height=44,Margin=new Thickness(8,2,6,2)};'
 Must 'FontSize=18,FontWeight=FontWeights.SemiBold,Foreground=TextInk,' 'FontSize=15,FontWeight=FontWeights.SemiBold,Foreground=TextInk,'
 Must 'var body=new StackPanel{Margin=new Thickness(12,2,12,12)};' 'var body=new StackPanel{Margin=new Thickness(9,1,9,8)};'
-Must 'var memo=Field("Edit note",(int)Math.Clamp(SystemParameters.WorkArea.Height*.18,95,165));' 'var memo=Field("Edit note",(int)Math.Clamp(SystemParameters.WorkArea.Height*.16,90,150));'
+Must 'var memo=Field("Edit note",Math.Clamp(SystemParameters.WorkArea.Height*.18,95,165) is double h ? (int)h : 140);' 'var memo=Field("Edit note",(int)Math.Clamp(SystemParameters.WorkArea.Height*.16,90,150));'
 Must 'var items=new ListBox{MaxHeight=122,MinHeight=70,' 'var items=new ListBox{MaxHeight=110,MinHeight=65,'
 Save $p $s
 Write-Host 'R14: compact search, system icons, no clock text plate, small notes and reminders'
