@@ -158,7 +158,7 @@ $text=$text.Substring(0,$tail)+@'
 # Reassign animated gradient only when weather actually changes.
 # Clock face halo is animated only when visible. Animation is compositor driven;
 # no new thread, no busy-wait, no per-frame file IO or weather HTTP traffic.
-Change '        canvas.Children.Add(circle);'+[Environment]::NewLine+'        content.FontSize' @'
+Change ('        canvas.Children.Add(circle);'+[Environment]::NewLine+'        content.FontSize') @'
         canvas.Children.Add(circle);
         AddWeatherHalo();
         content.FontSize
@@ -194,7 +194,7 @@ Change '    private void BuildDonut()' @'
 
     private void BuildDonut()
 '@
-Change '        canvas.Children.Clear();'+[Environment]::NewLine+'        ringPaths.Clear();'+[Environment]::NewLine+'        highlightedSector = -1;'+[Environment]::NewLine+'        content.FontSize = 18;' @'
+Change ('        canvas.Children.Clear();'+[Environment]::NewLine+'        ringPaths.Clear();'+[Environment]::NewLine+'        highlightedSector = -1;'+[Environment]::NewLine+'        content.FontSize = 18;') @'
         SuspendWeatherMotion();
         canvas.Children.Clear();
         ringPaths.Clear();
@@ -209,16 +209,22 @@ Change '        Show();Topmost=true;' @'
         Show();Topmost=true;
         if (!ringExpanded) BuildCompact(); // resume paused weather animation
 '@
-Change '        canvas.Children.Clear();'+[Environment]::NewLine+'        ringPaths.Clear();'+[Environment]::NewLine+'        highlightedSector = -1;'+[Environment]::NewLine+'        canvas.Width = canvas.Height = 292;' @'
+Change ('        canvas.Children.Clear();'+[Environment]::NewLine+'        ringPaths.Clear();'+[Environment]::NewLine+'        highlightedSector = -1;'+[Environment]::NewLine+'        canvas.Width = canvas.Height = 292;') @'
         SuspendWeatherMotion();
         canvas.Children.Clear();
         ringPaths.Clear();
         highlightedSector = -1;
         canvas.Width = canvas.Height = 292;
 '@
-# Avoid repeated weather gradient allocation for unchanged clock text each second.
-Change '        if (clockFace != null) clockFace.Fill = ClockFace();'+[Environment]::NewLine+'    }' @'
-    }
-'@
+# Avoid repeated allocation of a new gradient brush on every clock tick.
+$centreMethod = $text.IndexOf('    private void UpdateCenter()', [StringComparison]::Ordinal)
+if ($centreMethod -lt 0) { throw 'R9 UpdateCenter method missing' }
+$nextMethod = $text.IndexOf('    private static string Trim(', $centreMethod, [StringComparison]::Ordinal)
+if ($nextMethod -lt 0) { throw 'R9 UpdateCenter boundary missing' }
+$centreSource = $text.Substring($centreMethod, $nextMethod - $centreMethod)
+$paint = '        if (clockFace != null) clockFace.Fill = ClockFace();'
+if (!$centreSource.Contains($paint)) { throw 'R9 redundant clock paint missing' }
+$centreSource = $centreSource.Replace($paint,'')
+$text = $text.Substring(0,$centreMethod)+$centreSource+$text.Substring($nextMethod)
 [IO.File]::WriteAllText($path,$text,[Text.UTF8Encoding]::new($false))
 Write-Host 'R9 widget: right-click, edge-auto-dock, drag-close, clean ring, module icons, update progress and idle optimization.'
