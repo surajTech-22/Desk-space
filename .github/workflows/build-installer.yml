@@ -3,6 +3,8 @@ name: DeskSpace Windows Installer
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'releases/latest-build.txt'
   pull_request:
     branches: [main]
     paths:
@@ -401,5 +403,7 @@ jobs:
             sha=$oldSha.Trim()
           }
           $request = $body | ConvertTo-Json -Compress
-          $request | gh api --method PUT $receiptPath --input -
+          $receiptFile = Join-Path $env:RUNNER_TEMP 'deskspace-release-receipt.json'
+          [IO.File]::WriteAllText($receiptFile,$request,[Text.UTF8Encoding]::new($false))
+          gh api --method PUT $receiptPath --input $receiptFile
           if ($LASTEXITCODE -ne 0) { throw 'Release published, but publication receipt could not be saved' }
