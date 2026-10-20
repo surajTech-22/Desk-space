@@ -24,6 +24,7 @@ on:
       - "r13/**"
       - "r14/**"
       - "r15/**"
+      - "r16/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -306,6 +307,22 @@ jobs:
           if(!$shelf.Contains('PreviewDrop+=Receive') -or !$shelf.Contains('DragDrop.DoDragDrop') -or !$shelf.Contains('File.Copy(source,destination,false)')) {throw 'R15 temporary file drag/copy paths missing'}
           if(!$search.Contains('ScanVolume(root)') -or !$search.Contains('RegistryKey.OpenBaseKey')) {throw 'R15 full-drive/app discovery not linked'}
           if(!$weather.Contains('nightAnimations') -or !$weather.Contains('moonGlow')) {throw 'R15 night motion missing'}
+
+      - name: Apply R16 Excel exact-cell mapping and guarded autofill
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r16/apply-r16.ps1
+          $ui=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelV16.cs' -Raw
+          $bridge=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelBridgeV16.cs' -Raw
+          $store=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelStoreV16.cs' -Raw
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          if(!$ui.Contains('Capture selected Excel cells') -or !$ui.Contains('Preview matching cells')){throw 'Excel UI incomplete'}
+          if(!$bridge.Contains('SaveCopyAs') -or !$bridge.Contains('Existing formula protected')){throw 'Safe Excel preview/backup missing'}
+          if(!$store.Contains('CryptProtectData')){throw 'Excel mapping encryption missing'}
+          if(!$widget.Contains('OpenInWidget("Excel")')){throw 'Excel module navigation missing'}
+          $shelf=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
+          if($shelf.Contains('if(effect==DragDropEffects.Copy)Remove(item);')){throw 'Premature file deletion still present'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
