@@ -26,9 +26,9 @@ Must @'
         body.Children.Add(Caption("Choose exactly which captured values to save",12,true));
         selectedCells=new ListBox {
             MinHeight=95,Height=160,Margin=new Thickness(2,3,2,6),
-            BorderBrush=new SolidColorBrush(Color.FromRgb(197,201,219)),
-            ScrollViewer.HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled
+            BorderBrush=new SolidColorBrush(Color.FromRgb(197,201,219))
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(selectedCells,ScrollBarVisibility.Disabled);
         body.Children.Add(selectedCells);
         cellSelectionInfo=Caption("Capture a range first, then tick only the data you need.",12);
         cellSelectionInfo.Foreground=muted;
