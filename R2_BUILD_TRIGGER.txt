@@ -1,0 +1,1 @@
+Verify the standalone floating widget and self-contained R2 installer. No user data included.
