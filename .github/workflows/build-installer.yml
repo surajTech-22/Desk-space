@@ -1,37 +1,70 @@
-name: Build DeskSpace Windows Installer
+name: DeskSpace Windows Installer
+
 on:
   push:
     branches: [main]
     paths:
-      - "assets/deskspace_source.tar.xz"
       - ".github/workflows/build-installer.yml"
+      - "assets/source.part*.txt"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  windows-installer:
+  build:
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - name: Install .NET 8 SDK
+      - name: Checkout DeskSpace
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and verify original DeskSpace R1 sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = for ($i=1; $i -le 4; $i++) {
+            $p = "assets/source.part$i.txt"
+            if (!(Test-Path -LiteralPath $p)) { throw "Missing source part: $p" }
+            (Get-Content -LiteralPath $p -Raw).Trim()
+          }
+          $blob = [Convert]::FromBase64String($parts -join '')
+          $archive = Join-Path (Get-Location).Path 'assets/deskspace_source.tar.xz'
+          [System.IO.File]::WriteAllBytes($archive, $blob)
+          $sha = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne 'de852a020013de604cdb9b206e38f4ec1359e7f2169bc898e9ca60299a0249a3') {
+            throw "Source SHA256 mismatch: $sha"
+          }
+          tar -xJf $archive
+          if ($LASTEXITCODE -ne 0) { throw 'Archive extraction failed' }
+          if (!(Test-Path 'BUILD_DESKSPACE_SETUP.ps1')) { throw 'Build script missing' }
+          if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj')) { throw 'App project missing' }
+          if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj')) { throw 'Test project missing' }
+
+      - name: Install .NET 8 SDK on GitHub build runner
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Install Inno Setup on build runner
-        shell: pwsh
-        run: choco install innosetup --yes --no-progress
-      - name: Extract verified DeskSpace R1 build source
+
+      - name: Install Inno Setup on GitHub build runner
         shell: pwsh
         run: |
-          if (-not (Test-Path 'assets/deskspace_source.tar.xz')) { throw 'DeskSpace source archive missing' }
-          tar -xJf assets/deskspace_source.tar.xz
-          if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
-          if (-not (Test-Path './BUILD_DESKSPACE_SETUP.ps1')) { throw 'Build script missing' }
-      - name: Build and test app, publish self-contained setup.exe
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+
+      - name: Compile, test and package self-contained app
         shell: pwsh
         run: ./BUILD_DESKSPACE_SETUP.ps1
-      - name: Upload real Windows installer and SHA256
-        if: success()
+
+      - name: Confirm installer and checksum exist
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'release/DeskSpace_Setup.exe')) { throw 'Installer not created' }
+          if (!(Test-Path 'release/DeskSpace_Setup.sha256.txt')) { throw 'Checksum missing' }
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path 'release/DeskSpace_Setup.exe'))
+          if ($bytes.Length -lt 5000000 -or $bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw 'Invalid Windows installer' }
+
+      - name: Upload real Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: DeskSpace-Windows-Installer
