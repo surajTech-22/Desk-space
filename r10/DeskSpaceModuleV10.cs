@@ -84,6 +84,18 @@ public sealed class DeskSpaceModuleV10 : IDisposable
         var buttons=Row();var found=new List<SearchHit>();
         body.Children.Add(query);body.Children.Add(status);body.Children.Add(results);
         body.Children.Add(buttons);
+        void ShowQuickAccess()
+        {
+            var quick = new List<SearchHit>();
+            foreach(var file in prefs.PinnedApps.Take(12).Where(File.Exists))
+                quick.Add(new SearchHit{Category="Applications",Name=Path.GetFileNameWithoutExtension(file),Location="Pinned app",OpenTarget=file});
+            using(var recent = new RecentFilesService())
+                foreach(var item in recent.Entries.Where(e=>File.Exists(e.Path)).Take(15))
+                    quick.Add(new SearchHit{Category="Files",Name=item.Name,Location=item.Path,OpenTarget=item.Path});
+            results.ItemsSource=quick;
+            status.Text="Pinned applications and recent files · type to search everything";
+        }
+        ShowQuickAccess();
         void Choose(Action<SearchHit> action)
         {
             if(results.SelectedItem is not SearchHit hit)return;
@@ -108,7 +120,7 @@ public sealed class DeskSpaceModuleV10 : IDisposable
         debounce.Tick+=async (_,_)=>{
             debounce.Stop();queryCancel?.Cancel();queryCancel?.Dispose();queryCancel=new CancellationTokenSource();
             var token=queryCancel.Token;var term=query.Text.Trim();
-            if(term.Length<2){results.ItemsSource=null;status.Text="Enter at least two characters";return;}
+            if(term.Length<2){ShowQuickAccess();return;}
             status.Text="Searching…";
             try {
                 found=await Task.Run(()=>SearchNow(term,Load(),token),token);
