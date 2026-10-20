@@ -1,0 +1,1 @@
+Final R3 build verifies widget startup settings, independent host and installer packaging.
