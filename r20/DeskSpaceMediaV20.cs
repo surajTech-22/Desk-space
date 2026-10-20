@@ -9,7 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Effects;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using Windows.Media;
 using Windows.Media.Control;
