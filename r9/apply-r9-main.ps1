@@ -40,7 +40,8 @@ $actions=@{
 'Content="View Data Tabs"'='Content="▥  View Data Tabs"'
 }
 foreach($entry in $actions.GetEnumerator()){ EditMain $entry.Key $entry.Value }
-EditMain '          </WrapPanel>' @'
+EditMain ('<Button Content="▥  View Data Tabs" Click="GoTabs_Click" Padding="16,10" Margin="0,0,10,10"/>'+[Environment]::NewLine+'          </WrapPanel>') @'
+            <Button Content="▥  View Data Tabs" Click="GoTabs_Click" Padding="16,10" Margin="0,0,10,10"/>
             <Button Content="⌕  Universal Search" Click="UniversalSearch_Click" Padding="16,10" Margin="0,0,10,10"/>
             <Button Content="▤  Recent Files" Click="RecentFiles_Click" Padding="16,10" Margin="0,0,10,10"/>
             <Button Content="▣  Pinned Apps" Click="PinnedApps_Click" Padding="16,10" Margin="0,0,10,10"/>
