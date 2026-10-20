@@ -9,6 +9,7 @@ on:
       - "r2/**"
       - "r3/**"
       - "r4/**"
+      - "r5/**"
   pull_request:
     branches: [main]
     paths:
@@ -17,11 +18,12 @@ on:
       - "r2/**"
       - "r3/**"
       - "r4/**"
+      - "r5/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -115,6 +117,35 @@ jobs:
           [IO.File]::WriteAllText($iss,$setup,[Text.UTF8Encoding]::new($false))
           Write-Host 'R4 compact widget, ring selection and outer-ring drag behavior installed.'
 
+      - name: Add R5 automatic private GitHub update service
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $raw=(Get-Content -LiteralPath r5/overlay.b64.txt -Raw).Trim()
+          $destination = 'r5/overlay.tar.xz'
+          [IO.File]::WriteAllBytes($destination,[Convert]::FromBase64String($raw))
+          $expected='d792cf07774d1d653ff57c8df738e4429629be782e02c232b99baca823eab7c9'
+          $actual=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($actual -ne $expected){throw "R5 updater source checksum mismatch"}
+          tar -xJf $destination -C r5
+          if($LASTEXITCODE -ne 0){throw "R5 updater extraction failure"}
+          ./r5/apply-r5.ps1
+          if(!(Select-String -Path DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs -Pattern 'DeskSpaceUpdater.StartAutomaticChecks' -Quiet)){throw 'R5 updater timer not wired'}
+          if(!(Select-String -Path installer/DeskSpace.iss -Pattern '#define AppVersion "1.4.0"' -SimpleMatch -Quiet)){throw 'R5 version missing'}
+
+      - name: Verify official GitHub CLI is available for bundled updater
+        shell: pwsh
+        run: |
+          $cli=Get-Command gh.exe -ErrorAction SilentlyContinue
+          if (!$cli) {
+            choco install gh --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI installation failed' }
+            $env:PATH += ';C:\Program Files\GitHub CLI'
+          }
+          $cli=Get-Command gh.exe -ErrorAction SilentlyContinue
+          if (!$cli) { throw 'The updater needs the official gh.exe on the Windows build runner' }
+          gh --version
+
       - name: Install .NET 8 SDK on GitHub build runner
         uses: actions/setup-dotnet@v4
         with:
@@ -146,3 +177,18 @@ jobs:
             release/DeskSpace_Setup.exe
             release/DeskSpace_Setup.sha256.txt
           if-no-files-found: error
+
+
+      - name: Publish successful version to private GitHub Releases
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag='v1.4.0'
+          $repo='surajTech-22/Desk-space'
+          gh release view $tag --repo $repo *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Refusing to replace existing tagged release $tag" }
+          gh release create $tag 'release/DeskSpace_Setup.exe' 'release/DeskSpace_Setup.sha256.txt' --repo $repo --target $env:GITHUB_SHA --title 'DeskSpace R5 automatic updater' --notes 'Private verified Windows release. DeskSpace updater checks, downloads and applies this release after GitHub login on the PC.'
+          if ($LASTEXITCODE -ne 0) { throw 'Automatic update release publishing failed' }
