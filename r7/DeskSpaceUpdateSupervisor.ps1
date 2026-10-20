@@ -13,6 +13,11 @@ function Report([string]$stage) {
     } catch { }
 }
 try {
+    # Remember whether the full DeskSpace window was open; reopen it after installation.
+    $otherProcesses = @(Get-CimInstance Win32_Process -Filter "Name='DeskSpace.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.ProcessId -ne $OldPid -and $_.CommandLine -notlike '*--widget-host*' })
+    $restoreMainWindow = $otherProcesses.Count -gt 0
+    Report ('Supervisor received verified update; main window previously open: ' + $restoreMainWindow)
     Report 'Supervisor waiting for previous widget process to exit.'
     $previous = Get-Process -Id $OldPid -ErrorAction SilentlyContinue
     if ($null -ne $previous) {
@@ -38,6 +43,14 @@ try {
         Report 'Widget host relaunched by independent update supervisor.'
     } else {
         Report 'Widget host already relaunched by installer.'
+    }
+    if ($restoreMainWindow) {
+        $openMain = @(Get-CimInstance Win32_Process -Filter "Name='DeskSpace.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -notlike '*--widget-host*' })
+        if ($openMain.Count -eq 0) {
+            Start-Process -FilePath $TargetExe -WorkingDirectory (Split-Path -Parent $TargetExe) -ErrorAction Stop | Out-Null
+            Report 'Previously open DeskSpace main window automatically relaunched.'
+        }
     }
 } catch {
     Report ('Supervisor FAILED: ' + $_.Exception.GetType().Name + ': ' + $_.Exception.Message)
