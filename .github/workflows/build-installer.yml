@@ -29,6 +29,7 @@ on:
       - "r18/**"
       - "r19/**"
       - "r20/**"
+      - "r21/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -382,6 +383,18 @@ jobs:
           foreach($required in @('TogglePanel','ToggleCircle','DragDown','LoadArtAsync','IsShuffleEnabled','IsRepeatEnabled','IsPlaybackPositionEnabled','TryChangePlaybackRateAsync'))
           {if(!$media.Contains($required)){throw "R20 media gate: $required"}}
           if(!$search.Contains('DeskSpaceSearchIndexV13.Coverage')){throw 'R20 search coverage feedback missing'}
+
+      - name: Apply R21 modern compact/expanded/pill player and search polish
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r21/apply-r21.ps1
+          $media=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMediaV18.cs' -Raw
+          $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchV11.cs' -Raw
+          foreach($key in @('enum Layout','ToggleAdvanced','pillContent','pillPlay','KeepVisible','advancedContent'))
+          { if(!$media.Contains($key)){throw "R21 player missing $key"} }
+          if(!$search.Contains('status.ToolTip=coverage') -or !$search.Contains('FontSize=11,TextTrimming=TextTrimming.CharacterEllipsis'))
+          { throw 'R21 search layout verification failed' }
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
