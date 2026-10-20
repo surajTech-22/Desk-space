@@ -13,6 +13,7 @@ on:
       - "r4/**"
       - "r5/**"
       - "r6/**"
+      - "r7/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -140,6 +141,15 @@ jobs:
           if (!$setup.Contains('AppVerName=DeskSpace R5')) { throw 'R6 installer naming anchor missing' }
           $setup = $setup.Replace('AppVerName=DeskSpace R5','AppVerName=DeskSpace R6')
           [IO.File]::WriteAllText($iss,$setup,[Text.UTF8Encoding]::new($false))
+
+      - name: Apply R7 unattended widget updates and supervised restart
+        shell: pwsh
+        run: |
+          ./r7/apply-r7.ps1
+          $updater = Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs' -Raw
+          if ($updater.Contains('timer.Interval = TimeSpan.FromHours(2)')) { throw 'R7 must check every five minutes' }
+          if (!$updater.Contains('Verified installer handed to independent supervisor')) { throw 'R7 installation handoff is missing' }
+          if (!(Select-String -Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -Pattern 'EmbeddedResource Include="DeskSpaceUpdateSupervisor.ps1"' -SimpleMatch -Quiet)) { throw 'R7 supervisor is not bundled as a resource' }
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
