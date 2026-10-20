@@ -2,6 +2,7 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
 Copy-Item 'r15/DeskSpaceDropShelfV15.cs' "$root/DeskSpaceDropShelfV15.cs" -Force
+Copy-Item 'r15/DeskSpaceClipboardV15.cs' "$root/DeskSpaceClipboardV10.cs" -Force
 Copy-Item 'r15/DeskSpaceSearchIndexV15.cs' "$root/DeskSpaceSearchIndexV13.cs" -Force
 Copy-Item 'r15/DeskSpaceWeatherSceneV15.cs' "$root/DeskSpaceWeatherSceneV11.cs" -Force
 function ReadSource([string]$path){

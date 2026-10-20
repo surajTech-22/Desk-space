@@ -26,10 +26,17 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DeskSpace","TemporaryShelf",Guid.NewGuid().ToString("N"));
     private bool busy, disposed;
+    private static DeskSpaceDropShelfV15? active;
+    public static bool IsActive=>active!=null;
+    public static IReadOnlyList<string> ActivePaths=>
+        active?.held.Select(x=>x.StagedPath).ToArray()??Array.Empty<string>();
+    public static void ImportClipboardFiles()=>active?.ImportFromClipboard();
+    public static void ClearActive()=>active?.ClearAll();
     private int placementNudge;
     public DeskSpaceDropShelfV15(Window window)
     {
         host=window;
+        active=this;
         host.AllowDrop=true;
         host.PreviewDragOver+=DragOver;
         host.PreviewDrop+=Receive;
@@ -78,14 +85,24 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         e.Effects=busy?DragDropEffects.None:DragDropEffects.Copy;
         e.Handled=true;
     }
-    private async void Receive(object sender,DragEventArgs e)
+    private void Receive(object sender,DragEventArgs e)
     {
         if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
         e.Effects=DragDropEffects.Copy;
         e.Handled=true;
-        if(busy || disposed)return;
         var files=e.Data.GetData(DataFormats.FileDrop) as string[];
-        if(files==null||files.Length==0)return;
+        if(files?.Length>0)_=StageFilesAsync(files);
+    }
+    private void ImportFromClipboard()
+    {
+        try{
+            if(!Clipboard.ContainsFileDropList())return;
+            _=StageFilesAsync(Clipboard.GetFileDropList().Cast<string>().ToArray());
+        }catch(Exception){}
+    }
+    private async Task StageFilesAsync(string[] files)
+    {
+        if(busy||disposed||files.Length==0)return;
         busy=true;
         Render();
         try
@@ -114,6 +131,10 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 MessageBoxButton.OK,MessageBoxImage.Warning);
         }
         finally{busy=false;if(!disposed)Render();}
+    }
+    private void ClearAll()
+    {
+        foreach(var item in held.ToArray())Remove(item);
     }
     private static void CopyFolder(string source,string destination)
     {
@@ -235,6 +256,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
     {
         if(disposed)return;
         disposed=true;
+        if(ReferenceEquals(active,this))active=null;
         popup.IsOpen=false;
         host.PreviewDragOver-=DragOver;
         host.PreviewDrop-=Receive;

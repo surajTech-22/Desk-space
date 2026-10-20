@@ -275,6 +275,8 @@ jobs:
           ./r13/apply-r13.ps1
           $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
           $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
+          $clipboard=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceClipboardV10.cs' -Raw
+          if(!$clipboard.Contains('DeskSpaceDropShelfV15.ActivePaths')) {throw 'R15 Clipboard uses a separate shelf'}
           if(!$widget.Contains('ModuleArea()') -or !$widget.Contains('AddWeatherScene(53,6,185)')) { throw 'R13 adaptive size/weather gate missing' }
           if(!$search.Contains('DriveInfo.GetDrives()') -or !$search.Contains('Installed app / Start menu')) { throw 'R13 broad search/app gate missing' }
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs')) {throw 'R13 index missing'}
