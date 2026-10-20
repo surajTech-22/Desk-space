@@ -130,10 +130,6 @@ $handlers=@'
         var settings=WidgetSettingsV3.Load();
         new WidgetOptionsWindow(settings,() => { settings.Save();settings.ApplyWindowsStartup(); }).Show();
     }
-    private void ShowWidget_Click(object sender,RoutedEventArgs e)
-    {
-        WidgetHostLauncher.EnsureRunning(force:true);
-    }
     private async void CheckForUpdates_Click(object sender,RoutedEventArgs e)
     {
         await DeskSpaceUpdater.CheckAsync(this);
@@ -149,6 +145,10 @@ $handlers=@'
     }
 '@
 $cs=$cs.Replace($anchor,$handlers + $anchor)
+$oldShow = '    private void ShowWidget_Click(object sender, RoutedEventArgs e) => ShowFloatingWidget();'
+if(!$cs.Contains($oldShow)){throw 'R9 legacy widget launch handler missing'}
+$cs=$cs.Replace($oldShow, '    private void ShowWidget_Click(object sender, RoutedEventArgs e) => WidgetHostLauncher.EnsureRunning(force:true);')
+
 $needle='        VersionButton.Content = "v" + DeskSpaceUpdater.CurrentVersion;'
 if(!$cs.Contains($needle)){throw 'R8 main-version control not found'}
 $cs=$cs.Replace($needle,$needle+[Environment]::NewLine+
