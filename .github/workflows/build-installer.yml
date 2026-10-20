@@ -17,6 +17,7 @@ on:
       - "r8/**"
       - "r9/**"
       - "r10/**"
+      - "r11/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -223,6 +224,29 @@ jobs:
           }
           $recurrence=Get-Content 'DeskSpace_Windows_R1/DeskSpace/Models.cs' -Raw
           if(!$recurrence.Contains('public string Recurrence')){throw 'R10 recurrence data not linked'}
+
+      - name: Apply R11 inline widget views and weather scene
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r11/apply-r11.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          foreach($required in @('new DeskSpaceSearchV11(', 'new DeskSpaceInlineV11(', 'Width=540;Height=72;', 'ResizeLiveSearch', 'ProcessStartInfo("calc.exe")', 'new DeskSpaceWeatherSceneV11(', 'AddWeatherScene(145,145,130)')) {
+            if(!$widget.Contains($required)){throw "R11 widget behavior missing: $required"}
+          }
+          $module=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceModuleV10.cs' -Raw
+          if($module.Contains('BuildCalculator(') -or $module.Contains('BuildSearch(body)')) {throw 'Legacy calculator or oversized Search popup remains'}
+          if(!$module.Contains('internal static List<SearchHit> SearchNow(')){throw 'Shared Search engine not available'}
+          $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchV11.cs' -Raw
+          if(!$search.Contains('item.MouseEnter') -or $search.Contains('Windows Calculator')){throw 'R11 Search result hover actions not verified'}
+          $inline=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInlineV11.cs' -Raw
+          foreach($required in @('BuildNotes(', 'BuildReminders(', 'BuildClipboard(')) {
+            if(!$inline.Contains($required)){throw "R11 inline module missing $required"}
+          }
+          $scene=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWeatherSceneV11.cs' -Raw
+          foreach($required in @('Sunny(', 'Cloudy(', 'Rain(', 'Night(', 'StopMotion()')){
+            if(!$scene.Contains($required)){throw "R11 weather scene missing $required"}
+          }
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
