@@ -8,6 +8,7 @@ on:
       - "assets/source.part*.txt"
       - "r2/**"
       - "r3/**"
+      - "r4/**"
   pull_request:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - "assets/source.part*.txt"
       - "r2/**"
       - "r3/**"
+      - "r4/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -79,6 +81,39 @@ jobs:
           if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs')) { throw 'Widget host missing' }
           if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/UniversalSearch.cs')) { throw 'Universal Search missing' }
           if (!(Select-String -Path installer/DeskSpace.iss -Pattern '#define AppVersion "1.2.0"' -Quiet -SimpleMatch)) { throw 'R3 version missing' }
+
+      - name: Apply DeskSpace R4 compact hold-to-open and outside-ring drag gesture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = for ($i=1; $i -le 2; $i++) {
+            $source = "r4/gesture.part$i.txt"
+            if (!(Test-Path -LiteralPath $source)) { throw "R4 source part missing: $source" }
+            (Get-Content -LiteralPath $source -Raw).Trim()
+          }
+          $archive = Join-Path (Get-Location).Path 'r4/widget-host-r4.tar.xz'
+          [IO.File]::WriteAllBytes($archive,[Convert]::FromBase64String($parts -join ''))
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne 'be55889700e48e5f91dbe7847f8a29de8f68fcf25d5fbcd7b8d07c686cc95eba') {
+            throw "R4 source integrity mismatch: $actual"
+          }
+          tar -xJf $archive
+          if ($LASTEXITCODE -ne 0) { throw 'R4 extraction failed' }
+          if (!(Test-Path 'r4/WidgetHost.cs')) { throw 'New widget host missing' }
+          Copy-Item -LiteralPath 'r4/WidgetHost.cs' -Destination 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Force
+          $hostSource = Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          foreach ($requirement in @('CompactDiameter = 116','TimeSpan.FromMilliseconds(230)',
+            'private void OnGestureMove','private int SectorAt','ClickSegment(Segments[selection])',
+            'Leaving the outermost circle means MOVE WIDGET, never RUN ACTION.')) {
+            if (!$hostSource.Contains($requirement)) { throw "R4 behavior gate missing: $requirement" }
+          }
+          $iss = 'installer/DeskSpace.iss'
+          $setup = [IO.File]::ReadAllText($iss)
+          if (!$setup.Contains('#define AppVersion "1.2.0"')) { throw 'Previous installer version unexpected' }
+          $setup = $setup.Replace('#define AppVersion "1.2.0"','#define AppVersion "1.3.0"')
+          $setup = $setup.Replace('AppVerName=DeskSpace R3','AppVerName=DeskSpace R4')
+          [IO.File]::WriteAllText($iss,$setup,[Text.UTF8Encoding]::new($false))
+          Write-Host 'R4 compact widget, ring selection and outer-ring drag behavior installed.'
 
       - name: Install .NET 8 SDK on GitHub build runner
         uses: actions/setup-dotnet@v4
