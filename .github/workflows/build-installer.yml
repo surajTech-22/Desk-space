@@ -7,12 +7,14 @@ on:
       - ".github/workflows/build-installer.yml"
       - "assets/source.part*.txt"
       - "r2/**"
+      - "r3/**"
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/build-installer.yml"
       - "assets/source.part*.txt"
       - "r2/**"
+      - "r3/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -56,6 +58,26 @@ jobs:
           ./r2/apply-r2.ps1
           if (!(Select-String -Path DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs -Pattern 'ShowFloatingWidget' -Quiet)) { throw 'Floating widget not wired' }
           if (!(Select-String -Path installer/DeskSpace.iss -Pattern '#define AppVersion "1.1.0"' -Quiet -SimpleMatch)) { throw 'R2 installer version not applied' }
+
+      - name: Reconstruct and apply DeskSpace R3 live donut sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = for ($i=1; $i -le 3; $i++) {
+            $path = "r3/source.part$i.txt"
+            if (!(Test-Path -LiteralPath $path)) { throw "R3 missing source part: $path" }
+            (Get-Content -LiteralPath $path -Raw).Trim()
+          }
+          $archive = Join-Path (Get-Location).Path 'r3/source-overlay.tar.xz'
+          [IO.File]::WriteAllBytes($archive,[Convert]::FromBase64String($parts -join ''))
+          $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'fa18ac004316133551183e53f31d670d7a32f12a3d72207dc748d09db049898e') { throw "R3 source checksum mismatch: $hash" }
+          tar -xJf $archive
+          if ($LASTEXITCODE -ne 0) { throw 'R3 source extraction failed' }
+          ./r3/apply-r3.ps1
+          if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs')) { throw 'Widget host missing' }
+          if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/UniversalSearch.cs')) { throw 'Universal Search missing' }
+          if (!(Select-String -Path installer/DeskSpace.iss -Pattern '#define AppVersion "1.2.0"' -Quiet -SimpleMatch)) { throw 'R3 version missing' }
 
       - name: Install .NET 8 SDK on GitHub build runner
         uses: actions/setup-dotnet@v4
