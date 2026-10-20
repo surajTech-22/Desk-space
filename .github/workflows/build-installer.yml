@@ -6,11 +6,13 @@ on:
     paths:
       - ".github/workflows/build-installer.yml"
       - "assets/source.part*.txt"
+      - "r2/**"
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/build-installer.yml"
       - "assets/source.part*.txt"
+      - "r2/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -46,6 +48,14 @@ jobs:
           if (!(Test-Path 'BUILD_DESKSPACE_SETUP.ps1')) { throw 'Build script missing' }
           if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj')) { throw 'App project missing' }
           if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj')) { throw 'Test project missing' }
+
+      - name: Apply R2 independently editable desktop widget fix
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath r2/FloatingDashboardWindow.cs -Destination DeskSpace_Windows_R1/DeskSpace/FloatingDashboardWindow.cs
+          ./r2/apply-r2.ps1
+          if (!(Select-String -Path DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs -Pattern 'ShowFloatingWidget' -Quiet)) { throw 'Floating widget not wired' }
+          if (!(Select-String -Path installer/DeskSpace.iss -Pattern '#define AppVersion "1.1.0"' -Quiet -SimpleMatch)) { throw 'R2 installer version not applied' }
 
       - name: Install .NET 8 SDK on GitHub build runner
         uses: actions/setup-dotnet@v4
