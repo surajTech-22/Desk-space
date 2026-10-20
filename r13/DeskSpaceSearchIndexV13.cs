@@ -68,7 +68,12 @@ internal static class DeskSpaceSearchIndexV13
         ("Background", "ms-settings:personalization-background"),
         ("Lock screen", "ms-settings:lockscreen"),
         ("Recovery", "ms-settings:recovery"),
-        ("System information", "ms-settings:about")
+        ("System information", "ms-settings:about"),
+        ("Control Panel", "control.exe"),
+        ("Task Manager", "taskmgr.exe"),
+        ("Device Manager", "devmgmt.msc"),
+        ("Services", "services.msc"),
+        ("Registry Editor", "regedit.exe")
     };
     private static bool Matches(string source,string search)
         => source.Contains(search,StringComparison.OrdinalIgnoreCase);
@@ -188,15 +193,22 @@ internal static class DeskSpaceSearchIndexV13
         lock(Gate)
         {
             var scanned=0;
+            // Protect cross-volume coverage: a crowded C: result set must not
+            // prevent matches from D:, E:, removable or network volumes.
+            var perVolume=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);
             foreach(var item in Entries)
             {
                 if((++scanned&4095)==0)cancellation.ThrowIfCancellationRequested();
                 if(!Matches(item.Name,term))continue;
                 if(item.Name.EndsWith(".lnk",StringComparison.OrdinalIgnoreCase) ||
                    item.Name.EndsWith(".url",StringComparison.OrdinalIgnoreCase))continue;
+                var volume=Path.GetPathRoot(item.Path)??"";
+                perVolume.TryGetValue(volume,out var already);
+                if(already>=32)continue;
+                var before=results.Count;
                 Add(new SearchHit{Category="Files",
                     Name=item.Name,OpenTarget=item.Path,Location=item.Path});
-                if(results.Count>=150)break;
+                if(results.Count>before)perVolume[volume]=already+1;
             }
         }
         return results.OrderBy(h=>h.Category=="Applications"?0:
