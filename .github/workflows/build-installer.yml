@@ -210,6 +210,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Automatic update release publishing failed' }
           $status = "$tag|$env:GITHUB_SHA|release-published"
           $base64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($status))
-          $request = @{message='Record verified DeskSpace automatic-release publication';content=$base64;branch='main'} | ConvertTo-Json -Compress
-          $request | gh api --method PUT repos/$repo/contents/releases/latest-build.txt --input -
+          $receiptPath = "repos/$repo/contents/releases/latest-build.txt"
+          # The file already exists after the first release. GitHub's contents API
+          # requires its CURRENT blob SHA for every subsequent update.
+          $oldSha = gh api $receiptPath --jq '.sha'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($oldSha)) { throw 'Cannot verify current release receipt SHA' }
+          $body = @{
+            message='Record verified DeskSpace automatic-release publication'
+            content=$base64
+            branch='main'
+            sha=$oldSha.Trim()
+          }
+          $request = $body | ConvertTo-Json -Compress
+          $request | gh api --method PUT $receiptPath --input -
           if ($LASTEXITCODE -ne 0) { throw 'Release published, but publication receipt could not be saved' }
