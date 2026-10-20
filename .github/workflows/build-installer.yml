@@ -12,6 +12,7 @@ on:
       - "r3/**"
       - "r4/**"
       - "r5/**"
+      - "r6/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -125,6 +126,20 @@ jobs:
           ./r5/apply-r5.ps1
           if(!(Select-String -Path DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs -Pattern 'DeskSpaceUpdater.StartAutomaticChecks' -Quiet)){throw 'R5 updater timer not wired'}
           if(!(Select-String -Path installer/DeskSpace.iss -Pattern '#define AppVersion "1.4.0"' -SimpleMatch -Quiet)){throw 'R5 version missing'}
+
+      - name: Apply R6 post-authentication update retry and diagnostics
+        shell: pwsh
+        run: |
+          ./r6/apply-r6.ps1
+          $updater = Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs' -Raw
+          if (!$updater.Contains('TimeSpan.FromMinutes(5)')) { throw 'R6 automatic sign-in retry missing' }
+          if (!$updater.Contains('update-status.log')) { throw 'R6 diagnostics missing' }
+          if (!(Select-String -Path 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Pattern 'Check for updates' -SimpleMatch -Quiet)) { throw 'Widget update action missing' }
+          $iss = 'installer/DeskSpace.iss'
+          $setup = [IO.File]::ReadAllText($iss)
+          if (!$setup.Contains('AppVerName=DeskSpace R5')) { throw 'R6 installer naming anchor missing' }
+          $setup = $setup.Replace('AppVerName=DeskSpace R5','AppVerName=DeskSpace R6')
+          [IO.File]::WriteAllText($iss,$setup,[Text.UTF8Encoding]::new($false))
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
