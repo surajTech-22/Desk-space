@@ -160,10 +160,10 @@ $text=$text.Substring(0,$tail)+@'
 # Reassign animated gradient only when weather actually changes.
 # Clock face halo is animated only when visible. Animation is compositor driven;
 # no new thread, no busy-wait, no per-frame file IO or weather HTTP traffic.
-Change ('        canvas.Children.Add(circle);'+[Environment]::NewLine+'        content.FontSize') @'
+Change ('        canvas.Children.Add(circle);'+[Environment]::NewLine+'        clockFace = circle;') @'
         canvas.Children.Add(circle);
+        clockFace = circle;
         AddWeatherHalo();
-        content.FontSize
 '@
 Change '    private void BuildDonut()' @'
     private void AddWeatherHalo()
