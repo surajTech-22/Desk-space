@@ -20,6 +20,13 @@ if($s.Contains('net8.0-windows10.0.19041.0')){
     ReplaceRequired 'net8.0-windows' 'net8.0-windows10.0.19041.0'
 }else{throw 'R18 unknown Windows target framework'}
 Save $p $s
+$p='DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj';$s=Load $p
+if($s.Contains('net8.0-windows10.0.19041.0')){
+    Write-Host 'Tests already target Windows SDK.'
+}elseif($s.Contains('net8.0-windows')){
+    ReplaceRequired 'net8.0-windows' 'net8.0-windows10.0.19041.0'
+}else{throw 'R18 unknown Windows test target framework'}
+Save $p $s
 $p="$root/DeskSpaceSearchV11.cs";$s=Load $p
 ReplaceRequired 'foreach(var hit in found.Take(7))' 'foreach(var hit in found.Take(45))'
 ReplaceRequired 'status.Text=found.Count+" matches · hover for actions"+' 'status.Text=found.Count+" matches · files, apps, settings"+'
