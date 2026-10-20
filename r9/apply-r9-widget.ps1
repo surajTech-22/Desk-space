@@ -113,11 +113,7 @@ Change @'
             _ = DeskSpaceWeather.RefreshAsync(prefs.WeatherCity);
         }
 '@
-Change '        UpdateCenter();'+[Environment]::NewLine+'        bool isFullscreen' '        UpdateCenter();'+[Environment]::NewLine+'        bool isFullscreen'
 # Status events show in centre only during active downloading/verification.
-Change '        Loaded += (_, _) =>' @'
-        Loaded += (_, _) =>
-'@
 Change '            DeskSpaceWeather.Updated += OnWeatherUpdated;' @'
             DeskSpaceWeather.Updated += OnWeatherUpdated;
             DeskSpaceUpdateProgress.Changed += OnUpdateProgress;
@@ -160,7 +156,6 @@ $text=$text.Substring(0,$tail)+@'
             content.Text=nextCentreText;
 '@+$text.Substring($tail)
 # Reassign animated gradient only when weather actually changes.
-Change '        if (clockFace != null) clockFace.Fill = ClockFace();'+[Environment]::NewLine+'        content.Text' '        if (clockFace != null) clockFace.Fill = ClockFace();'+[Environment]::NewLine+'        content.Text'
 # Clock face halo is animated only when visible. Animation is compositor driven;
 # no new thread, no busy-wait, no per-frame file IO or weather HTTP traffic.
 Change '        canvas.Children.Add(circle);'+[Environment]::NewLine+'        content.FontSize' @'
