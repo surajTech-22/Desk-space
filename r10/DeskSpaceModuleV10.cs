@@ -238,13 +238,13 @@ public sealed class DeskSpaceModuleV10 : IDisposable
         var row=Row();body.Children.Add(row);
         DateTime cursor=DateTime.Today;
         var view=new ComboBox{ItemsSource=new[]{"Month","Week","Day","Agenda"},SelectedIndex=0,Width=130,Margin=new Thickness(0,0,10,0)};
+        var dayTitle=Label("",17);
+        var calendar=new Calendar{SelectionMode=CalendarSelectionMode.SingleDate,Margin=new Thickness(0,2,0,8)};
+        var events=new ListBox{MinHeight=125,MaxHeight=245};
         var previous=Btn("◀",()=>{cursor=cursor.AddDays(view.SelectedItem as string=="Month"?-30:view.SelectedItem as string=="Week"?-7:-1);Reload();});
         var next=Btn("▶",()=>{cursor=cursor.AddDays(view.SelectedItem as string=="Month"?30:view.SelectedItem as string=="Week"?7:1);Reload();});
         row.Children.Add(view);row.Children.Add(previous);row.Children.Add(next);
-        var dayTitle=Label("",17);body.Children.Add(dayTitle);
-        var calendar=new Calendar{SelectionMode=CalendarSelectionMode.SingleDate,Margin=new Thickness(0,2,0,8)};
-        body.Children.Add(calendar);
-        var events=new ListBox{MinHeight=125,MaxHeight=245};body.Children.Add(events);
+        body.Children.Add(dayTitle);body.Children.Add(calendar);body.Children.Add(events);
         body.Children.Add(Label("New event"));var title=TextBox("Event title");body.Children.Add(title);
         var date=new DatePicker{SelectedDate=DateTime.Today};body.Children.Add(date);
         var repeat=new ComboBox{ItemsSource=new[]{"None","Daily","Weekly","Monthly","Yearly"},SelectedIndex=0,Margin=new Thickness(0,7,0,7)};
