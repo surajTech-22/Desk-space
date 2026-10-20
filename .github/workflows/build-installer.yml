@@ -20,6 +20,7 @@ on:
       - "r11/**"
       - "r12/**"
       - "r13/**"
+      - "r14/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -278,6 +279,14 @@ jobs:
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs')) {throw 'R13 index missing'}
           $inline=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInlineV11.cs' -Raw
           if(!$inline.Contains('MaxHeight=122') -or !$inline.Contains('MaxHeight=115')) {throw 'R13 inline-size gate missing'}
+
+      - name: Apply R14 compact widget corrections
+        shell: pwsh
+        run: |
+          ./r14/apply-r14.ps1
+          $code=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          if(!$code.Contains('height<=58?CompactDiameter') -or !$code.Contains('without an extra plate')){throw 'R14 gates missing'}
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceShellIconV14.cs')){throw 'R14 shell icons missing'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
