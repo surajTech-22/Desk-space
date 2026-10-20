@@ -179,7 +179,7 @@ internal static class DeskSpaceExcelBridgeV16
         var indexed=anchors.GroupBy(a=>Normalize(a.Label)).ToDictionary(
             x=>x.Key,x=>x.ToList(),StringComparer.OrdinalIgnoreCase);
         var votes=new Dictionary<(int,int),HashSet<string>>();
-        foreach(var (row,col,label) in SheetLabels(sheet))
+        foreach(var (row,col,label) in SheetLabels((object)sheet))
         {
             var key=Normalize(label);
             if(!indexed.TryGetValue(key,out var matches))continue;
@@ -217,7 +217,7 @@ internal static class DeskSpaceExcelBridgeV16
         }
         else
         {
-            var match=FindAnchorMatch(sheet,entry);
+            var match=FindAnchorMatch((object)sheet,entry);
             r=match.Row;c=match.Col;
             int required=Math.Min(3,entry.Anchors.Count);
             verified=match.Unique&&match.Matches>=Math.Max(2,required) &&
