@@ -27,6 +27,7 @@ on:
       - "r16/**"
       - "r17/**"
       - "r18/**"
+      - "r19/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -351,6 +352,21 @@ jobs:
           if(!$media.Contains('GlobalSystemMediaTransportControlsSessionManager') -or !$widget.Contains('OnMediaVisibility')) {throw 'R18 media integration missing'}
           if(!$search.Contains('DeskSpaceWindowsSearchV18.Query') -or !$os.Contains('Search.CollatorDSO.1')) {throw 'R18 integrated Windows Search missing'}
           if(!$widget.Contains('LeaveMediaMode')){throw 'R18 widget cannot return to circle'}
+
+      - name: Correct media controls below circle and search content spacing
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r19/apply-r19.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $media=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMediaV18.cs' -Raw
+          $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchV11.cs' -Raw
+          $shelf=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
+          if($widget.Contains('Content=media.CreateView()')) {throw 'R19 still overrides the normal circle'}
+          if(!$widget.Contains('media.ShowBelow(this,()=>content.Text)') -or !$widget.Contains('SetMediaOffset(218)')) {throw 'R19 controls or previous module data not wired'}
+          if(!$media.Contains('Hide circle') -or !$media.Contains('TryChangePlaybackPositionAsync')) {throw 'R19 hide/seek controls missing'}
+          if(!$search.Contains('80+Math.Min(260') -or !$search.Contains('var actions=new ContextMenu()')) {throw 'R19 results spacing or action menu missing'}
+          if(!$shelf.Contains('public void SetMediaOffset(double offset)')) {throw 'R19 temporary shelf will overlap player'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
