@@ -30,7 +30,11 @@ public sealed class DeskSpaceVaultV10 : IDisposable
         public string Ciphertext { get; set; } = "";
         public string Tag { get; set; } = "";
     }
-    private readonly string path = Path.Combine(WorkspaceStore.Root, "password-vault-v10.enc");
+    private readonly string path;
+    public DeskSpaceVaultV10(string? storagePath = null)
+    {
+        path = storagePath ?? Path.Combine(WorkspaceStore.Root, "password-vault-v10.enc");
+    }
     private byte[]? key;
     private byte[]? salt;
     private List<Secret> entries = new();
