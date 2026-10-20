@@ -28,6 +28,7 @@ on:
       - "r17/**"
       - "r18/**"
       - "r19/**"
+      - "r20/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -367,6 +368,20 @@ jobs:
           if(!$media.Contains('Hide circle') -or !$media.Contains('TryChangePlaybackPositionAsync')) {throw 'R19 hide/seek controls missing'}
           if(!$search.Contains('80+Math.Min(260') -or !$search.Contains('var actions=new ContextMenu()')) {throw 'R19 results spacing or action menu missing'}
           if(!$shelf.Contains('public void SetMediaOffset(double offset)')) {throw 'R19 temporary shelf will overlap player'}
+
+      - name: Apply R20 case-insensitive drive search and compact media redesign
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r20/apply-r20.ps1
+          $index=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
+          $media=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMediaV18.cs' -Raw
+          $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchV11.cs' -Raw
+          foreach($required in @('OrdinalIgnoreCase','VolumeCounts','driveFilter','showVolumes'))
+          {if(!$index.Contains($required)){throw "R20 search coverage gate: $required"}}
+          foreach($required in @('TogglePanel','ToggleCircle','DragDown','LoadArtAsync','IsShuffleEnabled','IsRepeatEnabled','IsPlaybackPositionEnabled','TryChangePlaybackRateAsync'))
+          {if(!$media.Contains($required)){throw "R20 media gate: $required"}}
+          if(!$search.Contains('DeskSpaceSearchIndexV13.Coverage')){throw 'R20 search coverage feedback missing'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
