@@ -366,7 +366,7 @@ public sealed class DeskSpaceModuleV10 : IDisposable
         row.Children.Add(Btn("Copy password",()=>{
             if(!vault.IsUnlocked||entries.SelectedItem is not VaultRow selected)return;
             var found=vault.Entries.FirstOrDefault(x=>x.Id==selected.Id);
-            if(found==null)return;Clipboard.SetText(found.Password);lastAccess=DateTime.UtcNow;
+            if(found==null)return;DeskSpaceClipboardV10.CopySensitive(found.Password);lastAccess=DateTime.UtcNow;
         }));
         row.Children.Add(Btn("Delete",()=>{
             if(!vault.IsUnlocked||entries.SelectedItem is not VaultRow selected)return;
