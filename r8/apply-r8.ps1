@@ -67,8 +67,8 @@ Edit $w '        if (Mouse.LeftButton != MouseButtonState.Pressed || draggingGes
             Mouse.LeftButton != MouseButtonState.Pressed)
         {
             var location = e.GetPosition(this);
-            var centre = new Point(Width / 2, Height / 2);
-            if ((location - centre).Length >
+            var cursorCentre = new Point(Width / 2, Height / 2);
+            if ((location - cursorCentre).Length >
                 Math.Min(Width, Height) * 137.0 / 292.0 + 3)
             {
                 CollapseRing();
