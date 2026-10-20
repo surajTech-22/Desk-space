@@ -48,9 +48,6 @@ Edit $w '        Closing += (_, _) => { shutdown = true;' @'
         };
         Closing += (_, _) => { DeskSpaceWeather.Updated -= OnWeatherUpdated; shutdown = true;
 '@
-Edit $w '        ringGesture = false;' @'
-        ringGesture = false;
-'@
 # Only the ring selection gesture is allowed to activate a sector. Invisible
 # wedge buttons caused unrequested Clock detail windows and keyboard focus theft.
 Edit $w '            int index=i;' '            // Display-only ring segment. Mouse release decides the selection.'
@@ -72,7 +69,6 @@ case "Notes": case "Calendar": case "Reminders": case "Clock":
                 // No separate window until the user explicitly chooses Expand.
                 prefs.CenterMode=name;prefs.Save();UpdateCenter();CollapseRing();break;
 '@
-Edit $w '            Fill = new SolidColorBrush(Color.FromArgb(70, 25, 19, 58))' '            Fill = new SolidColorBrush(Color.FromArgb(70, 25, 19, 58))'
 Edit $w 'var circle = new Ellipse { Width = 272, Height = 272, Fill = accent,' @'
 var circle = new Ellipse { Width = 272, Height = 272, Fill = ClockFace(),
 '@
@@ -84,14 +80,8 @@ Edit $w '        var centre = new Ellipse { Width=134,Height=134,Fill=accent,Str
         clockFace = null;
         var centre = new Ellipse { Width=134,Height=134,Fill=ClockFace(),Stroke=Brushes.White,StrokeThickness=3 };
 '@
-Edit $w '        content.Text=prefs.CenterMode switch {' @'
-        content.Text=prefs.CenterMode switch {
-'@
-Edit $w '            _=> DateTime.Now.ToString("HH:mm:ss")+"\\n"+DateTime.Now.ToString("ddd dd MMM")' @'
+Edit $w '            _=> DateTime.Now.ToString("HH:mm:ss")+"\n"+DateTime.Now.ToString("ddd dd MMM")' @'
             _=> ClockWithWeather()
-'@
-Edit $w '        };' @'
-        };
 '@
 # Explicit functions are inserted before the center-display selector; do not
 # change any module or accounting data models.
