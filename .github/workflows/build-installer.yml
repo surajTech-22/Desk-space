@@ -206,6 +206,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           ./r10/apply-r10.ps1
+          ./r10/apply-r10-tests.ps1
           $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
           foreach($check in @('private DeskSpaceModuleV10? activeModule;', 'OpenInWidget(string name)', 'double scale=420.0/Width', 'private const double OpenDiameter = 408', 'DeskSpaceClipboardV10.Poll()', 'DeskSpaceWindowBehavior.AllowInput(this,true)')) {
             if(!$widget.Contains($check)){throw "R10 widget missing $check"}
