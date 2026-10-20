@@ -14,6 +14,7 @@ on:
       - "r5/**"
       - "r6/**"
       - "r7/**"
+      - "r8/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -157,6 +158,25 @@ jobs:
           foreach ($gate in @('Wait-Process', 'Start-Process -FilePath $Installer', 'Start-Process -FilePath $TargetExe', 'restoreMainWindow')) {
             if (!$supervisorSource.Contains($gate)) { throw "R7 unattended update supervisor is missing $gate" }
           }
+
+      - name: Apply R8 version UI, live weather, branded icon and donut interaction fixes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./r8/apply-r8.ps1
+          ./r8/create-logo.ps1
+          $widget = Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          foreach ($gate in @('DeskSpaceWindowBehavior.Apply', 'DeskSpaceWeather.RefreshAsync', 'ClockWithWeather()', 'MouseLeave +=', 'About / Version')) {
+            if (!$widget.Contains($gate)) { throw "R8 widget check failed: $gate" }
+          }
+          if ($widget.Contains('btn.Click += (_,_)=> ClickSegment')) { throw 'R8 must not open modules from invisible buttons' }
+          $native = Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWindowBehavior.cs' -Raw
+          if (!$native.Contains('WS_EX_NOACTIVATE') -or !$native.Contains('WS_EX_TOOLWINDOW')) { throw 'R8 Alt+Tab/focus exclusion missing' }
+          $project = Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -Raw
+          if (!$project.Contains('<ApplicationIcon>DeskSpace.ico</ApplicationIcon>')) { throw 'R8 application icon missing' }
+          $version = Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml' -Raw
+          if (!$version.Contains('VersionButton')) { throw 'R8 version control missing' }
+          if (!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.ico')) { throw 'R8 logo generation failed' }
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
