@@ -18,6 +18,7 @@ on:
       - "r9/**"
       - "r10/**"
       - "r11/**"
+      - "r12/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -246,6 +247,22 @@ jobs:
           $scene=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWeatherSceneV11.cs' -Raw
           foreach($required in @('Sunny(', 'Cloudy(', 'Rain(', 'Night(', 'StopMotion()')){
             if(!$scene.Contains($required)){throw "R11 weather scene missing $required"}
+          }
+
+      - name: Apply R12 weather rendering and explicit drag gestures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r12/apply-r12.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          foreach($required in @('OnShortcutRightMouseDown','StartShortcutDrag()','ModifierKeys.Shift','Mouse.RightButton==MouseButtonState.Pressed','rightClickOpenedUntil','SectorAt(e.GetPosition(this))>=0','Width=216,Height=116')) {
+            if(!$widget.Contains($required)) {throw "R12 expected widget behavior missing: $required"}
+          }
+          if($widget.Contains('Leaving the outermost circle means MOVE WIDGET')) {throw 'R12 unwanted outside-ring drag still exists'}
+          if($widget.Contains('move outside ring to drag')) {throw 'R12 obsolete drag tooltip remains'}
+          $scene=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWeatherSceneV11.cs' -Raw
+          foreach($needed in @('TimeSpan.FromSeconds(18)','Motion(-d*.065,d*.075,5.2)','Motion(-d*.11,d*.14,1.6)')) {
+            if(!$scene.Contains($needed)) {throw "R12 weather animation missing: $needed"}
           }
 
       - name: Assign monotonic build version to installer and app
