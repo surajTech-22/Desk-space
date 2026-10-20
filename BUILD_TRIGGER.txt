@@ -1,0 +1,1 @@
+Run the Windows installer verification pipeline for DeskSpace R1. This contains no client data.
