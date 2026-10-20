@@ -81,7 +81,7 @@ Change '    private bool CanDragFrom(MouseButtonEventArgs e)' @'
         var old=activeModule;activeModule=null;old.Dispose();
         DeskSpaceWindowBehavior.AllowInput(this,false);
         ShowActivated=false;
-        Content=new Viewbox{Child=canvas,Stretch=Stretch.Uniform};
+        Content=canvas.Parent as Viewbox ?? new Viewbox{Child=canvas,Stretch=Stretch.Uniform};
         Width=Height=CompactDiameter;
         Left=restoreLeft;Top=restoreTop;
         KeepOnVisibleDesktop();
@@ -208,5 +208,5 @@ $module=@'
 ReplaceMethod '    private void ClickSegment(string name)' '    private void ApplySettings()' $module
 [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
 $iss="installer/DeskSpace.iss"
-Edit $iss 'AppVerName=DeskSpace R9' 'AppVerName=DeskSpace R10'
+Edit $iss 'AppVerName=DeskSpace R8' 'AppVerName=DeskSpace R10'
 Write-Host 'R10 transformed widgets, 12-sector two-ring donut, encrypted vault, planner and clipboard integrated.'
