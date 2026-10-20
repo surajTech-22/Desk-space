@@ -34,7 +34,7 @@ public static class DeskSpaceClipboardV10
             Entries.RemoveAll(x=>DateTime.UtcNow-x.Copied>TimeSpan.FromMinutes(30));
         }
         catch(System.Runtime.InteropServices.COMException){}
-        catch(System.Windows.Threading.DispatcherOperationCanceledException){}
+        catch(InvalidOperationException){}
     }
     public static void HoldCurrentFiles()
     {
