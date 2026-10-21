@@ -37,6 +37,7 @@ on:
       - "r26/**"
       - "r27/**"
       - "r28/**"
+      - "r29/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -580,6 +581,41 @@ jobs:
           if(!$info.Contains('information-collections-v26.json') -or
             !(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
           {throw 'R28 legacy data or encrypted vault safety gate missing'}
+
+      - name: R29 close child submenu when hovering another module
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r29/apply-r29.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $select=$widget.IndexOf('private void UpdateHighlightedSector(')
+          $selectEnd=$widget.IndexOf('private void BuildCompact()', $select)
+          if($select -lt 0 -or $selectEnd -le $select){throw 'R29 selection method missing'}
+          $hover=$widget.Substring($select,$selectEnd-$select)
+          foreach($key in @('selected>=0 && selected!=6','CloseInformationContext();',
+            'selected==6 && ringExpanded','OpenInformationArc();'))
+          {if(!$hover.Contains($key)){throw "R29 hover state transition missing $key"}}
+          $arc=$widget.IndexOf('private int informationArcVersion;')
+          $arcEnd=$widget.IndexOf('private void ClickSegment(string name)', $arc)
+          if($arc -lt 0 -or $arcEnd -le $arc){throw 'R29 submenu state machine missing'}
+          $state=$widget.Substring($arc,$arcEnd-$arc)
+          foreach($key in @('if(version!=informationArcVersion)return;',
+             'informationArcVersion++;','informationArcOpening=false;',
+             'informationOverlay.Hide();','if(informationOverlay?.IsOpen==true)'))
+          {if(!$state.Contains($key)){throw "R29 stale-submenu prevention missing $key"}}
+          $click=$widget.IndexOf('private void ClickSegment(string name)')
+          $clickEnd=$widget.IndexOf('private void ApplySettings()', $click)
+          if($click -lt 0 -or $clickEnd -le $click){throw 'R29 click transition unavailable'}
+          if(!$widget.Substring($click,$clickEnd-$click).Contains('CloseInformationContext();'))
+          {throw 'R29 click fallback does not close previous submenu'}
+          if(!$widget.Contains('if(ringExpanded)' + [Environment]::NewLine +
+              '            CloseInformationContext();'))
+          {throw 'R29 parent ring collapse does not cancel child submenu'}
+          if(!$widget.Contains('if(selected==highlightedSector)return;'))
+          {throw 'R29 highlighting regression'}
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV27.cs' -Raw
+          foreach($key in @('ChildSector(','NewCollection()','information-collections-v26.json','VaultId'))
+          {if(!$info.Contains($key)){throw "R29 existing Information functionality lost $key"}}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
