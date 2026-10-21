@@ -41,6 +41,8 @@ $after=@'
         UpdateHighlightedSector(p);
         e.Handled=true;
 '@
+$prior=$prior.Replace([string][char]13+[char]10,[string][char]10)
+$after=$after.Replace([string][char]13+[char]10,[string][char]10)
 if(!$move.Contains($prior)){throw 'R32 captured mouse move anchor missing'}
 $move=$move.Replace($prior,$after)
 $s=$s.Substring(0,$moveBegin)+$move+$s.Substring($moveEnd)
@@ -72,6 +74,8 @@ $afterUp=@'
         holdTimer.Stop();
         holdPending = false;
 '@
+$beforeUp=$beforeUp.Replace([string][char]13+[char]10,[string][char]10)
+$afterUp=$afterUp.Replace([string][char]13+[char]10,[string][char]10)
 if(!$up.Contains($beforeUp) -or !$up.Contains('CollapseRing();') -or
    !$up.Contains('SectorAt(e.GetPosition(this))'))
 {throw 'R32 original mouse release safety guard failed'}
