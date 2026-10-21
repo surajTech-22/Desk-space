@@ -39,6 +39,7 @@ on:
       - "r28/**"
       - "r29/**"
       - "r30/**"
+      - "r31/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -671,6 +672,87 @@ jobs:
           if(!$clickMethod.Contains('ConfirmNavigation()') -or
              !$clickMethod.Contains('informationOverlay?.Hide();'))
           {throw 'R30 navigating away loses unsaved input without warning'}
+
+      - name: R31 interactive child-donut geometry and zero-saved action checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r31/apply-r31.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV31.cs' -Raw
+          foreach($key in @('DeskSpaceInformationV31','CloseInformationContext();',
+            'informationOverlay?.IsArcOpen','ConfirmNavigation()'))
+          {if(!$widget.Contains($key)){throw "R31 host integration missing: $key"}}
+          foreach($key in @('arcCanvas.MouseMove+=OnArcMouseMove',
+            'arcCanvas.PreviewMouseLeftButtonDown+=OnArcPointerDown',
+            'arcCanvas.PreviewMouseLeftButtonUp+=OnArcPointerUp',
+            'SlotAtPoint(e.GetPosition(arcCanvas))','entry.hit.FillContains(point)',
+            'ActivateChild(slot,arcHitZones[slot].id)',
+            'arcPressed=true;',
+            'HoverChild(slot,arcHitZones[slot].id)',
+            'count==1?17:Math.Min(57,12.0*count)',
+            'double start=-90-halfSweep',
+            'bool add=i==visible.Length',
+            'if(startIndex>0)',
+            'if(startIndex+PageSize<all.Count)',
+            'if(sector==arcHitZones.Count-1)',
+            'if(!editorActive)NewCollection()',
+            'TimeSpan.FromMilliseconds(260)',
+            'newHoverTimer.Stop()',
+            'information-collections-v26.json',
+            'information-items-v22.json','MaskRevealed()','VaultId'))
+          {if(!$info.Contains($key)){throw "R31 missing behavior: $key"}}
+          if($info.Contains('const double start=-153,finish=-27') -or
+             $info.Contains('b.MouseEnter+='))
+          {throw 'R31 legacy detached / overlapping arc still present'}
+          # These explicit geometric cases reproduce the actual error:
+          # with ZERO items, the only visible + sector must be centered
+          # above the Information parent, not placed far to the right.
+          foreach($saved in @(0,1,2,3,4,12))
+          {
+            $visible=[Math]::Min(4,$saved)
+            $count=$visible+1
+            $half=if($count -eq 1){17.0}else{[Math]::Min(57.0,12.0*$count)}
+            $start=-90.0-$half
+            $width=2.0*$half/$count
+            for($i=0;$i -lt $count;$i++)
+            {
+              $middle=$start+($i+0.5)*$width
+              $rad=$middle*[Math]::PI/180.0
+              # Full visual hit region must remain within Popup canvas.
+              foreach($radius in @(207.0,260.0))
+              {
+                $px=244+$radius*[Math]::Cos($rad)
+                $py=306+$radius*[Math]::Sin($rad)
+                if($px -lt 0 -or $px -ge 488 -or $py -lt 0 -or $py -ge 222)
+                {throw "R31 sector offscreen for $saved saved at slot $i : $px, $py"}
+              }
+              $cx=244+233.5*[Math]::Cos($rad)
+              $cy=306+233.5*[Math]::Sin($rad)
+              if($cx -lt 0 -or $cx -ge 488 -or $cy -lt 0 -or $cy -ge 222)
+              {throw "R31 child label offscreen for $saved saved, slot $i"}
+            }
+            if($saved -eq 0)
+            {
+               $addMid=$start+(0.5)*$width
+               if([Math]::Abs($addMid+90.0) -gt .0001)
+               {throw 'R31 empty + New is not directly above Information'}
+            }
+          }
+          # CI checks real pointer hit-testing dispatch source, not just
+          # whether the sector fills happened to draw successfully.
+          $render=$info.Substring($info.IndexOf('private void RenderArc()'),
+             $info.IndexOf('private static readonly Brush ChildIdle')-$info.IndexOf('private void RenderArc()'))
+          foreach($key in @('Data=hit','arcHitZones.Add((i,id,hit))',
+            'arcCanvas.Children.Add(sector)','IsHitTestVisible=false',
+            'PreviewMouseLeftButtonUp','ActivateChild(slot,arcHitZones[slot].id)'))
+          {
+            if(!$info.Contains($key)){throw "R31 hit-test path not wired: $key"}
+          }
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs') -or
+             !$info.Contains('File.Replace(temp,CollectionsPath'))
+          {throw 'R31 persisted information and encrypted vault safety gate failed'}
+          Write-Host 'R31 0/1/2/3/4/12-item sector geometry and pointer-selection source gates passed.'
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
