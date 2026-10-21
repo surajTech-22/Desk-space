@@ -55,7 +55,7 @@ $s=$s.Substring(0,$donutStart)+$donut+$s.Substring($donutEnd)
 # as SectorAt(), so screen scaling does not change its click area.
 $utility=@'
     private static bool HasModuleQuickAdd(string module) =>
-        module is "Notes" or "Reminders" or "Calendar" or "Clipboard";
+        module is "Notes" or "Reminders" or "Tasks" or "Calendar" or "Clipboard";
 
     private int QuickAddHitAt(Point p)
     {
@@ -98,7 +98,7 @@ $insert=@'
                 holdTimer.Stop();
                 holdPending=false;ringGesture=false;highlightedSector=-1;
                 if(IsMouseCaptured)ReleaseMouseCapture();
-                string target=Segments[addSector];
+                string target=Segments[addSector]=="Tasks"?"Reminders":Segments[addSector];
                 CollapseRing();
                 Dispatcher.BeginInvoke(new Action(()=>OpenInWidget(target,true)));
                 e.Handled=true;return;
