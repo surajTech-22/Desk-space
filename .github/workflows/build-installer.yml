@@ -42,6 +42,7 @@ on:
       - "r31/**"
       - "r32/**"
       - "r33/**"
+      - "r34/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -893,6 +894,10 @@ jobs:
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
           {throw 'R33 original encrypted vault not preserved'}
           Write-Host 'R33 compact shelf / movement / header + / data safeguards verified.'
+
+      - name: R34 inspect live ring transition methods
+        shell: pwsh
+        run: ./r34/inspect.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
