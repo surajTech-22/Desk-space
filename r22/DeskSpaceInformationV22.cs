@@ -31,7 +31,10 @@ internal sealed class DeskSpaceInformationV22
         try{
             if(!File.Exists(Location))return new();
             return JsonSerializer.Deserialize<List<Record>>(File.ReadAllText(Location))??new();
-        }catch(Exception){return new();}
+        }catch(Exception ex){
+            throw new InvalidDataException(
+                "The information file could not be read. It was not changed; restore or repair the file before editing.",ex);
+        }
     }
     private static void Write(List<Record> records)
     {
