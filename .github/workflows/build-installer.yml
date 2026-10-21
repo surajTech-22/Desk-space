@@ -964,9 +964,9 @@ jobs:
         shell: pwsh
         run: ./r35/test-r35.ps1
 
-      - name: R36 inspect assembled module regressions
+      - name: R36 verify full-circle weather calendar calculator and minimized media
         shell: pwsh
-        run: ./r36/inspect.ps1
+        run: ./r36/test-r36.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
