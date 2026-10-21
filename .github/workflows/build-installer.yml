@@ -659,7 +659,11 @@ jobs:
              !$hover.Contains('OpenCollection(id.Value)'))
           {throw 'R30 hovering a saved collection does not select/preview it'}
           if($hover.Contains('NewCollection()'))
-          {throw 'R30 + New must not create a draft accidentally on hover'}
+          {throw 'R30 + New must use dwell rather than immediate creation'}
+          foreach($key in @('newHoverTimer.Tick+=','TimeSpan.FromMilliseconds(260)',
+            'wedge.MouseLeave+=','b.MouseLeave+=','newHoverTimer.Stop();',
+            'newHoverTimer.Start();','EndChildHover(int sector)'))
+          {if(!$info.Contains($key)){throw "R30 hover and exit transition missing $key"}}
           $click=$widget.IndexOf('private void ClickSegment(string name)')
           $clickEnd=$widget.IndexOf('private void ApplySettings()', $click)
           if($click -lt 0 -or $clickEnd -le $click){throw 'R30 cannot verify navigation'}
