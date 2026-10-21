@@ -30,6 +30,7 @@ on:
       - "r19/**"
       - "r20/**"
       - "r21/**"
+      - "r22/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -395,6 +396,28 @@ jobs:
           { if(!$media.Contains($key)){throw "R21 player missing $key"} }
           if(!$search.Contains('status.ToolTip=coverage') -or !$search.Contains('FontSize=11,TextTrimming=TextTrimming.CharacterEllipsis'))
           { throw 'R21 search layout verification failed' }
+
+      - name: R22 restore all search categories, offline weather and circle morph
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r22/apply-r22.ps1
+          $search=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
+          $weather=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWeather.cs' -Raw
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $module=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceModuleV10.cs' -Raw
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV22.cs' -Raw
+          foreach($term in @('Category="Applications"','Category="Settings"','Category="Notes"','Category="Calendar"','Category="Reminders"','Category="Information"'))
+          {if(!$search.Contains($term)){throw "R22 search category missing: $term"}}
+          foreach($term in @('LoadCache','Persist(reading)','IsOffline','WeatherStatus'))
+          {if(!$weather.Contains($term)){throw "R22 weather persistence missing: $term"}}
+          if(!$widget.Contains('AnimateModuleOpen(surface)') -or !$widget.Contains('AnimateModuleClose(previousWidth,previousHeight)'))
+          {throw 'R22 morph animation missing'}
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV22.cs') -or
+             !(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
+          {throw 'R22 information manager or existing vault source missing'}
+          if($info.Contains('password-vault-v10.enc')){throw 'R22 ordinary information references vault file'}
+          if(!$info.Contains('information-items-v22.json')){throw 'R22 normal information store missing'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
