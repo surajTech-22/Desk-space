@@ -136,8 +136,8 @@ internal static class Program
     private static void TestMediaPill()
     {
         var player=Make("DeskSpace.DeskSpaceMediaV18");
-        var host=new Window{Width=116,Height=116,ShowInTaskbar=false,
-            WindowStyle=WindowStyle.None,Opacity=0};
+        var host=new Window{Width=116,Height=116,Left=100,Top=100,
+            ShowInTaskbar=false,WindowStyle=WindowStyle.None,Opacity=0};
         try
         {
             Set(player,"visible",true);
