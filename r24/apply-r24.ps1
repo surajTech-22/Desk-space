@@ -210,4 +210,104 @@ $morph=@'
 '@
 $s=$s.Substring(0,$start)+$morph+$s.Substring($end)
 Save $p $s
-Write-Host 'R24: in-circle Calendar with full planner, improved window morph, modern information editor, unchanged vault and existing event data.'
+# Anchor resizing at the centre of the original circle, including window
+# position. Animating only Width/Height made modules appear to grow from the
+# top-left rather than morph from the circle.
+$s=Read $p
+function MustWidget([string]$old,[string]$new) {
+    if(!$script:s.Contains($old)){throw "R24 morph anchor missing: $old"}
+    $script:s=$script:s.Replace($old,$new)
+}
+$position=@'
+    private void PositionModuleFromCircle(double sourceLeft,double sourceTop,
+        double sourceWidth,double sourceHeight)
+    {
+        Left=sourceLeft+sourceWidth/2-Width/2;
+        Top=sourceTop+sourceHeight/2-Height/2;
+        KeepOnVisibleDesktop();
+    }
+
+'@
+MustWidget '    private void StopMorphWindowAnimations()' ($position+'    private void StopMorphWindowAnimations()')
+MustWidget '        BeginAnimation(Window.HeightProperty,null);' @'
+        BeginAnimation(Window.HeightProperty,null);
+        BeginAnimation(Window.LeftProperty,null);
+        BeginAnimation(Window.TopProperty,null);
+'@
+MustWidget '        AnimateModuleOpenFrom(surface,CompactDiameter,CompactDiameter);' '        AnimateModuleOpenFrom(surface,CompactDiameter,CompactDiameter,restoreLeft,restoreTop);'
+MustWidget '    private void AnimateModuleOpenFrom(FrameworkElement surface,double startW,double startH)' '    private void AnimateModuleOpenFrom(FrameworkElement surface,double startW,double startH,double startLeft,double startTop)'
+MustWidget '        double targetW=Width,targetH=Height;' '        double targetW=Width,targetH=Height,targetLeft=Left,targetTop=Top;'
+MustWidget '        // A small entry scale plus delayed opacity removes the harsh' @'
+        BeginAnimation(Window.LeftProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(startLeft,targetLeft,duration){
+                FillBehavior=System.Windows.Media.Animation.FillBehavior.Stop,EasingFunction=easing});
+        BeginAnimation(Window.TopProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(startTop,targetTop,duration){
+                FillBehavior=System.Windows.Media.Animation.FillBehavior.Stop,EasingFunction=easing});
+        // A small entry scale plus delayed opacity removes the harsh
+'@
+MustWidget '    private void AnimateModuleClose(double oldWidth,double oldHeight)' '    private void AnimateModuleClose(double oldWidth,double oldHeight,double oldLeft,double oldTop)'
+MustWidget '        if(Content is FrameworkElement circle)' @'
+        BeginAnimation(Window.LeftProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(oldLeft,Left,duration){
+                FillBehavior=System.Windows.Media.Animation.FillBehavior.Stop,EasingFunction=easing});
+        BeginAnimation(Window.TopProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(oldTop,Top,duration){
+                FillBehavior=System.Windows.Media.Animation.FillBehavior.Stop,EasingFunction=easing});
+        if(Content is FrameworkElement circle)
+'@
+# Both calendar presentation sizes should morph around the current centre.
+MustWidget '        double previousWidth=Width,previousHeight=Height;' @'
+        double previousWidth=Width,previousHeight=Height;
+        double previousLeft=Left,previousTop=Top;
+'@
+MustWidget '        AnimateModuleOpenFrom(surface,previousWidth,previousHeight);' '        AnimateModuleOpenFrom(surface,previousWidth,previousHeight,previousLeft,previousTop);'
+MustWidget @'
+        KeepOnVisibleDesktop();
+        var surface=activeModule.Build("Calendar");
+'@ @'
+        PositionModuleFromCircle(previousLeft,previousTop,previousWidth,previousHeight);
+        var surface=activeModule.Build("Calendar");
+'@
+MustWidget @'
+        KeepOnVisibleDesktop();
+        FrameworkElement surface=new Viewbox{Stretch=Stretch.Uniform,
+'@ @'
+        PositionModuleFromCircle(previousLeft,previousTop,previousWidth,previousHeight);
+        FrameworkElement surface=new Viewbox{Stretch=Stretch.Uniform,
+'@
+# Restrict these replacements to the exact host opening/returning methods.
+$open=$s.IndexOf('    private void OpenInWidget(string name)',[StringComparison]::Ordinal)
+$limit=if($open -ge 0){$s.IndexOf('    private void PositionModuleFromCircle(', $open,[StringComparison]::Ordinal)}else{-1}
+if($open -lt 0 -or $limit -le $open){throw 'R24 opening method boundary unavailable'}
+$openMethod=$s.Substring($open,$limit-$open)
+$old=@'
+        KeepOnVisibleDesktop();
+        Content=surface;
+'@
+$new=@'
+        PositionModuleFromCircle(restoreLeft,restoreTop,CompactDiameter,CompactDiameter);
+        Content=surface;
+'@
+if(!$openMethod.Contains($old)){throw 'R24 opening placement not found'}
+$openMethod=$openMethod.Replace($old,$new)
+$s=$s.Substring(0,$open)+$openMethod+$s.Substring($limit)
+
+$back=$s.IndexOf('    private void ReturnFromModule()', [StringComparison]::Ordinal)
+$backEnd=if($back -ge 0){$s.IndexOf('    private bool CanDragFrom(', $back,[StringComparison]::Ordinal)}else{-1}
+if($back -lt 0 -or $backEnd -le $back){throw 'R24 returning method boundary unavailable'}
+$return=$s.Substring($back,$backEnd-$back)
+$before='        var previousHeight=Height;'
+$after=@'
+        var previousHeight=Height;
+        var previousLeft=Left;
+        var previousTop=Top;
+'@
+if(!$return.Contains($before)){throw 'R24 return size anchor unavailable'}
+$return=$return.Replace($before,$after)
+if(!$return.Contains('AnimateModuleClose(previousWidth,previousHeight);')){throw 'R24 return animation anchor unavailable'}
+$return=$return.Replace('AnimateModuleClose(previousWidth,previousHeight);','AnimateModuleClose(previousWidth,previousHeight,previousLeft,previousTop);')
+$s=$s.Substring(0,$back)+$return+$s.Substring($backEnd)
+Save $p $s
+Write-Host 'R24: circle-anchored animated window geometry, in-circle Calendar and reversible full planner, corrected Information Manager.'
+
