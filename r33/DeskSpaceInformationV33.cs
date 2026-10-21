@@ -133,6 +133,13 @@ internal sealed class DeskSpaceInformationV33 : IDisposable
         x.Margin=new Thickness(4,3,6,3);
         DockPanel.SetDock(x,Dock.Right);
         header.Children.Add(x);
+        var add=SmallButton("+",()=>{if(!editorActive)NewCollection();});
+        add.ToolTip="New information collection";
+        add.FontSize=17;
+        add.MinWidth=29;
+        add.Margin=new Thickness(1,2,1,2);
+        DockPanel.SetDock(add,Dock.Right);
+        header.Children.Add(add);
         var h=new Border{Padding=new Thickness(9,6,0,0),Child=shelfTitle};
         header.Children.Add(h);
         shelfScroll=new ScrollViewer{
