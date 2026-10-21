@@ -22,7 +22,7 @@ Must '    public FrameworkElement Build(string mode)' @'
     public FrameworkElement Build(string mode)
 '@
 $buildStart=$s.IndexOf('    public FrameworkElement Build(string mode)',[StringComparison]::Ordinal)
-$buildEnd=if($buildStart -ge 0){$s.IndexOf('    private void BuildSearch(',$buildStart,[StringComparison]::Ordinal)}else{-1}
+$buildEnd=if($buildStart -ge 0){$s.IndexOf('    private void BuildNotes(',$buildStart,[StringComparison]::Ordinal)}else{-1}
 if($buildStart -lt 0 -or $buildEnd -le $buildStart){throw 'R33 module Build boundaries unavailable'}
 $block=$s.Substring($buildStart,$buildEnd-$buildStart)
 if(!$block.Contains('var top=new DockPanel();') -or !$block.Contains('switch(mode)'))
