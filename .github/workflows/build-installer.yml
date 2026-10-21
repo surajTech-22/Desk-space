@@ -959,9 +959,9 @@ jobs:
           {throw 'R34 encrypted vault original missing'}
           Write-Host 'R34 source and layout regression gates passed for child collapse, left/right overflow and module + actions.'
 
-      - name: R35 inspect assembled input and collapse state
+      - name: R35 shared child and main wheel hover regression gates
         shell: pwsh
-        run: ./r35/inspect.ps1
+        run: ./r35/test-r35.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
