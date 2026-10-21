@@ -107,3 +107,12 @@ if(!$hostSource.Contains($methodAnchor)){throw 'R37 calculator helper anchor mis
 $hostSource=$hostSource.Replace($methodAnchor,$launcher+$methodAnchor)
 [IO.File]::WriteAllText($hostPath,$hostSource,[Text.UTF8Encoding]::new($false))
 Write-Host 'R37: original Windows Calculator launch + circle back; circular-safe calendar and seamless offline sky.' 
+
+# Match the existing real WPF smoke test to the new compact icon,
+# while retaining the separate Planner button.
+$smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
+$old='ButtonWith(ui,"Expand ↗")'
+if(!$smoke.Contains($old)){throw 'R37 WPF calendar expand test anchor missing'}
+$smoke=$smoke.Replace($old,'ButtonWith(ui,"↗")')
+[IO.File]::WriteAllText('r36/UiSmoke/Program.cs',$smoke,[Text.UTF8Encoding]::new($false))
+Write-Host 'R37: WPF calendar compact expansion/return hit targets updated.'
