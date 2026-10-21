@@ -1017,6 +1017,26 @@ jobs:
         shell: pwsh
         run: ./BUILD_DESKSPACE_SETUP.ps1
 
+      - name: R36 render and exercise real WPF weather calendar media and calculator
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- 'r36/UiSmoke/visual-evidence'
+          if($LASTEXITCODE -ne 0){throw 'R36 WPF rendering and interaction smoke failed'}
+          $screens=Get-ChildItem 'r36/UiSmoke/visual-evidence' -Filter '*.png'
+          if($screens.Count -lt 6){throw 'R36 WPF screenshot evidence incomplete'}
+          foreach($image in $screens){
+            if($image.Length -lt 2500){throw "R36 empty screenshot: $($image.Name)"}
+          }
+          Write-Host "R36 captured $($screens.Count) authentic WPF render comparisons."
+
+      - name: Upload R36 WPF visual verification images
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R36-WPF-Visual-Smoke
+          path: r36/UiSmoke/visual-evidence/*.png
+          if-no-files-found: error
+
       - name: Confirm installer and checksum exist
         shell: pwsh
         run: |
