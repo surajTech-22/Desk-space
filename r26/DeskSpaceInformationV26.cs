@@ -74,6 +74,7 @@ internal sealed class DeskSpaceInformationV26 : IDisposable
     private bool disposed;
     private List<Collection> all=new();
     private readonly List<RowEditor> editorRows=new();
+    private readonly List<TextBlock> revealedValues=new();
     private bool addingRow;
     private Guid? editingId;
 
@@ -93,7 +94,7 @@ internal sealed class DeskSpaceInformationV26 : IDisposable
         var header=new DockPanel{
             LastChildFill=true,Background=Pale,Height=35,
             Margin=new Thickness(0,0,0,3)};
-        var x=SmallButton("×",()=>shelf.IsOpen=false);
+        var x=SmallButton("×",()=>{shelf.IsOpen=false;MaskRevealed();vault.Lock();});
         x.FontSize=16;x.MinWidth=30;
         x.Margin=new Thickness(4,3,6,3);
         DockPanel.SetDock(x,Dock.Right);
@@ -125,7 +126,7 @@ internal sealed class DeskSpaceInformationV26 : IDisposable
         lockTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(15)};
         lockTimer.Tick+=(_,_)=>{
             if(vault.IsUnlocked && DateTime.UtcNow-lastVaultAccess>TimeSpan.FromMinutes(3)){
-                vault.Lock();master.Clear();
+                vault.Lock();MaskRevealed();master.Clear();
                 if(shelf.IsOpen)warning.Text="Vault locked after inactivity.";
             }
         };
@@ -207,7 +208,7 @@ internal sealed class DeskSpaceInformationV26 : IDisposable
     public void Hide()
     {
         arc.IsOpen=false;shelf.IsOpen=false;
-        vault.Lock();master.Clear();
+        MaskRevealed();vault.Lock();master.Clear();
         warning.Text="";
         changed();
     }
@@ -256,6 +257,7 @@ internal sealed class DeskSpaceInformationV26 : IDisposable
     }
     private void Shelf(string title)
     {
+        MaskRevealed();
         shelfTitle.Text=title;
         shelfBody.Children.Clear();
         warning.Text="";
@@ -298,7 +300,8 @@ internal sealed class DeskSpaceInformationV26 : IDisposable
                     var s=vault.Entries.FirstOrDefault(z=>z.Id==row.VaultId);
                     if(s==null){warning.Text="The linked vault entry was not found.";return;}
                     TouchVault();
-                    val.Text=val.Text=="••••••••"?s.Password:"••••••••";
+                    if(val.Text=="••••••••") {val.Text=s.Password;revealedValues.Add(val);}
+                    else {val.Text="••••••••";revealedValues.Remove(val);}
                 }
                 else if(row.Value.Length>0)Clipboard.SetText(row.Value);
             });
@@ -465,11 +468,17 @@ internal sealed class DeskSpaceInformationV26 : IDisposable
         }
         catch(Exception ex){warning.Text=ex.Message;}
     }
+    private void MaskRevealed()
+    {
+        foreach(var value in revealedValues)value.Text="••••••••";
+        revealedValues.Clear();
+    }
     public void Dispose()
     {
         if(disposed)return;
         disposed=true;
         arc.IsOpen=false;shelf.IsOpen=false;
+        MaskRevealed();
         arcCanvas.MouseWheel-=ScrollArc;
         lockTimer.Stop();
         vault.Dispose();
