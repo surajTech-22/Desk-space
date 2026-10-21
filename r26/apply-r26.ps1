@@ -99,9 +99,8 @@ $s=$s.Replace($center,$center+@'
 $leave='if (ringExpanded && !ringGesture && !draggingGesture &&'
 if(!$s.Contains($leave)){throw 'R26 MouseLeave ring anchor not located'}
 $s=$s.Replace($leave,'if (ringExpanded && informationOverlay?.IsOpen!=true && !ringGesture && !draggingGesture &&')
-$cleanup='        Closing += (_,_)=>activeModule?.Dispose();'
+$cleanup='activeModule?.Dispose();'
 if(!$s.Contains($cleanup)){throw 'R26 WPF cleanup anchor absent'}
-$s=$s.Replace($cleanup,$cleanup+[string][char]10+
-'        Closing += (_,_)=>informationOverlay?.Dispose();')
+$s=$s.Replace($cleanup,'activeModule?.Dispose(); informationOverlay?.Dispose();')
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R26 outer ring contains collection-based modules; Information opens partial sliding arc and compact shelf. Existing live modules, vault, and source preserved.'
