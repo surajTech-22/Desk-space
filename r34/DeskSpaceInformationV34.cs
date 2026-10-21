@@ -582,7 +582,8 @@ internal sealed class DeskSpaceInformationV34 : IDisposable
             if(editorActive && shelf.IsOpen)
                 owner.Dispatcher.BeginInvoke(new Action(()=>{
                     if(!disposed && editorActive)
-                        Keyboard.Focus(editorNameField??shelfBorder);
+                        Keyboard.Focus(editorNameField is not null?
+                            (IInputElement)editorNameField:(IInputElement)shelfBorder);
                 }),DispatcherPriority.ContextIdle);
         }),DispatcherPriority.Background);
     }
