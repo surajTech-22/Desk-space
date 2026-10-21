@@ -25,7 +25,7 @@ Write-Host 'R37 media mute checks passed. Windows compile and real WPF screensho
 
 $calendar=[IO.File]::ReadAllText("$root/DeskSpaceCompactCalendarV36.cs")
 foreach($key in @(
-    'Width = 240',
+    'Width = 232',
     'new GridLength(32)',
     'new GridLength(30)',
     'Selected=new DateTime(',
