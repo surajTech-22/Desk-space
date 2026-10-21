@@ -36,6 +36,7 @@ on:
       - "r25/**"
       - "r26/**"
       - "r27/**"
+      - "r28/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -543,6 +544,42 @@ jobs:
           if(!$arc.Contains('information-items-v22.json') -or
              !$arc.Contains('information-collections-v26.json'))
           {throw 'R27 data backward compatibility missing'}
+
+      - name: R28 hover-to-open contextual submenu regression checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r28/apply-r28.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $moveStart=$widget.IndexOf('private void OnGestureMove(')
+          $moveEnd=$widget.IndexOf('private void OnGestureUp(', $moveStart)
+          if($moveStart -lt 0 -or $moveEnd -le $moveStart){throw 'R28 cannot verify mouse move'}
+          $move=$widget.Substring($moveStart,$moveEnd-$moveStart)
+          $paintStart=$widget.IndexOf('private void UpdateHighlightedSector(')
+          $paintEnd=$widget.IndexOf('private void BuildCompact()', $paintStart)
+          if($paintStart -lt 0 -or $paintEnd -le $paintStart){throw 'R28 cannot verify hover selection'}
+          $paint=$widget.Substring($paintStart,$paintEnd-$paintStart)
+          $arcStart=$widget.IndexOf('private void OpenInformationArc()')
+          $arcEnd=$widget.IndexOf('private void ClickSegment(string name)', $arcStart)
+          if($arcStart -lt 0 -or $arcEnd -le $arcStart){throw 'R28 cannot verify child arc lifecycle'}
+          $arc=$widget.Substring($arcStart,$arcEnd-$arcStart)
+          foreach($key in @('if(Mouse.LeftButton!=MouseButtonState.Pressed)','UpdateHighlightedSector(p);',
+            'if(informationOverlay?.IsOpen==true)return;', 'CollapseRing();'))
+          {if(!$move.Contains($key)){throw "R28 pointer motion missing $key"}}
+          foreach($key in @('int selected=SectorAt(p);','selected==6 && ringExpanded',
+            'OpenInformationArc();','if(selected==highlightedSector)return;'))
+          {if(!$paint.Contains($key)){throw "R28 hover event missing $key"}}
+          foreach($key in @('informationArcOpening','informationOverlay?.IsOpen==true',
+            'if(!ringExpanded)ToggleRing();','ShowAttachedArc();','Dispatcher.BeginInvoke('))
+          {if(!$arc.Contains($key)){throw "R28 submenu lifecycle missing $key"}}
+          if($arc.Contains('informationOverlay.Hide()'))
+          {throw 'R28 hover still toggles submenu closed'}
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV27.cs' -Raw
+          if(!$info.Contains('ChildSector(') -or !$info.Contains('MouseLeftButtonUp+='))
+          {throw 'R28 connected child sectors were removed'}
+          if(!$info.Contains('information-collections-v26.json') -or
+            !(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
+          {throw 'R28 legacy data or encrypted vault safety gate missing'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
