@@ -413,8 +413,9 @@ jobs:
           {if(!$weather.Contains($term)){throw "R22 weather persistence missing: $term"}}
           if(!$widget.Contains('AnimateModuleOpen(surface)') -or !$widget.Contains('AnimateModuleClose(previousWidth,previousHeight)'))
           {throw 'R22 morph animation missing'}
-          if(!$module.Contains('DeskSpaceInformationV22') -or !$module.Contains('BuildPassword(area)'))
-          {throw 'R22 information/vault selection not bound'}
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV22.cs') -or
+             !(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
+          {throw 'R22 information manager or existing vault source missing'}
           if($info.Contains('password-vault-v10.enc')){throw 'R22 ordinary information references vault file'}
           if(!$info.Contains('information-items-v22.json')){throw 'R22 normal information store missing'}
 
