@@ -39,7 +39,7 @@ foreach($key in @('Clip=new EllipseGeometry(new Point(diameter/2,diameter/2)',
 if($scene.Contains('Motion(-d*.11,d*.14,1.6)') -or
     $scene.Contains('Motion(-d*.065,d*.075,5.2)'))
 {throw 'R36 old bouncing cloud/rain animation remains'}
-foreach($key in @('Width=298','pillSeek=new Slider{Minimum=0',
+foreach($key in @('frame.Width=pill?298','pillSeek=new Slider{Minimum=0',
     'pillPreviousButton=Make("⏮"',
     'pillNextButton=Make("⏭"',
     'var miniPlayButton=Make("▶"',
@@ -49,7 +49,7 @@ foreach($key in @('Width=298','pillSeek=new Slider{Minimum=0',
     'double height=view==Layout.Pill?76',
     'TryTogglePlayPauseAsync',
     'TryChangePlaybackPositionAsync',
-    'CircleMinimized','dragHeader.CaptureMouse()'))
+    'circleMinimized','dragHeader.CaptureMouse()'))
 {
     if(!$media.Contains($key)){throw "R36 compact media capability missing: $key"}
 }
