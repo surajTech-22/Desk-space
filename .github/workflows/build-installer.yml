@@ -772,8 +772,9 @@ jobs:
           {if(!$hostCode.Contains($key)){throw "R32 main window drag selection not wired: $key"}}
           $move=$hostCode.Substring($hostCode.IndexOf('private void OnGestureMove('),
             $hostCode.IndexOf('private void OnGestureUp(')-$hostCode.IndexOf('private void OnGestureMove('))
-          if($move.IndexOf('TryCapturedDragAtScreen(') -gt $move.IndexOf('UpdateHighlightedSector(p)'))
-          {throw 'R32 child drag must run before parent sector hit-test'}
+          $pressed=$move.Substring($move.IndexOf('if(!ringGesture)return;'))
+          if($pressed.IndexOf('TryCapturedDragAtScreen(') -gt $pressed.IndexOf('UpdateHighlightedSector(p)'))
+          {throw 'R32 captured drag must run before held main-ring hit-test'}
           $release=$hostCode.Substring($hostCode.IndexOf('private void OnGestureUp('),
             1900)
           if($release.IndexOf('TryCapturedDragAtScreen(') -gt $release.IndexOf('CollapseRing();'))
