@@ -289,6 +289,10 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
             var name=add?"+ New":visible[i].Name;
             var b=SmallButton(name,()=>ActivateChild(sector,collectionId));
             b.Width=80;b.Height=30;b.FontSize=11;
+            b.Content=new TextBlock{
+                Text=name,TextTrimming=TextTrimming.CharacterEllipsis,
+                TextAlignment=TextAlignment.Center,MaxWidth=76,
+                VerticalAlignment=VerticalAlignment.Center};
             b.ToolTip=add?"Create a new information collection":name;
             b.Padding=new Thickness(2,3,2,3);
             b.Background=Brushes.Transparent;
@@ -335,9 +339,10 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
         // Hovering a saved collection SELECTS and PREVIEWS it immediately.
         // Never reveal stored PW on hover: encrypted values stay masked.
         if(editorActive)return; // do not destroy unsaved editing.
-        if(sector==4)
-            NewCollection();
-        else if(id.HasValue)
+        // Hover on + highlights it; creating a new editor requires a
+        // deliberate click/Enter so merely passing through cannot discard
+        // an existing draft or interrupt collection preview.
+        if(sector<4 && id.HasValue)
             OpenCollection(id.Value);
     }
     private void ActivateChild(int sector,Guid? id)
