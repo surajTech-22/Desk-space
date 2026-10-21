@@ -288,6 +288,7 @@ internal sealed class DeskSpaceInformationV34 : IDisposable
     private void CloseShelf()
     {
         editorActive=false;shownCollectionId=null;
+        editorNameField=null;
         shelf.IsOpen=false;
         LeaveEditorKeyboardMode();
         MaskRevealed();vault.Lock();master.Clear();
@@ -301,6 +302,7 @@ internal sealed class DeskSpaceInformationV34 : IDisposable
         if(owner.IsMouseCaptured)owner.ReleaseMouseCapture();
         DeskSpaceWindowBehavior.AllowInput(owner,true);
         editorKeyboardMode=true;
+        editorNameField=firstField;
         owner.Activate();
         FocusManager.SetIsFocusScope(shelfBorder,true);
         owner.Dispatcher.BeginInvoke(new Action(()=>{
@@ -346,6 +348,7 @@ internal sealed class DeskSpaceInformationV34 : IDisposable
     private bool arcPressed;
     private bool capturedDragSelection;
     private bool editorKeyboardMode;
+    private TextBox? editorNameField;
 
     // Child sectors are placed ONLY across a partial arc centered over the
     // Information parent at the top of the existing outer ring. For an
@@ -579,8 +582,7 @@ internal sealed class DeskSpaceInformationV34 : IDisposable
             if(editorActive && shelf.IsOpen)
                 owner.Dispatcher.BeginInvoke(new Action(()=>{
                     if(!disposed && editorActive)
-                        Keyboard.Focus(editorRows.Count>0?
-                            editorRows[0].Value:shelfBorder);
+                        Keyboard.Focus(editorNameField??shelfBorder);
                 }),DispatcherPriority.ContextIdle);
         }),DispatcherPriority.Background);
     }
