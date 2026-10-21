@@ -41,6 +41,7 @@ on:
       - "r30/**"
       - "r31/**"
       - "r32/**"
+      - "r33/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -827,6 +828,71 @@ jobs:
             }
           }
           Write-Host 'R32 drag, click, empty state, textbox focus, dynamic rows and data gates verified.'
+
+      - name: R33 compact tethered Information shelf and plus creation controls
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r33/apply-r33.ps1
+          $hostCode=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV33.cs' -Raw
+          $modules=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceModuleV10.cs' -Raw
+          foreach($key in @('DeskSpaceInformationV33','CloseInformationContext()',
+            'TryCapturedDragAtScreen','informationOverlay?.IsArcOpen'))
+          {if(!$hostCode.Contains($key)){throw "R33 host integration missing: $key"}}
+          foreach($key in @('shelfBorder=new Border{Width=304,MaxHeight=234',
+             'shelfBorder.Width=editing?324:300',
+             'shelfBorder.MaxHeight=editing?336:234',
+             'shelfScroll.MaxHeight=editing?253:164',
+             'owner.LocationChanged+=OwnerLocationChanged',
+             'owner.SizeChanged+=OwnerSizeChanged',
+             'owner.LocationChanged-=OwnerLocationChanged',
+             'owner.SizeChanged-=OwnerSizeChanged',
+             'UpdateShelfPosition();',
+             'double x=(diameter-panelWidth)/2',
+             'double y=height+5',
+             'shelf.HorizontalOffset=x+epsilon',
+             'shelf.VerticalOffset=y+epsilon',
+             'new Action(UpdateShelfPosition)',
+             'add.ToolTip="New information collection"',
+             'newHoverTimer','TryCapturedDragAtScreen',
+             'DeskSpaceWindowBehavior.AllowInput(owner,true)',
+             'DeskSpaceWindowBehavior.AllowInput(owner,false)',
+             'information-collections-v26.json','information-items-v22.json',
+             'File.Replace(temp,CollectionsPath','VaultId','MaskRevealed()'))
+          {if(!$info.Contains($key)){throw "R33 shelf geometry/security missing: $key"}}
+          foreach($key in @('private Action? headerAddAction;',
+            'headerAddAction=null;',
+            'if(headerAddAction!=null)',
+            'var add=Btn("+",()=>headerAddAction?.Invoke())',
+            'top.Children.Insert(0,add)',
+            '"Notes"=>"New note"',
+            '"Reminders"=>"New reminder"',
+            '"Calendar"=>"New calendar event"',
+            '"Clipboard"=>"Capture current clipboard text/files"',
+            'picker.SelectedItem=null',
+            'title.Clear();due.SelectedDate=DateTime.Today',
+            'repeat.SelectedIndex=0;title.Focus()',
+            'DeskSpaceClipboardV10.Poll()',
+            'DeskSpaceClipboardV10.HoldCurrentFiles()'))
+          {if(!$modules.Contains($key)){throw "R33 missing header + action: $key"}}
+          # Ensure all four actions are wired IN their matching modules.
+          foreach($pair in @(
+             @('BuildNotes(','BuildReminders('),
+             @('BuildReminders(','BuildCalendar('),
+             @('BuildCalendar(','BuildClipboard('),
+             @('BuildClipboard(','BuildSettings(')
+          )){
+             $a=$modules.IndexOf('private void '+$pair[0])
+             $b=$modules.IndexOf('private void '+$pair[1],$a+1)
+             if($a -lt 0 -or $b -le $a){throw "R33 failed to locate module body: $($pair[0])"}
+             $section=$modules.Substring($a,$b-$a)
+             if(!$section.Contains('headerAddAction=()=>'))
+             {throw "R33 header + callback absent from $($pair[0])"}
+          }
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
+          {throw 'R33 original encrypted vault not preserved'}
+          Write-Host 'R33 compact shelf / movement / header + / data safeguards verified.'
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
