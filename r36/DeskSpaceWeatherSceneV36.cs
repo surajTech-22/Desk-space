@@ -26,6 +26,21 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
         Clip=new EllipseGeometry(new Point(diameter/2,diameter/2),
             diameter/2-3,diameter/2-3);
         var code=reading.Code;
+        // Daylight scenes have a genuinely light, full-disc backdrop.
+        // The host switches clock glyphs to contrasting navy ink; night,
+        // rain and thunderstorms retain the original deep-blue surface
+        // with white high-contrast text.
+        if(reading.IsDay && code<=3)
+        {
+            var sky=new Ellipse{
+                Width=diameter,Height=diameter,
+                Fill=new LinearGradientBrush(
+                    Color.FromRgb(184,220,248),
+                    Color.FromRgb(244,248,255),90),
+                IsHitTestVisible=false
+            };
+            Draw(sky,0,0);
+        }
         if(!reading.IsDay)Night(diameter);
         else if(code>=51)Rain(diameter);
         else if(code<=1)Sunny(diameter);
