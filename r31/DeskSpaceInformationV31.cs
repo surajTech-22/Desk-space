@@ -107,6 +107,7 @@ internal sealed class DeskSpaceInformationV31 : IDisposable
         // capture and overlapping controls otherwise lose selections.
         arcCanvas.MouseMove+=OnArcMouseMove;
         arcCanvas.MouseLeave+=(_,_)=>EndArcHover();
+        arcCanvas.PreviewMouseLeftButtonDown+=OnArcPointerDown;
         arcCanvas.PreviewMouseLeftButtonUp+=OnArcPointerUp;
         newHoverTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(260)};
         newHoverTimer.Tick+=(_,_)=>{
@@ -287,6 +288,7 @@ internal sealed class DeskSpaceInformationV31 : IDisposable
     private const double ArcOuterRadius=260;
     private const int PageSize=4;
     private readonly List<(int index, Guid? id, Geometry hit)> arcHitZones=new();
+    private bool arcPressed;
 
     // Child sectors are placed ONLY across a partial arc centered over the
     // Information parent at the top of the existing outer ring. For an
@@ -385,13 +387,24 @@ internal sealed class DeskSpaceInformationV31 : IDisposable
         }
         hoveredChild=-1;
     }
-    private void OnArcPointerUp(object sender,MouseButtonEventArgs e)
+    private void OnArcPointerDown(object sender,MouseButtonEventArgs e)
     {
         if(!arc.IsOpen)return;
         int slot=SlotAtPoint(e.GetPosition(arcCanvas));
         if(slot<0)return;
-        // This is the real WPF input path for both empty and populated
-        // sub-donuts, regardless of which wedge/text is hit.
+        arcPressed=true;
+        // Activation occurs before the release can be lost to the
+        // transparent Popup's separate Windows input surface.
+        ActivateChild(slot,arcHitZones[slot].id);
+        e.Handled=true;
+    }
+    private void OnArcPointerUp(object sender,MouseButtonEventArgs e)
+    {
+        if(arcPressed){arcPressed=false;e.Handled=true;return;}
+        if(!arc.IsOpen)return;
+        int slot=SlotAtPoint(e.GetPosition(arcCanvas));
+        if(slot<0)return;
+        // Fallback for touch/alternative input paths that route a release.
         ActivateChild(slot,arcHitZones[slot].id);
         e.Handled=true;
     }
