@@ -112,6 +112,7 @@ $up=$up.Replace($oldUp,$insert)
 $s=$s.Substring(0,$upStart)+$up+$s.Substring($upEnd)
 
 Must 'private void OpenInWidget(string name)' 'private void OpenInWidget(string name,bool quickAddRequested=false)'
+Must 'DeskSpaceInlineV11? activeInline' 'DeskSpaceInlineV34? activeInline'
 Must 'new DeskSpaceInlineV11(name,previousCenter,ReturnFromModule)' 'new DeskSpaceInlineV34(name,previousCenter,ReturnFromModule,quickAddRequested)'
 Must 'new DeskSpaceCompactCalendarV24().Create(' 'new DeskSpaceCompactCalendarV34().Create('
 
