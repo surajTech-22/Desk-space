@@ -6,7 +6,7 @@ foreach($start in @('    private void CollapseRing(','    private void ToggleRin
     $a=$s.IndexOf($start,[StringComparison]::Ordinal)
     if($a -lt 0){Write-Host "=== $start not found ===";continue}
     $b=$s.IndexOf('    private ', $a+$start.Length,[StringComparison]::Ordinal)
-    if($b -lt 0)$b=$s.Length
+    if($b -lt 0){$b=$s.Length}
     Write-Host "=== $start ==="
     Write-Host $s.Substring($a,[Math]::Min($b-$a,9000))
 }
