@@ -243,6 +243,7 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
         editorActive=false;shownCollectionId=null;
         shelf.IsOpen=false;
         MaskRevealed();vault.Lock();master.Clear();
+        changed(); // restore the correct centre preview when shelf closes
     }
     // Radially connected wedges instead of R26's detached horizontal
     // arc. Both radii exceed the parent donut's 195-DIP outer edge.
