@@ -770,6 +770,11 @@ jobs:
             'if(IsMouseCaptured)ReleaseMouseCapture();',
             'return; // keep parent + child donut visible'))
           {if(!$hostCode.Contains($key)){throw "R32 main window drag selection not wired: $key"}}
+          $open=$hostCode.Substring($hostCode.IndexOf('private void OpenInformationArc()'),
+            $hostCode.IndexOf('private void ClickSegment(string name)')-$hostCode.IndexOf('private void OpenInformationArc()'))
+          if(!$open.Contains('if(ringExpanded)' + [Environment]::NewLine +
+            '            ShowAttachedArc(); // needed for a held drag entering a child arc'))
+          {throw 'R32 child popup is still deferred during captured drag'}
           $move=$hostCode.Substring($hostCode.IndexOf('private void OnGestureMove('),
             $hostCode.IndexOf('private void OnGestureUp(')-$hostCode.IndexOf('private void OnGestureMove('))
           $pressed=$move.Substring($move.IndexOf('if(!ringGesture)return;'))
