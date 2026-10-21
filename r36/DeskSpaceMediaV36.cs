@@ -273,7 +273,7 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
     private void UpdateView()
     {
         if(titleText!=null)titleText.Text=title;
-        if(pillTitle!=null)pillTitle.Text=title;
+        if(pillTitle!=null)pillTitle.Text=string.IsNullOrWhiteSpace(title)?"Media":title;
         if(pillPlay!=null)pillPlay.Text=playing?"Ⅱ":"▶";
         if(pillPreviousButton!=null)pillPreviousButton.IsEnabled=capabilities?.IsPreviousEnabled==true;
         if(pillNextButton!=null)pillNextButton.IsEnabled=capabilities?.IsNextEnabled==true;
@@ -478,7 +478,7 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
             var transport=new StackPanel{Orientation=Orientation.Horizontal,
                 HorizontalAlignment=HorizontalAlignment.Center,
                 Margin=new Thickness(0,3,0,3)};
-            previousButton=Make("⏮","Previous",()=>_=Control("previous"));
+            previousButton=Make("«","Previous",()=>_=Control("previous"));
             transport.Children.Add(previousButton);
             rewindButton=Make("≪","Rewind",()=>_=Control("rewind"));
             transport.Children.Add(rewindButton);
@@ -487,7 +487,7 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
             play.Content=playGlyph;transport.Children.Add(play);
             fastButton=Make("≫","Fast forward",()=>_=Control("forward"));
             transport.Children.Add(fastButton);
-            nextButton=Make("⏭","Next",()=>_=Control("next"));
+            nextButton=Make("»","Next",()=>_=Control("next"));
             transport.Children.Add(nextButton);
             details.Children.Add(transport);
             var seekRow=new Grid{Margin=new Thickness(2,0,2,4)};
@@ -530,13 +530,13 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
             var pillRow=new DockPanel{LastChildFill=true};
             var restore=Make("▢","Restore full media player",TogglePanel,26);
             DockPanel.SetDock(restore,Dock.Right);pillRow.Children.Add(restore);
-            pillNextButton=Make("⏭","Next track",()=>_=Control("next"),27);
+            pillNextButton=Make("»","Next track",()=>_=Control("next"),27);
             DockPanel.SetDock(pillNextButton,Dock.Right);pillRow.Children.Add(pillNextButton);
             var miniPlayButton=Make("▶","Play or pause",()=>_=Control("toggle"),29);
             pillPlay=new TextBlock{Text="▶",FontSize=16,Foreground=Brushes.White};
             miniPlayButton.Content=pillPlay;
             DockPanel.SetDock(miniPlayButton,Dock.Right);pillRow.Children.Add(miniPlayButton);
-            pillPreviousButton=Make("⏮","Previous track",()=>_=Control("previous"),27);
+            pillPreviousButton=Make("«","Previous track",()=>_=Control("previous"),27);
             DockPanel.SetDock(pillPreviousButton,Dock.Right);pillRow.Children.Add(pillPreviousButton);
             miniArt=new Image{Source=image,Stretch=Stretch.UniformToFill};
             var smallArt=new Border{Width=27,Height=27,CornerRadius=new CornerRadius(7),
