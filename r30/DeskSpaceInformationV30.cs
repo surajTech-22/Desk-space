@@ -85,7 +85,17 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
     private int keyboardIndex=-1;
 
     public bool IsOpen => arc.IsOpen || shelf.IsOpen;
+    public bool IsArcOpen => arc.IsOpen;
+    public bool IsEditing => editorActive;
     public int SavedCount => all.Count;
+    public bool ConfirmNavigation()
+    {
+        if(!editorActive)return true;
+        return MessageBox.Show(owner,
+            "Close the Information editor without saving these changes?",
+            "Unsaved information",MessageBoxButton.YesNo,
+            MessageBoxImage.Warning)==MessageBoxResult.Yes;
+    }
     public DeskSpaceInformationV30(Window window,Action onChanged)
     {
         owner=window;changed=onChanged;
@@ -214,12 +224,17 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
         catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace information",
             MessageBoxButton.OK,MessageBoxImage.Warning);}
     }
+    public void HideArc()
+    {
+        if(!arc.IsOpen)return;
+        arc.IsOpen=false;
+        hoveredChild=-1;keyboardIndex=-1;
+        changed();
+    }
     public void Hide()
     {
-        arc.IsOpen=false;shelf.IsOpen=false;
-        editorActive=false;shownCollectionId=null;
-        hoveredChild=-1;keyboardIndex=-1;
-        MaskRevealed();vault.Lock();master.Clear();
+        HideArc();
+        CloseShelf();
         warning.Text="";
         changed();
     }
