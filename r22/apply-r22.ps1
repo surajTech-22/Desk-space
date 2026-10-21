@@ -84,7 +84,7 @@ Must '    private void BuildPassword(StackPanel body)' @'
 
     private void BuildPassword(StackPanel body)
 '@
- @'
+Must '    private void BuildPassword(StackPanel body)' @'
     private void BuildInformation(StackPanel body)
     {
         body.Children.Add(Label("Information Manager",20));
