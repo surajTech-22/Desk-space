@@ -11,7 +11,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Windows.Media.Animation;
-using Forms = System.Windows.Forms;
 
 namespace DeskSpace;
 
@@ -119,19 +118,19 @@ internal sealed class DeskSpaceInformationV35 : IDisposable
         // Independently poll real screen-pointer position during an open arc.
         // Both parent-ring capture and child-popup hit-testing therefore use
         // one logical radial navigation path.
-        pointerTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(35)};
+        pointerTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(DeskSpaceWheelHoverV35.PointerPollMilliseconds)};
         pointerTimer.Tick+=(_,_)=>PollPointer();
         arcCanvas.PreviewMouseLeftButtonDown+=OnArcPointerDown;
         arcCanvas.PreviewMouseLeftButtonUp+=OnArcPointerUp;
-        newHoverTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(510)};
-        edgeTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(175)};
+        newHoverTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(DeskSpaceWheelHoverV35.ChildCommitMilliseconds)};
+        edgeTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(DeskSpaceWheelHoverV35.EdgeFirstMilliseconds)};
         edgeTimer.Tick+=(_,_)=>{
             if(!arc.IsOpen || disposed || editorActive || edgeDirection==0){
                 StopEdgeScroll();return;
             }
             if(!CanPage(edgeDirection)){StopEdgeScroll();return;}
             Slide(edgeDirection);
-            edgeTimer.Interval=TimeSpan.FromMilliseconds(135);
+            edgeTimer.Interval=TimeSpan.FromMilliseconds(DeskSpaceWheelHoverV35.EdgeRepeatMilliseconds);
         };
         newHoverTimer.Tick+=(_,_)=>{
             newHoverTimer.Stop();
@@ -480,10 +479,8 @@ internal sealed class DeskSpaceInformationV35 : IDisposable
            editorActive)return;
         try
         {
-            var screen=Forms.Control.MousePosition;
-            // WPF converts physical screen pixels to the popup's DPI-aware
-            // coordinate system. No mouse capture or WPF hover event needed.
-            var point=arcCanvas.PointFromScreen(new Point(screen.X,screen.Y));
+            // All modules use the same DPI-aware wheel cursor source.
+            var point=DeskSpaceWheelHoverV35.MouseIn(arcCanvas);
             ProcessWheelPointer(point);
         }
         catch(InvalidOperationException){} // popup is between HWND layouts
