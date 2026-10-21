@@ -238,17 +238,25 @@ internal sealed class DeskSpaceInformationV27 : IDisposable
         arcCanvas.Children.Clear();
         const int count=5;
         const double start=-153,finish=-27,span=(finish-start)/count;
+        var visible=all.Skip(startIndex).Take(4).ToArray();
         for(int i=0;i<count;i++)
         {
+            int sector=i;
+            var color=i==count-1?Accent:
+                new SolidColorBrush(Color.FromRgb(220,229,251));
             var wedge=new System.Windows.Shapes.Path{
                 Data=ChildSector(start+i*span,start+(i+1)*span),
                 Stroke=Brushes.White,StrokeThickness=2,
-                Fill=i==count-1?Accent:
-                    new SolidColorBrush(Color.FromRgb(220,229,251)),
-                IsHitTestVisible=false};
+                Fill=color,IsHitTestVisible=true,Cursor=Cursors.Hand};
+            wedge.MouseLeftButtonUp+=(_,e)=>{
+                if(sector==4)NewCollection();
+                else if(sector<visible.Length)OpenCollection(visible[sector].Id);
+                e.Handled=true;
+            };
+            wedge.MouseEnter+=(_,_)=>wedge.Opacity=.78;
+            wedge.MouseLeave+=(_,_)=>wedge.Opacity=1;
             arcCanvas.Children.Add(wedge);
         }
-        var visible=all.Skip(startIndex).Take(4).ToArray();
         for(int i=0;i<5;i++)
         {
             int slot=i;
