@@ -79,11 +79,7 @@ $s=Read $p
 $anchor='        activeModule=new DeskSpaceModuleV10(prefs,previousCenter,ReturnFromModule);'
 RequiredReplace $anchor ($anchor+[string][char]10+
     '        activeModule.CalendarCompactRequested=OpenCalendarCompact;')
-$original=@'
-        else if(name=="Excel")
-        {
-'@
-$replacement=@'
+$calendarBranch=@'
         else if(name=="Calendar")
         {
             var bounds=ModuleArea();
@@ -92,10 +88,10 @@ $replacement=@'
             surface=new Viewbox{Stretch=Stretch.Uniform,
                 Child=new DeskSpaceCompactCalendarV24().Create(OpenCalendarExpanded,ReturnFromModule)};
         }
-        else if(name=="Excel")
-        {
 '@
-RequiredReplace $original $replacement
+$excel=$s.IndexOf('        else if(name=="Excel")',[StringComparison]::Ordinal)
+if($excel -lt 0){throw 'R24 Excel branch insertion point missing'}
+$s=$s.Insert($excel,$calendarBranch+[string][char]10)
 
 $start=$s.IndexOf('    private void StopMorphWindowAnimations()', [StringComparison]::Ordinal)
 $end=if($start -ge 0){$s.IndexOf('    private void ResizeLiveSearch(double height)', $start,[StringComparison]::Ordinal)}else{-1}
