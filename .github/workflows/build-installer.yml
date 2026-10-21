@@ -43,6 +43,7 @@ on:
       - "r32/**"
       - "r33/**"
       - "r34/**"
+      - "r35/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -957,6 +958,10 @@ jobs:
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
           {throw 'R34 encrypted vault original missing'}
           Write-Host 'R34 source and layout regression gates passed for child collapse, left/right overflow and module + actions.'
+
+      - name: R35 inspect assembled input and collapse state
+        shell: pwsh
+        run: ./r35/inspect.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
