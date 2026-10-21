@@ -29,6 +29,7 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
     private Window? host;
     private Func<string>? summary;
     private Border? frame, dragHeader;
+    private Grid? playerRoot;
     private StackPanel? details;
     private Grid? artLayer;
     private LinearGradientBrush? dynamicGradient;
@@ -343,7 +344,13 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
         if(mainHeader!=null)mainHeader.Visibility=pill?Visibility.Collapsed:Visibility.Visible;
         if(pillHeader!=null)pillHeader.Visibility=pill?Visibility.Visible:Visibility.Collapsed;
         dragHeader=pill?pillHeader:mainHeader;
-        if(frame!=null)frame.Width=pill?298:view==Layout.Advanced?292:256;
+        if(frame!=null){
+            frame.Width=pill?298:view==Layout.Advanced?292:256;
+            frame.Height=pill?76:view==Layout.Advanced?240:156;
+        }
+        // Without an explicit height, large album art forces the Root Grid
+        // to reserve 250px even when all full-player controls are hidden.
+        if(playerRoot!=null)playerRoot.Height=frame?.Height??76;
         if(expandButton!=null)expandButton.Content=view==Layout.Advanced?"⌃":"⌄";
         if(pill)visualTimer.Stop();else if(!visualTimer.IsEnabled)visualTimer.Start();
         KeepVisible();
@@ -411,6 +418,7 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
             CloseBelow();
             host=window;summary=previousModuleData;
             var root=new Grid();
+            playerRoot=root;
             artLayer=new Grid{ClipToBounds=true};
             artwork=new Image{
                 Stretch=Stretch.UniformToFill,
@@ -594,6 +602,7 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
         if(host!=null)host.LocationChanged-=Reposition;
         if(popup!=null)popup.IsOpen=false;
         popup=null;host=null;summary=null;frame=null;dragHeader=null;details=null;
+        playerRoot=null;
         artLayer=null;dynamicGradient=null;artwork=null;
         contextText=titleText=artistText=playGlyph=elapsedText=durationText=headerCaption=null;
         previousButton=nextButton=stopButton=shuffleButton=repeatButton=rewindButton=fastButton=speedButton=null;
