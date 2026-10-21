@@ -40,6 +40,7 @@ on:
       - "r29/**"
       - "r30/**"
       - "r31/**"
+      - "r32/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -753,6 +754,10 @@ jobs:
              !$info.Contains('File.Replace(temp,CollectionsPath'))
           {throw 'R31 persisted information and encrypted vault safety gate failed'}
           Write-Host 'R31 0/1/2/3/4/12-item sector geometry and pointer-selection source gates passed.'
+
+      - name: R32 inspect WPF drag capture and editor focus
+        shell: pwsh
+        run: ./r32/inspect-r32.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
