@@ -42,6 +42,7 @@ on:
       - "r31/**"
       - "r32/**"
       - "r33/**"
+      - "r34/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -893,6 +894,69 @@ jobs:
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
           {throw 'R33 original encrypted vault not preserved'}
           Write-Host 'R33 compact shelf / movement / header + / data safeguards verified.'
+
+      - name: R34 child selection collapse, arc edge hover and live module + regression checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r34/apply-r34.ps1
+          ./r34/module-quick-add.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV34.cs' -Raw
+          $inline=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInlineV34.cs' -Raw
+          $calendar=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceCompactCalendarV34.cs' -Raw
+          $module=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceModuleV10.cs' -Raw
+          foreach($key in @('DeskSpaceInformationV34','if(ringExpanded)ToggleRing();',
+            'informationOverlay?.HideArc()',
+            'HasModuleQuickAdd(Segments[i])',
+            'private int QuickAddHitAt(Point p)',
+            'QuickAddHitAt(e.GetPosition(this))',
+            'new DeskSpaceInlineV34(name,previousCenter,ReturnFromModule,quickAddRequested)',
+            'new DeskSpaceCompactCalendarV34().Create(',
+            'private void OpenInWidget(string name,bool quickAddRequested=false)',
+            'if(quickAddRequested && name=="Calendar")',
+            'new Action(()=>activeModule?.StartNewItem())'))
+          {if(!$widget.Contains($key)){throw "R34 missing real donut routing: $key"}}
+          foreach($key in @('CommitChildSelection()',
+            'onCommitted();','if(id.HasValue && !editorActive)',
+            'newHoverTimer.Tick+=',
+            'TimeSpan.FromMilliseconds(310)',
+            'StartEdgeScroll(-1)','StartEdgeScroll(1)',
+            'left.MouseEnter','right.MouseEnter',
+            'private void StartEdgeScroll(int direction)',
+            'private void StopEdgeScroll()',
+            'edgeTimer.Tick+=',
+            'if(!CanPage(direction))',
+            'TryCapturedDragAtScreen',
+            'DeskSpaceWindowBehavior.AllowInput(owner,true)',
+            'information-collections-v26.json','information-items-v22.json',
+            'File.Replace(temp,CollectionsPath','VaultId','MaskRevealed()'))
+          {if(!$info.Contains($key)){throw "R34 arc behavior or storage lost: $key"}}
+          foreach($key in @('DeskSpaceInlineV34',
+            'var add=Button("+",()=>startNew?.Invoke())',
+            'startNew=()=>','quickAddRequested=openNew',
+            'if(quickAddRequested)',
+            'DeskSpaceClipboardV10.Poll()',
+            'DeskSpaceClipboardV10.HoldCurrentFiles()',
+            'title.Clear();memo.Clear();title.Focus()'))
+          {if(!$inline.Contains($key)){throw "R34 live compact editor + absent: $key"}}
+          if(!$calendar.Contains('var addEvent = SmallButton("+",expand)'))
+          {throw 'R34 Calendar compact + button missing'}
+          if(!$module.Contains('public void StartNewItem()=>headerAddAction?.Invoke();'))
+          {throw 'R34 full calendar new-event action unavailable'}
+          # Child paging must not need a mouse click and must stop at edges.
+          foreach($number in @(0,1,2,4,6,12))
+          {
+            $page=0
+            $count=0
+            while($page+4 -lt $number){$page++;$count++;if($count -gt 100){throw 'R34 infinite right paging'}}
+            if($page -ne [Math]::Max(0,$number-4)){throw "R34 right paging mismatch for $number saved"}
+            while($page -gt 0){$page--;$count++;if($count -gt 100){throw 'R34 infinite left paging'}}
+            if($page -ne 0){throw 'R34 paging failed to return to first entry'}
+          }
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
+          {throw 'R34 encrypted vault original missing'}
+          Write-Host 'R34 source and layout regression gates passed for child collapse, left/right overflow and module + actions.'
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
