@@ -4,6 +4,7 @@ $root='DeskSpace_Windows_R1/DeskSpace'
 Copy-Item 'r22/DeskSpaceSearchIndexV22.cs' "$root/DeskSpaceSearchIndexV13.cs" -Force
 Copy-Item 'r22/DeskSpaceWeatherV22.cs' "$root/DeskSpaceWeather.cs" -Force
 Copy-Item 'r22/DeskSpaceInformationV22.cs' "$root/DeskSpaceInformationV22.cs" -Force
+Copy-Item 'r22/DeskSpaceCalculatorV22.cs' "$root/DeskSpaceCalculatorV22.cs" -Force
 
 function ReadSource([string]$path){
     [IO.File]::ReadAllText($path).Replace([string][char]13+[char]10,[string][char]10)
@@ -43,7 +44,47 @@ Must '            case "Password": BuildPassword(body);break;' @'
             case "Information": BuildInformation(body);break;
             case "Password": BuildInformation(body);break;
 '@
+Must '            case "Settings": body.Children.Add(Label("Widget preferences and quick tools",20));body.Children.Add(Btn("Open widget settings",()=>new WidgetOptionsWindow(prefs,()=>prefs.Save()).Show()));break;' '            case "Settings": BuildSettings(body);break;'
+Must '            case "Calendar": BuildCalendar(body);break;' @'
+            case "Calendar": BuildCalendar(body);break;
+            case "Calculator": body.Children.Add(new DeskSpaceCalculatorV22().Create());break;
+'@
 Must '    private void BuildPassword(StackPanel body)' @'
+    private void BuildSettings(StackPanel body)
+    {
+        body.Children.Add(Label("Widget Settings",20));
+        body.Children.Add(Label("These controls are inside DeskSpace. Your previous settings and permissions remain unchanged.",12));
+        var weather=new CheckBox{Content="Show weather in the clock circle",
+            IsChecked=prefs.ShowWeather,Margin=new Thickness(0,7,0,10)};
+        body.Children.Add(weather);
+        var city=new ComboBox{
+            ItemsSource=DeskSpaceWeather.Cities.Select(x=>x.Name).ToList(),
+            SelectedItem=prefs.WeatherCity,MinHeight=34,
+            Margin=new Thickness(0,3,0,9)};
+        body.Children.Add(Label("Weather city"));
+        body.Children.Add(city);
+        var state=Label(DeskSpaceWeather.WeatherStatus,12);
+        body.Children.Add(state);
+        var row=Row();body.Children.Add(row);
+        row.Children.Add(Btn("Save",()=>{
+            prefs.ShowWeather=weather.IsChecked==true;
+            if(city.SelectedItem is string chosen)prefs.WeatherCity=chosen;
+            prefs.Save();
+            state.Text="Preferences saved · "+DeskSpaceWeather.WeatherStatus;
+        }));
+        row.Children.Add(Btn("Refresh online weather",async ()=>{
+            await DeskSpaceWeather.RefreshAsync(prefs.WeatherCity);
+            state.Text=DeskSpaceWeather.WeatherStatus;
+        }));
+        body.Children.Add(Label("Additional settings are available on demand.",12));
+        body.Children.Add(Btn("Advanced settings",()=>{
+            new WidgetOptionsWindow(prefs,()=>prefs.Save()).Show();
+        }));
+    }
+
+    private void BuildPassword(StackPanel body)
+'@
+ @'
     private void BuildInformation(StackPanel body)
     {
         body.Children.Add(Label("Information Manager",20));
@@ -92,6 +133,27 @@ SaveSource $p $s
 $p="$root/WidgetHost.cs";$s=ReadSource $p
 Must '"Clipboard", "Password",' '"Clipboard", "Information",'
 Must 'or "Password" or' 'or "Information" or'
+# Calculator must not launch a separate Windows Calculator process.
+Must @'
+        if(name=="Calculator")
+        {
+            CollapseRing();
+            try {
+                Process.Start(new ProcessStartInfo("calc.exe"){UseShellExecute=true});
+            }
+            catch(Exception ex) {
+                MessageBox.Show("Windows Calculator could not start: "+ex.Message,
+                    "DeskSpace",MessageBoxButton.OK,MessageBoxImage.Warning);
+            }
+            return;
+        }
+'@ @'
+        if(name=="Calculator")
+        {
+            OpenInWidget(name);
+            return;
+        }
+'@
 Must '        Content=surface;' @'
         Content=surface;
         AnimateModuleOpen(surface);
