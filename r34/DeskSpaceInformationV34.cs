@@ -403,7 +403,6 @@ internal sealed class DeskSpaceInformationV34 : IDisposable
         {
             var left=SmallButton("‹",()=>Slide(-1));
             left.MouseEnter+=(_,_)=>StartEdgeScroll(-1);
-            left.MouseLeave+=(_,_)=>StopEdgeScroll();
             left.Width=32;left.Height=29;left.FontSize=20;
             left.ToolTip="Previous collections";
             Canvas.SetLeft(left,0);Canvas.SetTop(left,166);
@@ -413,7 +412,6 @@ internal sealed class DeskSpaceInformationV34 : IDisposable
         {
             var right=SmallButton("›",()=>Slide(1));
             right.MouseEnter+=(_,_)=>StartEdgeScroll(1);
-            right.MouseLeave+=(_,_)=>StopEdgeScroll();
             right.Width=32;right.Height=29;right.FontSize=20;
             right.ToolTip="Next collections";
             Canvas.SetLeft(right,456);Canvas.SetTop(right,166);
