@@ -145,8 +145,13 @@ $after=@'
             surface=activeModule.Build(name);
         }
 '@
-if(!$block.Contains($before)){throw 'R25 default panel sizes missing'}
-$block=$block.Replace($before,$after)
+$before=$before.Replace([string][char]13+[char]10,[string][char]10)
+$after=$after.Replace([string][char]13+[char]10,[string][char]10)
+if(!$block.Contains($before)){
+    $pattern='(?s)        else\\s*\\{\\s*Width=602;Height=686;\\s*surface=activeModule\\.Build\\(name\\);\\s*\\}'
+    if([regex]::IsMatch($block,$pattern)){$block=[regex]::Replace($block,$pattern,$after,1)}
+    else {throw ('R25 default panel sizing not found. Existing opening method: '+$block)}
+} else {$block=$block.Replace($before,$after)}
 $s=$s.Substring(0,$open)+$block+$s.Substring($end)
 Save $p $s
 Write-Host 'R25: compact Settings/Information/default panels, UI/PW/custom label-value storage, one Calendar slot plus Files shortcut.'
