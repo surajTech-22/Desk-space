@@ -79,10 +79,6 @@ internal sealed class DeskSpaceInformationV25
             Margin=new Thickness(0,7,0,0)};
         DockPanel.SetDock(error,Dock.Bottom);panel.Children.Add(error);
 
-        Button plus=null!;
-        plus=Button("+",()=>ShowEditor(null),true);
-        plus.MinWidth=32;plus.FontSize=18;
-        Grid.SetColumn(plus,1);header.Children.Add(plus);
         Guid? editing=null;
         var selection=new ComboBox{ItemsSource=new[]{"UI","PW","Other"},
             SelectedIndex=0,MinHeight=31};
@@ -99,6 +95,9 @@ internal sealed class DeskSpaceInformationV25
         editor.Children.Add(new TextBlock{Text="Value",Foreground=Subtle,FontSize=12,
             Margin=new Thickness(0,9,0,4)});
         editor.Children.Add(value);
+        var plus=Button("+",()=>ShowEditor(null),true);
+        plus.MinWidth=32;plus.FontSize=18;
+        Grid.SetColumn(plus,1);header.Children.Add(plus);
         var buttons=new WrapPanel{Margin=new Thickness(0,11,0,0)};
         editor.Children.Add(buttons);
         buttons.Children.Add(Button("Save",Save,true));
