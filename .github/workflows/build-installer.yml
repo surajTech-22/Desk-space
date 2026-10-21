@@ -520,9 +520,29 @@ jobs:
           if($info.Contains('Password=entry.Value') -or $info.Contains('Value=entry.Password.Password'))
           {throw 'R26 plaintext PW storage detected'}
 
-      - name: R27 inspect donut collapse and selection lifecycle
+      - name: R27 connected child donut sectors and parent ring lifecycle
         shell: pwsh
-        run: ./r27/inspect-r27.ps1
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r27/apply-r27.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $arc=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV27.cs' -Raw
+          foreach($key in @('DeskSpaceInformationV27','if(!ringExpanded)ToggleRing()',
+            'DispatcherPriority.Background','informationOverlay.Show()',
+            'ringExpanded && informationOverlay?.IsOpen==true)informationOverlay.Hide()'))
+          {if(!$widget.Contains($key)){throw "R27 parent donut guard missing: $key"}}
+          foreach($key in @('ChildSector(','SweepDirection.Clockwise','SweepDirection.Counterclockwise',
+            'const double cx=244,cy=306,r0=203,r1=265','arcCanvas=new Canvas{Width=488,Height=211}',
+            'var visible=all.Skip(startIndex).Take(4)', 'NewCollection()', 'OpenCollection(visible[slot].Id)',
+            'OfferVaultUnlock()','MaskRevealed()'))
+          {if(!$arc.Contains($key)){throw "R27 attached child sector missing: $key"}}
+          if($arc.Contains('Data=Geometry.Parse("M 39,81 Q 237,-35 434,81")'))
+          {throw 'R27 still has detached horizontal curve'}
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
+          {throw 'R27 encrypted vault missing'}
+          if(!$arc.Contains('information-items-v22.json') -or
+             !$arc.Contains('information-collections-v26.json'))
+          {throw 'R27 data backward compatibility missing'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
