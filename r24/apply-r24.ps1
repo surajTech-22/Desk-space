@@ -262,33 +262,24 @@ MustWidget '        double previousWidth=Width,previousHeight=Height;' @'
         double previousLeft=Left,previousTop=Top;
 '@
 MustWidget '        AnimateModuleOpenFrom(surface,previousWidth,previousHeight);' '        AnimateModuleOpenFrom(surface,previousWidth,previousHeight,previousLeft,previousTop);'
-MustWidget @'
-        KeepOnVisibleDesktop();
-        var surface=activeModule.Build("Calendar");
-'@ @'
-        PositionModuleFromCircle(previousLeft,previousTop,previousWidth,previousHeight);
-        var surface=activeModule.Build("Calendar");
-'@
-MustWidget @'
-        KeepOnVisibleDesktop();
-        FrameworkElement surface=new Viewbox{Stretch=Stretch.Uniform,
-'@ @'
-        PositionModuleFromCircle(previousLeft,previousTop,previousWidth,previousHeight);
-        FrameworkElement surface=new Viewbox{Stretch=Stretch.Uniform,
-'@
+function PlaceAtSurface([string]$nextLine) {
+    $where=$script:s.IndexOf($nextLine,[StringComparison]::Ordinal)
+    if($where -lt 0){throw "R24 calendar surface anchor missing: $nextLine"}
+    $before=$script:s.LastIndexOf('        KeepOnVisibleDesktop();',$where,[StringComparison]::Ordinal)
+    if($before -lt 0 -or $where-$before -gt 140){throw "R24 calendar position anchor missing: $nextLine"}
+    $script:s=$script:s.Substring(0,$before)+
+        '        PositionModuleFromCircle(previousLeft,previousTop,previousWidth,previousHeight);'+
+        $script:s.Substring($before+'        KeepOnVisibleDesktop();'.Length)
+}
+PlaceAtSurface '        var surface=activeModule.Build("Calendar");'
+PlaceAtSurface '        FrameworkElement surface=new Viewbox{Stretch=Stretch.Uniform,'
 # Restrict these replacements to the exact host opening/returning methods.
 $open=$s.IndexOf('    private void OpenInWidget(string name)',[StringComparison]::Ordinal)
 $limit=if($open -ge 0){$s.IndexOf('    private void PositionModuleFromCircle(', $open,[StringComparison]::Ordinal)}else{-1}
 if($open -lt 0 -or $limit -le $open){throw 'R24 opening method boundary unavailable'}
 $openMethod=$s.Substring($open,$limit-$open)
-$old=@'
-        KeepOnVisibleDesktop();
-        Content=surface;
-'@
-$new=@'
-        PositionModuleFromCircle(restoreLeft,restoreTop,CompactDiameter,CompactDiameter);
-        Content=surface;
-'@
+$old='        KeepOnVisibleDesktop();'
+$new='        PositionModuleFromCircle(restoreLeft,restoreTop,CompactDiameter,CompactDiameter);'
 if(!$openMethod.Contains($old)){throw 'R24 opening placement not found'}
 $openMethod=$openMethod.Replace($old,$new)
 $s=$s.Substring(0,$open)+$openMethod+$s.Substring($limit)
