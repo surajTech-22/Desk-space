@@ -6,12 +6,14 @@ $scene=Get-Content "$root/DeskSpaceWeatherSceneV11.cs" -Raw
 $media=Get-Content "$root/DeskSpaceMediaV18.cs" -Raw
 $calendar=Get-Content "$root/DeskSpaceCompactCalendarV36.cs" -Raw
 $inline=Get-Content "$root/DeskSpaceInlineV36.cs" -Raw
+$information=Get-Content "$root/DeskSpaceInformationV36.cs" -Raw
 foreach($key in @('AddWeatherScene(10,9,272)',
     'private void ApplyWeatherContrast()',
     'content.Foreground=bright?',
     'private void OpenCalendarQuickAdd()',
     'new DeskSpaceCompactCalendarV36().Create(OpenCalendarExpanded,ReturnFromModule,OpenCalendarQuickAdd)',
     'double size=Math.Min(342,Math.Min(bounds.Width,bounds.Height));',
+    'DeskSpaceInformationV36? informationOverlay',
     'new DeskSpaceInlineV36(name,previousCenter,ReturnFromModule,quickAddRequested)',
     'else if(name=="Calculator")','new DeskSpaceCalculatorV22().Create()',
     'name=="Notes"?256:name=="Reminders"?278:291'))
@@ -67,6 +69,13 @@ foreach($key in @('var back=Button("← Circle",done)',
     'DeskSpaceClipboardV10.Poll()'))
 {
     if(!$inline.Contains($key)){throw "R36 inline/reminders regression: $key"}
+}
+foreach($key in @('point.X<=82 && CanPage(-1)', 'point.X>=406 && CanPage(1)',
+    'shelfBorder.Width=editing?304:272', 'shelfScroll.MaxHeight=editing?235:124',
+    'File.Replace(temp,CollectionsPath','information-collections-v26.json',
+    'DeskSpaceWindowBehavior.AllowInput(owner,true)'))
+{
+    if(!$information.Contains($key)){throw "R36 information wheel regression: $key"}
 }
 # Render-time layout math: compact weather overlay must fit circular host,
 # and calendar/pill shrink rather than reserve unused rectangles.
