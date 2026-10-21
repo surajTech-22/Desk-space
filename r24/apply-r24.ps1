@@ -35,10 +35,11 @@ $information=@'
         body.Children.Add(types);
         var details=new StackPanel();
         body.Children.Add(details);
-        var ordinary=Btn("Information",()=>Switch(false));
-        var secure=Btn("Password · Security Vault",()=>Switch(true));
-        types.Children.Add(ordinary);types.Children.Add(secure);
         bool? current=null;
+        Button ordinary=null!,secure=null!;
+        ordinary=Btn("Information",()=>Switch(false));
+        secure=Btn("Password · Security Vault",()=>Switch(true));
+        types.Children.Add(ordinary);types.Children.Add(secure);
         void Switch(bool password)
         {
             if(current==password)return;
