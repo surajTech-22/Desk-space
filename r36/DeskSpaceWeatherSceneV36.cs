@@ -71,7 +71,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
         var rays=new Canvas{Width=size*1.75,Height=size*1.75,IsHitTestVisible=false};
         sunRotation=new RotateTransform(0,rays.Width/2,rays.Height/2);
         rays.RenderTransform=sunRotation;
-        for(int i=0;i<20;i++)
+        for(int i=0;i<8;i++)
         {
             double theta=i*Math.PI/4;
             var radius=size*.59;
@@ -134,7 +134,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
         CloudCore(d,d*.19,d*.11,1.48,true);
         var drops=new Canvas{Width=d*.88,Height=d*.61,Opacity=.80};
         var brush=new SolidColorBrush(Color.FromArgb(210,183,226,255));
-        for(int i=0;i<8;i++)
+        for(int i=0;i<20;i++)
         {
             double xx=d*(.03+(i%10)*.077);
             double yy=d*(.04+(i/10)*.29+(i%3)*.022);
