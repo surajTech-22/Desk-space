@@ -22,7 +22,7 @@ foreach($key in $required){if(!$donut.Contains($key)){throw "R34 BuildDonut anch
 $donut=$donut.Replace('bool outer=i>=6;int slot=i%6;',@'
 bool outer=i>=6;int slot=i%6;
             bool hasQuickAdd=HasModuleQuickAdd(Segments[i]);
-'@.TrimEnd())
+'@)
 $donut=$donut.Replace('double radius=outer?162:98;',
     'double radius=outer?(hasQuickAdd?151:162):(hasQuickAdd?87:98);')
 $donut=$donut.Replace('            canvas.Children.Add(label);',@'
@@ -48,7 +48,7 @@ $donut=$donut.Replace('            canvas.Children.Add(label);',@'
                 Canvas.SetLeft(plus,px-10);Canvas.SetTop(plus,py-2-10);
                 canvas.Children.Add(plus);
             }
-'@.TrimEnd())
+'@)
 $s=$s.Substring(0,$donutStart)+$donut+$s.Substring($donutEnd)
 
 # Quick add hit testing is always in the same 420-DIP coordinate space
@@ -160,7 +160,7 @@ $open=$open.Replace('        Show();Activate();',@'
         if(quickAddRequested && name=="Calendar")
             Dispatcher.BeginInvoke(new Action(()=>activeModule?.StartNewItem()),
                 System.Windows.Threading.DispatcherPriority.Input);
-'@.TrimEnd())
+'@)
 $s=$s.Substring(0,$openStart)+$open+$s.Substring($openEnd)
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 
