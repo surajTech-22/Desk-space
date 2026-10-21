@@ -33,6 +33,7 @@ on:
       - "r22/**"
       - "r23/**"
       - "r24/**"
+      - "r25/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -473,6 +474,27 @@ jobs:
              !$module.Substring($start,$end-$start).Contains('CalendarCompactRequested')) {
              throw 'R24 Calendar compact/expanded control missing'
           }
+
+      - name: R25 compact all module panels and remove duplicate Date/Calendar
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r25/apply-r25.ps1
+          ./r25/apply-animation-r25.ps1
+          $module=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceModuleV10.cs' -Raw
+          $widgetR25=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV25.cs' -Raw
+          foreach($key in @('DeskSpaceInformationV25','BuildPassword(contents)','ShowOrdinary','Weather on circle'))
+          { if(!$module.Contains($key)){throw "R25 module missing $key"} }
+          foreach($key in @('"Clock", "Files", "Tasks", "Weather"','"Settings"=>382','"Information"=>385',
+              'OpenInWidget(name=="Files"?"Search":name)'))
+          { if(!$widgetR25.Contains($key)){throw "R25 window missing $key"} }
+          foreach($key in @('"UI","PW","Other"','information-items-v22.json','openPasswordVault()','File.Replace'))
+          { if(!$info.Contains($key)){throw "R25 information missing $key"} }
+          foreach($key in @('CompleteModuleReturn()','closingMorph','width.Completed+=','Content=restore'))
+          { if(!$widgetR25.Contains($key)){throw "R25 animation missing $key"} }
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
+          {throw 'Existing encrypted Security Vault must not change'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
