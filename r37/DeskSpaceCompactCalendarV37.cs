@@ -28,7 +28,7 @@ internal sealed class DeskSpaceCompactCalendarV36
         var canvas = new Grid { Width = diameter, Height = diameter,
             Background = new SolidColorBrush(Color.FromRgb(249,248,254)),
             Clip = new EllipseGeometry(new Rect(0,0,diameter,diameter)) };
-        var panel = new StackPanel { Width = 240, HorizontalAlignment = HorizontalAlignment.Center,
+        var panel = new StackPanel { Width = 232, HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center };
         canvas.Children.Add(panel);
 
