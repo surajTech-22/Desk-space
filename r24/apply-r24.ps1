@@ -70,7 +70,7 @@ $calendar=$s.IndexOf('    private void BuildCalendar(StackPanel body)',[StringCo
 $after=if($calendar -ge 0){$s.IndexOf($anchor,$calendar,[StringComparison]::Ordinal)}else{-1}
 if($after -lt 0){throw 'R24 Calendar toolbar missing'}
 $replace=$anchor+[string][char]10+'        if(CalendarCompactRequested!=null)row.Children.Add(Btn("◉ Compact",CalendarCompactRequested));'
-$s=$s.Substring(0,$after)+$s.Substring($after).Replace($anchor,$replace)
+$s=$s.Substring(0,$after)+$replace+$s.Substring($after+$anchor.Length)
 Save $p $s
 
 $p="$root/WidgetHost.cs"
