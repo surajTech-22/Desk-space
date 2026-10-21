@@ -45,6 +45,7 @@ on:
       - "r34/**"
       - "r35/**"
       - "r36/**"
+      - "r37/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -967,6 +968,10 @@ jobs:
       - name: R36 verify full-circle weather calendar calculator and minimized media
         shell: pwsh
         run: ./r36/test-r36.ps1
+
+      - name: R37 expose system mute in compact and minimized media player
+        shell: pwsh
+        run: ./r37/test-r37.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
