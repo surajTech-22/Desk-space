@@ -31,6 +31,7 @@ on:
       - "r20/**"
       - "r21/**"
       - "r22/**"
+      - "r23/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -418,6 +419,30 @@ jobs:
           {throw 'R22 information manager or existing vault source missing'}
           if($info.Contains('password-vault-v10.enc')){throw 'R22 ordinary information references vault file'}
           if(!$info.Contains('information-items-v22.json')){throw 'R22 normal information store missing'}
+
+      - name: R23 prevent ring scaling after morphing modules
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r23/apply-r23.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          if(!$widget.Contains('StopMorphWindowAnimations();') -or
+             !$widget.Contains('Width=OpenDiameter;') -or
+             !$widget.Contains('Height=OpenDiameter;') -or
+             !$widget.Contains('FillBehavior=System.Windows.Media.Animation.FillBehavior.Stop'))
+          {throw 'R23 ring animation regression check failed'}
+          $sourceStart=$widget.IndexOf('    private void BuildDonut()')
+          $sourceEnd=$widget.IndexOf('    private static Geometry Sector(', $sourceStart)
+          if($sourceStart -lt 0 -or $sourceEnd -le $sourceStart){throw 'R23 cannot inspect ring method'}
+          $donut=$widget.Substring($sourceStart,$sourceEnd-$sourceStart)
+          if(!$donut.Contains('Width=OpenDiameter;') -or !$donut.Contains('StopMorphWindowAnimations();'))
+          {throw 'R23 ring retains compact dimensions'}
+          $morphStart=$widget.IndexOf('    private void AnimateModuleOpen(')
+          $morphEnd=$widget.IndexOf('    private void ResizeLiveSearch(', $morphStart)
+          if($morphStart -lt 0 -or $morphEnd -le $morphStart){throw 'R23 morph method inspection failed'}
+          $morph=$widget.Substring($morphStart,$morphEnd-$morphStart)
+          if(([regex]::Matches($morph,'FillBehavior=System.Windows.Media.Animation.FillBehavior.Stop')).Count -lt 7)
+          {throw 'R23 orphaned WPF animation HoldEnd remains'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
