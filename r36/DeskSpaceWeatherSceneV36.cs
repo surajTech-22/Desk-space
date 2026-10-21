@@ -26,21 +26,19 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
         Clip=new EllipseGeometry(new Point(diameter/2,diameter/2),
             diameter/2-3,diameter/2-3);
         var code=reading.Code;
-        // Daylight scenes have a genuinely light, full-disc backdrop.
-        // The host switches clock glyphs to contrasting navy ink; night,
-        // rain and thunderstorms retain the original deep-blue surface
-        // with white high-contrast text.
-        if(reading.IsDay && code<=3)
-        {
-            var sky=new Ellipse{
-                Width=diameter,Height=diameter,
-                Fill=new LinearGradientBrush(
-                    Color.FromRgb(184,220,248),
-                    Color.FromRgb(244,248,255),90),
-                IsHitTestVisible=false
-            };
-            Draw(sky,0,0);
-        }
+        // Condition-aware FULL-DISK sky, not disconnected decorations.
+        // Contrasting text on the host is paired with these scene palettes.
+        bool bright=reading.IsDay && code<=3;
+        var top=bright?Color.FromRgb(184,220,248):
+            reading.IsDay?Color.FromRgb(35,68,113):Color.FromRgb(22,31,73);
+        var bottom=bright?Color.FromRgb(244,248,255):
+            reading.IsDay?Color.FromRgb(91,119,159):Color.FromRgb(49,57,113);
+        var sky=new Ellipse{
+            Width=diameter,Height=diameter,
+            Fill=new LinearGradientBrush(top,bottom,90),
+            IsHitTestVisible=false
+        };
+        Draw(sky,0,0);
         if(!reading.IsDay)Night(diameter);
         else if(code>=51)Rain(diameter);
         else if(code<=1)Sunny(diameter);
