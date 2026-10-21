@@ -44,6 +44,7 @@ on:
       - "r33/**"
       - "r34/**"
       - "r35/**"
+      - "r36/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -962,6 +963,10 @@ jobs:
       - name: R35 shared child and main wheel hover regression gates
         shell: pwsh
         run: ./r35/test-r35.ps1
+
+      - name: R36 inspect assembled module regressions
+        shell: pwsh
+        run: ./r36/inspect.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
