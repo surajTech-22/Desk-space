@@ -44,10 +44,10 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
         // continuous downloaded video; current weather data selects the sky.
         Draw(Disc(diameter*.93,
             Glow(bright?Color.FromRgb(255,255,255):Color.FromRgb(101,149,231)),
-            bright?.29:.18),-diameter*.19,-diameter*.21);
+            bright ? 0.29 : 0.18),-diameter*.19,-diameter*.21);
         Draw(Disc(diameter*.78,
             Glow(bright?Color.FromRgb(255,246,203):Color.FromRgb(146,169,227)),
-            bright?.17:.12),diameter*.41,diameter*.54);
+            bright ? 0.17 : 0.12),diameter*.41,diameter*.54);
         if(!reading.IsDay)Night(diameter);
         else if(code>=51)Rain(diameter);
         else if(code<=1)Sunny(diameter);
@@ -122,7 +122,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
     {
         var ribbon=new Canvas{
             Width=d*3.5,Height=d*.31*scale,
-            IsHitTestVisible=false,Opacity=dark?.68:.76};
+            IsHitTestVisible=false,Opacity=dark ? 0.68 : 0.76};
         var soft=dark?Color.FromRgb(212,224,245):Color.FromRgb(255,255,255);
         var shade=dark?Color.FromRgb(113,139,184):Color.FromRgb(202,223,246);
         var fill=new LinearGradientBrush(soft,shade,90);
