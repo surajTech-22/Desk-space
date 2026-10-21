@@ -25,17 +25,17 @@ internal sealed class DeskSpaceCompactCalendarV24
         var canvas = new Grid { Width = 408, Height = 408,
             Background = new SolidColorBrush(Color.FromRgb(249,248,254)),
             Clip = new EllipseGeometry(new Rect(0,0,408,408)) };
-        var panel = new StackPanel { Width = 306, HorizontalAlignment = HorizontalAlignment.Center,
+        var panel = new StackPanel { Width = 280, HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center };
         canvas.Children.Add(panel);
 
-        var top = new Grid { Margin = new Thickness(0,0,0,7) };
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+        var top = new Grid { Margin = new Thickness(0,0,0,4) };
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(35) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1,GridUnitType.Star) });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
         var exit = SmallButton("←",close);
         top.Children.Add(exit);
-        var heading = new TextBlock { Text = "Calendar", FontSize = 19,
+        var heading = new TextBlock { Text = "Calendar", FontSize = 17,
             FontWeight = FontWeights.SemiBold, Foreground = ink,
             VerticalAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Center };
         Grid.SetColumn(heading,1);top.Children.Add(heading);
@@ -44,15 +44,15 @@ internal sealed class DeskSpaceCompactCalendarV24
         Grid.SetColumn(expandButton,2);top.Children.Add(expandButton);
         panel.Children.Add(top);
 
-        var days = new UniformGrid { Columns=7, Rows=6, Height=210 };
+        var days = new UniformGrid { Columns=7, Rows=6, Height=156 };
         var agenda = new TextBlock { TextWrapping=TextWrapping.Wrap,Foreground=ink,
-            FontSize=12,MaxHeight=38,TextTrimming=TextTrimming.CharacterEllipsis,
-            TextAlignment=TextAlignment.Center,Margin=new Thickness(4,0,4,6) };
+            FontSize=11,MaxHeight=25,TextTrimming=TextTrimming.CharacterEllipsis,
+            TextAlignment=TextAlignment.Center,Margin=new Thickness(4,0,4,3) };
         var nav = new Grid { Margin=new Thickness(0,0,0,4) };
         nav.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(37) });
         nav.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
         nav.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(37) });
-        var caption = new TextBlock { Foreground=ink,FontSize=15,
+        var caption = new TextBlock { Foreground=ink,FontSize=14,
             FontWeight=FontWeights.SemiBold,VerticalAlignment=VerticalAlignment.Center,
             TextAlignment=TextAlignment.Center };
         Grid.SetColumn(caption,1);nav.Children.Add(caption);
@@ -69,7 +69,7 @@ internal sealed class DeskSpaceCompactCalendarV24
         panel.Children.Add(days);
 
         var line = new Border { Background=new SolidColorBrush(Color.FromRgb(223,220,234)),
-            Height=1,Margin=new Thickness(5,4,5,7) };
+            Height=1,Margin=new Thickness(5,3,5,5) };
         panel.Children.Add(line);
         panel.Children.Add(agenda);
         var bottom = new Grid();
@@ -94,18 +94,18 @@ internal sealed class DeskSpaceCompactCalendarV24
                 int d=i-offset+1;
                 if(d<1 || d>DateTime.DaysInMonth(month.Year,month.Month))
                 {
-                    days.Children.Add(new Border { Width=34,Height=30 });continue;
+                    days.Children.Add(new Border { Width=31,Height=23 });continue;
                 }
                 var date=new DateTime(month.Year,month.Month,d);
                 bool chosen=date.Date==selected.Date;
                 bool current=date.Date==DateTime.Today;
                 var btn=new Button { Content=d.ToString(),Width=34,Height=30,
-                    Padding=new Thickness(0),Margin=new Thickness(2,1,2,1),
+                    Padding=new Thickness(0),Margin=new Thickness(1,1,1,1),
                     BorderThickness=new Thickness(current && !chosen?1:0),
                     BorderBrush=accent,
                     Background=chosen?accent:Brushes.Transparent,
                     Foreground=chosen?Brushes.White:ink,
-                    FontSize=12,FontWeight=chosen?FontWeights.SemiBold:FontWeights.Normal,
+                    FontSize=11,FontWeight=chosen?FontWeights.SemiBold:FontWeights.Normal,
                     Cursor=System.Windows.Input.Cursors.Hand };
                 btn.Click+=(_,_)=>{selected=date;Draw();};
                 days.Children.Add(btn);
@@ -143,7 +143,7 @@ internal sealed class DeskSpaceCompactCalendarV24
     }
     private static Button SmallButton(string title,Action act)
     {
-        var b=new Button { Content=title,Height=29,MinWidth=32,
+        var b=new Button { Content=title,Height=26,MinWidth=32,
             Padding=new Thickness(6,2,6,2),
             Background=new SolidColorBrush(Color.FromRgb(237,233,249)),
             BorderThickness=new Thickness(0),Foreground=new SolidColorBrush(Color.FromRgb(64,53,116)),
