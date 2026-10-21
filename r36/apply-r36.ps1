@@ -3,6 +3,7 @@ Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
 Copy-Item 'r36/DeskSpaceWeatherSceneV36.cs' "$root/DeskSpaceWeatherSceneV11.cs" -Force
 Copy-Item 'r36/DeskSpaceMediaV36.cs' "$root/DeskSpaceMediaV18.cs" -Force
+Copy-Item 'r36/DeskSpaceInformationV36.cs' "$root/DeskSpaceInformationV36.cs" -Force
 Copy-Item 'r36/DeskSpaceCompactCalendarV36.cs' "$root/DeskSpaceCompactCalendarV36.cs" -Force
 Copy-Item 'r36/DeskSpaceInlineV36.cs' "$root/DeskSpaceInlineV36.cs" -Force
 function Read([string]$path) {
@@ -17,6 +18,8 @@ function Must([string]$a,[string]$b) {
 }
 $p="$root/WidgetHost.cs"
 $s=Read $p
+Must 'DeskSpaceInformationV35? informationOverlay' 'DeskSpaceInformationV36? informationOverlay'
+Must 'new DeskSpaceInformationV35(this,' 'new DeskSpaceInformationV36(this,'
 Must 'DeskSpaceInlineV34? activeInline' 'DeskSpaceInlineV36? activeInline'
 Must 'new DeskSpaceInlineV34(name,previousCenter,ReturnFromModule,quickAddRequested)' 'new DeskSpaceInlineV36(name,previousCenter,ReturnFromModule,quickAddRequested)'
 Must 'new DeskSpaceCompactCalendarV34().Create(OpenCalendarExpanded,ReturnFromModule)' 'new DeskSpaceCompactCalendarV36().Create(OpenCalendarExpanded,ReturnFromModule,OpenCalendarQuickAdd)'
