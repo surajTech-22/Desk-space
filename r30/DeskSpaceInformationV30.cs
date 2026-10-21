@@ -54,6 +54,7 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
     private readonly Action changed;
     private readonly DeskSpaceVaultV10 vault=new();
     private readonly DispatcherTimer lockTimer;
+    private readonly DispatcherTimer newHoverTimer;
     private readonly Popup arc;
     private readonly Popup shelf;
     private readonly Canvas arcCanvas;
@@ -101,6 +102,12 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
         owner=window;changed=onChanged;
         arcCanvas=new Canvas{Width=488,Height=222,Focusable=true};
         arcCanvas.PreviewKeyDown+=OnSubmenuKeyDown;
+        newHoverTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(260)};
+        newHoverTimer.Tick+=(_,_)=>{
+            newHoverTimer.Stop();
+            if(!disposed && arc.IsOpen && hoveredChild==4 && !editorActive)
+                NewCollection();
+        };
         arc=new Popup{
             PlacementTarget=owner,Placement=PlacementMode.Relative,
             HorizontalOffset=-39,VerticalOffset=-102,
@@ -226,6 +233,7 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
     }
     public void HideArc()
     {
+        newHoverTimer.Stop();
         if(!arc.IsOpen)return;
         arc.IsOpen=false;
         hoveredChild=-1;keyboardIndex=-1;
@@ -268,6 +276,7 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
     }
     private void RenderArc()
     {
+        newHoverTimer.Stop();
         arcCanvas.Children.Clear();
         childWedges.Clear();childLabels.Clear();
         hoveredChild=-1;
@@ -342,6 +351,8 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
     private void HoverChild(int sector,Guid? id)
     {
         if(disposed || !arc.IsOpen)return;
+        bool enteredNewSector=hoveredChild!=sector;
+        if(enteredNewSector)newHoverTimer.Stop();
         hoveredChild=sector;
         keyboardIndex=sector==4?all.Count:startIndex+sector;
         for(int i=0;i<childWedges.Count;i++)
@@ -355,10 +366,14 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
         // Hovering a saved collection SELECTS and PREVIEWS it immediately.
         // Never reveal stored PW on hover: encrypted values stay masked.
         if(editorActive)return; // do not destroy unsaved editing.
-        // Hover on + highlights it; creating a new editor requires a
-        // deliberate click/Enter so merely passing through cannot discard
-        // an existing draft or interrupt collection preview.
-        if(sector<4 && id.HasValue)
+        // Hover on saved wedges previews immediately. + New is also
+        // hover-selectable, with a short dwell to avoid opening a draft
+        // merely by passing over it while scrolling along the arc.
+        if(sector==4 && enteredNewSector)
+        {
+            if(!editorActive)newHoverTimer.Start();
+        }
+        else if(sector<4 && id.HasValue)
             OpenCollection(id.Value);
     }
     private void ActivateChild(int sector,Guid? id)
@@ -367,6 +382,7 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
         if(disposed)return;
         if(sector==4)
         {
+            newHoverTimer.Stop();
             if(!editorActive)NewCollection();
             return;
         }
@@ -670,7 +686,7 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
         editorActive=false;
         MaskRevealed();
         arcCanvas.MouseWheel-=ScrollArc;
-        lockTimer.Stop();
+        newHoverTimer.Stop();lockTimer.Stop();
         vault.Dispose();
     }
 }
