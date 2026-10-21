@@ -32,6 +32,7 @@ on:
       - "r21/**"
       - "r22/**"
       - "r23/**"
+      - "r24/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -443,6 +444,35 @@ jobs:
           $morph=$widget.Substring($morphStart,$morphEnd-$morphStart)
           if(([regex]::Matches($morph,'FillBehavior=System.Windows.Media.Animation.FillBehavior.Stop')).Count -lt 7)
           {throw 'R23 orphaned WPF animation HoldEnd remains'}
+
+      - name: R24 compact Calendar, Information Manager, and smoother circle morph
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r24/apply-r24.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $module=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceModuleV10.cs' -Raw
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV24.cs' -Raw
+          $calendar=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceCompactCalendarV24.cs' -Raw
+          foreach($term in @('OpenCalendarExpanded()','OpenCalendarCompact()','DeskSpaceCompactCalendarV24',
+                             'AnimateModuleOpenFrom(','DoubleAnimationUsingKeyFrames'))
+          { if(!$widget.Contains($term)){throw "R24 widget missing: $term"} }
+          foreach($term in @('new DeskSpaceInformationV24().Create()','BuildPassword(details)',
+                             'CalendarCompactRequested'))
+          { if(!$module.Contains($term)){throw "R24 module missing: $term"} }
+          if(!$info.Contains('information-items-v22.json') -or
+             !$info.Contains('File.Replace(temp,Location,Location+".previous"') -or
+             $info.Contains('password-vault-v10.enc')) {throw 'R24 data migration or vault isolation check failed'}
+          if(!$calendar.Contains('Clip = new EllipseGeometry') -or
+             !$calendar.Contains('Open planner') -or
+             !$calendar.Contains('OccursOn(')) {throw 'R24 in-circle calendar incomplete'}
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs')){throw 'R24 security vault missing'}
+          $start=$module.IndexOf('private void BuildCalendar(StackPanel body)')
+          $end=$module.IndexOf('private void BuildClipboard(StackPanel body)',$start)
+          if($start -lt 0 -or $end -le $start -or
+             !$module.Substring($start,$end-$start).Contains('CalendarCompactRequested')) {
+             throw 'R24 Calendar compact/expanded control missing'
+          }
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
