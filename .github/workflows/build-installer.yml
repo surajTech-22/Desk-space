@@ -755,9 +755,72 @@ jobs:
           {throw 'R31 persisted information and encrypted vault safety gate failed'}
           Write-Host 'R31 0/1/2/3/4/12-item sector geometry and pointer-selection source gates passed.'
 
-      - name: R32 inspect WPF drag capture and editor focus
+      - name: R32 test captured-drag child sector and real text-entry focus
         shell: pwsh
-        run: ./r32/inspect-r32.ps1
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r32/apply-r32.ps1
+          $hostCode=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $child=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV32.cs' -Raw
+          $behavior=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWindowBehavior.cs' -Raw
+          foreach($key in @('DeskSpaceInformationV32',
+            'TryCapturedDragAtScreen(PointToScreen(p),false)',
+            'PointToScreen(e.GetPosition(this)),true)',
+            'informationOverlay?.EndCapturedDrag()',
+            'if(IsMouseCaptured)ReleaseMouseCapture();',
+            'return; // keep parent + child donut visible'))
+          {if(!$hostCode.Contains($key)){throw "R32 main window drag selection not wired: $key"}}
+          $move=$hostCode.Substring($hostCode.IndexOf('private void OnGestureMove('),
+            $hostCode.IndexOf('private void OnGestureUp(')-$hostCode.IndexOf('private void OnGestureMove('))
+          if($move.IndexOf('TryCapturedDragAtScreen(') -gt $move.IndexOf('UpdateHighlightedSector(p)'))
+          {throw 'R32 child drag must run before parent sector hit-test'}
+          $release=$hostCode.Substring($hostCode.IndexOf('private void OnGestureUp('),
+            1900)
+          if($release.IndexOf('TryCapturedDragAtScreen(') -gt $release.IndexOf('CollapseRing();'))
+          {throw 'R32 child drop wrongly collapses the two-ring donut'}
+          foreach($key in @('arcCanvas.PointFromScreen(screenPoint)',
+            'SlotAtPoint(local)','HoverChild(slot,target.id)',
+            'ActivateChild(slot,target.id)','capturedDragSelection=true',
+            'capturedDragSelection=false','!capturedDragSelection',
+            'DeskSpaceWindowBehavior.AllowInput(owner,true)',
+            'DeskSpaceWindowBehavior.AllowInput(owner,false)',
+            'owner.IsMouseCaptured','owner.ReleaseMouseCapture()',
+            'owner.Activate()','firstField.Focus()',
+            'Keyboard.Focus(firstField)',
+            'FocusManager.SetFocusedElement(shelfBorder,firstField)',
+            'DispatcherPriority.Input','EnterEditorKeyboardMode(name)',
+            'LeaveEditorKeyboardMode()',
+            'item.Value.TextChanged+=','item.Custom.TextChanged+=',
+            'item.Password.PasswordChanged+=',
+            'if(typed)AddRow()',
+            'File.Replace(temp,CollectionsPath',
+            'information-items-v22.json','VaultId',
+            'MaskRevealed()'))
+          {if(!$child.Contains($key)){throw "R32 lost drag / editor / data safeguard: $key"}}
+          if(!$behavior.Contains('InputWindows.Add(hwnd)') -or
+             !$behavior.Contains('style &= ~WS_EX_NOACTIVATE'))
+          {throw 'R32 cannot safely enable native textbox keyboard activation'}
+          $source=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV31.cs' -Raw
+          if(!$source.Contains('arcCanvas.PreviewMouseLeftButtonDown+=OnArcPointerDown'))
+          {throw 'R32 ordinary click selection was lost'}
+          # Screen pixel to popup-DIP roundtrip: parent capture and popup
+          # use the same PointToScreen/PointFromScreen coordinate space.
+          foreach($count in @(0,1,2,4,12))
+          {
+            $num=[Math]::Min(4,$count)+1
+            $half=if($num -eq 1){17}else{[Math]::Min(57,12*$num)}
+            $start=-90-$half
+            for($i=0;$i -lt $num;$i++)
+            {
+              $middle=$start+(($i+.5)*$half*2/$num)
+              $r=$middle*[Math]::PI/180
+              $px=244+233.5*[Math]::Cos($r)
+              $py=306+233.5*[Math]::Sin($r)
+              if($px -lt 0 -or $px -gt 488 -or $py -lt 0 -or $py -gt 222)
+              {throw "R32 drag landing off hit-zone canvas count=$count sector=$i"}
+            }
+          }
+          Write-Host 'R32 drag, click, empty state, textbox focus, dynamic rows and data gates verified.'
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
