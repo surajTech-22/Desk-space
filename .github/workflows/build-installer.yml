@@ -38,6 +38,7 @@ on:
       - "r27/**"
       - "r28/**"
       - "r29/**"
+      - "r30/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -616,6 +617,60 @@ jobs:
           $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV27.cs' -Raw
           foreach($key in @('ChildSector(','NewCollection()','information-collections-v26.json','VaultId'))
           {if(!$info.Contains($key)){throw "R29 existing Information functionality lost $key"}}
+
+      - name: R30 child-sector hover selection and basic interaction regression checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r30/apply-r30.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV30.cs' -Raw
+          foreach($needle in @('DeskSpaceInformationV30','informationOverlay.HideArc()',
+            'informationOverlay?.IsArcOpen','ConfirmNavigation()',
+            'informationOverlay?.Hide();','CloseInformationContext();'))
+          {if(!$widget.Contains($needle)){throw "R30 main module missing $needle"}}
+          foreach($needle in @('wedge.MouseEnter+=','b.MouseEnter+=','HoverChild(sector,collectionId)',
+            'OpenCollection(id.Value)','w.Fill=selected','OnSubmenuKeyDown',
+            'if(e.Key==Key.Escape)','if(e.Key==Key.Left || e.Key==Key.Right',
+            'if(e.Key==Key.Enter || e.Key==Key.Space)',
+            'DeleteCollection(Collection collection)','MessageBoxButton.YesNo',
+            'if(editorActive)return','NewCollection()', 'ConfirmNavigation()',
+            'information-collections-v26.json','information-items-v22.json',
+            'VaultId','MaskRevealed()','IsArcOpen => arc.IsOpen'))
+          {if(!$info.Contains($needle)){throw "R30 child donut behavior missing $needle"}}
+          if($info.Contains('TextBlockToolTip()')){throw 'R30 invalid WPF API remained'}
+          if(!$info.Contains('File.Replace(temp,CollectionsPath') -or
+            !(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
+          {throw 'R30 data safety regression'}
+          # Verify hover and click dispatch paths, not only visual labels.
+          $r=$info.IndexOf('private void RenderArc()')
+          $rEnd=$info.IndexOf('private void ScrollArc(', $r)
+          if($r -lt 0 -or $rEnd -le $r){throw 'R30 render method absent'}
+          $render=$info.Substring($r,$rEnd-$r)
+          if(!$render.Contains('wedge.MouseLeftButtonUp+=') -or
+             !$render.Contains('wedge.MouseEnter+=') -or
+             !$render.Contains('b.MouseEnter+='))
+          {throw 'R30 missing child-sector hit testing or hover selection'}
+          $h=$info.IndexOf('private void HoverChild(')
+          $hEnd=$info.IndexOf('private void ActivateChild(', $h)
+          if($h -lt 0 -or $hEnd -le $h){throw 'R30 hover callback unavailable'}
+          $hover=$info.Substring($h,$hEnd-$h)
+          if(!$hover.Contains('if(sector<4 && id.HasValue)') -or
+             !$hover.Contains('OpenCollection(id.Value)'))
+          {throw 'R30 hovering a saved collection does not select/preview it'}
+          if($hover.Contains('NewCollection()'))
+          {throw 'R30 + New must use dwell rather than immediate creation'}
+          foreach($key in @('newHoverTimer.Tick+=','TimeSpan.FromMilliseconds(260)',
+            'wedge.MouseLeave+=','b.MouseLeave+=','newHoverTimer.Stop();',
+            'newHoverTimer.Start();','EndChildHover(int sector)'))
+          {if(!$info.Contains($key)){throw "R30 hover and exit transition missing $key"}}
+          $click=$widget.IndexOf('private void ClickSegment(string name)')
+          $clickEnd=$widget.IndexOf('private void ApplySettings()', $click)
+          if($click -lt 0 -or $clickEnd -le $click){throw 'R30 cannot verify navigation'}
+          $clickMethod=$widget.Substring($click,$clickEnd-$click)
+          if(!$clickMethod.Contains('ConfirmNavigation()') -or
+             !$clickMethod.Contains('informationOverlay?.Hide();'))
+          {throw 'R30 navigating away loses unsaved input without warning'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
