@@ -42,8 +42,8 @@ if($scene.Contains('Motion(-d*.11,d*.14,1.6)') -or
     $scene.Contains('Motion(-d*.065,d*.075,5.2)'))
 {throw 'R36 old bouncing cloud/rain animation remains'}
 foreach($key in @('frame.Width=pill?298','pillSeek=new Slider{Minimum=0',
-    'pillPreviousButton=Make("⏮"',
-    'pillNextButton=Make("⏭"',
+    'pillPreviousButton=Make("«"',
+    'pillNextButton=Make("»"',
     'var miniPlayButton=Make("▶"',
     'var restore=Make("▢"',
     'pillSeek.PreviewMouseLeftButtonUp+=async',
