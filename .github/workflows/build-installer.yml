@@ -34,6 +34,7 @@ on:
       - "r23/**"
       - "r24/**"
       - "r25/**"
+      - "r26/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -495,6 +496,28 @@ jobs:
           { if(!$widgetR25.Contains($key)){throw "R25 animation missing $key"} }
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
           {throw 'Existing encrypted Security Vault must not change'}
+
+      - name: R26 contextual information arc, dynamic multirow collections and vault references
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r26/apply-r26.ps1
+          $widget=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $info=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV26.cs' -Raw
+          $vault=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs' -Raw
+          foreach($key in @('"Information", "Notes", "Reminders", "Clipboard", "Files", "Tasks"',
+                 'OpenInformationArc()','informationOverlay?.IsOpen','informationOverlay?.Dispose()',
+                 'new DeskSpaceInformationV26(this'))
+          { if(!$widget.Contains($key)){throw "R26 host missing $key"} }
+          foreach($key in @('information-collections-v26.json','information-items-v22.json',
+                 'startIndex=Math.Clamp','RenderArc()','Popup','Canvas','OfferVaultUnlock()',
+                 'editorRows[^1]','if(typed)AddRow()','vault.Upsert','VaultId',
+                 'File.Replace(temp,CollectionsPath'))
+          { if(!$info.Contains($key)){throw "R26 information missing $key"} }
+          if(!$vault.Contains('AesGcm') -or !$vault.Contains('Rfc2898DeriveBytes.Pbkdf2'))
+          {throw 'R26 existing vault safety gate failed'}
+          if($info.Contains('Password=entry.Value') -or $info.Contains('Value=entry.Password.Password'))
+          {throw 'R26 plaintext PW storage detected'}
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
