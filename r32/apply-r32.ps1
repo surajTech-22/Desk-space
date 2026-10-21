@@ -81,5 +81,28 @@ if(!$up.Contains($beforeUp) -or !$up.Contains('CollapseRing();') -or
 {throw 'R32 original mouse release safety guard failed'}
 $up=$up.Replace($beforeUp,$afterUp)
 $s=$s.Substring(0,$upBegin)+$up+$s.Substring($upEnd)
+# A captured drag must not wait for a low-priority dispatcher callback to
+# draw its child sectors. By the time the event runs the pointer may already
+# have left the parent ring. Open synchronously while that ring is expanded.
+$openBegin=$s.IndexOf('    private void OpenInformationArc()', [StringComparison]::Ordinal)
+$openEnd=if($openBegin -ge 0){$s.IndexOf('    private void ClickSegment(string name)', $openBegin,[StringComparison]::Ordinal)}else{-1}
+if($openBegin -lt 0 -or $openEnd -le $openBegin){throw 'R32 cannot find submenu opening method'}
+$open=$s.Substring($openBegin,$openEnd-$openBegin)
+$oldPredicate=@'
+        if(ringExpanded &&
+           Mouse.LeftButton!=MouseButtonState.Pressed &&
+           Mouse.RightButton!=MouseButtonState.Pressed)
+            ShowAttachedArc();
+'@
+$updatedPredicate=@'
+        if(ringExpanded)
+            ShowAttachedArc(); // needed for a held drag entering a child arc
+'@
+$oldPredicate=$oldPredicate.Replace([string][char]13+[char]10,[string][char]10)
+$updatedPredicate=$updatedPredicate.Replace([string][char]13+[char]10,[string][char]10)
+if(!$open.Contains($oldPredicate)){throw 'R32 previous deferred drag logic changed'}
+$open=$open.Replace($oldPredicate,$updatedPredicate)
+$s=$s.Substring(0,$openBegin)+$open+$s.Substring($openEnd)
+
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R32: drag from the main donut into the child donut highlights under mouse capture, drop selects, simple click preserved; editor fields acquire keyboard focus while saving or editing.'
