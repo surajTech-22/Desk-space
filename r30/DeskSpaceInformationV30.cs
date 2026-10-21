@@ -295,6 +295,7 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
                 IsHitTestVisible=true,Cursor=Cursors.Hand,
                 ToolTip=i==4?"Create a new information collection":visible[i].Name};
             wedge.MouseEnter+=(_,_)=>HoverChild(sector,collectionId);
+            wedge.MouseLeave+=(_,_)=>EndChildHover(sector);
             wedge.MouseLeftButtonUp+=(_,e)=>{
                 ActivateChild(sector,collectionId);e.Handled=true;
             };
@@ -324,6 +325,7 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
             b.Foreground=add?Brushes.White:Ink;
             b.BorderThickness=new Thickness(0);
             b.MouseEnter+=(_,_)=>HoverChild(sector,collectionId);
+            b.MouseLeave+=(_,_)=>EndChildHover(sector);
             Canvas.SetLeft(b,x-40);Canvas.SetTop(b,y-15);
             childLabels.Add(b);
             arcCanvas.Children.Add(b);
@@ -375,6 +377,15 @@ internal sealed class DeskSpaceInformationV30 : IDisposable
         }
         else if(sector<4 && id.HasValue)
             OpenCollection(id.Value);
+    }
+    private void EndChildHover(int sector)
+    {
+        if(hoveredChild!=sector)return;
+        if(sector==4 && !editorActive)
+        {
+            newHoverTimer.Stop();
+            hoveredChild=-1;
+        }
     }
     private void ActivateChild(int sector,Guid? id)
     {
