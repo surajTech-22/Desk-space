@@ -44,6 +44,10 @@ internal sealed class DeskSpaceCompactCalendarV24
         Grid.SetColumn(expandButton,2);top.Children.Add(expandButton);
         panel.Children.Add(top);
 
+        var days = new UniformGrid { Columns=7, Rows=6, Height=210 };
+        var agenda = new TextBlock { TextWrapping=TextWrapping.Wrap,Foreground=ink,
+            FontSize=12,MaxHeight=38,TextTrimming=TextTrimming.CharacterEllipsis,
+            TextAlignment=TextAlignment.Center,Margin=new Thickness(4,0,4,6) };
         var nav = new Grid { Margin=new Thickness(0,0,0,4) };
         nav.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(37) });
         nav.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
@@ -62,15 +66,11 @@ internal sealed class DeskSpaceCompactCalendarV24
             weekday.Children.Add(new TextBlock { Text=x,Foreground=muted,
                 FontSize=11,TextAlignment=TextAlignment.Center });
         panel.Children.Add(weekday);
-        var days = new UniformGrid { Columns=7, Rows=6, Height=210 };
         panel.Children.Add(days);
 
         var line = new Border { Background=new SolidColorBrush(Color.FromRgb(223,220,234)),
             Height=1,Margin=new Thickness(5,4,5,7) };
         panel.Children.Add(line);
-        var agenda = new TextBlock { TextWrapping=TextWrapping.Wrap,Foreground=ink,
-            FontSize=12,MaxHeight=38,TextTrimming=TextTrimming.CharacterEllipsis,
-            TextAlignment=TextAlignment.Center,Margin=new Thickness(4,0,4,6) };
         panel.Children.Add(agenda);
         var bottom = new Grid();
         bottom.ColumnDefinitions.Add(new ColumnDefinition());
@@ -127,18 +127,19 @@ internal sealed class DeskSpaceCompactCalendarV24
 
     private static bool OccursOn(EventItem e, DateTime date)
     {
-        DateTime start=e.Date.Date, current=date.Date;
-        if(start>current)return false;
-        if(start==current)return true;
-        int days=(current-start).Days;
-        return e.Recurrence switch
+        // Match the full planner's recurrence expansion, including the
+        // AddMonths rollover behavior for dates such as January 31.
+        DateTime day=date.Date, at=e.Date;
+        for(int i=0;i<500 && at.Date<=day;i++)
         {
-            "Daily" => true,
-            "Weekly" => days%7==0,
-            "Monthly" => current.Day==start.Day,
-            "Yearly" => current.Month==start.Month && current.Day==start.Day,
-            _ => false
-        };
+            if(at.Date==day)return true;
+            if(e.Recurrence=="Daily")at=at.AddDays(1);
+            else if(e.Recurrence=="Weekly")at=at.AddDays(7);
+            else if(e.Recurrence=="Monthly")at=at.AddMonths(1);
+            else if(e.Recurrence=="Yearly")at=at.AddYears(1);
+            else return false;
+        }
+        return false;
     }
     private static Button SmallButton(string title,Action act)
     {
