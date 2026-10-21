@@ -467,8 +467,6 @@ jobs:
           if(!$calendar.Contains('Clip = new EllipseGeometry') -or
              !$calendar.Contains('Open planner') -or
              !$calendar.Contains('OccursOn(')) {throw 'R24 in-circle calendar incomplete'}
-          foreach($key in @('CompleteModuleReturn()','closingMorph','width.Completed+=','Content=restore'))
-          { if(!$host.Contains($key)){throw "R25 animation missing $key"} }
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs')){throw 'R24 security vault missing'}
           $start=$module.IndexOf('private void BuildCalendar(StackPanel body)')
           $end=$module.IndexOf('private void BuildClipboard(StackPanel body)',$start)
@@ -493,6 +491,8 @@ jobs:
           { if(!$host.Contains($key)){throw "R25 window missing $key"} }
           foreach($key in @('"UI","PW","Other"','information-items-v22.json','openPasswordVault()','File.Replace'))
           { if(!$info.Contains($key)){throw "R25 information missing $key"} }
+          foreach($key in @('CompleteModuleReturn()','closingMorph','width.Completed+=','Content=restore'))
+          { if(!$host.Contains($key)){throw "R25 animation missing $key"} }
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVaultV10.cs'))
           {throw 'Existing encrypted Security Vault must not change'}
 
