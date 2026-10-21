@@ -1,0 +1,166 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using DeskSpace;
+
+internal static class Program
+{
+    private const BindingFlags Any = BindingFlags.Instance |
+        BindingFlags.Public | BindingFlags.NonPublic;
+    private static string outdir = "";
+    private static readonly Assembly Product = typeof(WeatherReading).Assembly;
+    [STAThread]
+    private static int Main(string[] args)
+    {
+        outdir=args.Length>0?args[0]:Path.Combine(Path.GetTempPath(),"deskspace-r36-ui");
+        Directory.CreateDirectory(outdir);
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        try
+        {
+            TestWeather();
+            TestCalendar();
+            TestCalculator();
+            TestMediaPill();
+            Console.WriteLine("R36 WPF visual smoke PASS: weather full disk, calendar navigation/event +, internal calculator 1+2=3, media pill controls and screenshots");
+            app.Shutdown();
+            return 0;
+        }
+        catch(Exception ex)
+        {
+            Console.Error.WriteLine("R36 WPF visual smoke FAILED: "+ex);
+            app.Shutdown();
+            return 1;
+        }
+    }
+    private static object Make(string fullName,params object?[] args)
+    {
+        var type=Product.GetType(fullName,true)!;
+        return Activator.CreateInstance(type,Any,null,args,null)
+            ??throw new Exception("Unable to create "+fullName);
+    }
+    private static object? Call(object target,string method,params object?[] args) =>
+        target.GetType().GetMethod(method,Any)?.Invoke(target,args)
+        ??(method=="Create"?throw new InvalidOperationException("Create returned null"):null);
+    private static T Private<T>(object target,string field) =>
+        (T)(target.GetType().GetField(field,Any)?.GetValue(target)
+            ??throw new Exception("No "+field));
+    private static void Set(object target,string name,object value) =>
+        (target.GetType().GetField(name,Any)
+          ??throw new Exception("Missing "+name)).SetValue(target,value);
+    private static void Assert(bool ok,string reason)
+    {
+        if(!ok)throw new Exception(reason);
+    }
+    private static IEnumerable<DependencyObject> Walk(DependencyObject root)
+    {
+        yield return root;
+        int n=VisualTreeHelper.GetChildrenCount(root);
+        for(int i=0;i<n;i++)
+            foreach(var child in Walk(VisualTreeHelper.GetChild(root,i)))
+                yield return child;
+    }
+    private static Button ButtonWith(DependencyObject root,string label) =>
+        Walk(root).OfType<Button>().FirstOrDefault(x=>x.Content is string s&&s==label)
+        ??throw new Exception("Missing button "+label);
+    private static string Render(FrameworkElement visual,int width,int height,string name)
+    {
+        visual.Measure(new Size(width,height));
+        visual.Arrange(new Rect(0,0,width,height));
+        visual.UpdateLayout();
+        var pixels=new RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);
+        pixels.Render(visual);
+        var encoder=new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(pixels));
+        string path=Path.Combine(outdir,name+".png");
+        using(var stream=File.Create(path))encoder.Save(stream);
+        Assert(new FileInfo(path).Length>2500,"Blank/near-empty render: "+name);
+        return path;
+    }
+    private static void TestWeather()
+    {
+        var samples=new[]{
+            ("clear-day",new WeatherReading("Bengaluru",26,0,true,DateTime.UtcNow)),
+            ("rain",new WeatherReading("Bengaluru",22,63,true,DateTime.UtcNow)),
+            ("night",new WeatherReading("Bengaluru",21,2,false,DateTime.UtcNow))
+        };
+        foreach(var (name,reading) in samples)
+        {
+            var scene=(FrameworkElement)Make("DeskSpace.DeskSpaceWeatherSceneV11",
+                reading,272.0);
+            Assert(scene.Width==272 && scene.Height==272,"Weather scene does not fill circle");
+            var ellipse=scene.Clip as EllipseGeometry;
+            Assert(ellipse!=null&&ellipse.RadiusX>=130&&ellipse.RadiusY>=130,
+                "Weather scene still clipped to a semicircle");
+            Render(scene,272,272,"weather-"+name);
+            Call(scene,"StopMotion");
+        }
+    }
+    private static void TestCalendar()
+    {
+        int events=0,expand=0,close=0;
+        var calendar=Make("DeskSpace.DeskSpaceCompactCalendarV36");
+        var ui=(FrameworkElement)(Call(calendar,"Create",
+            (Action)(()=>expand++),(Action)(()=>close++),
+            (Action)(()=>events++))??throw new Exception("Calendar did not render"));
+        Assert(ui.Width==342 && ui.Height==342,"Calendar still uses oversized circle");
+        Render(ui,342,342,"calendar-compact");
+        ButtonWith(ui,"+").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(events==1 && expand==0,"Calendar + reopened planner instead of new event");
+        ButtonWith(ui,"Expand ↗").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(expand==1,"Calendar expand stopped working");
+        ButtonWith(ui,"‹").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        ButtonWith(ui,"›").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        ButtonWith(ui,"Today").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        ButtonWith(ui,"←").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(close==1,"Calendar exit stopped working");
+    }
+    private static void TestCalculator()
+    {
+        var calculator=Make("DeskSpace.DeskSpaceCalculatorV22");
+        var ui=(FrameworkElement)(Call(calculator,"Create")
+            ??throw new Exception("In-app calculator unavailable"));
+        foreach(var key in new[]{"1","+","2","="})
+            ButtonWith(ui,key).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var display=Private<TextBlock>(calculator,"display");
+        Assert(decimal.TryParse(display.Text,out decimal value) && value==3m,
+            "Embedded calculator 1+2 did not equal 3");
+        Render(ui,324,395,"calculator-internal");
+    }
+    private static void TestMediaPill()
+    {
+        var player=Make("DeskSpace.DeskSpaceMediaV18");
+        var host=new Window{Width=116,Height=116,Left=100,Top=100,
+            ShowInTaskbar=false,WindowStyle=WindowStyle.None,Opacity=0};
+        try
+        {
+            Set(player,"visible",true);
+            Call(player,"ShowBelow",host,(Func<string>)(()=>"Clock"));
+            Call(player,"TogglePanel");
+            var frame=Private<Border>(player,"frame");
+            Assert(Math.Abs(frame.Width-298)<.01,"Minimized player still wrong width");
+            Assert(Private<StackPanel>(player,"pillContent").Visibility==Visibility.Visible,
+                "Minimized media controls not rendered");
+            Assert(Private<Slider>(player,"pillSeek")!=null,"Minimized seek bar absent");
+            var buttons=Walk(frame).OfType<Button>().Select(b=>b.ToolTip?.ToString())
+                .Where(x=>!string.IsNullOrEmpty(x)).ToArray();
+            foreach(string name in new[]{"Previous track","Play or pause",
+                "Next track","Restore full media player"})
+                Assert(buttons.Contains(name),"Missing minimized media control: "+name);
+            Render(frame,298,76,"media-minimized");
+            Call(player,"TogglePanel");
+            Assert(frame.Width<298,"Restored player did not return to compact width");
+        }
+        finally
+        {
+            Call(player,"Dispose");
+            host.Close();
+        }
+    }
+}
