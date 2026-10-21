@@ -575,7 +575,13 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             OpenCollection(id.Value);
         if(enteredNewSector && !capturedDragSelection &&
            edgeDirection==0 && Mouse.LeftButton!=MouseButtonState.Pressed)
+        {
+            // Preview is immediate; on an overflowing wheel, allow time
+            // to travel to the edge without auto-collapsing the menu.
+            newHoverTimer.Interval=TimeSpan.FromMilliseconds(
+                all.Count>PageSize?1050:650);
             newHoverTimer.Start();
+        }
     }
     private void EndChildHover(int sector)
     {
