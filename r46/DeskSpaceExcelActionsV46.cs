@@ -12,7 +12,7 @@ internal static class DeskSpaceExcelActionsV46
         "Value","Reference","Formula","Current date on paste (Ctrl+;)",
         "Current time on paste (Ctrl+Shift+;)","Current date and time on paste",
         "Live date formula (=TODAY())","Live date/time formula (=NOW())",
-        "Excel Shortcut (enter Ctrl+; or Ctrl+Shift+;)"
+        "Excel Shortcut (enter Ctrl+; or Ctrl+Shift+;)","Custom formula (paste)"
     };
     internal static bool IsAction(string k)=>k is Date or Time or DateTimeKind
         or Today or Now or CustomFormula;
@@ -47,7 +47,7 @@ internal static class DeskSpaceExcelActionsV46
         if(selected==EditorKinds[6])return Today;
         if(selected==EditorKinds[7])return Now;
         if(selected==EditorKinds[8])return FromShortcut(input);
-        if(selected=="Formula")return CustomFormula;
+        if(selected==EditorKinds[9])return CustomFormula;
         return "";
     }
     internal static bool IsStaticDateTime(string k)=>k is Date or Time or DateTimeKind;
