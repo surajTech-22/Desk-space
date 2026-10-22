@@ -21,7 +21,7 @@ if($wheel.Contains('canvas=new Canvas{Width=650,Height=650') -or
    $wheel.Contains('Status("Excel Information","Saved mappings')){
     throw 'R42 old detached popup/click-to-open Information behavior remains'
 }
-if(!$wheel.Contains('CX=325,CY=325,Outer=252,Inner=196')){
+if(!$wheel.Contains('CX=325,CY=325,Outer=260,Inner=207')){
     throw 'R42 child-arc geometry is not directly connected to main outer ring'
 }
 foreach($v in @('Task CheckAsync(Window owner)',

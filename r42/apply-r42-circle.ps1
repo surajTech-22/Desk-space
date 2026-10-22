@@ -219,7 +219,7 @@ foreach($method in @('    private void CollapseRing()',
                      '    private void BuildCompact()')){
     $a=$s.IndexOf($method,[StringComparison]::Ordinal)
     if($a -lt 0){throw "R43 missing parent lifecycle: $method"}
-    $b=$s.IndexOf('{',$a+[string]::new($method).Length,[StringComparison]::Ordinal)
+    $b=$s.IndexOf('{',$a+$method.Length,[StringComparison]::Ordinal)
     if($b -lt 0){throw "R43 missing brace: $method"}
     $guard=@'
         excelWheel?.HideArc();
