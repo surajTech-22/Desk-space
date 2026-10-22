@@ -38,3 +38,12 @@ for($i=0;$i -lt $lines.Length;$i++)
  }
 }
 Write-Host '=== R39 RING HIT MATH END ==='
+
+Write-Host '=== R39 RING ROUTING EXTRA BEGIN ==='
+$ls=[IO.File]::ReadAllLines('DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs')
+foreach($region in @(@(970,1140),@(1430,1515))){
+ for($i=$region[0]-1;$i -lt [Math]::Min($ls.Length,$region[1]);$i++){
+  Write-Host ('{0,4}: {1}' -f ($i+1),$ls[$i])
+ }
+}
+Write-Host '=== R39 RING ROUTING EXTRA END ==='
