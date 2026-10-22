@@ -11,8 +11,12 @@ namespace DeskSpace;
 // lived dedicated STA worker. Never create, close, save or alter a workbook.
 internal static class DeskSpaceExcelWorkerV41
 {
-    private static Task<T> Sta<T>(Func<T> read)
+    private static readonly SemaphoreSlim ExcelGate=new(1,1);
+    private static async Task<T> Sta<T>(Func<T> read)
     {
+        await ExcelGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
         var result=new TaskCompletionSource<T>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var thread=new Thread(()=>{
@@ -38,7 +42,9 @@ internal static class DeskSpaceExcelWorkerV41
         }) { IsBackground=true,Name="DeskSpace Excel read (STA)" };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        return result.Task;
+        return await result.Task.ConfigureAwait(false);
+        }
+        finally {ExcelGate.Release();}
     }
     public static Task<DeskSpaceExcelTemplateV16> CaptureAsync(
         string title,string range,bool formulas) =>
