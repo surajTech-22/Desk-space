@@ -38,3 +38,17 @@ foreach($label in @('"rain-night"','"thunder"','"drizzle"','"snow"',
     if(!$smoke.Contains($label)){throw "R38 missing real WPF smoke test: $label"}
 }
 Write-Host 'R38 source, condition model, cloud-owned emitters, Excel/vault/updater preservation gates PASS'
+
+# Existing Excel workflow and donut sector mapping: read-only build diagnosis.
+# Avoid inserting duplicate Excel modules until the current sector capacity
+# and click routing are known.
+$hostSource=[IO.File]::ReadAllText("$root/WidgetHost.cs")
+Write-Host 'R38 EXCEL CIRCLE SOURCE BEGIN'
+$lines=$hostSource -split "\r?\n"
+for($i=0;$i -lt $lines.Length;$i++){
+    if($lines[$i] -match 'Segments\s*=|private void BuildDonut\(|private void ClickSegment\(|case "Excel"|OpenInWidget\("Excel"\)'){
+        $end=[Math]::Min($lines.Length-1,$i+18)
+        for($j=$i;$j -le $end;$j++){Write-Host ("{0}: {1}" -f ($j+1),$lines[$j])}
+    }
+}
+Write-Host 'R38 EXCEL CIRCLE SOURCE END'
