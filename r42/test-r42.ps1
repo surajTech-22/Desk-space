@@ -158,9 +158,27 @@ $new2=@'
 '@
 if(!$s.Contains($old2)){throw 'R42 cannot update R40 main Workspace Excel buttons'}
 $s=$s.Replace($old2,$new2)
+# The original 14-wedge smoke source was created by R39. Replace its
+# unreachable extra outer wedge assertion and execute the 13-wedge test.
+if(!$s.Contains('    private static void TestDonut14()')){
+    throw 'R42 cannot locate original 14-sector donut WPF smoke test'
+}
+$s=$s.Replace('    private static void TestDonut14()',
+              '    private static void TestDonut13()')
+$s=$s.Replace('ring.Count==14','ring.Count==13')
+$s=$s.Replace('i<14;i++','i<13;i++')
+$s=$s.Replace('int slot=i%7;','int slot=i>=7?i-7:i;')
+$s=$s.Replace('(-90+slot*(360.0/7))*Math.PI/180',
+              '(-90+slot*(360.0/(i>=7?6:7)))*Math.PI/180')
+$s=$s.Replace('14-sector donut mismatch','13-sector donut mismatch')
+$s=$s.Replace('donut-14-excel','donut-13-excel-functions')
+$s=$s.Replace('Excel/Excel Clipboard replaced a pre-existing sector',
+              'Excel Functions removed an original 12-sector feature')
 $anchor='            TestExcelWorkspaceAndShelf();'
 if(!$s.Contains($anchor)){throw 'R42 missing WPF smoke caller'}
-$s=$s.Replace($anchor,$anchor+[string][char]10+'            TestExcelDirectPasteWheel();')
+$s=$s.Replace($anchor,$anchor+[string][char]10+
+    '            TestDonut13();'+[string][char]10+
+    '            TestExcelDirectPasteWheel();')
 $anchor='    private static void TestExcelWorkspaceAndShelf()'
 if(!$s.Contains($anchor)){throw 'R42 missing WPF test insertion'}
 $method=@'
