@@ -28,7 +28,7 @@ Use only **invented test data**. The current preview UI may display **“local d
 - The latest **official GitHub release as checked on 22 Oct 2026** is **v1.4.266**.
 - **R42** is the development/manual Windows test stream in branch [`r42-excel-mapping-editor`](https://github.com/surajTech-22/Desk-space/tree/r42-excel-mapping-editor). A locally compiled R42 instance may show a higher build number; that alone does **not** mean it is a published release.
 - This repository is **private**; testers must be invited, or receive the approved installer/guide from the owner.
-- Automatic GitHub Actions Windows builds are disabled to conserve the exhausted free Actions allocation. Local owner-side builds use the [manual update documentation](r42/manual-update/README.md) on the R42 branch.
+- Automatic GitHub Actions Windows builds are disabled to conserve the exhausted free Actions allocation. Local owner-side builds use the [manual update documentation](https://github.com/surajTech-22/Desk-space/blob/r42-excel-mapping-editor/r42/manual-update/README.md) on the R42 branch.
 
 ### Feature navigation
 
