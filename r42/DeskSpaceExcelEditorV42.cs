@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace DeskSpace;
 
@@ -76,6 +77,37 @@ internal sealed partial class DeskSpaceExcelV16
             Background=new SolidColorBrush(Color.FromRgb(247,249,254)),
             LastChildFill=true
         };
+        // Offline mode must preserve saved mapping viewing and editing.
+        // Only actions that require a LIVE Excel process are disabled.
+        var excelActions=new List<Button>();
+        Button RequiresExcel(string text,Action action,bool primary=false)
+        {
+            var button=ButtonV42(text,()=>{
+                if(!DeskSpaceExcelWheelV42.ExcelIsOpen())
+                {
+                    if(status!=null)status.Text=
+                        "Excel is not open. Saved collections can still be viewed "+
+                        "and edited, but live Excel capture and paste are unavailable.";
+                    return;
+                }
+                action();
+            },primary);
+            excelActions.Add(button);
+            return button;
+        }
+        var excelOfflineMessage=HintV42(
+            "Excel is not open. Saved mappings remain available for viewing; "+
+            "Excel capture, selection and paste are disabled.",11);
+        var excelAvailabilityTimer=new DispatcherTimer{
+            Interval=TimeSpan.FromSeconds(1)
+        };
+        void RefreshExcelActions()
+        {
+            bool online=DeskSpaceExcelWheelV42.ExcelIsOpen();
+            foreach(var button in excelActions)button.IsEnabled=online;
+            excelOfflineMessage.Visibility=online?Visibility.Collapsed:Visibility.Visible;
+        }
+        excelAvailabilityTimer.Tick+=(_,_)=>RefreshExcelActions();
         var top=new DockPanel{
             Background=NavyV42,LastChildFill=true,Margin=new Thickness(0)
         };
@@ -98,12 +130,13 @@ internal sealed partial class DeskSpaceExcelV16
         // Keep explanatory text in the optional section to maximize the
         // actual mapping area in short or restored Windows sizes.
         var mainActions=new WrapPanel();
-        mainActions.Children.Add(ButtonV42(
+        mainActions.Children.Add(RequiresExcel(
             "Copy and analyze selected Excel cells",()=>Run(Capture),true));
         mainActions.Children.Add(ButtonV42(
             "Screenshot",()=>OpenScreenshot()));
         mainActions.Children.Add(ButtonV42("Refresh saved mappings",()=>Run(()=>ReloadSavedV42(true))));
         head.Children.Add(mainActions);
+        head.Children.Add(excelOfflineMessage);
         DockPanel.SetDock(head,Dock.Top);root.Children.Add(head);
 
         var content=new Grid{Margin=new Thickness(6,0,6,4),MinHeight=180};
@@ -176,7 +209,7 @@ internal sealed partial class DeskSpaceExcelV16
         editorHead.Children.Add(editorInfoV42);
 
         var editButtons=new WrapPanel();
-        editButtons.Children.Add(ButtonV42(
+        editButtons.Children.Add(RequiresExcel(
             "Capture selected Excel cells",()=>Run(Capture),true));
         editButtons.Children.Add(ButtonV42("Save collection & data",
             ()=>Run(SaveEditorV42),true));
@@ -187,8 +220,8 @@ internal sealed partial class DeskSpaceExcelV16
 
         var footer=new StackPanel{Margin=new Thickness(0,2,0,0)};
         var pasteButtons=new WrapPanel();
-        pasteButtons.Children.Add(ButtonV42("Preview matching cells",()=>Run(Preview)));
-        pasteButtons.Children.Add(ButtonV42("Apply autofill",()=>Run(Apply),true));
+        pasteButtons.Children.Add(RequiresExcel("Preview matching cells",()=>Run(Preview)));
+        pasteButtons.Children.Add(RequiresExcel("Apply autofill",()=>Run(Apply),true));
         footer.Children.Add(pasteButtons);
         matchSummary=HintV42("Preview before any Excel changes.",10);
         footer.Children.Add(matchSummary);
@@ -251,11 +284,11 @@ internal sealed partial class DeskSpaceExcelV16
             IsChecked=true,IsEnabled=false};
         options.Children.Add(formulas);
         var extraButtons=new WrapPanel();
-        extraButtons.Children.Add(ButtonV42("Open workbook…",()=>Run(OpenWorkbook)));
+        extraButtons.Children.Add(RequiresExcel("Open workbook…",()=>Run(OpenWorkbook)));
         extraButtons.Children.Add(ButtonV42("Analyze marked image region",AnalyzeScreenshot));
-        extraButtons.Children.Add(ButtonV42(
+        extraButtons.Children.Add(RequiresExcel(
             "Verify screenshot against selected Excel range",()=>Run(LinkScreenshotToExcel)));
-        extraButtons.Children.Add(ButtonV42(
+        extraButtons.Children.Add(RequiresExcel(
             "Copy range to Excel-only shelf",DeskSpaceExcelClipboardV39.CaptureNow));
         options.Children.Add(extraButtons);
         var imageBorder=new Border{BorderThickness=new Thickness(1),
@@ -302,6 +335,12 @@ internal sealed partial class DeskSpaceExcelV16
         root.Children.Add(content);
 
         root.IsVisibleChanged+=(_,e)=>{
+            if(e.NewValue is true)
+            {
+                RefreshExcelActions();
+                excelAvailabilityTimer.Start();
+            }
+            else excelAvailabilityTimer.Stop();
             if(e.NewValue is true && !editorBusyV42 && !hasUnsavedChangesV42) {
                 try {ReloadSavedV42(false);} catch(Exception ex) {
                     status.Text="Could not refresh encrypted mappings: "+ex.Message;
@@ -309,6 +348,7 @@ internal sealed partial class DeskSpaceExcelV16
             }
         };
         ReloadSavedV42(false);
+        RefreshExcelActions();
         return root;
     }
     private void AddColumnV42(string title,string property,int width)
