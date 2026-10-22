@@ -26,14 +26,13 @@ function Set-Directive([string]$key,[string]$value){
 # Never use "force" since it might lose unsaved workspace edits.
 Set-Directive 'CloseApplications' 'yes'
 Set-Directive 'RestartApplications' 'no'
-Set-Directive 'ForceCloseApplications' 'no'
 Set-Directive 'CloseApplicationsFilter' '*.exe,*.dll,*.chm'
 # Original installer displayed a stale "DeskSpace R10" title. Fix label
 # only; preserve stable AppId, installation directory and all user data.
 Set-Directive 'AppVerName' 'DeskSpace {#AppVersion}'
 [IO.File]::WriteAllText($p,$head+$setup+$tail,[Text.UTF8Encoding]::new($false))
 foreach($v in @('CloseApplications=yes','RestartApplications=no',
- 'ForceCloseApplications=no','AppVerName=DeskSpace {#AppVersion}')){
+'AppVerName=DeskSpace {#AppVersion}')){
     if(![IO.File]::ReadAllText($p).Contains($v)){throw "Missing guarded installer setting: $v"}
 }
 Write-Host 'R42 installer: automatic graceful close, no forced exit, no restart, current version label. Original AppId and data unchanged.'
