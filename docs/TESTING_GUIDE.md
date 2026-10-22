@@ -61,6 +61,9 @@ Mark each item. If the feature is missing from this particular build, use **NOT 
 | REM-01 | Add and complete a dummy reminder | State persists after reopening |
 | CLOCK-01 | Open clock and inbuilt Windows calculator | Correct function launches or failure is clearly explained |
 | WEATHER-01 | Open weather in light/dark background and with network disconnected | Text remains readable; cached/offline behavior does not pretend to be live |
+| WEATHER-02 | In widget Settings, click **Use my location**, grant Windows location access, and refresh weather | Explicit opt-in; real device position used for approximate nearby weather; no silent fallback to another city |
+| WEATHER-03 | Deny location permission and refresh | Manual city search and offline last-synced weather remain available, with clear failure status |
+| WEATHER-04 | Search a city outside the original presets and select the correct country/region | Worldwide city lookup works, selected city persists, and source labels match the requested location |
 | MEDIA-01 | Open compact media player; move/minimize and test supported controls | Controls remain visible; no unexpected audio or stuck overlay |
 | CLIP-01 | Copy dummy text and files; try the appropriate clipboard | Original Windows clipboard continues working; files do not disappear unexpectedly |
 | INFO-01 | Create/edit a dummy information item or custom tab | Saved values can be reviewed and copied again |
@@ -72,8 +75,8 @@ Mark each item. If the feature is missing from this particular build, use **NOT 
 | EXCEL-06 | Put a formula in a destination cell; test guarded paste using a copy | Formula and formatting remain intact; reference labels are untouched |
 | EXCEL-07 | Test Excel clipboard separately with dummy copy | Copied Excel values do not merge with Files/general clipboard |
 | EXCEL-08 | After a **successful** Excel paste, check notice visibility | In builds implementing the new behavior: success notice auto-hides after ~3 seconds; errors remain readable. Other modules unaffected |
-| EXCEL-09 | Test one Excel parent wheel → Clipboard/Information navigation | In builds implementing the redesign: no separate main Excel Clipboard sector |
-| EXCEL-10 | Under Excel Information, save an ungrouped mapping and a mapping assigned to `Clients/Audit`; navigate by wheel | **Planned R42 enhancement, not yet verified:** ungrouped appears at root; grouped item appears only inside its group. Grouping is classification, never a third main Excel child |
+| EXCEL-09 | Find **Excel Functions on the OUTER circle** and hover/click it | One outer Excel Functions parent appears, with Clipboard and Information children. No main Excel Clipboard and no inner Excel Functions sector |
+| EXCEL-10 | Under Excel Functions → Information, save an ungrouped mapping and a mapping assigned to `Clients/Audit`; navigate by wheel | **R42 candidate pending Windows verification:** ungrouped mapping appears directly in Information; grouped mapping appears inside Clients → Audit. Grouping is not an Excel Functions child |
 | SAFE-01 | Close a window while a dummy edit is unsaved | No silent data loss; clear save/discard choice where supported |
 | PERF-01 | Scroll long lists and switch modules repeatedly | No freezing, runaway popup, access violation or repeated app launches |
 
@@ -121,3 +124,10 @@ If no diagnostic ZIP was created, send a screenshot, the error window text and t
 5. If an already-built, verified local installer exists, the V4 package's `INSTALL_EXISTING_R42.bat` may be used to install it with the running-app check rather than recompiling. Do not use it with an unknown or checksum-mismatched installer.
 
 The test guide is descriptive, **not proof that all functions are present or correct** in any one build.
+
+
+### R42 manual tester update
+
+**R42 tester candidate is NOT yet verified.** The expected circle has 6 original inner sectors, 7 outer sectors, with **Excel Functions as the seventh outer sector**. Under Excel Functions are only **Clipboard** and **Information**. Information shows ungrouped saved mappings directly and grouped mappings through named child donut levels. Excel paste success notices auto-hide in three seconds; errors do not.
+
+The Weather Settings **Use my location** button must ask Windows permission from the foreground. If denied or unavailable, use manual place search and an offline cached reading. Do not silently substitute Bengaluru or imply cached readings are live. Test at least one non-preset world city and current-location permission denial. Use disposable Excel workbooks and invented data.
