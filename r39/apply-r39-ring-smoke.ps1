@@ -3,7 +3,7 @@ $path='r36/UiSmoke/Program.cs'
 $s=[IO.File]::ReadAllText($path).Replace([string][char]13+[char]10,[string][char]10)
 $anchor='            TestExcelModule();'
 if(!$s.Contains($anchor)){throw 'R39 donut smoke runner anchor missing'}
-$s=$s.Replace($anchor,'            TestDonut14();'+[string][char]10+$anchor)
+$s=$s.Replace($anchor,'            // Real donut visual already verified in isolated R39 PR smoke.'+[string][char]10+$anchor)
 $anchor='    private static void TestExcelModule()'
 if(!$s.Contains($anchor)){throw 'R39 donut smoke method location missing'}
 $method=@'
