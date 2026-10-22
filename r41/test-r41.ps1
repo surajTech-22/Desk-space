@@ -24,7 +24,7 @@ foreach($key in @(
  'private async void LinkScreenshotToExcel()',
  'private async void Preview()', 'private async void Apply()',
  'await DeskSpaceExcelWorkerV41.PreviewAsync(', 'await DeskSpaceExcelWorkerV41.ApplyAsync(',
- 'PresentCandidate(candidate);','Excel selection unavailable',
+ 'await PresentCandidateAsync(candidate)','Excel selection unavailable',
  'Reference','Value','Formula','Ignore',
  'await PresentCandidateAsync(candidate)',
  'Dispatcher.Yield(', 'rendered%32==0'
