@@ -24,8 +24,9 @@ internal static class DeskSpaceExcelWorkerV41
                 {
                     try { result.TrySetResult(read());return; }
                     catch(COMException ex) when(
-                        (uint)ex.HResult is 0x80010001 or 0x8001010A or
-                        0x800AC472 && attempt<3)
+                        ((uint)ex.HResult==0x80010001 ||
+                         (uint)ex.HResult==0x8001010A ||
+                         (uint)ex.HResult==0x800AC472) && attempt<3)
                     {
                         Thread.Sleep(180*(attempt+1));
                     }
