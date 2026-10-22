@@ -285,12 +285,15 @@ $method=@'
                 Render(surface,Math.Max(200,(int)surface.Width),
                     Math.Max(200,(int)surface.Height),"excel-nested-level-"+(i+1));
             }
-            // Composite image of the ACTUAL generated geometry; older
-            // smoke tests only showed each child Popup separately, missing
-            // the detached, drifting chain seen on a 1650x930 desktop.
+            // Acceptance reference for the user's actual 1650x930
+            // screenshot layout. Use the SAME fitted geometry function
+            // as the running widget, not an unloaded mock window's
+            // undefined Left/Top. Reject ANY clipped ring pixel.
             var composite=new Canvas{Width=1650,Height=930,
                 Background=Brushes.White};
             const double originX=1380,originY=310;
+            var desktop=new Rect(0,0,1650,930);
+            var centre=new Point(originX,originY);
             var parent=new System.Windows.Shapes.Ellipse{
                 Width=390,Height=390,
                 Stroke=new SolidColorBrush(Color.FromRgb(192,194,209)),
@@ -300,8 +303,13 @@ $method=@'
             Canvas.SetLeft(parent,originX-195);
             Canvas.SetTop(parent,originY-195);
             composite.Children.Add(parent);
-            var type=Product.GetType("DeskSpace.DeskSpaceSubArcGeometryV48",true)!;
-            var sector=type.GetMethod("Sector",
+            var geometryType=Product.GetType(
+                "DeskSpace.DeskSpaceSubArcGeometryV48",true)!;
+            var sector=geometryType.GetMethod("Sector",
+                BindingFlags.Static|BindingFlags.NonPublic)!;
+            var chooseAngle=geometryType.GetMethod("FitAngleAt",
+                BindingFlags.Static|BindingFlags.NonPublic)!;
+            var halfSweep=geometryType.GetMethod("Half",
                 BindingFlags.Static|BindingFlags.NonPublic)!;
             void Draw(int depth,double begin,double step,int count)
             {
@@ -311,6 +319,10 @@ $method=@'
                         depth,begin+k*step,begin+(k+1)*step})!;
                     var g=piece.Clone();
                     g.Transform=new TranslateTransform(originX-325,originY-325);
+                    var bounds=g.Bounds;
+                    Assert(bounds.Left>=8 && bounds.Top>=8 &&
+                           bounds.Right<=1642 && bounds.Bottom<=922,
+                        "R48 nested Excel arc is clipped on a 1650x930 desktop");
                     var stroke=new System.Windows.Shapes.Path{
                         Data=g,Stroke=Brushes.White,StrokeThickness=2,
                         Fill=depth==0?Brushes.MediumPurple:
@@ -320,20 +332,26 @@ $method=@'
                     composite.Children.Add(stroke);
                 }
             }
-            var original=(System.Collections.ICollection)Private<object>(
-                wheel,"displayed");
-            Draw(0,Private<double>(wheel,"rootStartAngle"),
-                Private<double>(wheel,"rootStep"),original.Count);
+            var original=(System.Collections.ICollection)
+                Private<object>(wheel,"displayed");
+            double rootFirst=Private<double>(wheel,"rootStartAngle");
+            double rootStep=Private<double>(wheel,"rootStep");
+            Draw(0,rootFirst,rootStep,original.Count);
+            double selected=rootFirst+1.5*rootStep; // Information
             for(int k=0;k<levels.Count;k++)
             {
                 var level=levels[k]!;
                 var ringItems=(System.Collections.ICollection)
                     level.GetType().GetField("Items",Any)!.GetValue(level)!;
-                double sectorStart=(double)level.GetType()
-                    .GetField("StartAngle",Any)!.GetValue(level)!;
-                double step=(double)level.GetType()
-                    .GetField("StepAngle",Any)!.GetValue(level)!;
-                Draw(k+1,sectorStart,step,ringItems.Count);
+                int count=ringItems.Count;
+                double half=(double)halfSweep.Invoke(
+                    null,new object[]{count})!;
+                double fitted=(double)chooseAngle.Invoke(null,new object[]{
+                    k+1,selected,half,centre,desktop,1.0})!;
+                double firstAngle=fitted-half;
+                double step=2*half/count;
+                Draw(k+1,firstAngle,step,count);
+                selected=firstAngle+.5*step; // first nested collection
             }
             Render(composite,1650,930,"excel-joined-information-arcs");
             Call(wheel,"HideArc");
