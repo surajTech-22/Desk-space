@@ -1,0 +1,171 @@
+    private void Capture()
+    {
+        var candidate=DeskSpaceExcelBridgeV16.Capture(name.Text,range.Text,
+            formulas.IsChecked==true);
+        if(screenshotBytes!=null)
+        {
+            candidate.ScreenshotBase64=Convert.ToBase64String(screenshotBytes);
+            candidate.ScreenshotSelection=Region();
+        }
+        PresentCandidate(candidate);
+        DeskSpaceExcelClipboardV39.CaptureNow();
+    }
+
+    private void AnalyzeScreenshot()
+    {
+        _=AnalyzeScreenshotAsync();
+    }
+    private async System.Threading.Tasks.Task AnalyzeScreenshotAsync()
+    {
+        try
+        {
+            if(screenshotBytes==null)
+                throw new InvalidOperationException("Choose a screenshot first.");
+            status.Text="Reading visible screenshot text using Windows OCR…";
+            var candidate=await DeskSpaceExcelScreenshotV39.AnalyzeAsync(
+                screenshotBytes,name.Text,Region());
+            if(candidate.Cells.Count==0)
+                throw new InvalidOperationException(
+                    "No readable text found in the marked screenshot area.");
+            PresentCandidate(candidate);
+            status.Text="Recognized "+candidate.Cells.Count+
+                " source text lines. Cell addresses are NOT verified from an image. "+
+                "Review the raw text and roles; link an Excel selection to verify cell destinations.";
+        }
+        catch(Exception ex){status.Text="Screenshot analysis: "+ex.Message;}
+    }
+    private void LinkScreenshotToExcel()
+    {
+        if(screenshotBytes==null)
+            throw new InvalidOperationException("Upload a screenshot to link first.");
+        var candidate=DeskSpaceExcelBridgeV16.Capture(name.Text,range.Text,
+            formulas.IsChecked==true);
+        candidate.SourceKind="Screenshot + live Excel";
+        candidate.CoordinatesVerified=true;
+        candidate.ScreenshotBase64=Convert.ToBase64String(screenshotBytes);
+        candidate.ScreenshotSelection=Region();
+        PresentCandidate(candidate);
+        status.Text="Linked screenshot to live "+candidate.SourceSheet+" "+
+            candidate.SourceAddress+". Actual cell addresses, values, formulas "+
+            "and merges are verified from the selected Excel range.";
+    }
+    private void PresentCandidate(DeskSpaceExcelTemplateV16 candidate)
+    {
+        pendingSelection=candidate;
+        selectedCells.Items.Clear();
+        foreach(var cell in candidate.Cells)
+        {
+            var actual=candidate.CoordinatesVerified ?
+                (string.IsNullOrEmpty(cell.CellAddress)
+                  ?CellReference(candidate.SourceRow+cell.RowOffset,
+                        candidate.SourceColumn+cell.ColumnOffset):cell.CellAddress)
+                : "Image row "+(cell.RowOffset+1)+", item "+(cell.ColumnOffset+1);
+            var checkbox=new CheckBox{
+                Tag=cell,IsChecked=cell.ValueKind!="formula",
+                FontSize=12,Foreground=ink,Margin=new Thickness(4,3,4,4),
+                ToolTip="Select to save exactly this text and its classification"
+            };
+            var contents=new StackPanel{Margin=new Thickness(1)};
+            contents.Children.Add(new TextBlock{
+                Text=actual+"  ·  "+cell.Display+
+                    (cell.ValueKind=="formula"?"  [formula: "+cell.FormulaR1C1+"]":""),
+                FontSize=12,Foreground=ink,TextWrapping=TextWrapping.Wrap
+            });
+            var editor=new WrapPanel{Margin=new Thickness(0,3,0,0)};
+            var role=new ComboBox{Width=110,Margin=new Thickness(0,1,5,1),
+                ToolTip="Reference Cell = header; Value Cell = input"};
+            foreach(string option in new[]{"Reference","Value","Formula","Ignore"})
+                role.Items.Add(option);
+            role.SelectedItem=cell.Role;
+            role.SelectionChanged+=(_,_)=>{
+                cell.Role=role.SelectedItem?.ToString()??"Ignore";
+                cell.FixedOrVariable=cell.Role=="Reference"?"Fixed label":
+                    cell.Role=="Formula"?"Calculated":"Variable input (review)";
+            };
+            editor.Children.Add(role);
+            var category=new ComboBox{Width=135,Margin=new Thickness(0,1,5,1),
+                ToolTip="Fixed labels / variable inputs / calculated fields"};
+            foreach(string option in new[]{"Fixed label","Variable input (review)",
+                "Calculated","Review"})category.Items.Add(option);
+            category.SelectedItem=cell.FixedOrVariable;
+            category.SelectionChanged+=(_,_)=>{
+                cell.FixedOrVariable=category.SelectedItem?.ToString()??"Review";
+            };
+            editor.Children.Add(category);
+            contents.Children.Add(editor);
+            if(cell.ValueKind!="formula")
+            {
+                var actualText=new TextBox{
+                    Text=cell.RawValue,Margin=new Thickness(0,2,2,1),
+                    MinWidth=160,MaxWidth=440,
+                    ToolTip="Edit transcription only if the source text is wrong"};
+                actualText.TextChanged+=(_,_)=>{
+                    cell.RawValue=actualText.Text;
+                    cell.Display=actualText.Text;
+                };
+                contents.Children.Add(actualText);
+            }
+            checkbox.Content=contents;
+            checkbox.Checked+=(_,_)=>UpdateSelectionCount();
+            checkbox.Unchecked+=(_,_)=>UpdateSelectionCount();
+            selectedCells.Items.Add(checkbox);
+        }
+        UpdateSelectionCount();
+        status.Text="Analyzed "+candidate.Cells.Count+" source entries, "+
+            candidate.RowCount+" rows × "+candidate.ColumnCount+" columns. "+
+            (candidate.CoordinatesVerified?"Exact Excel cell positions verified.":
+            "Screenshot OCR coordinates only; destination addresses unverified.")+
+            " Choose Reference, Value, Formula or Ignore before saving.";
+    }
+    private void UpdateSelectionCount()
+    {
+        if(pendingSelection==null||cellSelectionInfo==null)return;
+        cellSelectionInfo.Text=selectedCells.Items.OfType<CheckBox>()
+            .Count(x=>x.IsChecked==true)+" of "+
+            pendingSelection.Cells.Count+" entries selected for saving.";
+    }
+    private void SaveCheckedCells()
+    {
+        if(pendingSelection==null)
+            throw new InvalidOperationException(
+                "Analyze live Excel cells or a screenshot before saving.");
+        var chosen=selectedCells.Items.OfType<CheckBox>()
+            .Where(x=>x.IsChecked==true)
+            .Select(x=>x.Tag).OfType<DeskSpaceExcelCellV16>()
+            .Where(c=>c.Role!="Ignore").ToList();
+        if(chosen.Count==0)
+            throw new InvalidOperationException("Select at least one data entry.");
+        pendingSelection.Cells=chosen;
+        var existing=pendingSelection.Anchors.Select(a=>
+            a.RowOffset+":"+a.ColumnOffset).ToHashSet();
+        foreach(var cell in chosen.Where(x=>x.Role=="Reference"))
+        {
+            if(string.IsNullOrWhiteSpace(cell.RawValue))continue;
+            if(!existing.Add(cell.RowOffset+":"+cell.ColumnOffset))continue;
+            pendingSelection.Anchors.Add(new DeskSpaceExcelAnchorV16{
+                RowOffset=cell.RowOffset,ColumnOffset=cell.ColumnOffset,
+                Label=cell.RawValue
+            });
+        }
+        foreach(var cell in chosen.Where(x=>x.Role=="Value"))
+        {
+            var header=chosen.Where(c=>c.Role=="Reference" &&
+                ((c.ColumnOffset==cell.ColumnOffset && c.RowOffset<cell.RowOffset)||
+                 (c.RowOffset==cell.RowOffset && c.ColumnOffset<cell.ColumnOffset)))
+                .OrderBy(c=>Math.Abs(c.RowOffset-cell.RowOffset)+
+                    Math.Abs(c.ColumnOffset-cell.ColumnOffset)).FirstOrDefault();
+            if(header!=null)cell.HeaderCellAddress=header.CellAddress;
+        }
+        saved.Add(pendingSelection);
+        DeskSpaceExcelStoreV16.Save(saved);
+        var added=pendingSelection;
+        pendingSelection=null;
+        selectedCells.Items.Clear();
+        cellSelectionInfo.Text="Saved. Capture another selection to add information.";
+        Refresh(added.Id);
+        status.Text="Saved "+chosen.Count+" approved entries. "+
+            (added.CoordinatesVerified?
+                "Exact Excel destination addresses preserved.":
+                "Screenshot text preserved, but addresses remain unverified; autofill is blocked until linked.")+
+            " Existing templates were kept.";
+    }
