@@ -250,7 +250,8 @@ $method=@'
             Assert(levels.Count==1,"Information replaced parent instead of opening a ring");
             // The connected submenu must occupy its own parent wedge;
             // a full 360-degree blue band is a visual regression.
-            var span=wheel.GetType().GetMethod("Span",Any)!;
+            var span=wheel.GetType().GetMethod("Span",
+                BindingFlags.Static|BindingFlags.NonPublic)!;
             double half=(double)span.Invoke(null,new object[]{2})!;
             Assert(half<=30.0 && half>=20.0,
                 "Excel submenu spans more than its parent sector");
