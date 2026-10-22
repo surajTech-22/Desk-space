@@ -1071,8 +1071,8 @@ jobs:
 
 
 
-      - name: Publish verified R42 Windows tester prerelease
-        if: github.ref == 'refs/heads/r42-excel-mapping-editor'
+      - name: Publish R42 stable automatic release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1087,11 +1087,11 @@ jobs:
           $versionLine = Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"$' | Select-Object -First 1
           if (!$versionLine) { throw 'Installer version missing' }
           $version = $versionLine.Matches[0].Groups[1].Value
-          $tag = 'r42-test-' + $env:GITHUB_SHA.Substring(0,12) + '-v' + $version
+          $tag = 'v' + $version
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Refusing to overwrite $tag" }
-          gh release create $tag $exe $checksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 Windows tester $version" --notes "R42 test candidate at $env:GITHUB_SHA. Verify SHA256 before installation." --prerelease --latest=false
-          if ($LASTEXITCODE -ne 0) { throw 'Tester release publishing failed' }
+          if ($LASTEXITCODE -eq 0) { throw "Refusing to overwrite stable release $tag" }
+          gh release create $tag $exe $checksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 automatic update $version" --notes "Stable DeskSpace R42 automatic-channel release from commit $env:GITHUB_SHA. Windows build, WPF smoke tests, installer validation, and SHA-256 verification passed. Installs through the existing supervised updater." 
+          if ($LASTEXITCODE -ne 0) { throw 'Automatic stable release publication failed' }
 
       - name: Publish successful version to private GitHub Releases
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

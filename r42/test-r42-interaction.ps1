@@ -24,10 +24,13 @@ if($wheel.Contains('canvas=new Canvas{Width=650,Height=650') -or
 if(!$wheel.Contains('CX=325,CY=325,Outer=252,Inner=196')){
     throw 'R42 child-arc geometry is not directly connected to main outer ring'
 }
-foreach($v in @('FindCli()','GitHubCLI','auth","status"',
-    'release","list"','isPrerelease','DeskSpaceUpdater.CurrentVersion',
-    'DeskSpaceUpdater.CheckAsync(owner)','Uri.EscapeDataString(newerTag)')){
-    if(!$updater.Contains($v)){throw "R42 update checking disabled: $v"}
+foreach($v in @('Task CheckAsync(Window owner)',
+    'DeskSpaceUpdater.CheckAsync(owner)')){
+    if(!$updater.Contains($v)){throw "R42 automatic update route missing: $v"}
+}
+if($updater.Contains('isPrerelease') -or
+   $updater.Contains('r42-test-')){
+    throw 'R42 test release must not block the stable update channel'
 }
 if(!$oldUpdater.Contains('public static string CurrentVersion')){
     throw 'R42 original version stamping was removed'
@@ -42,8 +45,8 @@ foreach($file in @(Get-ChildItem -LiteralPath $root -Filter '*.cs' -File)){
     $s=[IO.File]::ReadAllText($file.FullName)
     $count+=([regex]::Matches($s,'DeskSpaceUpdateCheckV42[.]CheckAsync[(]')).Count
     if($s.Contains('DeskSpaceUpdater.CheckAsync(')){
-        throw ('R42 manual update UI still uses old non-tester path: '+$file.Name)
+        throw ('R42 UI bypasses the stable updater facade: '+$file.Name)
     }
 }
 if($count -lt 1){throw 'R42 no update-check buttons wired'}
-Write-Host "R42 UI + update checks PASS: hover drill-down, tight outer-ring popup, guarded paste, $count manual update actions, private tester/stable update paths."
+Write-Host "R42 UI + update checks PASS: hover drill-down, tight outer-ring popup, guarded paste, $count stable in-app update actions, automatic release channel."

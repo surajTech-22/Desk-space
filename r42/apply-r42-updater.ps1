@@ -24,11 +24,14 @@ if($count -lt 1){
     throw 'R42 no in-app Check for Updates buttons were connected'
 }
 $helper=[IO.File]::ReadAllText($target)
-foreach($guard in @('DeskSpaceUpdater.CurrentVersion',
-    'BuildTools","GitHubCLI"','auth","status"','isPrerelease',
-    'ProcessStartInfo(Releases)','DeskSpaceUpdater.CheckAsync(owner)')){
+foreach($guard in @('Task CheckAsync(Window owner)',
+    'DeskSpaceUpdater.CheckAsync(owner)')){
     if(!$helper.Contains($guard)){
-        throw "R42 new cross-PC update check missing: $guard"
+        throw "R42 stable update checker missing: $guard"
     }
+}
+if($helper.Contains('isPrerelease') -or
+   $helper.Contains('r42-test-')){
+    throw 'R42 tester release path must not intercept automatic stable updates'
 }
 Write-Host "R42 update checker linked to $count in-app update buttons; preserved original SHA-256 updater."
