@@ -962,30 +962,13 @@ jobs:
 
       - name: R42 PowerShell syntax and automatic-variable preflight
         shell: pwsh
-        run: |
-          $ErrorActionPreference='Stop'
-          $psScripts=@(Get-ChildItem -LiteralPath 'r42' -Filter '*.ps1' -File -Recurse)
-          if($psScripts.Count -lt 4){throw 'R42 PowerShell source files missing'}
-          foreach($script in $psScripts){
-            $tokens=$null
-            $parseErrors=$null
-            $ast=[System.Management.Automation.Language.Parser]::ParseFile(
-                $script.FullName,[ref]$tokens,[ref]$parseErrors)
-            if($parseErrors.Count -gt 0){
-              $details=($parseErrors | ForEach-Object {
-                "$($_.Extent.File):$($_.Extent.StartLineNumber): $($_.Message)"
-              }) -join [Environment]::NewLine
-              throw "R42 PowerShell source parse error: $details"
-            }
-            # $Host is a built-in read-only automatic variable (case-insensitive).
-            # Parse errors alone do not detect assignment attempts.
-            $assignments=$ast.FindAll({
-              param($node)
-              $node -is [System.Management.Automation.Language.AssignmentStatementAst]
-            },$true)
-            foreach($assignment in $assignments){
-              $left=$assignment.Left.Extent.Text.Trim()
-              if($left -match '^\$Host      - name: R42 verified installed-app closure and corrected Inno Setup version label
+        run: ./r42/test-r42-powershell.ps1
+
+      - name: R42 user-approved current location and worldwide weather tests
+        shell: pwsh
+        run: ./r42/test-r42-weather.ps1
+
+      - name: R42 verified installed-app closure and corrected Inno Setup version label
         shell: pwsh
         run: |
           ./r42/test-r42-installer.ps1
