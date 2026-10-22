@@ -109,4 +109,14 @@ Edit $bridge @'
             throw new InvalidOperationException(
                 "Target cells are not verified. Link a live Excel range and preview again.");
 '@
+
+# R39 must retain empty input cells and their EXACT destination positions.
+# Empty cells are analysis-only until the user provides a value; they never
+# blank existing cells through the Paste Special Values path.
+Edit $bridge '                if(raw==null&&!hasFormula)continue;' @'
+                // Keep blank cells in selected table geometry. They may be
+                // destinations for values entered later.
+'@
+Edit $bridge '                else record.ValueKind="text";' '                else record.ValueKind=raw==null?"blank":"text";'
+Edit $bridge 'else if(source.Role!="Value" || source.ValueKind=="formula")' 'else if(source.Role!="Value" || source.ValueKind=="formula" || source.ValueKind=="blank")'
 Write-Host 'R39: compatible DPAPI records, exact live Excel metadata, source formulas protected, screenshot verification gate.'
