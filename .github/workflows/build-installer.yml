@@ -14,7 +14,7 @@ permissions:
 # Never cancel a main-branch production release job.
 concurrency:
   group: deskspace-installer-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/r42-excel-mapping-editor' }}
 
 jobs:
   build:
