@@ -170,7 +170,10 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         // Main donut coordinates are 420-based. Match its actual scale,
         // then anchor a SMALL child-popup to the exact sector geometry.
         // WPF must not slide a transparent 650x650 popup off-screen.
-        double scale=Math.Clamp(Math.Min(w,h)/420.0,.60,1.60);
+        // Child-wheel geometry is in a 650x650 coordinate system (CX=CY=325).
+        // Scaling it as 420x420 places the arc far outside the parent ring.
+        // Keep child geometry aligned to the parent's centred circular viewport.
+        double scale=Math.Clamp(Math.Min(w,h)/650.0,.38,1.05);
         canvas.LayoutTransform=new ScaleTransform(scale,scale);
         arc.HorizontalOffset=w/2-CX*scale+(localOriginX-10)*scale;
         arc.VerticalOffset=h/2-CY*scale+(localOriginY-10)*scale;
