@@ -248,6 +248,12 @@ $method=@'
             Call(wheel,"Activate",1); // Information child of Excel Functions
             var levels=(System.Collections.IList)Private<object>(wheel,"childRings");
             Assert(levels.Count==1,"Information replaced parent instead of opening a ring");
+            // The connected submenu must occupy its own parent wedge;
+            // a full 360-degree blue band is a visual regression.
+            var span=wheel.GetType().GetMethod("Span",Any)!;
+            double half=(double)span.Invoke(null,new object[]{2})!;
+            Assert(half<=30.0 && half>=20.0,
+                "Excel submenu spans more than its parent sector");
             var first=levels[0]!;
             var activate=wheel.GetType().GetMethod("ActivateRing",Any)!;
             activate.Invoke(wheel,new object[]{first,0}); // Clients

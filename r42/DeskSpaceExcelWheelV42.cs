@@ -245,8 +245,11 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     // Each submenu occupies a separate transparent Popup; no existing
     // ring is redrawn or replaced when a group opens another level.
-    // Sub-donuts are full concentric rings, not detached pie-shaped fans.
-    private static double Span(int count)=>180;
+    // A child donut is an ATTACHED sector arc, not a 360-degree overlay.
+    // Never cover the complete main wheel with a submenu. Each child
+    // occupies a bounded angular span around the selected parent wedge.
+    private static double Span(int count)=>
+        Math.Min(48.0,Math.Max(16.0,12.5*Math.Max(1,count)));
     private double RootAngle(int slot)
     {
         double half=Span(displayed.Count);
@@ -296,7 +299,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     {
         if(disposed||!arc.IsOpen||pasting)return;
         CloseFrom(depth);
-        KeepConcentricRingOnScreen(Outer+depth*54);
+        // Opening a submenu must NEVER move the main donut or the user's
+        // pointer. The child arc is positioned in its parent's coordinates.
         // Never silently flatten deep groups into the preceding donut.
         var ring=new ChildRing(depth,group,angle,owner);
         childRings.Add(ring);
@@ -321,6 +325,9 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private void RenderRing(ChildRing ring)
     {
         var all=BranchItems(ring.Group);
+        if(ring.Depth>12)
+            throw new InvalidOperationException(
+                "Excel Information nesting exceeded supported donut levels.");
         ring.Start=Math.Clamp(ring.Start,0,Math.Max(0,all.Count-PerPage));
         ring.Items.Clear();
         ring.Items.AddRange(all.Skip(ring.Start).Take(PerPage));
@@ -480,24 +487,6 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         HideArc();collapseParent();_=PasteAsync(format);
     }
 
-    // Move the *whole wheel* just enough for the complete sub-donut to fit
-    // on screen. Never reposition the child independently of the parent.
-    private void KeepConcentricRingOnScreen(double outerRadius)
-    {
-        if(!owner.IsLoaded || owner.WindowState!=WindowState.Normal)return;
-        Rect area=SystemParameters.WorkArea;
-        double radius=outerRadius*DeskSpaceDonutGeometryV43.Scale(owner)+10;
-        double w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
-        double h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
-        if(w<=0||h<=0)return;
-        double x=owner.Left+w/2,y=owner.Top+h/2;
-        if(area.Width>radius*2)
-            x=Math.Clamp(x,area.Left+radius,area.Right-radius);
-        if(area.Height>radius*2)
-            y=Math.Clamp(y,area.Top+radius,area.Bottom-radius);
-        if(Math.Abs(x-owner.Left-w/2)>1)owner.Left=x-w/2;
-        if(Math.Abs(y-owner.Top-h/2)>1)owner.Top=y-h/2;
-    }
     private void Position()
     {
         if(disposed)return;
@@ -541,7 +530,6 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             start=0;
             suppressNextUp=false;
             Render();
-            KeepConcentricRingOnScreen(Outer);
             Position();
             arc.IsOpen=true;
             pointerTimer.Start();
