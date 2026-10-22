@@ -39,6 +39,38 @@ foreach($check in @(
      throw "R42 direct-paste Excel circle missing: $check"
  }
 }
+# WPF donut index 6 is Excel and index 7 is Information. Inspect the
+# actual updated selector rather than accepting loose tokens elsewhere:
+# R29 and R39 changed its structure and older comment-based anchors failed.
+$paintStart=$hostSource.IndexOf('    private void UpdateHighlightedSector(',[StringComparison]::Ordinal)
+$paintEnd=$hostSource.IndexOf('    private void BuildCompact()', [Math]::Max(0,$paintStart),[StringComparison]::Ordinal)
+if($paintStart -lt 0 -or $paintEnd -le $paintStart) {
+    throw 'R42 cannot locate updated WPF hover selector'
+}
+$paint=$hostSource.Substring($paintStart,$paintEnd-$paintStart)
+foreach($required in @('if(selected>=0 && selected!=7)',
+    'else if(selected==7 && ringExpanded && activeModule==null)',
+    'OpenInformationArc();',
+    'if(selected==6 && ringExpanded && activeModule==null)',
+    'OpenExcelArc();',
+    'if(selected>=0 && selected!=6 && excelWheel?.IsArcOpen==true)',
+    'excelWheel.HideArc();'))
+{
+    if(!$paint.Contains($required)){throw "R42 Excel/Information ring-index regression: $required"}
+}
+if($paint.Contains('if(selected>=0 && selected!=6)')) {
+    throw 'R42: R29 still mistakes Excel for Information'
+}
+# Reject the compiler-reported ambiguous Path token before dotnet build.
+foreach($bad in @('List<Path>', 'new Path{')){
+    if($wheel.Contains($bad)) {
+        throw "R42 WPF Path CS0104 ambiguity remains: $bad"
+    }
+}
+if(!$wheel.Contains('System.Windows.Shapes.Path')){
+    throw 'R42 Excel child geometry is missing explicitly qualified WPF Path'
+}
+
 if(!$hostSource.Contains('excelWheel?.Dispose();')){throw 'Excel popup lifetime leak'}
 foreach($check in @('x.Source.Role=="Value"','ValueKind!="formula"',
  'ValueKind!="blank"','cell.Value2=TypedValue(change.Source);',
