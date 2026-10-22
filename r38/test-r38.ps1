@@ -39,16 +39,18 @@ foreach($label in @('"rain-night"','"thunder"','"drizzle"','"snow"',
 }
 Write-Host 'R38 source, condition model, cloud-owned emitters, Excel/vault/updater preservation gates PASS'
 
-# Existing Excel workflow and donut sector mapping: read-only build diagnosis.
-# Avoid inserting duplicate Excel modules until the current sector capacity
-# and click routing are known.
+
+# The Excel workflow was already implemented in R16, but the ring currently
+# has exactly 12 occupied slots. Protect its existing tray, in-widget and
+# main-app entrypoints instead of silently replacing another module.
 $hostSource=[IO.File]::ReadAllText("$root/WidgetHost.cs")
-Write-Host 'R38 EXCEL CIRCLE SOURCE BEGIN'
-$lines=$hostSource -split "\r?\n"
-for($i=0;$i -lt $lines.Length;$i++){
-    if($lines[$i] -match 'Segments\s*=|private void BuildDonut\(|private void ClickSegment\(|case "Excel"|OpenInWidget\("Excel"\)'){
-        $end=[Math]::Min($lines.Length-1,$i+18)
-        for($j=$i;$j -le $end;$j++){Write-Host ("{0}: {1}" -f ($j+1),$lines[$j])}
-    }
+foreach($key in @(
+   'private static readonly string[] Segments',
+   '"Information", "Notes", "Reminders", "Clipboard", "Files", "Tasks"',
+   'private DeskSpaceExcelV16? activeExcel;',
+   'new DeskSpaceExcelV16(ReturnFromModule)',
+   'OpenInWidget("Excel")'
+)){
+   if(!$hostSource.Contains($key)){throw "R38 existing Excel route not preserved: $key"}
 }
-Write-Host 'R38 EXCEL CIRCLE SOURCE END'
+Write-Host 'R38 existing Excel routes and 12 original donut entries preserved'
