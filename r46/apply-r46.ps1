@@ -15,31 +15,25 @@ Replace-Once '        if(cell.ValueKind=="boolean")' @'
         if(cell.ValueKind=="boolean")
 '@
 Replace-Once 'var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula)>();' 'var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula,string Format)>();'
-Replace-Once @'
-                rollback.Add((cell,previous,hadFormula,hadFormula?Text(cell.FormulaR1C1):""));
-                if(change.Source.ValueKind=="formula")
-                    cell.FormulaR1C1=change.Source.FormulaR1C1;
-                else cell.Value2=TypedValue(change.Source);
-'@ @'
-                rollback.Add((cell,previous,hadFormula,
+Replace-Once 'rollback.Add((cell,previous,hadFormula,hadFormula?Text(cell.FormulaR1C1):""));' @'
+rollback.Add((cell,previous,hadFormula,
                     hadFormula?Text(cell.FormulaR1C1):"",
                     Text(cell.NumberFormat)));
-                if(DeskSpaceExcelActionsV46.IsFormulaAction(change.Source.ValueKind))
+'@
+Replace-Once 'if(change.Source.ValueKind=="formula")' @'
+if(DeskSpaceExcelActionsV46.IsFormulaAction(change.Source.ValueKind))
                     cell.FormulaR1C1=DeskSpaceExcelActionsV46.Formula(change.Source);
                 else if(change.Source.ValueKind=="formula")
-                    cell.FormulaR1C1=change.Source.FormulaR1C1;
-                else cell.Value2=TypedValue(change.Source);
+'@
+Replace-Once 'else cell.Value2=TypedValue(change.Source);' @'
+else cell.Value2=TypedValue(change.Source);
                 if(DeskSpaceExcelActionsV46.IsAction(change.Source.ValueKind))
                     cell.NumberFormat=DeskSpaceExcelActionsV46.NumberFormat(
                         change.Source.ValueKind);
 '@
-Replace-Once @'
-                    else x.Cell.Value2=x.Old;
-                }catch(COMException){}
-'@ @'
-                    else x.Cell.Value2=x.Old;
+Replace-Once 'else x.Cell.Value2=x.Old;' @'
+else x.Cell.Value2=x.Old;
                     if(x.Format.Length>0)x.Cell.NumberFormat=x.Format;
-                }catch(COMException){}
 '@
 [IO.File]::WriteAllText($bridge,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R46 Excel value engine wired: capture-time date is never frozen; live formulas explicit; rollback includes number format.'
