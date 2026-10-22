@@ -21,7 +21,7 @@ Require @'
         menu.Items.Add("Excel · reusable data",null,(_,_)=>Dispatcher.Invoke(
             ()=>OpenInWidget("Excel")));
 '@ @'
-        menu.Items.Add("Excel · saved formats",null,(_,_)=>Dispatcher.Invoke(
+        menu.Items.Add("Excel Functions · Clipboard / Information",null,(_,_)=>Dispatcher.Invoke(
             OpenExcelArc));
 '@
 Require @'
