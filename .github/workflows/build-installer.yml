@@ -47,6 +47,7 @@ on:
       - "r36/**"
       - "r37/**"
       - "r38/**"
+      - "r39/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -977,6 +978,10 @@ jobs:
       - name: R38 verified weather cloud/rain physics and module preservation
         shell: pwsh
         run: ./r38/test-r38.ps1
+
+      - name: R39 source inspection for circle Excel and updater integration
+        shell: pwsh
+        run: ./r39/diagnose.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
