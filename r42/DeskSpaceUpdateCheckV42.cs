@@ -25,8 +25,16 @@ internal static class DeskSpaceUpdateCheckV42
         foreach(var dir in path.Split(Path.PathSeparator,
                     StringSplitOptions.RemoveEmptyEntries))
             names.Add(Path.Combine(dir.Trim().Trim('"'),"gh.exe"));
+        // Installed systems must not depend on the build PC's PATH.
+        var app=AppContext.BaseDirectory;
+        names.Add(Path.Combine(app,"gh.exe"));
+        names.Add(Path.Combine(app,"Tools","gh.exe"));
+        names.Add(Path.Combine(app,"GitHubCLI","gh.exe"));
+        names.Add(Path.Combine(app,"Tools","GitHubCLI","gh.exe"));
         names.Add(Path.Combine(Environment.GetFolderPath(
             Environment.SpecialFolder.ProgramFiles),"GitHub CLI","gh.exe"));
+        names.Add(Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.ProgramFilesX86),"GitHub CLI","gh.exe"));
         names.Add(Path.Combine(Environment.GetFolderPath(
             Environment.SpecialFolder.LocalApplicationData),
             "Programs","GitHub CLI","gh.exe"));
@@ -64,8 +72,7 @@ internal static class DeskSpaceUpdateCheckV42
         }
         var stdout=await output;
         var stderr=await errors;
-        return (process.ExitCode,process.ExitCode==0?stdout:stderr+"
-"+stdout);
+        return (process.ExitCode,process.ExitCode==0?stdout:stderr+"\n"+stdout);
     }
 
     private static void OpenReleases()
