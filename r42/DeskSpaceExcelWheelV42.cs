@@ -873,7 +873,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
                 ToolTip=header
             };
             row.Children.Add(label);
-            var valueText=new TextBlock{Text=value.Display,
+            var valueText=new TextBlock{
+                Text=DeskSpaceExcelActionsV46.PreviewText(value,DateTime.Now),
                 FontSize=11,Foreground=Ink,TextTrimming=TextTrimming.CharacterEllipsis,
                 ToolTip=value.CellAddress+" = "+value.Display};
             Grid.SetColumn(valueText,1);row.Children.Add(valueText);
