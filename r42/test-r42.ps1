@@ -15,9 +15,11 @@ foreach($check in @(
  'private async void Capture()', 'private async void Apply()'
 )){if(!$base.Contains($check)){throw "R42 main editor integration missing: $check"}}
 foreach($check in @(
- 'Excel Mapping','SAVED MAPPINGS','Header / Reference',
- 'Value / Input','Value cell','ReferenceCell','Save mapping changes',
- 'Rename mapping','Refresh saved mappings','LoadEditorV42(',
+ 'Excel Mapping','SAVED MAPPINGS','Data field name',
+ 'Data value','Value cell','ReferenceCell','Save collection & data',
+ 'Collection name (groups related data together)',
+ 'Data name (saved Excel mapping)',
+ 'Capture selected Excel cells','Refresh saved mappings','LoadEditorV42(',
  'SaveEditorV42()','DeskSpaceExcelStoreV16.Load()',
  'DeskSpaceExcelStoreV16.Save(disk)','ShowCapturedV42(',
  'existing>=0)disk[existing]=edited',
@@ -143,10 +145,10 @@ $old=@'
 '@
 $new=@'
             "Refresh saved mappings",
-            "Rename mapping",
+            "Capture selected Excel cells",
             "Copy and analyze selected Excel cells",
-            "Save mapping changes",
-            "Delete mapping",
+            "Save collection & data",
+            "Delete selected data",
 '@
 $old=$old.Replace([string][char]13+[char]10,[string][char]10)
 $new=$new.Replace([string][char]13+[char]10,[string][char]10)
@@ -163,7 +165,7 @@ $old2=@'
 '@
 $new2=@'
             "Refresh saved mappings",
-            "Save mapping changes",
+            "Save collection & data",
             "Preview matching cells"
 '@
 if($s.Contains($old2)){
@@ -171,14 +173,14 @@ if($s.Contains($old2)){
 }else{
     # The R39 button rewrite above already changes these shared labels.
     # Do not fail solely because the legacy R40 exact text is gone.
-    foreach($label in @('"Refresh saved mappings"','"Save mapping changes"')){
+    foreach($label in @('"Refresh saved mappings"','"Save collection & data"')){
         if(!$s.Contains($label)){throw "R42 Workspace smoke missing revised action $label"}
     }
 }
 # R40's separate Workspace test still contains legacy labels not adjacent to
 # the R39 block. Match the actual revised UI in every smoke assertion.
 $s=$s.Replace('"Verify screenshot against selected Excel range"','"Refresh saved mappings"')
-$s=$s.Replace('"Save checked values"','"Save mapping changes"')
+$s=$s.Replace('"Save checked values"','"Save collection & data"')
 if($s.Contains('"Verify screenshot against selected Excel range"') -or
    $s.Contains('"Save checked values"')){
     throw 'R42 smoke retained outdated Excel Workspace actions'
@@ -225,7 +227,36 @@ $method=@'
             Assert((bool)wheel.GetType().GetProperty("IsArcOpen")!
                     .GetValue(wheel)!,
                 "Excel child wheel was not shown");
+            // An in-memory example must open successive attached rings,
+            // retaining all ancestors instead of redrawing the same arc.
+            var record=Make("DeskSpace.DeskSpaceExcelTemplateV16");
+            var model=record.GetType();
+            model.GetProperty("Name")!.SetValue(record,"Client Ledger");
+            model.GetProperty("GroupPath")!.SetValue(record,"Clients/Audit");
+            var formats=(System.Collections.IList)Private<object>(wheel,"formats");
+            formats.Add(record);
+            Call(wheel,"Activate",1); // Information child of Excel Functions
+            var levels=(System.Collections.IList)Private<object>(wheel,"childRings");
+            Assert(levels.Count==1,"Information replaced parent instead of opening a ring");
+            var first=levels[0]!;
+            var activate=wheel.GetType().GetMethod("ActivateRing",Any)!;
+            activate.Invoke(wheel,new object[]{first,0}); // Clients
+            Assert(levels.Count==2,"Clients group must open a second attached ring");
+            var second=levels[1]!;
+            activate.Invoke(wheel,new object[]{second,0}); // Audit
+            Assert(levels.Count==3,"Audit group must open a third attached ring");
+            Assert((bool)wheel.GetType().GetProperty("IsArcOpen")!
+                    .GetValue(wheel)!,"Opening nested rings closed original Excel ring");
+            for(int i=0;i<3;i++)
+            {
+                var ring=levels[i]!;
+                var surface=(Canvas)ring.GetType().GetField("Surface",Any)!
+                    .GetValue(ring)!;
+                Render(surface,Math.Max(200,(int)surface.Width),
+                    Math.Max(200,(int)surface.Height),"excel-nested-level-"+(i+1));
+            }
             Call(wheel,"HideArc");
+            Assert(levels.Count==0,"Collapsed wheel retained detached sub-donuts");
             Assert(!(bool)wheel.GetType().GetProperty("IsArcOpen")!
                     .GetValue(wheel)!,
                 "Excel child wheel did not close");
