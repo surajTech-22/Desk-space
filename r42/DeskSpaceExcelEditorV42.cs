@@ -39,7 +39,7 @@ internal sealed partial class DeskSpaceExcelV16
     private DeskSpaceExcelTemplateV16? editingTemplateV42;
     private Guid editingIdV42=Guid.Empty;
     private bool editingDraftV42,selectionGuardV42;
-    private bool editorBusyV42;
+    private bool editorBusyV42,hasUnsavedChangesV42,loadingEditorV42;
 
     private static Brush NavyV42=>new SolidColorBrush(Color.FromRgb(31,50,82));
     private static Brush BorderV42=>new SolidColorBrush(Color.FromRgb(204,215,230));
@@ -143,6 +143,10 @@ internal sealed partial class DeskSpaceExcelV16
             Margin=new Thickness(2,3,2,7)});
         mappingNameV42=Field("Rename this mapping");
         mappingNameV42.Margin=new Thickness(0,0,0,3);
+        mappingNameV42.TextChanged+=(_,_)=>{
+            if(!loadingEditorV42 && editingTemplateV42!=null)
+                hasUnsavedChangesV42=true;
+        };
         editorHead.Children.Add(mappingNameV42);
         editorInfoV42=HintV42("Choose a saved mapping on the left, or capture cells from Excel.");
         editorHead.Children.Add(editorInfoV42);
@@ -152,7 +156,7 @@ internal sealed partial class DeskSpaceExcelV16
             ()=>Run(SaveEditorV42),true));
         editButtons.Children.Add(ButtonV42("Rename mapping",
             ()=>Run(SaveEditorV42)));
-        editButtons.Children.Add(ButtonV42("Delete mapping",()=>Run(Delete)));
+        editButtons.Children.Add(ButtonV42("Delete mapping",()=>Run(DeleteMappingV42)));
         editorHead.Children.Add(editButtons);
         DockPanel.SetDock(editorHead,Dock.Top);right.Children.Add(editorHead);
 
@@ -189,6 +193,7 @@ internal sealed partial class DeskSpaceExcelV16
         AddColumnV42("Value cell","ValueCell",90);
         AddColumnV42("Type","Kind",98);
         mappingGridV42.CellEditEnding+=(_,_)=>{
+            hasUnsavedChangesV42=true;
             latest=null;
             if(editorInfoV42!=null)editorInfoV42.Text=
                 "Edited mapping (unsaved). Click Save mapping changes to keep it.";
@@ -265,7 +270,7 @@ internal sealed partial class DeskSpaceExcelV16
         root.Children.Add(content);
 
         root.IsVisibleChanged+=(_,e)=>{
-            if(e.NewValue is true && !editorBusyV42) {
+            if(e.NewValue is true && !editorBusyV42 && !hasUnsavedChangesV42) {
                 try {ReloadSavedV42(false);} catch(Exception ex) {
                     status.Text="Could not refresh encrypted mappings: "+ex.Message;
                 }
@@ -276,8 +281,10 @@ internal sealed partial class DeskSpaceExcelV16
     }
     private void AddColumnV42(string title,string property,int width)
     {
+        bool addressOrType=property is "ReferenceCell" or "ValueCell" or "Kind";
         mappingGridV42!.Columns.Add(new DataGridTextColumn{
             Header=title,Width=new DataGridLength(width),
+            IsReadOnly=addressOrType,
             Binding=new Binding(property){
                 Mode=BindingMode.TwoWay,
                 UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged},
@@ -308,6 +315,11 @@ internal sealed partial class DeskSpaceExcelV16
     private void ReloadSavedV42(bool explicitReload)
     {
         if(templates==null)return;
+        if(hasUnsavedChangesV42 && editingTemplateV42!=null)
+        {
+            status.Text="You have unsaved mapping changes. Save them before refreshing.";
+            return;
+        }
         var existing=editingIdV42;
         // The two frontends are separate Windows processes. Load from DPAPI
         // again, never rely on the list captured at constructor time.
@@ -335,8 +347,48 @@ internal sealed partial class DeskSpaceExcelV16
     private void OnLibrarySelectedV42()
     {
         if(selectionGuardV42)return;
-        if(templates.SelectedItem is DeskSpaceExcelTemplateV16 entry)
-            LoadEditorV42(entry);
+        if(templates.SelectedItem is not DeskSpaceExcelTemplateV16 entry)return;
+        if(hasUnsavedChangesV42 && editingTemplateV42!=null &&
+           entry.Id!=editingIdV42)
+        {
+            selectionGuardV42=true;
+            try {
+                templates.SelectedItem=saved.FirstOrDefault(x=>x.Id==editingIdV42);
+            }
+            finally {selectionGuardV42=false;}
+            status.Text="Please save your current header/value changes before changing formats.";
+            return;
+        }
+        LoadEditorV42(entry);
+    }
+    private void DeleteMappingV42()
+    {
+        if(editingTemplateV42==null)
+            throw new InvalidOperationException("Select a saved mapping to delete.");
+        if(editingDraftV42)
+        {
+            editingTemplateV42=null;
+            editingIdV42=Guid.Empty;
+            hasUnsavedChangesV42=false;
+            mappingGridV42!.ItemsSource=null;
+            mappingRowsV42.Clear();
+            if(mappingNameV42!=null)mappingNameV42.Clear();
+            status.Text="Unsaved capture discarded. Previously saved mappings are unchanged.";
+            return;
+        }
+        if(hasUnsavedChangesV42)
+        {
+            status.Text="Save the current changes before deleting this mapping, "+
+                "or reopen the saved format to discard them.";
+            return;
+        }
+        // Retain the existing confirmation and encrypted-store deletion.
+        Delete();
+        editingTemplateV42=null;editingIdV42=Guid.Empty;
+        hasUnsavedChangesV42=false;
+        mappingRowsV42.Clear();
+        mappingGridV42!.ItemsSource=null;
+        ReloadSavedV42(true);
     }
     private static DeskSpaceExcelTemplateV16 CloneV42(DeskSpaceExcelTemplateV16 entry)=>
         JsonSerializer.Deserialize<DeskSpaceExcelTemplateV16>(
@@ -346,8 +398,13 @@ internal sealed partial class DeskSpaceExcelV16
     {
         editingTemplateV42=CloneV42(entry);
         editingIdV42=entry.Id;editingDraftV42=false;
-        RenderMappingRowsV42(editingTemplateV42);
-        if(mappingNameV42!=null)mappingNameV42.Text=entry.Name;
+        loadingEditorV42=true;
+        try {
+            RenderMappingRowsV42(editingTemplateV42);
+            if(mappingNameV42!=null)mappingNameV42.Text=entry.Name;
+        }
+        finally {loadingEditorV42=false;}
+        hasUnsavedChangesV42=false;
         if(editorInfoV42!=null)editorInfoV42.Text=
             entry.SourceWorkbook+" · "+entry.SourceSheet+" · "+
             entry.SourceAddress+" · "+entry.Cells.Count+" cells"+
@@ -360,6 +417,7 @@ internal sealed partial class DeskSpaceExcelV16
     {
         editingTemplateV42=candidate;
         editingIdV42=Guid.Empty;editingDraftV42=true;
+        hasUnsavedChangesV42=true;
         mappingNameV42!.Text=candidate.Name;
         RenderMappingRowsV42(candidate);
         editorInfoV42!.Text="New capture · "+candidate.SourceSheet+" · "+
@@ -533,6 +591,7 @@ internal sealed partial class DeskSpaceExcelV16
             saved.Clear();saved.AddRange(disk);
             pendingSelection=null;
             editingDraftV42=false;editingIdV42=edited.Id;
+            hasUnsavedChangesV42=false;
             FilterLibraryV42();
             selectionGuardV42=true;
             try {templates.SelectedItem=saved.FirstOrDefault(x=>x.Id==edited.Id);}
