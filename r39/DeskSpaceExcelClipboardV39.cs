@@ -34,6 +34,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     private static DeskSpaceExcelClipboardV39? active;
     private int reposition;
     public static void CaptureNow()=>active?.CaptureSelection(false);
+    public static void ShowActive()=>active?.Enable();
 
     public DeskSpaceExcelClipboardV39(Window hostWindow)
     {
