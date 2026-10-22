@@ -1021,12 +1021,24 @@ jobs:
           [IO.File]::WriteAllText($cs,$code,[Text.UTF8Encoding]::new($false))
           Write-Host "Release version assigned: $version"
 
-      - name: Ensure published version supersedes legacy local Windows builds
+      - name: Verify version is above legacy local installs
         shell: pwsh
         run: |
-          $ErrorActionPreference='Stop'
-          $installer='installer/DeskSpace.iss'
-          $line=Select-String -Path $installer -Pattern '^#define AppVersion "([^"]+)"
+          $ErrorActionPreference = 'Stop'
+          $setup = [IO.File]::ReadAllText('installer/DeskSpace.iss')
+          $match = [regex]::Match($setup, '#define AppVersion "([0-9]+[.][0-9]+[.][0-9]+)"')
+          if (!$match.Success) { throw 'Installer version missing' }
+          $v = [version]$match.Groups[1].Value
+          if ($v -le [version]'1.4.29412') { throw 'Release older than legacy PC install' }
+          $updater = [IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs')
+          $stamp = 'InstalledVersion = new(' + $v.Major + ', ' + $v.Minor + ', ' + $v.Build + ');'
+          if (!$updater.Contains($stamp)) { throw 'App version differs from installer' }
+          if (!$updater.Contains('DeskSpacePublicUpdaterV44.StartAutomaticChecks(host)')) {
+            throw 'Automatic updater not connected'
+          }
+          Write-Host ('Version gate PASS: ' + $v)
+
+      - name: Verify official GitHub CLI is available for bundled updater
         shell: pwsh
         run: |
           $cli=Get-Command gh.exe -ErrorAction SilentlyContinue
@@ -1038,7 +1050,6 @@ jobs:
           $cli=Get-Command gh.exe -ErrorAction SilentlyContinue
           if (!$cli) { throw 'The updater needs the official gh.exe on the Windows build runner' }
           gh --version
-
       - name: Install .NET 8 SDK on GitHub build runner
         uses: actions/setup-dotnet@v4
         with:
