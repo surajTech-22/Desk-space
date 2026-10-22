@@ -50,11 +50,15 @@ Mark each item. If the feature is missing from this particular build, use **NOT 
 |---|---|---|
 | INS-01 | Close old DeskSpace; install supplied version; open from Start | Installer finishes, version badge shows intended build, no missing-file error |
 | INS-02 | Exit Workspace and widget; reopen | Existing dummy notes/settings remain; no blank-data reset |
+| INS-03 | On a *second Windows PC*, click Check for Updates from Workspace/tray | Clear status if portable GitHub CLI is missing, account not authenticated, private repository inaccessible, no newer release, or tester release found. No silent disabled button |
+| INS-04 | From a GitHub-authorized second PC, check private tester releases using a dummy account with repository permission | New R42 pre-release link opens for human review; original stable SHA-256 installer pathway remains protected |
 | UI-01 | Click each sidebar section in Workspace | Correct page opens without unrelated module covering it |
 | UI-02 | Restore a smaller Workspace window; open Excel Mapping | Saved list and mapping table stay usable; no clipped action buttons or large empty instructional panels |
 | WHEEL-01 | Open **Show Live Donut Widget**; hover all wheel sectors | Hover feedback and visible labels; no unexpected selection or popup |
 | WHEEL-02 | Test click, wheel scroll, child arc, back-to-circle and edge of display | Navigation stays anchored, is reversible, does not cover controls |
 | WHEEL-03 | Minimize/collapse the widget and restore it | Minimized controls remain reachable |
+| WHEEL-04 | Put the parent circle near the far-left and far-right screen edge; hover **Excel Functions → Information → a saved group** without clicking | Child arcs stay physically attached to the outer Excel sector, drill down after a short hover, and keep normal Back navigation |
+| WHEEL-05 | Hover a saved mapping repeatedly, then move away without pressing any button | No workbook modifications. Paste occurs only after explicit mapping selection |
 | SEARCH-01 | Search a known app and a file using uppercase/lowercase variations | Matching apps/files appear case-insensitively |
 | NOTES-01 | Create, edit and delete dummy note | Changes persist; cancellation does not remove existing data |
 | CAL-01 | Open calendar; add and edit dummy event | Event appears under expected date; compact calendar remains usable |
