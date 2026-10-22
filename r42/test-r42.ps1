@@ -222,7 +222,8 @@ $method=@'
             owner,(Action)(()=>{}));
         // Excel is deliberately absent in this test. Saved-information
         // browsing MUST remain usable and must never initiate COM/paste.
-        var probe=wheel.GetType().GetField("ExcelProbe",Any)!;
+        var probe=wheel.GetType().GetField("ExcelProbe",
+            BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)!;
         var originalProbe=probe.GetValue(null);
         probe.SetValue(null,(Func<bool>)(()=>false));
         try
