@@ -105,4 +105,13 @@ foreach($key in @('EnableCurrentLocationAsync','SearchCitiesAsync','CurrentLocat
                   'WeatherReading','Geolocator.RequestAccessAsync')){
     if(!$service.Contains($key)){throw "R42 required weather service missing: $key"}
 }
+# Additional location search controls must remain visible in compact mode.
+# Increase only Settings' module height; all other module sizes are unchanged.
+$widget=Join-Path $root 'WidgetHost.cs'
+$widgetSource=[IO.File]::ReadAllText($widget)
+$sizeKey='"Settings"=>304,'
+if($widgetSource.Contains($sizeKey)){
+    $widgetSource=$widgetSource.Replace($sizeKey,'"Settings"=>414,')
+    [IO.File]::WriteAllText($widget,$widgetSource,[Text.UTF8Encoding]::new($false))
+}
 Write-Host 'R42 Weather: current Windows location with consent, worldwide place search, original manual/offline modes.'
