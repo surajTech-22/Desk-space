@@ -11,7 +11,7 @@ foreach($v in @(
     'localOriginX=extent.Left',
     'geometry.Transform=translation',
     'drillTimer.Start();',
-    'command=="information"||command=="group"',
+    'item.Command=="information"||item.Command=="group"',
     'if(item.Command!="mapping" || !item.Id.HasValue)return;',
     'DeskSpaceExcelClipboardV39.ShowActive();'
 )){
