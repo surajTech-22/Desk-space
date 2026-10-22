@@ -994,6 +994,12 @@ jobs:
           ./r44/apply-r44.ps1
           ./r44/test-r44.ps1
 
+      - name: R46 Excel keyboard actions and paste-time date mapping verification
+        shell: pwsh
+        run: |
+          ./r46/apply-r46.ps1
+          ./r46/test-r46.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
