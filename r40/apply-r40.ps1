@@ -36,19 +36,15 @@ Swap $excel '        var done=ActionButton("← Circle",back);' '        var don
 # Main WPF workspace has a real dedicated tab, not another attempt to
 # open the floating widget using a named pipe.
 $xaml="$root/MainWindow.xaml"
-Swap $xaml @'
-       <TabItem Tag="Clock" Header="◷  Clock &amp; Timer">
-'@ @'
-       <TabItem x:Name="ExcelMainTab" Tag="Excel" Header="▦  Excel Mapping">
+Swap $xaml '<TabItem Tag="Clock" Header="◷  Clock &amp; Timer">' @'
+<TabItem x:Name="ExcelMainTab" Tag="Excel" Header="▦  Excel Mapping">
          <Grid x:Name="ExcelMainHost" Margin="0" Loaded="ExcelMainHost_Loaded"/>
        </TabItem>
        <TabItem Tag="Clock" Header="◷  Clock &amp; Timer">
 '@
 # Make mapping discoverable without having to know the hidden Modules page.
-Swap $xaml @'
-            <Button Content="Show Live Donut Widget" Click="ShowWidget_Click" Padding="16,10" Margin="0,0,10,10"/>
-'@ @'
-            <Button Content="Show Live Donut Widget" Click="ShowWidget_Click" Padding="16,10" Margin="0,0,10,10"/>
+Swap $xaml '<Button Content="Show Live Donut Widget" Click="ShowWidget_Click" Padding="16,10" Margin="0,0,10,10"/>' @'
+<Button Content="Show Live Donut Widget" Click="ShowWidget_Click" Padding="16,10" Margin="0,0,10,10"/>
             <Button Content="▦  Excel Mapping" Click="ExcelModule_Click" Padding="16,10" Margin="0,0,10,10"/>
 '@
 Swap $xaml '            <Button Tag="Excel" Content="▦  Excel reusable data" Click="ExcelModule_Click"' '            <Button Tag="Excel" Content="▦  Excel Mapping" Click="ExcelModule_Click"'
