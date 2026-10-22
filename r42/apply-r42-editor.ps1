@@ -12,6 +12,12 @@ function Patch([string]$file,[string]$old,[string]$new)
     $data=$data.Replace($old,$new)
     [IO.File]::WriteAllText($file,$data,[Text.UTF8Encoding]::new($false))
 }
+# The optional group is classification metadata, not a new Excel module.
+# Historical DPAPI JSON records without this field deserialize as ungrouped.
+Patch "$root/DeskSpaceExcelStoreV16.cs" '    public string SourceKind {get;set;}="Live Excel";' @'
+    public string SourceKind {get;set;}="Live Excel";
+    public string GroupPath {get;set;}=""; // optional Information / Group hierarchy
+'@
 $ui="$root/DeskSpaceExcelV16.cs"
 Patch $ui 'internal sealed class DeskSpaceExcelV16 : IDisposable' 'internal sealed partial class DeskSpaceExcelV16 : IDisposable'
 # Keep native data/model, screenshot and Excel COM, but replace the old
