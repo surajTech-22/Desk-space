@@ -5,6 +5,7 @@ $ErrorActionPreference='Stop'
 ./r39/apply-r39-host.ps1
 ./r39/apply-r39-ring.ps1
 ./r39/apply-r39-smoke.ps1
+./r39/apply-r39-ring-smoke.ps1
 $root='DeskSpace_Windows_R1/DeskSpace'
 $store=[IO.File]::ReadAllText("$root/DeskSpaceExcelStoreV16.cs")
 $bridge=[IO.File]::ReadAllText("$root/DeskSpaceExcelBridgeV16.cs")
