@@ -48,6 +48,7 @@ on:
       - "r37/**"
       - "r38/**"
       - "r39/**"
+      - "r40/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -982,6 +983,10 @@ jobs:
       - name: R39 Excel screenshot/live selection, independent clipboard and fast updates
         shell: pwsh
         run: ./r39/test-r39.ps1
+
+      - name: R40 inspect existing workspace layout before wiring Excel page
+        shell: pwsh
+        run: ./r40/inspect.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
