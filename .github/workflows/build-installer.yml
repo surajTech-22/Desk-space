@@ -987,6 +987,12 @@ jobs:
           Copy-Item -LiteralPath r43/DeskSpaceDonutGeometryV43.cs -Destination DeskSpace_Windows_R1/DeskSpace/DeskSpaceDonutGeometryV43.cs -Force
           ./r43/test-r43.ps1
 
+      - name: R44 connect manual-only Windows clients to public automatic stable updates
+        shell: pwsh
+        run: |
+          ./r44/apply-r44.ps1
+          ./r44/test-r44.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
