@@ -962,7 +962,9 @@ jobs:
 
       - name: R42 verified installed-app closure and corrected Inno Setup version label
         shell: pwsh
-        run: ./r42/apply-r42-installer.ps1
+        run: |
+          ./r42/test-r42-installer.ps1
+          ./r42/apply-r42-installer.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
