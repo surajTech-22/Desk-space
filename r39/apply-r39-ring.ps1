@@ -91,6 +91,11 @@ foreach($pair in @(
  if(!$ring.Contains($pair[0])){throw "R39 ring rendering anchor missing: $($pair[0])"}
  $ring=$ring.Replace($pair[0],$pair[1])
 }
+# Slightly smaller inner-ring labels avoid colliding with the 130 DIP
+# centre and outer + badges in the seven-sector layout.
+$ring=$ring.Replace('FontSize=outer?13:12,','FontSize=outer?12:11,')
+$ring=$ring.Replace('double radius=outer?(hasQuickAdd?151:162):(hasQuickAdd?87:98);',
+  'double radius=outer?(hasQuickAdd?151:162):(hasQuickAdd?94:100);')
 $ring=$ring.Replace('Text=SegmentIcons[i]+"\n"+Segments[i],FontSize=outer?13:12,',
   'Text=SegmentIcons[i]+"\n"+(Segments[i]=="Excel Clipboard"?"Excel Clips":Segments[i]),FontSize=outer?12:12,')
 $s=$s.Substring(0,$ba)+$ring+$s.Substring($bb)
