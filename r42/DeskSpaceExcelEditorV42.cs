@@ -138,34 +138,50 @@ internal sealed partial class DeskSpaceExcelV16
         var right=new DockPanel{LastChildFill=true};
         var editorHead=new StackPanel();
         editorHead.Children.Add(new TextBlock{
-            Text="HEADER → VALUE MAPPING",FontSize=13,
+            Text="COLLECTION & DATA",FontSize=13,
             FontWeight=FontWeights.Bold,Foreground=ink,
             Margin=new Thickness(2,3,2,7)});
-        mappingNameV42=Field("Rename this mapping");
-        mappingNameV42.Margin=new Thickness(0,0,0,3);
-        mappingNameV42.TextChanged+=(_,_)=>{
-            if(!loadingEditorV42 && editingTemplateV42!=null)
-                hasUnsavedChangesV42=true;
-        };
-        editorHead.Children.Add(mappingNameV42);
-        // Group is a path under Excel Information (e.g. Clients / Audit).
-        // Empty means show the mapping directly, with no group donut.
-        mappingGroupV42=Field("Information group (optional): Clients / Audit");
-        mappingGroupV42.Margin=new Thickness(0,0,0,3);
+        editorHead.Children.Add(new TextBlock{
+            Text="Collection name (groups related data together)",
+            FontWeight=FontWeights.SemiBold,Foreground=ink,
+            Margin=new Thickness(2,0,2,2)});
+        // GroupPath is optional and stored with each encrypted mapping.
+        // A new collection appears in the wheel when the first mapping is saved.
+        mappingGroupV42=Field("Example: Clients / Audit");
+        mappingGroupV42.Margin=new Thickness(0,0,0,6);
         mappingGroupV42.TextChanged+=(_,_)=>{
             if(!loadingEditorV42 && editingTemplateV42!=null)
                 hasUnsavedChangesV42=true;
         };
         editorHead.Children.Add(mappingGroupV42);
-        editorInfoV42=HintV42("Choose a saved mapping on the left, or capture cells from Excel.");
+        editorHead.Children.Add(new TextBlock{
+            Text="Data name (saved Excel mapping)",
+            FontWeight=FontWeights.SemiBold,Foreground=ink,
+            Margin=new Thickness(2,1,2,2)});
+        mappingNameV42=Field("Example: GST details");
+        mappingNameV42.Margin=new Thickness(0,0,0,3);
+        mappingNameV42.TextChanged+=(_,_)=>{
+            if(!loadingEditorV42 && editingTemplateV42!=null)
+                hasUnsavedChangesV42=true;
+            // Capture() still uses this original field in the advanced panel.
+            // Keep it synchronized without changing Excel capture semantics.
+            if(name!=null && name.Text!=mappingNameV42.Text)
+                name.Text=mappingNameV42.Text;
+        };
+        editorHead.Children.Add(mappingNameV42);
+        editorInfoV42=HintV42(
+            "Enter a collection and data name, select cells in Excel, then click Capture. "+
+            "Edit Data field / Data value rows below and save. "+
+            "Collections appear in the wheel after their first data mapping is saved.",11);
         editorHead.Children.Add(editorInfoV42);
 
         var editButtons=new WrapPanel();
-        editButtons.Children.Add(ButtonV42("Save mapping changes",
+        editButtons.Children.Add(ButtonV42(
+            "Capture selected Excel cells",()=>Run(Capture),true));
+        editButtons.Children.Add(ButtonV42("Save collection & data",
             ()=>Run(SaveEditorV42),true));
-        editButtons.Children.Add(ButtonV42("Rename mapping",
-            ()=>Run(SaveEditorV42)));
-        editButtons.Children.Add(ButtonV42("Delete mapping",()=>Run(DeleteMappingV42)));
+        editButtons.Children.Add(ButtonV42("Delete selected data",
+            ()=>Run(DeleteMappingV42)));
         editorHead.Children.Add(editButtons);
         DockPanel.SetDock(editorHead,Dock.Top);right.Children.Add(editorHead);
 
@@ -196,9 +212,9 @@ internal sealed partial class DeskSpaceExcelV16
         mappingGridV42.Columns.Add(new DataGridCheckBoxColumn{
             Header="Save",Binding=new Binding("Include"){Mode=BindingMode.TwoWay},
             Width=51});
-        AddColumnV42("Header / Reference","Header",210);
+        AddColumnV42("Data field name","Header",210);
         AddColumnV42("Header cell","ReferenceCell",93);
-        AddColumnV42("Value / Input","Value",210);
+        AddColumnV42("Data value","Value",210);
         AddColumnV42("Value cell","ValueCell",90);
         AddColumnV42("Type","Kind",98);
         mappingGridV42.CellEditEnding+=(_,_)=>{
@@ -218,10 +234,16 @@ internal sealed partial class DeskSpaceExcelV16
             IsExpanded=false,Margin=new Thickness(7,1,7,2)
         };
         var options=new StackPanel{Margin=new Thickness(5)};
-        options.Children.Add(HintV42("Select an existing format on the left, change its group, header or value, then save. Verified Excel cell addresses are protected. Screenshot-only formats require linking to actual Excel cells before pasting."));
-        name=Field("New mapping name","Excel mapping");
+        options.Children.Add(HintV42(
+            "A collection is an optional group name such as Clients. "+
+            "A data name identifies each saved mapping inside it. "+
+            "Each row contains a data field name and its value. "+
+            "Verified Excel addresses remain protected; screenshot-only "+
+            "formats must be linked to real Excel cells before pasting."));
+        name=Field("Data name","Excel mapping");
         range=Field("Optional source address e.g. B20:D25","");
-        options.Children.Add(new TextBlock{Text="New mapping name",Foreground=ink});
+        options.Children.Add(new TextBlock{
+            Text="Data name (also editable above)",Foreground=ink});
         options.Children.Add(name);
         options.Children.Add(new TextBlock{Text="Optional Excel range (leave empty for current selection)",Foreground=ink});
         options.Children.Add(range);
@@ -322,7 +344,8 @@ internal sealed partial class DeskSpaceExcelV16
             templates.SelectedItem=display.FirstOrDefault(x=>x.Id==current);
         }
         finally {selectionGuardV42=false;}
-        libraryInfoV42.Text=saved.Count+" saved mappings · "+display.Length+" shown";
+        libraryInfoV42.Text=saved.Count+" saved data entries · "+display.Length+
+            " shown (collection / data name)";
     }
     private void ReloadSavedV42(bool explicitReload)
     {
@@ -448,8 +471,11 @@ internal sealed partial class DeskSpaceExcelV16
         hasUnsavedChangesV42=true;
         loadingEditorV42=true;
         try {
+            // Preserve the user's collection instead of silently dropping it
+            // every time a new selection is captured.
+            var requestedName=mappingNameV42?.Text.Trim()??"";
+            if(requestedName.Length>0)candidate.Name=requestedName;
             mappingNameV42!.Text=candidate.Name;
-            if(mappingGroupV42!=null)mappingGroupV42.Text="";
         } finally {loadingEditorV42=false;}
         RenderMappingRowsV42(candidate);
         editorInfoV42!.Text="New capture · "+candidate.SourceSheet+" · "+
@@ -536,7 +562,8 @@ internal sealed partial class DeskSpaceExcelV16
             CommitCellEditsV42(mappingGridV42!);
             var edited=CloneV42(editingTemplateV42);
             var title=mappingNameV42?.Text.Trim()??"";
-            if(title.Length==0)throw new InvalidOperationException("Enter a mapping name.");
+            if(title.Length==0)throw new InvalidOperationException(
+                "Enter a Data name above the table before saving.");
             if(title.Length>140)throw new InvalidOperationException("Use a shorter mapping name.");
             edited.Name=title;
             // Group segments are labels, not paths on the Windows filesystem.
@@ -620,7 +647,8 @@ internal sealed partial class DeskSpaceExcelV16
                 }
             }
             if(edited.Cells.Count==0)
-                throw new InvalidOperationException("No cells to save.");
+                throw new InvalidOperationException(
+                    "Capture an Excel selection to add data fields before saving.");
             // Reload before updating so a second DeskSpace window cannot
             // overwrite mappings saved elsewhere since this view opened.
             var disk=DeskSpaceExcelStoreV16.Load();
