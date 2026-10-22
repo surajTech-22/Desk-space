@@ -26,6 +26,7 @@ Replace @'
             "The screenshot and live Excel inputs use the same classification and "+
             "save screen. Only Excel itself can verify exact cell addresses and formulas.",12));
 '@
+Replace 'Content="Save formulas as formulas (otherwise save their displayed values)"' 'Content="Record formulas for analysis only (never paste formulas)"'
 Replace '        body.Children.Add(Caption("Choose exactly which captured values to save",12,true));' '        body.Children.Add(Caption("Review Reference Cell / Value Cell / formulas and select what to save",12,true));'
 Replace @'
             ActionButton("Capture selected Excel cells",()=>Run(Capture))
