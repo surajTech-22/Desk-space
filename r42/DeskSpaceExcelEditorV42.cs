@@ -382,13 +382,28 @@ internal sealed partial class DeskSpaceExcelV16
                 "or reopen the saved format to discard them.";
             return;
         }
-        // Retain the existing confirmation and encrypted-store deletion.
-        Delete();
+        // Delete by the saved immutable ID, not through the legacy
+        // ListBox.Items.Clear() refresher. The modern library binds ItemsSource,
+        // which throws if a legacy refresh tries to mutate Items directly.
+        var nameToDelete=editingTemplateV42.Name;
+        if(MessageBox.Show("Delete saved mapping '"+nameToDelete+"'?"+
+            Environment.NewLine+"This will not change any Excel workbook.",
+            "DeskSpace Excel",MessageBoxButton.YesNo,
+            MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
+        var disk=DeskSpaceExcelStoreV16.Load();
+        if(disk.RemoveAll(x=>x.Id==editingIdV42)!=1)
+            throw new InvalidOperationException(
+                "The selected mapping changed or was already deleted. "+
+                "Refresh saved mappings.");
+        DeskSpaceExcelStoreV16.Save(disk);
         editingTemplateV42=null;editingIdV42=Guid.Empty;
         hasUnsavedChangesV42=false;
         mappingRowsV42.Clear();
         mappingGridV42!.ItemsSource=null;
-        ReloadSavedV42(true);
+        saved.Clear();saved.AddRange(disk);
+        FilterLibraryV42();
+        status.Text="Deleted mapping '"+nameToDelete+
+            "'. Original Excel workbooks and all other mappings are unchanged.";
     }
     private static DeskSpaceExcelTemplateV16 CloneV42(DeskSpaceExcelTemplateV16 entry)=>
         JsonSerializer.Deserialize<DeskSpaceExcelTemplateV16>(
