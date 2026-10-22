@@ -69,8 +69,9 @@ internal sealed partial class DeskSpaceExcelV16
 
     public FrameworkElement Create()
     {
-        // Main navigation and circular shortcut now use exactly the same
-        // editable saved-mapping layout.
+        // The main Workspace provides the mapping editor. In the circular
+        // Excel wheel, selecting a saved format pastes values directly
+        // without opening this heavyweight editor.
         var root=new DockPanel{
             Background=new SolidColorBrush(Color.FromRgb(247,249,254)),
             LastChildFill=true
