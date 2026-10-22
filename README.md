@@ -34,7 +34,7 @@ Use only **invented test data**. The current preview UI may display **“local d
 
 The **Workspace** sidebar is for editing and detailed views. The floating **donut** is for quick navigation, hover preview and mouse interactions. The Excel Mapping Workspace is where saved mappings can be reviewed and edited. For Excel paste, the target workbook must already be open in Microsoft Excel desktop, and all safety gates must pass.
 
-**Excel wheel redesign under development:** A single **Excel Functions** main sector will contain **Clipboard** and **Information** children. Inside Excel Information, ungrouped saved mappings appear directly and grouped mappings appear under the chosen group name, retaining the current nested donut navigation. Grouping is *not* a separate Excel function. Also planned: compact Excel Workspace layout and an Excel-only paste-success notice that disappears after three seconds. Do not report these as completed until the specific build implements them.
+**R42 tester changes (awaiting local Windows acceptance):** **Excel Functions** is the additional **outer-ring** main sector (six original inner sectors; seven outer). Its children are **Clipboard** and **Information**. Under Information, ungrouped saved mappings appear directly; grouped mappings open in named donut levels. Grouping is not an extra Excel Functions child. The R42 source also includes a compact Excel Mapping editor and an Excel-only paste-success notice that closes after three seconds. **Weather** supports an opt-in **Use my location** button, worldwide city search, and offline cached readings. These new changes are *source changes under testing*, not a verified stable release.
 
 ## Feedback and issues
 
