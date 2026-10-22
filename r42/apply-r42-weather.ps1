@@ -1,13 +1,13 @@
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
-$host=Join-Path $root 'DeskSpaceModuleV10.cs'
+$moduleSourceFile=Join-Path $root 'DeskSpaceModuleV10.cs'
 $destination=Join-Path $root 'DeskSpaceWeather.cs'
-if(!(Test-Path $host) -or !(Test-Path $destination)){
+if(!(Test-Path $moduleSourceFile) -or !(Test-Path $destination)){
     throw 'R42 weather integration source missing'
 }
 Copy-Item -LiteralPath 'r42/DeskSpaceWeatherV42.cs' -Destination $destination -Force
-$s=[IO.File]::ReadAllText($host).Replace([string][char]13+[char]10,[string][char]10)
+$s=[IO.File]::ReadAllText($moduleSourceFile).Replace([string][char]13+[char]10,[string][char]10)
 $a=$s.IndexOf('    private void BuildSettings(StackPanel body)',[StringComparison]::Ordinal)
 $z=if($a -ge 0){$s.IndexOf('    private void BuildInformation(StackPanel body)',$a,[StringComparison]::Ordinal)}else{-1}
 if($a -lt 0 -or $z -le $a){throw 'R42 cannot isolate existing compact Weather Settings'}
@@ -99,7 +99,7 @@ $replacement=@'
 '@
 $replacement=$replacement.Replace([string][char]13+[char]10,[string][char]10)
 $s=$s.Substring(0,$a)+$replacement+$s.Substring($z)
-[IO.File]::WriteAllText($host,$s,[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($moduleSourceFile,$s,[Text.UTF8Encoding]::new($false))
 $service=[IO.File]::ReadAllText($destination)
 foreach($key in @('EnableCurrentLocationAsync','SearchCitiesAsync','CurrentLocationChoice',
                   'WeatherReading','Geolocator.RequestAccessAsync')){
