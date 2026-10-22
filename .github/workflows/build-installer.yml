@@ -960,6 +960,10 @@ jobs:
         shell: pwsh
         run: ./r42/test-r42.ps1
 
+      - name: R42 user-approved current location and worldwide weather tests
+        shell: pwsh
+        run: ./r42/test-r42-weather.ps1
+
       - name: R42 PowerShell source syntax preflight before packaging
         shell: pwsh
         run: |
