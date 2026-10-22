@@ -968,6 +968,10 @@ jobs:
         shell: pwsh
         run: ./r42/test-r42-weather.ps1
 
+      - name: R42 contiguous Excel hover child wheel and cross-PC check-for-updates
+        shell: pwsh
+        run: ./r42/test-r42-interaction.ps1
+
       - name: R42 verified installed-app closure and corrected Inno Setup version label
         shell: pwsh
         run: |
