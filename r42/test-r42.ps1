@@ -285,6 +285,57 @@ $method=@'
                 Render(surface,Math.Max(200,(int)surface.Width),
                     Math.Max(200,(int)surface.Height),"excel-nested-level-"+(i+1));
             }
+            // Composite image of the ACTUAL generated geometry; older
+            // smoke tests only showed each child Popup separately, missing
+            // the detached, drifting chain seen on a 1650x930 desktop.
+            var composite=new Canvas{Width=1650,Height=930,
+                Background=Brushes.White};
+            const double originX=1380,originY=310;
+            var parent=new System.Windows.Shapes.Ellipse{
+                Width=390,Height=390,
+                Stroke=new SolidColorBrush(Color.FromRgb(192,194,209)),
+                StrokeThickness=4,
+                Fill=new SolidColorBrush(Color.FromRgb(237,234,252))
+            };
+            Canvas.SetLeft(parent,originX-195);
+            Canvas.SetTop(parent,originY-195);
+            composite.Children.Add(parent);
+            var type=Product.GetType("DeskSpace.DeskSpaceSubArcGeometryV48",true)!;
+            var sector=type.GetMethod("Sector",
+                BindingFlags.Static|BindingFlags.NonPublic)!;
+            void Draw(int depth,double begin,double step,int count)
+            {
+                for(int k=0;k<count;k++)
+                {
+                    var piece=(Geometry)sector.Invoke(null,new object[]{
+                        depth,begin+k*step,begin+(k+1)*step})!;
+                    var g=piece.Clone();
+                    g.Transform=new TranslateTransform(originX-325,originY-325);
+                    var stroke=new System.Windows.Shapes.Path{
+                        Data=g,Stroke=Brushes.White,StrokeThickness=2,
+                        Fill=depth==0?Brushes.MediumPurple:
+                            new SolidColorBrush(Color.FromRgb(
+                                (byte)(60+depth*18),85,174))
+                    };
+                    composite.Children.Add(stroke);
+                }
+            }
+            var original=(System.Collections.ICollection)Private<object>(
+                wheel,"displayed");
+            Draw(0,Private<double>(wheel,"rootStartAngle"),
+                Private<double>(wheel,"rootStep"),original.Count);
+            for(int k=0;k<levels.Count;k++)
+            {
+                var level=levels[k]!;
+                var ringItems=(System.Collections.ICollection)
+                    level.GetType().GetField("Items",Any)!.GetValue(level)!;
+                double first=(double)level.GetType()
+                    .GetField("StartAngle",Any)!.GetValue(level)!;
+                double step=(double)level.GetType()
+                    .GetField("StepAngle",Any)!.GetValue(level)!;
+                Draw(k+1,first,step,ringItems.Count);
+            }
+            Render(composite,1650,930,"excel-joined-information-arcs");
             Call(wheel,"HideArc");
             Assert(levels.Count==0,"Collapsed wheel retained detached sub-donuts");
             Assert(!(bool)wheel.GetType().GetProperty("IsArcOpen")!
