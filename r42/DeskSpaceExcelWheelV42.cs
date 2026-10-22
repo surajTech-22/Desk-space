@@ -49,7 +49,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     {
         owner=window;collapseParent=onCommit;
         canvas=new Canvas{Width=650,Height=650,
-            Background=Brushes.Transparent,Focusable=true};
+            Background=null,Focusable=true};
         canvas.PreviewMouseLeftButtonDown+=OnDown;
         canvas.PreviewMouseLeftButtonUp+=OnUp;
         canvas.MouseMove+=OnMove;
