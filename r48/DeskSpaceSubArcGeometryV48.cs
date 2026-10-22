@@ -77,29 +77,43 @@ internal static class DeskSpaceSubArcGeometryV48
         double preferred,double half)
     {
         double scale=DeskSpaceDonutGeometryV43.Scale(owner);
-        double ox=owner.Left+(owner.ActualWidth>0?owner.ActualWidth:owner.Width)/2;
-        double oy=owner.Top+(owner.ActualHeight>0?owner.ActualHeight:owner.Height)/2;
+        double w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
+        double h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
         Rect work=SystemParameters.WorkArea;
-        // At successive radial depths, prefer neighbouring directions
-        // that remain on-screen and share a wedge with the previous layer.
+        double ox=owner.Left+w/2,oy=owner.Top+h/2;
+        if(!double.IsFinite(ox)||!double.IsFinite(oy))
+        {
+            ox=work.Left+work.Width/2;
+            oy=work.Top+work.Height/2;
+        }
+        return FitAngleAt(depth,preferred,half,new Point(ox,oy),work,scale);
+    }
+    // Testable screen-edge policy. Every sample along the visible arc is
+    // checked, including cardinal extrema between the two endpoints.
+    internal static double FitAngleAt(int depth,double preferred,double half,
+        Point centre,Rect work,double scale)
+    {
         double[] shifts={0,-10,10,-20,20,-30,30,-40,40};
         double best=preferred,bestScore=double.PositiveInfinity;
-        foreach(var shift in shifts)
+        foreach(double shift in shifts)
         {
-            double centre=preferred+shift;
+            double candidate=preferred+shift;
             double penalty=Math.Abs(shift)*1.5;
-            foreach(double edge in new[]{centre-half,centre,centre+half})
+            for(int n=0;n<=16;n++)
             {
-                var p=Polar(Outer(depth),edge);
-                double x=ox+p.X*scale,y=oy+p.Y*scale;
-                const double margin=9;
+                double angle=candidate-half+(2*half*n/16.0);
+                var p=Polar(Outer(depth),angle);
+                double x=centre.X+p.X*scale;
+                double y=centre.Y+p.Y*scale;
+                const double margin=12;
                 penalty+=80*(Math.Max(0,work.Left+margin-x)+
                     Math.Max(0,x-(work.Right-margin))+
                     Math.Max(0,work.Top+margin-y)+
                     Math.Max(0,y-(work.Bottom-margin)));
             }
-            if(penalty<bestScore){bestScore=penalty;best=centre;}
+            if(penalty<bestScore){bestScore=penalty;best=candidate;}
         }
         return best;
     }
+
 }
