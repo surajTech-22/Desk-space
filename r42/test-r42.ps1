@@ -329,11 +329,11 @@ $method=@'
                 var level=levels[k]!;
                 var ringItems=(System.Collections.ICollection)
                     level.GetType().GetField("Items",Any)!.GetValue(level)!;
-                double first=(double)level.GetType()
+                double sectorStart=(double)level.GetType()
                     .GetField("StartAngle",Any)!.GetValue(level)!;
                 double step=(double)level.GetType()
                     .GetField("StepAngle",Any)!.GetValue(level)!;
-                Draw(k+1,first,step,ringItems.Count);
+                Draw(k+1,sectorStart,step,ringItems.Count);
             }
             Render(composite,1650,930,"excel-joined-information-arcs");
             Call(wheel,"HideArc");
