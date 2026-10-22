@@ -580,8 +580,11 @@ jobs:
           if($click -lt 0 -or $clickEnd -le $click){throw 'R29 click transition unavailable'}
           if(!$widget.Substring($click,$clickEnd-$click).Contains('CloseInformationContext();'))
           {throw 'R29 click fallback does not close previous submenu'}
-          if(!$widget.Contains('if(ringExpanded)' + [Environment]::NewLine +
-              '            CloseInformationContext();'))
+          # Source rewrite scripts normalize to LF, while PowerShell on Windows
+          # uses CRLF for Environment.NewLine. Verify the actual R29 behavior
+          # without failing on line-ending representation.
+          $normalizedR29=$widget.Replace("`r`n","`n")
+          if(!$normalizedR29.Contains("if(ringExpanded)`n            CloseInformationContext();"))
           {throw 'R29 parent ring collapse does not cancel child submenu'}
           if(!$widget.Contains('if(selected==highlightedSector)return;'))
           {throw 'R29 highlighting regression'}
