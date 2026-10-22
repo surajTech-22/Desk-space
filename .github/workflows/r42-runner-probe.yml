@@ -1,0 +1,20 @@
+name: R42 Runner Health Probe
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/r42-runner-probe.yml"
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Linux runner available
+        run: echo "R42 Linux hosted runner executed successfully"
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 3
+    steps:
+      - name: Windows runner available
+        shell: pwsh
+        run: Write-Host "R42 Windows 2022 hosted runner executed successfully"
