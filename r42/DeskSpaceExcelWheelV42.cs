@@ -35,6 +35,9 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         displayed=new();
     private int start,hovered=-1,pageDirection;
     private double localOriginX,localOriginY;
+    private double rootCenterX,rootCenterY;
+    private const double MiniOuter=77,MiniInner=35,MiniSize=176;
+    private const double MainOuterRadius=194;
     private int drillSlot=-1;
     private int drillDepth=-1; // 0 = Excel parent arc, 1+ = attached rings
     private readonly List<ChildRing> childRings=new();
@@ -50,7 +53,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         internal readonly List<System.Windows.Shapes.Path> Wedges=new();
         internal int Start,Hovered=-1;
         internal bool SuppressNextUp;
-        internal double OriginX,OriginY;
+        internal double OriginX,OriginY,CenterX,CenterY,StartAngle;
         internal ChildRing(int depth,string group,double angle,Window owner)
         {
             Depth=depth;Group=group;Angle=angle;
@@ -105,7 +108,10 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     // Align the child arc with that wedge and use the Information wheel
     // positioning, click, pagination and shelf behavior.
     private const double CX=325,CY=325,Outer=260,Inner=207;
-    private static readonly double ArcCenter=DeskSpaceDonutGeometryV43.OuterSectorCenter(6);
+    // Main donut positions its OUTER sector label at the sector starting
+    // angle, rather than the 7-sector geometric midpoint. Match THAT anchor.
+    private static readonly double ArcCenter=
+        DeskSpaceDonutGeometryV43.OuterSectorCenter(6)-360.0/14.0;
     private static readonly Brush Accent=new SolidColorBrush(Color.FromRgb(69,88,175));
     private static readonly Brush Idle=new SolidColorBrush(Color.FromRgb(221,234,255));
     private static readonly Brush Selected=new SolidColorBrush(Color.FromRgb(156,184,239));
@@ -219,46 +225,66 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             Cursor=Cursors.Hand};
         b.Click+=(_,_)=>action();return b;
     }
-    private static Geometry Sector(double a,double b)
-    {
-        static Point Pt(double radius,double degrees)
-        {
-            double rad=degrees*Math.PI/180;
-            return new Point(CX+radius*Math.Cos(rad),
-                             CY+radius*Math.Sin(rad));
-        }
-        var f=new PathFigure{StartPoint=Pt(Outer,a),IsClosed=true};
-        if(b-a>=359.9)f.Segments.Add(new ArcSegment{
-            Point=Pt(Outer,a+180),Size=new Size(Outer,Outer),
-            SweepDirection=SweepDirection.Clockwise});
-        f.Segments.Add(new ArcSegment{
-            Point=Pt(Outer,b),Size=new Size(Outer,Outer),
-            SweepDirection=SweepDirection.Clockwise});
-        f.Segments.Add(new LineSegment(Pt(Inner,b),true));
-        if(b-a>=359.9)f.Segments.Add(new ArcSegment{
-            Point=Pt(Inner,b-180),Size=new Size(Inner,Inner),
-            SweepDirection=SweepDirection.Counterclockwise});
-        f.Segments.Add(new ArcSegment{
-            Point=Pt(Inner,a),Size=new Size(Inner,Inner),
-            SweepDirection=SweepDirection.Counterclockwise});
-        return new PathGeometry(new[]{f});
-    }
+    // A sub-donut is a separate compact WPF wheel anchored to its parent
+    // sector. It never draws a huge annulus around the entire main wheel.
+    private static Geometry Sector(double a,double b)=>
+        SectorAtRadius(a,b,MiniInner,MiniOuter);
     // Each submenu occupies a separate transparent Popup; no existing
     // ring is redrawn or replaced when a group opens another level.
     // A child donut is an ATTACHED sector arc, not a 360-degree overlay.
     // Never cover the complete main wheel with a submenu. Each child
     // occupies a bounded angular span around the selected parent wedge.
+    // Retained for the R43 bounded-angle legacy guard; actual submenus
+    // are complete mini-wheels in separate compact canvases.
     private static double Span(int count)=>
-        Math.Min(48.0,Math.Max(16.0,12.5*Math.Max(1,count)));
-    private double RootAngle(int slot)
+        Math.Min(30.0,Math.Max(16.0,12.0*Math.Max(1,count)));
+    private double RootAngle(int slot) =>
+        ArcCenter-270.0+(slot+.5)*360.0/displayed.Count;
+    private static double RingAngle(ChildRing ring,int slot) =>
+        ring.StartAngle+(slot+.5)*360.0/ring.Items.Count;
+
+    private static Point Polar(double radius,double degrees)
     {
-        double half=Span(displayed.Count);
-        return ArcCenter-half+(slot+.5)*2*half/displayed.Count;
+        double rad=degrees*Math.PI/180;
+        return new Point(radius*Math.Cos(rad),radius*Math.Sin(rad));
     }
-    private static double RingAngle(ChildRing ring,int slot)
+    private Point PlaceWheel(double originX,double originY,
+        double wantedAngle,double distance)
     {
-        double half=Span(ring.Items.Count);
-        return ring.Angle-half+(slot+.5)*2*half/ring.Items.Count;
+        // The first candidate is a wheel touching the selected sector.
+        // Reflow only if it would be clipped by the actual desktop bounds.
+        double scale=DeskSpaceDonutGeometryV43.Scale(owner);
+        double screenX=owner.Left+owner.ActualWidth/2;
+        double screenY=owner.Top+owner.ActualHeight/2;
+        Rect screen=SystemParameters.WorkArea;
+        double[] shifts={0,-35,35,-70,70,105,-105,180};
+        Point best=new(originX,originY);
+        double bestScore=double.PositiveInfinity;
+        foreach(double shift in shifts)
+        {
+            var v=Polar(distance,wantedAngle+shift);
+            double x=originX+v.X,y=originY+v.Y;
+            double absX=screenX+x*scale,absY=screenY+y*scale;
+            double margin=(MiniSize/2+6)*scale;
+            double overflow=Math.Max(0,screen.Left+margin-absX)+
+                Math.Max(0,absX-(screen.Right-margin))+
+                Math.Max(0,screen.Top+margin-absY)+
+                Math.Max(0,absY-(screen.Bottom-margin));
+            double collision=0;
+            foreach(var w in childRings)
+            {
+                double dx=x-w.CenterX,dy=y-w.CenterY;
+                double separation=Math.Sqrt(dx*dx+dy*dy);
+                if(separation<MiniOuter*1.7)
+                    collision+=MiniOuter*1.7-separation;
+            }
+            double mainSeparation=Math.Sqrt(x*x+y*y);
+            if(mainSeparation<MainOuterRadius+MiniOuter)
+                collision+=MainOuterRadius+MiniOuter-mainSeparation;
+            double score=overflow*100+collision*30+Math.Abs(shift);
+            if(score<bestScore){bestScore=score;best=new Point(x,y);}
+        }
+        return best;
     }
     private void CloseFrom(int depth)
     {
@@ -303,6 +329,11 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         // pointer. The child arc is positioned in its parent's coordinates.
         // Never silently flatten deep groups into the preceding donut.
         var ring=new ChildRing(depth,group,angle,owner);
+        Point parent=depth==1?new Point(rootCenterX,rootCenterY):
+            new Point(childRings.First(x=>x.Depth==depth-1).CenterX,
+                      childRings.First(x=>x.Depth==depth-1).CenterY);
+        Point placement=PlaceWheel(parent.X,parent.Y,angle,MiniOuter*2+6);
+        ring.CenterX=placement.X;ring.CenterY=placement.Y;
         childRings.Add(ring);
         RenderRing(ring);
         ring.Surface.MouseMove+=(_,e)=>HoverRing(ring,e.GetPosition(ring.Surface));
@@ -325,9 +356,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private void RenderRing(ChildRing ring)
     {
         var all=BranchItems(ring.Group);
-        if(ring.Depth>12)
-            throw new InvalidOperationException(
-                "Excel Information nesting exceeded supported donut levels.");
+        if(ring.Depth>8)
+            throw new InvalidOperationException("Excel collection nesting exceeds eight levels.");
         ring.Start=Math.Clamp(ring.Start,0,Math.Max(0,all.Count-PerPage));
         ring.Items.Clear();
         ring.Items.AddRange(all.Skip(ring.Start).Take(PerPage));
@@ -335,48 +365,44 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         ring.Hovered=-1;
         int count=ring.Items.Count;
         if(count==0)return;
-        // Parent's outer edge and child's inner edge differ by only 7 DIPs.
-        double inner=Inner+ring.Depth*54;
-        double outer=Outer+ring.Depth*54;
-        double half=Span(count),step=2*half/count;
-        var geometries=new List<Geometry>();
-        Rect bounds=Rect.Empty;
+        ring.Surface.Width=MiniSize;ring.Surface.Height=MiniSize;
+        // The first collection is on the outward-facing wedge; no
+        // backwards drill-down across the main wheel.
+        ring.StartAngle=ring.Angle-180.0/count;
         for(int i=0;i<count;i++)
         {
-            var geometry=SectorAtRadius(
-                ring.Angle-half+i*step,ring.Angle-half+(i+1)*step,
-                inner,outer);
-            geometries.Add(geometry);
-            bounds.Union(geometry.Bounds);
-        }
-        const double margin=10;
-        ring.OriginX=bounds.Left;ring.OriginY=bounds.Top;
-        ring.Surface.Width=bounds.Width+2*margin;
-        ring.Surface.Height=bounds.Height+2*margin;
-        var translation=new TranslateTransform(-bounds.Left+margin,
-                                                -bounds.Top+margin);
-        for(int i=0;i<count;i++)
-        {
-            var item=ring.Items[i];
-            var hit=geometries[i].Clone();hit.Transform=translation;
+            var entry=ring.Items[i];
+            double first=ring.StartAngle+i*360.0/count;
+            double last=first+360.0/count;
+            var hit=SectorAtRadius(first,last,MiniInner,MiniOuter);
             var wedge=new System.Windows.Shapes.Path{
                 Data=hit,Stroke=Brushes.White,StrokeThickness=2,
-                Fill=item.Command=="mapping"?Idle:Accent,
-                Cursor=Cursors.Hand,ToolTip=item.Label
+                Fill=entry.Command=="mapping"?Idle:Accent,
+                Cursor=Cursors.Hand,ToolTip=entry.Label
             };
             ring.Surface.Children.Add(wedge);
-            ring.Wedges.Add(wedge);ring.Zones.Add(hit);
-            double mid=(ring.Angle-half+(i+.5)*step)*Math.PI/180;
-            double r=(inner+outer)/2;
-            var label=new TextBlock{Text=item.Label,Width=90,FontSize=11,
-                Foreground=item.Command=="mapping"?Ink:Brushes.White,
+            ring.Zones.Add(hit);ring.Wedges.Add(wedge);
+            var at=Polar((MiniInner+MiniOuter)/2,first+180.0/count);
+            var label=new TextBlock{
+                Text=entry.Label,Width=76,FontSize=10,
+                Foreground=entry.Command=="mapping"?Ink:Brushes.White,
                 TextAlignment=TextAlignment.Center,
                 TextTrimming=TextTrimming.CharacterEllipsis,
-                ToolTip=item.Label,IsHitTestVisible=false};
-            Canvas.SetLeft(label,CX+r*Math.Cos(mid)-bounds.Left+margin-45);
-            Canvas.SetTop(label,CY+r*Math.Sin(mid)-bounds.Top+margin-9);
+                ToolTip=entry.Label,IsHitTestVisible=false
+            };
+            Canvas.SetLeft(label,MiniSize/2+at.X-38);
+            Canvas.SetTop(label,MiniSize/2+at.Y-10);
             ring.Surface.Children.Add(label);
         }
+        ring.Surface.Children.Add(new TextBlock{
+            Text=ring.Group.Length==0?"Information":
+                 ring.Group.Split('/').Last(),Width=MiniInner*2,
+            TextAlignment=TextAlignment.Center,
+            FontSize=9,TextTrimming=TextTrimming.CharacterEllipsis,
+            Foreground=Ink,IsHitTestVisible=false,
+            Margin=new Thickness(MiniSize/2-MiniInner,
+                                 MiniSize/2-9,0,0)
+        });
         if(ring.Start>0)
         {
             var prev=SmallButton("‹",()=>PageRing(ring,-1));
@@ -386,8 +412,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(ring.Start+PerPage<all.Count)
         {
             var next=SmallButton("›",()=>PageRing(ring,1));
-            Canvas.SetLeft(next,Math.Max(0,ring.Surface.Width-34));
-            Canvas.SetTop(next,Math.Max(0,ring.Surface.Height-30));
+            Canvas.SetLeft(next,MiniSize-30);Canvas.SetTop(next,MiniSize-26);
             ring.Surface.Children.Add(next);
         }
         PositionRing(ring);
@@ -395,38 +420,36 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private static Geometry SectorAtRadius(
         double a,double b,double inner,double outer)
     {
-        static Point P(double r,double degrees)
+        static Point P(double r,double deg)
         {
-            double rad=degrees*Math.PI/180;
-            return new Point(CX+r*Math.Cos(rad),CY+r*Math.Sin(rad));
+            var rad=deg*Math.PI/180;
+            return new Point(MiniSize/2+r*Math.Cos(rad),
+                             MiniSize/2+r*Math.Sin(rad));
         }
-        var figure=new PathFigure{StartPoint=P(outer,a),IsClosed=true};
-        // A single WPF ArcSegment cannot describe 360 degrees. Split
-        // whole-ring single-item segments into two 180-degree arcs.
-        bool full=b-a>=359.9;
-        if(full)figure.Segments.Add(new ArcSegment{Point=P(outer,a+180),
+        var f=new PathFigure{StartPoint=P(outer,a),IsClosed=true};
+        if(b-a>=359.9)f.Segments.Add(new ArcSegment{
+            Point=P(outer,a+180),Size=new Size(outer,outer),
+            SweepDirection=SweepDirection.Clockwise});
+        f.Segments.Add(new ArcSegment{Point=P(outer,b),
             Size=new Size(outer,outer),
             SweepDirection=SweepDirection.Clockwise});
-        figure.Segments.Add(new ArcSegment{Point=P(outer,b),
-            Size=new Size(outer,outer),
-            SweepDirection=SweepDirection.Clockwise});
-        figure.Segments.Add(new LineSegment(P(inner,b),true));
-        if(full)figure.Segments.Add(new ArcSegment{Point=P(inner,b-180),
+        f.Segments.Add(new LineSegment(P(inner,b),true));
+        if(b-a>=359.9)f.Segments.Add(new ArcSegment{
+            Point=P(inner,b-180),Size=new Size(inner,inner),
+            SweepDirection=SweepDirection.Counterclockwise});
+        f.Segments.Add(new ArcSegment{Point=P(inner,a),
             Size=new Size(inner,inner),
             SweepDirection=SweepDirection.Counterclockwise});
-        figure.Segments.Add(new ArcSegment{Point=P(inner,a),
-            Size=new Size(inner,inner),
-            SweepDirection=SweepDirection.Counterclockwise});
-        return new PathGeometry(new[]{figure});
+        return new PathGeometry(new[]{f});
     }
     private void PositionRing(ChildRing ring)
     {
         double scale=DeskSpaceDonutGeometryV43.Scale(owner);
         ring.Surface.LayoutTransform=new ScaleTransform(scale,scale);
-        Point offset=DeskSpaceDonutGeometryV43.PopupOffset(owner,
-            CX,CY,ring.OriginX-10,ring.OriginY-10);
-        ring.Popup.HorizontalOffset=offset.X;
-        ring.Popup.VerticalOffset=offset.Y;
+        ring.Popup.HorizontalOffset=owner.ActualWidth/2+
+            (ring.CenterX-MiniSize/2)*scale;
+        ring.Popup.VerticalOffset=owner.ActualHeight/2+
+            (ring.CenterY-MiniSize/2)*scale;
     }
     private int RingSlot(ChildRing ring,Point p)
     {
@@ -490,17 +513,18 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private void Position()
     {
         if(disposed)return;
-        var w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
-        var h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
+        double w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
+        double h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
         if(w<=0||h<=0)return;
-        // One shared 420-DIP logical coordinate contract with the parent.
-        // The child arc must sit OUTSIDE the main ring, never across its labels.
         double scale=DeskSpaceDonutGeometryV43.Scale(owner);
+        // Anchor to the ACTUAL Excel outer parent wedge, not a 650px
+        // coordinate system or the parent wheel centre.
+        var wanted=Polar(MainOuterRadius+MiniOuter+3,ArcCenter);
+        var root=PlaceWheel(0,0,ArcCenter,MainOuterRadius+MiniOuter+3);
+        rootCenterX=root.X;rootCenterY=root.Y;
         canvas.LayoutTransform=new ScaleTransform(scale,scale);
-        Point offset=DeskSpaceDonutGeometryV43.PopupOffset(owner,CX,CY,
-            localOriginX-10,localOriginY-10);
-        arc.HorizontalOffset=offset.X;
-        arc.VerticalOffset=offset.Y;
+        arc.HorizontalOffset=w/2+(rootCenterX-MiniSize/2)*scale;
+        arc.VerticalOffset=h/2+(rootCenterY-MiniSize/2)*scale;
         shelf.HorizontalOffset=arc.HorizontalOffset+
             canvas.Width*scale/2-shelfBorder.Width/2+(++tick%2)*.001;
         shelf.VerticalOffset=arc.VerticalOffset+canvas.Height*scale+4;
@@ -599,73 +623,54 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         hovered=-1;
         var all=Entries();
         start=Math.Clamp(start,0,Math.Max(0,all.Count-PerPage));
-        var visible=all.Skip(start).Take(PerPage).ToArray();
-        displayed.AddRange(visible);
-        int count=visible.Length;
+        displayed.AddRange(all.Skip(start).Take(PerPage));
+        int count=displayed.Count;
         if(count==0)return;
-        double half=Span(count);
-        double step=half*2/count;
-        var geometries=new List<Geometry>();
-        Rect extent=Rect.Empty;
+        canvas.Width=MiniSize;canvas.Height=MiniSize;
+        double begin=ArcCenter-(count-.5)*360.0/count;
         for(int i=0;i<count;i++)
         {
-            var geometry=Sector(ArcCenter-half+i*step,
-                                ArcCenter-half+(i+1)*step);
-            geometries.Add(geometry);
-            extent.Union(geometry.Bounds);
-        }
-        // Full concentric ring; narrow detached arc geometry is prohibited.
-        // Tight Popup bounds prevent WPF from shifting the entire Excel
-        // wheel when the parent circle is near a monitor edge.
-        const double margin=10;
-        localOriginX=extent.Left;
-        localOriginY=extent.Top;
-        canvas.Width=Math.Max(100,extent.Width+2*margin);
-        canvas.Height=Math.Max(80,extent.Height+2*margin);
-        var translation=new TranslateTransform(-localOriginX+margin,
-                                               -localOriginY+margin);
-        for(int i=0;i<count;i++)
-        {
-            var item=visible[i];
-            bool action=item.Command!="mapping";
-            var original=geometries[i];
-            var geometry=original.Clone();
-            geometry.Transform=translation;
-            var shape=new System.Windows.Shapes.Path{
+            var entry=displayed[i];
+            double first=begin+i*360.0/count;
+            double last=first+360.0/count;
+            var geometry=Sector(first,last);
+            var wedge=new System.Windows.Shapes.Path{
                 Data=geometry,Stroke=Brushes.White,StrokeThickness=2,
-                Fill=action?Accent:Idle,Tag=i,
-                Cursor=Cursors.Hand,ToolTip=item.Label
+                Fill=entry.Command=="mapping"?Idle:Accent,
+                Tag=i,Cursor=Cursors.Hand,ToolTip=entry.Label
             };
-            canvas.Children.Add(shape);sectors.Add(shape);
-            hitZones.Add((i,item.Id,geometry));
-            double mid=(ArcCenter-half+(i+.5)*step)*Math.PI/180;
-            double radius=(Inner+Outer)/2;
-            double x=CX+radius*Math.Cos(mid)-localOriginX+margin;
-            double y=CY+radius*Math.Sin(mid)-localOriginY+margin;
+            canvas.Children.Add(wedge);sectors.Add(wedge);
+            hitZones.Add((i,entry.Id,geometry));
+            var at=Polar((MiniInner+MiniOuter)/2,first+180.0/count);
             var label=new TextBlock{
-                Text=item.Label,Width=88,FontSize=11,
-                Foreground=action?Brushes.White:Ink,
-                FontWeight=action?FontWeights.SemiBold:FontWeights.Normal,
+                Text=entry.Label,Width=76,FontSize=10,
+                Foreground=entry.Command=="mapping"?Ink:Brushes.White,
                 TextAlignment=TextAlignment.Center,
                 TextTrimming=TextTrimming.CharacterEllipsis,
-                ToolTip=item.Label,IsHitTestVisible=false
+                ToolTip=entry.Label,IsHitTestVisible=false
             };
-            Canvas.SetLeft(label,x-44);Canvas.SetTop(label,y-10);
+            Canvas.SetLeft(label,MiniSize/2+at.X-38);
+            Canvas.SetTop(label,MiniSize/2+at.Y-9);
             canvas.Children.Add(label);
         }
+        var centre=new TextBlock{
+            Text="Excel",Width=MiniInner*2,
+            FontSize=11,Foreground=Ink,
+            TextAlignment=TextAlignment.Center,IsHitTestVisible=false
+        };
+        Canvas.SetLeft(centre,MiniSize/2-MiniInner);
+        Canvas.SetTop(centre,MiniSize/2-8);
+        canvas.Children.Add(centre);
         if(start>0)
         {
             var previous=SmallButton("‹",()=>Page(-1));
-            previous.ToolTip="Previous Excel Information items";
             Canvas.SetLeft(previous,0);Canvas.SetTop(previous,0);
             canvas.Children.Add(previous);
         }
         if(start+PerPage<all.Count)
         {
             var next=SmallButton("›",()=>Page(1));
-            next.ToolTip="More Excel Information items";
-            Canvas.SetLeft(next,Math.Max(0,canvas.Width-38));
-            Canvas.SetTop(next,Math.Max(0,canvas.Height-30));
+            Canvas.SetLeft(next,MiniSize-30);Canvas.SetTop(next,MiniSize-28);
             canvas.Children.Add(next);
         }
         Position();
