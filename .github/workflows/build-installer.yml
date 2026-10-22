@@ -960,11 +960,7 @@ jobs:
         shell: pwsh
         run: ./r42/test-r42.ps1
 
-      - name: R42 user-approved current location and worldwide weather tests
-        shell: pwsh
-        run: ./r42/test-r42-weather.ps1
-
-      - name: R42 PowerShell source syntax preflight before packaging
+      - name: R42 PowerShell syntax and automatic-variable preflight
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -973,7 +969,7 @@ jobs:
           foreach($script in $psScripts){
             $tokens=$null
             $parseErrors=$null
-            [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $ast=[System.Management.Automation.Language.Parser]::ParseFile(
                 $script.FullName,[ref]$tokens,[ref]$parseErrors)
             if($parseErrors.Count -gt 0){
               $details=($parseErrors | ForEach-Object {
@@ -981,8 +977,152 @@ jobs:
               }) -join [Environment]::NewLine
               throw "R42 PowerShell source parse error: $details"
             }
+            # $Host is a built-in read-only automatic variable (case-insensitive).
+            # Parse errors alone do not detect assignment attempts.
+            $assignments=$ast.FindAll({
+              param($node)
+              $node -is [System.Management.Automation.Language.AssignmentStatementAst]
+            },$true)
+            foreach($assignment in $assignments){
+              $left=$assignment.Left.Extent.Text.Trim()
+              if($left -match '^\$Host      - name: R42 verified installed-app closure and corrected Inno Setup version label
+        shell: pwsh
+        run: |
+          ./r42/test-r42-installer.ps1
+          ./r42/apply-r42-installer.ps1
+
+      - name: Assign monotonic build version to installer and app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $number = [int]$env:GITHUB_RUN_NUMBER
+          if ($number -le 0) { throw 'Cannot determine new release build number' }
+          $version = "1.4.$number"
+          $iss = 'installer/DeskSpace.iss'
+          $inno = [IO.File]::ReadAllText($iss)
+          $from = '#define AppVersion "1.4.0"'
+          if (!$inno.Contains($from)) { throw 'Incorrect pre-build installer version' }
+          $inno = $inno.Replace($from,'#define AppVersion "' + $version + '"')
+          [IO.File]::WriteAllText($iss,$inno,[Text.UTF8Encoding]::new($false))
+          $cs = 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs'
+          $code = [IO.File]::ReadAllText($cs)
+          $before = 'private static readonly Version InstalledVersion = new(1, 4, 0);'
+          if (!$code.Contains($before)) { throw 'Updater version anchor missing' }
+          $code = $code.Replace($before, 'private static readonly Version InstalledVersion = new(1, 4, ' + $number + ');')
+          [IO.File]::WriteAllText($cs,$code,[Text.UTF8Encoding]::new($false))
+          Write-Host "Release version assigned: $version"
+
+      - name: Verify official GitHub CLI is available for bundled updater
+        shell: pwsh
+        run: |
+          $cli=Get-Command gh.exe -ErrorAction SilentlyContinue
+          if (!$cli) {
+            choco install gh --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI installation failed' }
+            $env:PATH += ';C:\Program Files\GitHub CLI'
           }
-          Write-Host "R42 syntax preflight: $($psScripts.Count) scripts parsed without errors."
+          $cli=Get-Command gh.exe -ErrorAction SilentlyContinue
+          if (!$cli) { throw 'The updater needs the official gh.exe on the Windows build runner' }
+          gh --version
+
+      - name: Install .NET 8 SDK on GitHub build runner
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Inno Setup on GitHub build runner
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+
+      - name: Compile, test and package self-contained app
+        shell: pwsh
+        run: ./BUILD_DESKSPACE_SETUP.ps1
+
+      - name: R41 WPF test Excel, scroll and weather scenes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- 'r36/UiSmoke/visual-evidence'
+          if($LASTEXITCODE -ne 0){throw 'R41 WPF UI and clipboard smoke failed'}
+          $screens=Get-ChildItem 'r36/UiSmoke/visual-evidence' -Filter '*.png'
+          if($screens.Count -lt 6){throw 'R36 WPF screenshot evidence incomplete'}
+          foreach($image in $screens){
+            if($image.Length -lt 2500){throw "R36 empty screenshot: $($image.Name)"}
+          }
+          Write-Host "R38 captured $($screens.Count) authentic WPF render comparisons."
+
+      - name: Upload R36 WPF visual verification images
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R41-WPF-Visual-Smoke
+          path: r36/UiSmoke/visual-evidence/*.png
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Confirm installer and checksum exist
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'release/DeskSpace_Setup.exe')) { throw 'Installer not created' }
+          if (!(Test-Path 'release/DeskSpace_Setup.sha256.txt')) { throw 'Checksum missing' }
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path 'release/DeskSpace_Setup.exe'))
+          if ($bytes.Length -lt 5000000 -or $bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw 'Invalid Windows installer' }
+
+      - name: Upload real Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-Windows-Installer
+          path: |
+            release/DeskSpace_Setup.exe
+            release/DeskSpace_Setup.sha256.txt
+          retention-days: 3
+          if-no-files-found: error
+
+
+      - name: Publish successful version to private GitHub Releases
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $match = Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"$' | Select-Object -First 1
+          if (!$match) { throw 'Cannot read compiled DeskSpace release version' }
+          $tag = 'v' + $match.Matches[0].Groups[1].Value
+          $repo = 'surajTech-22/Desk-space'
+          gh release view $tag --repo $repo *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Refusing to replace existing tagged release $tag" }
+          gh release create $tag 'release/DeskSpace_Setup.exe' 'release/DeskSpace_Setup.sha256.txt' --repo $repo --target $env:GITHUB_SHA --title 'DeskSpace R5 automatic updater' --notes 'Private verified Windows release. The DeskSpace updater authenticates using the official GitHub CLI.'
+          if ($LASTEXITCODE -ne 0) { throw 'Automatic update release publishing failed' }
+          $status = "$tag|$env:GITHUB_SHA|release-published"
+          $base64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($status))
+          $receiptPath = "repos/$repo/contents/releases/latest-build.txt"
+          # The file already exists after the first release. GitHub's contents API
+          # requires its CURRENT blob SHA for every subsequent update.
+          $oldSha = gh api $receiptPath --jq '.sha'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($oldSha)) { throw 'Cannot verify current release receipt SHA' }
+          $body = @{
+            message='Record verified DeskSpace automatic-release publication'
+            content=$base64
+            branch='main'
+            sha=$oldSha.Trim()
+          }
+          $request = $body | ConvertTo-Json -Compress
+          $receiptFile = Join-Path $env:RUNNER_TEMP 'deskspace-release-receipt.json'
+          [IO.File]::WriteAllText($receiptFile,$request,[Text.UTF8Encoding]::new($false))
+          gh api --method PUT $receiptPath --input $receiptFile
+          if ($LASTEXITCODE -ne 0) { throw 'Release published, but publication receipt could not be saved' }
+){
+                throw "R42 reserved PowerShell variable assignment: $($script.Name):$($assignment.Extent.StartLineNumber)"
+              }
+            }
+          }
+          Write-Host "R42 syntax/automatic-variable preflight: $($psScripts.Count) scripts passed."
+
+      - name: R42 user-approved current location and worldwide weather tests
+        shell: pwsh
+        run: ./r42/test-r42-weather.ps1
 
       - name: R42 verified installed-app closure and corrected Inno Setup version label
         shell: pwsh
