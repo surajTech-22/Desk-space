@@ -993,13 +993,20 @@ jobs:
           ./r44/apply-r44.ps1
           ./r44/test-r44.ps1
 
-      - name: Assign monotonic build version to installer and app
+      - name: Assign higher stable version than legacy local 1.4 builds
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $number = [int]$env:GITHUB_RUN_NUMBER
           if ($number -le 0) { throw 'Cannot determine new release build number' }
-          $version = "1.4.$number"
+          # 1.4.29412 exists on user PCs from the old local builder. A
+          # 1.4.3xx public release is NOT an update to that installation.
+          # Moving the minor version above 1.4 makes the next stable release
+          # strictly newer without weakening System.Version comparisons.
+          $version = "1.5.$number"
+          if ([version]$version -le [version]"1.4.29412") {
+            throw "Release must supersede legacy installed v1.4.29412"
+          }
           $iss = 'installer/DeskSpace.iss'
           $inno = [IO.File]::ReadAllText($iss)
           $from = '#define AppVersion "1.4.0"'
@@ -1010,7 +1017,7 @@ jobs:
           $code = [IO.File]::ReadAllText($cs)
           $before = 'private static readonly Version InstalledVersion = new(1, 4, 0);'
           if (!$code.Contains($before)) { throw 'Updater version anchor missing' }
-          $code = $code.Replace($before, 'private static readonly Version InstalledVersion = new(1, 4, ' + $number + ');')
+          $code = $code.Replace($before, 'private static readonly Version InstalledVersion = new(1, 5, ' + $number + ');')
           [IO.File]::WriteAllText($cs,$code,[Text.UTF8Encoding]::new($false))
           Write-Host "Release version assigned: $version"
 
