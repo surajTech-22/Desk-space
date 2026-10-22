@@ -11,7 +11,7 @@ foreach($t in @('HostDiameter=420','ChildInner=207','ChildOuter=260',
 }
 foreach($t in @('Outer=260,Inner=207','OuterSectorCenter(6)',
 'DeskSpaceDonutGeometryV43.Scale(owner)',
-'DeskSpaceDonutGeometryV43.PopupOffset(owner,CX,CY',
+'rootCenterX=root.X;rootCenterY=root.Y',
 'HideArc(); // Parent collapsed')){
  if(!$wheel.Contains($t)){throw "R43 bad Excel arc: $t"}
 }
