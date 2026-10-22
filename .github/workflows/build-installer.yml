@@ -982,6 +982,12 @@ jobs:
           ./r42/test-r42-installer.ps1
           ./r42/apply-r42-installer.ps1
 
+      - name: R48 Information-reference shared circle sub-arc verification
+        shell: pwsh
+        run: |
+          Copy-Item r48/DeskSpaceSubArcGeometryV48.cs DeskSpace_Windows_R1/DeskSpace/DeskSpaceSubArcGeometryV48.cs -Force
+          ./r48/test-r48.ps1
+
       - name: R43 shared connected child-donut geometry and collapse safety
         shell: pwsh
         run: |

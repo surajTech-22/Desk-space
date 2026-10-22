@@ -11,7 +11,7 @@ foreach($t in @('HostDiameter=420','ChildInner=207','ChildOuter=260',
 }
 foreach($t in @('Outer=260,Inner=207','OuterSectorCenter(6)',
 'DeskSpaceDonutGeometryV43.Scale(owner)',
-'rootCenterX=root.X;rootCenterY=root.Y',
+'DeskSpaceSubArcGeometryV48.PopupOffset(owner,rootBounds)',
 'HideArc(); // Parent collapsed')){
  if(!$wheel.Contains($t)){throw "R43 bad Excel arc: $t"}
 }
@@ -29,18 +29,19 @@ foreach($method in @('private void CollapseRing()','private void BuildCompact()'
  }
 }
 $rootWheel=[IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelWheelV42.cs')
-foreach($part in @('MiniOuter=77,MiniInner=35,MiniSize=176',
-    'PlaceWheel(0,0,ArcCenter,MainOuterRadius+MiniOuter+3)',
-    'rootPositionReady',
-    'ring.Surface.Width=MiniSize',
-    'ring.Surface.Height=MiniSize',
-    'ArcCenter-270.0+(slot+.5)*360.0/displayed.Count')){
+foreach($part in @('DeskSpaceSubArcGeometryV48.Half(count)',
+    'DeskSpaceSubArcGeometryV48.Sector(',
+    'DeskSpaceSubArcGeometryV48.PopupOffset(owner,rootBounds)',
+    'DeskSpaceSubArcGeometryV48.PopupOffset(owner,ring.Bounds)',
+    'rootStep=2*half/count',
+    'ring.StartAngle=centre-half',
+    'ring.StepAngle=2*half/count')){
     if(!$rootWheel.Contains($part)){
-        throw "R47 missing compact attached child wheel anchor: $part"
+        throw "R48 Information-reference radial submenu missing: $part"
     }
 }
-if($rootWheel.Contains('private static double Span(int count)=>180;') -or
+if($rootWheel.Contains('MiniOuter=77') -or
    $rootWheel.Contains('KeepConcentricRingOnScreen(')){
-    throw 'R47 massive Excel overlay geometry has returned'
+    throw 'R48 legacy detached mini-bubbles or fullscreen band returned'
 }
-Write-Host 'R47 PASS: compact 176-DIP Excel child donuts, stable parent anchor, nested tear-down.'
+Write-Host 'R48 PASS: Information-reference attached partial arcs, one shared circle centre and hierarchy teardown.'
