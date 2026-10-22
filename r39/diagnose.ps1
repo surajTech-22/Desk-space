@@ -23,3 +23,18 @@ foreach($target in @('DeskSpaceUpdater.cs','DeskSpaceExcelV16.cs')){
  }
 }
 Write-Host 'R39 source diagnostics finished'
+
+$lines=[IO.File]::ReadAllLines('DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs')
+Write-Host '=== R39 RING HIT MATH BEGIN ==='
+for($i=0;$i -lt $lines.Length;$i++)
+{
+ if($lines[$i] -match '(?<word>i<12|i\s*<\s*12|i>=6|i\s*>=\s*6|i%6|slot\*60|slot \* 60|360\s*/\s*6|Math.PI\s*/\s*6|Segments\[|SegmentIcons\[|ringPaths\[|SectorAt\(|QuickAddHitAt\(|ClickSegment\(|Excel)' -or $lines[$i] -match 'for\s*\(int i=0;i<12')
+ {
+   if($i -lt 175 -or ($i -gt 1050 -and $i -lt 1450) -or ($i -gt 330 -and $i -lt 820))
+   {
+     $a=[Math]::Max(0,$i-2);$b=[Math]::Min($lines.Length-1,$i+2)
+     for($j=$a;$j -le $b;$j++){Write-Host ('{0,4}: {1}' -f ($j+1),$lines[$j])}
+   }
+ }
+}
+Write-Host '=== R39 RING HIT MATH END ==='
