@@ -1,0 +1,533 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
+
+namespace DeskSpace;
+
+// A single understandable saved-format view shared by the main Workspace and
+// circle. Underlying exact Excel cell offsets/formulas are the original model.
+// The review rows are editable COPYs until the user presses Save Mapping.
+internal sealed partial class DeskSpaceExcelV16
+{
+    private sealed class MappingRowV42
+    {
+        internal DeskSpaceExcelCellV16? Cell;
+        internal string OriginalRaw="";
+        internal string OriginalLabel="";
+        internal int HeaderRow=-1,HeaderCol=-1;
+        public bool Include {get;set;}=true;
+        public string Header {get;set;}="";
+        public string ReferenceCell {get;set;}="";
+        public string ValueCell {get;set;}="";
+        public string Value {get;set;}="";
+        public string Kind {get;set;}="Value";
+        public string CellType {get;set;}="";
+        public bool IsFormula=>CellType=="formula";
+        public string Formula {get;set;}="";
+    }
+
+    private TextBox? librarySearchV42,mappingNameV42;
+    private TextBlock? libraryInfoV42,editorInfoV42;
+    private DataGrid? mappingGridV42;
+    private readonly List<MappingRowV42> mappingRowsV42=new();
+    private DeskSpaceExcelTemplateV16? editingTemplateV42;
+    private Guid editingIdV42=Guid.Empty;
+    private bool editingDraftV42,selectionGuardV42;
+    private bool editorBusyV42;
+
+    private static Brush NavyV42=>new SolidColorBrush(Color.FromRgb(31,50,82));
+    private static Brush BorderV42=>new SolidColorBrush(Color.FromRgb(204,215,230));
+    private static Border PanelV42(UIElement child)=>new(){
+        Background=Brushes.White,BorderThickness=new Thickness(1),
+        BorderBrush=BorderV42,CornerRadius=new CornerRadius(10),
+        Padding=new Thickness(12),Margin=new Thickness(0,0,10,0),Child=child
+    };
+    private static Button ButtonV42(string text,Action action,bool primary=false)
+    {
+        var button=ActionButton(text,action);
+        button.Padding=new Thickness(12,7,12,7);
+        button.Margin=new Thickness(3,3,6,3);
+        button.MinHeight=34;
+        if(primary)
+        {
+            button.Background=new SolidColorBrush(Color.FromRgb(41,96,164));
+            button.Foreground=Brushes.White;
+            button.BorderBrush=button.Background;
+        }
+        return button;
+    }
+    private TextBlock HintV42(string text,int size=12)=>new(){
+        Text=text,FontSize=size,Foreground=muted,
+        Margin=new Thickness(2,4,2,8),TextWrapping=TextWrapping.Wrap
+    };
+
+    public FrameworkElement Create()
+    {
+        // Main navigation and circular shortcut now use exactly the same
+        // editable saved-mapping layout.
+        var root=new DockPanel{
+            Background=new SolidColorBrush(Color.FromRgb(247,249,254)),
+            LastChildFill=true
+        };
+        var top=new DockPanel{
+            Background=NavyV42,LastChildFill=true,Margin=new Thickness(0)
+        };
+        var exit=ButtonV42(inWorkspace?"← Workspace":"← Circle",back);
+        DockPanel.SetDock(exit,Dock.Right);
+        top.Children.Add(exit);
+        top.Children.Add(new TextBlock{
+            Text="Excel Mapping",FontSize=19,FontWeight=FontWeights.SemiBold,
+            Foreground=Brushes.White,Margin=new Thickness(18,12,12,12)
+        });
+        DockPanel.SetDock(top,Dock.Top);
+        root.Children.Add(top);
+
+        // The toolbar is limited to three normal actions; the source/target
+        // options remain accessible in a collapsible section.
+        var head=new StackPanel{Margin=new Thickness(12,12,12,7)};
+        head.Children.Add(new TextBlock{
+            Text="Your saved Excel formats",FontSize=18,
+            FontWeight=FontWeights.SemiBold,Foreground=ink});
+        head.Children.Add(HintV42("Select a saved format to review or edit its headers, values and cell destinations. Or capture a new range."));
+        var mainActions=new WrapPanel();
+        mainActions.Children.Add(ButtonV42(
+            "Copy and analyze selected Excel cells",()=>Run(Capture),true));
+        mainActions.Children.Add(ButtonV42(
+            "Upload screenshot + OCR",()=>OpenScreenshot()));
+        mainActions.Children.Add(ButtonV42("Refresh saved mappings",()=>Run(()=>ReloadSavedV42(true))));
+        head.Children.Add(mainActions);
+        DockPanel.SetDock(head,Dock.Top);root.Children.Add(head);
+
+        var content=new Grid{Margin=new Thickness(12,0,10,10)};
+        content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(235)});
+        content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+        content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
+        var left=new DockPanel{LastChildFill=true};
+        var libraryHeader=new StackPanel();
+        libraryHeader.Children.Add(new TextBlock{
+            Text="SAVED MAPPINGS",FontSize=13,Foreground=ink,
+            FontWeight=FontWeights.Bold,Margin=new Thickness(0,3,0,6)});
+        librarySearchV42=Field("Search saved Excel formats");
+        librarySearchV42.Margin=new Thickness(0,0,0,7);
+        librarySearchV42.TextChanged+=(_,_)=>FilterLibraryV42();
+        libraryHeader.Children.Add(librarySearchV42);
+        libraryInfoV42=HintV42("Loading saved mappings…");
+        libraryHeader.Children.Add(libraryInfoV42);
+        DockPanel.SetDock(libraryHeader,Dock.Top);left.Children.Add(libraryHeader);
+        templates=new ListBox{
+            MinHeight=165,DisplayMemberPath="Name",Margin=new Thickness(0,0,0,4),
+            BorderThickness=new Thickness(0),FontSize=13,
+            Background=Brushes.White
+        };
+        templates.SelectionChanged+=(_,_)=>OnLibrarySelectedV42();
+        left.Children.Add(templates);
+        Grid.SetColumn(left,0);content.Children.Add(PanelV42(left));
+
+        // Right-side editor: one row shows Header -> Value -> Destination.
+        // All edits are staged and saved explicitly; mere selection never
+        // changes a saved DPAPI file or a running Excel workbook.
+        var right=new DockPanel{LastChildFill=true};
+        var editorHead=new StackPanel();
+        editorHead.Children.Add(new TextBlock{
+            Text="HEADER → VALUE MAPPING",FontSize=13,
+            FontWeight=FontWeights.Bold,Foreground=ink,
+            Margin=new Thickness(2,3,2,7)});
+        mappingNameV42=Field("Rename this mapping");
+        mappingNameV42.Margin=new Thickness(0,0,0,3);
+        editorHead.Children.Add(mappingNameV42);
+        editorInfoV42=HintV42("Choose a saved mapping on the left, or capture cells from Excel.");
+        editorHead.Children.Add(editorInfoV42);
+
+        var editButtons=new WrapPanel();
+        editButtons.Children.Add(ButtonV42("Save mapping changes",
+            ()=>Run(SaveEditorV42),true));
+        editButtons.Children.Add(ButtonV42("Rename mapping",
+            ()=>Run(SaveEditorV42)));
+        editButtons.Children.Add(ButtonV42("Delete mapping",()=>Run(Delete)));
+        editorHead.Children.Add(editButtons);
+        DockPanel.SetDock(editorHead,Dock.Top);right.Children.Add(editorHead);
+
+        var footer=new StackPanel();
+        var pasteButtons=new WrapPanel();
+        pasteButtons.Children.Add(ButtonV42("Preview matching cells",()=>Run(Preview)));
+        pasteButtons.Children.Add(ButtonV42("Apply autofill",()=>Run(Apply),true));
+        footer.Children.Add(pasteButtons);
+        matchSummary=HintV42("Preview shows the target cells before any Excel changes.");
+        footer.Children.Add(matchSummary);
+        previewRows=new ListBox{Height=80,Margin=new Thickness(0,2,0,8),FontSize=11};
+        footer.Children.Add(previewRows);
+        status=HintV42("Saved mappings appear on the left. Edits are saved only when you press Save mapping changes.");
+        footer.Children.Add(status);
+        DockPanel.SetDock(footer,Dock.Bottom);right.Children.Add(footer);
+
+        mappingGridV42=new DataGrid{
+            AutoGenerateColumns=false,IsReadOnly=false,
+            HeadersVisibility=DataGridHeadersVisibility.Column,
+            CanUserAddRows=false,CanUserDeleteRows=false,
+            CanUserReorderColumns=true,GridLinesVisibility=DataGridGridLinesVisibility.Horizontal,
+            AlternatingRowBackground=new SolidColorBrush(Color.FromRgb(243,248,255)),
+            BorderThickness=new Thickness(1),BorderBrush=BorderV42,
+            RowHeight=37,ColumnHeaderHeight=36,
+            FrozenColumnCount=2,
+            EnableRowVirtualization=true,EnableColumnVirtualization=true
+        };
+        mappingGridV42.Columns.Add(new DataGridCheckBoxColumn{
+            Header="Save",Binding=new Binding("Include"){Mode=BindingMode.TwoWay},
+            Width=51});
+        AddColumnV42("Header / Reference","Header",210);
+        AddColumnV42("Header cell","ReferenceCell",93);
+        AddColumnV42("Value / Input","Value",210);
+        AddColumnV42("Value cell","ValueCell",90);
+        AddColumnV42("Type","Kind",98);
+        mappingGridV42.CellEditEnding+=(_,_)=>{
+            latest=null;
+            if(editorInfoV42!=null)editorInfoV42.Text=
+                "Edited mapping (unsaved). Click Save mapping changes to keep it.";
+        };
+        right.Children.Add(mappingGridV42);
+        Grid.SetColumn(right,1);content.Children.Add(PanelV42(right));
+        root.Children.Add(content);
+
+        // Optional controls stay accessible without forcing extra steps for
+        // simple capture, review, edit, save, paste.
+        var advanced=new Expander{
+            Header="More options: exact range, screenshot region and cell-by-cell review",
+            IsExpanded=false,Margin=new Thickness(14,2,14,4)
+        };
+        var options=new StackPanel{Margin=new Thickness(9)};
+        name=Field("New mapping name","Excel mapping");
+        range=Field("Optional source address e.g. B20:D25","");
+        options.Children.Add(new TextBlock{Text="New mapping name",Foreground=ink});
+        options.Children.Add(name);
+        options.Children.Add(new TextBlock{Text="Optional Excel range (leave empty for current selection)",Foreground=ink});
+        options.Children.Add(range);
+        formulas=new CheckBox{Content="Record source formulas for reference only",
+            IsChecked=true,IsEnabled=false};
+        options.Children.Add(formulas);
+        var extraButtons=new WrapPanel();
+        extraButtons.Children.Add(ButtonV42("Open workbook…",()=>Run(OpenWorkbook)));
+        extraButtons.Children.Add(ButtonV42("Analyze marked image region",AnalyzeScreenshot));
+        extraButtons.Children.Add(ButtonV42(
+            "Verify screenshot against selected Excel range",()=>Run(LinkScreenshotToExcel)));
+        extraButtons.Children.Add(ButtonV42(
+            "Copy range to Excel-only shelf",DeskSpaceExcelClipboardV39.CaptureNow));
+        options.Children.Add(extraButtons);
+        var imageBorder=new Border{BorderThickness=new Thickness(1),
+            BorderBrush=BorderV42,Background=Brushes.White};
+        var imageScroll=new ScrollViewer{
+            Height=135,HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility=ScrollBarVisibility.Auto
+        };
+        drawing=new Canvas{Width=250,Height=150,Background=Brushes.WhiteSmoke};
+        picture=new Image{Stretch=Stretch.Fill};
+        drawing.Children.Add(picture);
+        mark=new System.Windows.Shapes.Rectangle{
+            Visibility=Visibility.Collapsed,
+            Stroke=new SolidColorBrush(Color.FromRgb(54,119,230)),
+            StrokeThickness=2,
+            Fill=new SolidColorBrush(Color.FromArgb(48,73,155,241)),
+            IsHitTestVisible=false
+        };
+        drawing.Children.Add(mark);
+        drawing.MouseLeftButtonDown+=DrawStart;
+        drawing.MouseMove+=DrawMove;
+        drawing.MouseLeftButtonUp+=DrawEnd;
+        imageScroll.Content=drawing;imageBorder.Child=imageScroll;
+        options.Children.Add(imageBorder);
+        selectedCells=new ListBox{Height=110,MinHeight=80};
+        options.Children.Add(selectedCells);
+        cellSelectionInfo=HintV42("Capture or analyze a range to inspect individual source cells.");
+        options.Children.Add(cellSelectionInfo);
+        options.Children.Add(ButtonV42("Save checked values",()=>Run(SaveCheckedCells)));
+        manual=new CheckBox{Content="Paste starting at the selected Excel cell",
+            IsChecked=false};
+        overwrite=new CheckBox{Content="Replace existing non-formula values",
+            IsChecked=false};
+        manual.Checked+=(_,_)=>latest=null;
+        manual.Unchecked+=(_,_)=>latest=null;
+        overwrite.Checked+=(_,_)=>latest=null;
+        overwrite.Unchecked+=(_,_)=>latest=null;
+        options.Children.Add(manual);options.Children.Add(overwrite);
+        advanced.Content=new ScrollViewer{
+            VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
+            MaxHeight=260,Content=options};
+        DockPanel.SetDock(advanced,Dock.Bottom);
+        root.Children.Add(advanced);
+
+        root.IsVisibleChanged+=(_,e)=>{
+            if(e.NewValue is true && !editorBusyV42) {
+                try {ReloadSavedV42(false);} catch(Exception ex) {
+                    status.Text="Could not refresh encrypted mappings: "+ex.Message;
+                }
+            }
+        };
+        ReloadSavedV42(false);
+        return root;
+    }
+    private void AddColumnV42(string title,string property,int width)
+    {
+        mappingGridV42!.Columns.Add(new DataGridTextColumn{
+            Header=title,Width=new DataGridLength(width),
+            Binding=new Binding(property){
+                Mode=BindingMode.TwoWay,
+                UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged},
+            ElementStyle=new Style(typeof(TextBlock)){
+                Setters={new Setter(TextBlock.TextTrimmingProperty,TextTrimming.CharacterEllipsis)}
+            }
+        });
+    }
+    private void FilterLibraryV42()
+    {
+        if(templates==null || libraryInfoV42==null)return;
+        var term=librarySearchV42?.Text.Trim()??"";
+        var display=saved
+            .Where(x=>term.Length==0 ||
+                x.Name.Contains(term,StringComparison.OrdinalIgnoreCase) ||
+                x.SourceSheet.Contains(term,StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+        selectionGuardV42=true;
+        try
+        {
+            var current=editingIdV42;
+            templates.ItemsSource=display;
+            templates.SelectedItem=display.FirstOrDefault(x=>x.Id==current);
+        }
+        finally {selectionGuardV42=false;}
+        libraryInfoV42.Text=saved.Count+" saved mappings · "+display.Length+" shown";
+    }
+    private void ReloadSavedV42(bool explicitReload)
+    {
+        if(templates==null)return;
+        var existing=editingIdV42;
+        // The two frontends are separate Windows processes. Load from DPAPI
+        // again, never rely on the list captured at constructor time.
+        var disk=DeskSpaceExcelStoreV16.Load();
+        saved.Clear();
+        saved.AddRange(disk);
+        FilterLibraryV42();
+        var selection=saved.FirstOrDefault(x=>x.Id==existing);
+        if(selection!=null)
+        {
+            selectionGuardV42=true;
+            templates.SelectedItem=selection;
+            selectionGuardV42=false;
+            LoadEditorV42(selection);
+        }
+        else if(explicitReload)
+        {
+            mappingRowsV42.Clear();
+            mappingGridV42!.ItemsSource=null;
+            editingTemplateV42=null;editingIdV42=Guid.Empty;
+            editorInfoV42!.Text="Choose a saved mapping, or capture an Excel range.";
+        }
+        if(explicitReload)status.Text="Saved mappings refreshed from Windows encrypted storage.";
+    }
+    private void OnLibrarySelectedV42()
+    {
+        if(selectionGuardV42)return;
+        if(templates.SelectedItem is DeskSpaceExcelTemplateV16 entry)
+            LoadEditorV42(entry);
+    }
+    private static DeskSpaceExcelTemplateV16 CloneV42(DeskSpaceExcelTemplateV16 entry)=>
+        JsonSerializer.Deserialize<DeskSpaceExcelTemplateV16>(
+            JsonSerializer.Serialize(entry))
+        ??throw new InvalidOperationException("Cannot create editable copy of Excel mapping.");
+    private void LoadEditorV42(DeskSpaceExcelTemplateV16 entry)
+    {
+        editingTemplateV42=CloneV42(entry);
+        editingIdV42=entry.Id;editingDraftV42=false;
+        RenderMappingRowsV42(editingTemplateV42);
+        if(mappingNameV42!=null)mappingNameV42.Text=entry.Name;
+        if(editorInfoV42!=null)editorInfoV42.Text=
+            entry.SourceWorkbook+" · "+entry.SourceSheet+" · "+
+            entry.SourceAddress+" · "+entry.Cells.Count+" cells"+
+            (entry.CoordinatesVerified?" · Verified addresses":" · Image positions only");
+        latest=null;
+        if(matchSummary!=null)matchSummary.Text="Review and save your edits. Preview before pasting into Excel.";
+        if(previewRows!=null)previewRows.ItemsSource=null;
+    }
+    private void ShowCapturedV42(DeskSpaceExcelTemplateV16 candidate)
+    {
+        editingTemplateV42=candidate;
+        editingIdV42=Guid.Empty;editingDraftV42=true;
+        mappingNameV42!.Text=candidate.Name;
+        RenderMappingRowsV42(candidate);
+        editorInfoV42!.Text="New capture · "+candidate.SourceSheet+" · "+
+            candidate.SourceAddress+" · "+candidate.Cells.Count+
+            " cells. Check each header and value, then Save mapping changes.";
+        latest=null;
+    }
+    private void RenderMappingRowsV42(DeskSpaceExcelTemplateV16 entry)
+    {
+        mappingRowsV42.Clear();
+        var references=entry.Cells.Where(c=>c.Role=="Reference").ToArray();
+        var sources=entry.Cells
+            .Where(c=>c.Role!="Reference" && c.Role!="Ignore").ToArray();
+        foreach(var cell in sources)
+        {
+            var best=references
+                .Where(c=>
+                   (c.RowOffset==cell.RowOffset && c.ColumnOffset<cell.ColumnOffset) ||
+                   (c.ColumnOffset==cell.ColumnOffset && c.RowOffset<cell.RowOffset))
+                .OrderBy(c=>Math.Abs(c.RowOffset-cell.RowOffset)+
+                    Math.Abs(c.ColumnOffset-cell.ColumnOffset)).FirstOrDefault();
+            var bestAnchor=entry.Anchors
+                .Where(a=>
+                    (a.RowOffset==cell.RowOffset && a.ColumnOffset<cell.ColumnOffset) ||
+                    (a.ColumnOffset==cell.ColumnOffset && a.RowOffset<cell.RowOffset))
+                .OrderBy(a=>Math.Abs(a.RowOffset-cell.RowOffset)+
+                    Math.Abs(a.ColumnOffset-cell.ColumnOffset)).FirstOrDefault();
+            int refRow=best?.RowOffset??bestAnchor?.RowOffset??-1;
+            int refCol=best?.ColumnOffset??bestAnchor?.ColumnOffset??-1;
+            string refAddress=cell.HeaderCellAddress;
+            if(string.IsNullOrWhiteSpace(refAddress) && refRow>=0 && entry.CoordinatesVerified)
+                refAddress=CellReference(entry.SourceRow+refRow,entry.SourceColumn+refCol);
+            string header=best?.RawValue??bestAnchor?.Label??"";
+            if(!string.IsNullOrWhiteSpace(cell.HeaderCellAddress))
+            {
+                var specific=entry.Cells.FirstOrDefault(c=>
+                    string.Equals(c.CellAddress,cell.HeaderCellAddress,StringComparison.OrdinalIgnoreCase));
+                if(specific!=null){header=specific.RawValue;refRow=specific.RowOffset;refCol=specific.ColumnOffset;}
+            }
+            mappingRowsV42.Add(new MappingRowV42{
+                Cell=cell,OriginalRaw=cell.RawValue,OriginalLabel=header,
+                HeaderRow=refRow,HeaderCol=refCol,
+                Header=header,ReferenceCell=refAddress,
+                ValueCell=cell.CellAddress.Length>0?cell.CellAddress:
+                    entry.CoordinatesVerified?CellReference(
+                        entry.SourceRow+cell.RowOffset,entry.SourceColumn+cell.ColumnOffset):"Unverified",
+                Value=cell.ValueKind=="formula"?cell.Display:cell.RawValue,
+                Kind=cell.Role,CellType=cell.ValueKind,Formula=cell.FormulaR1C1,
+                Include=cell.ValueKind!="blank"
+            });
+        }
+        // Header-only ranges are not discarded; they are visible for
+        // correction and retain their classification after saving.
+        foreach(var header in references.Where(r=>
+            !mappingRowsV42.Any(x=>x.HeaderRow==r.RowOffset && x.HeaderCol==r.ColumnOffset)))
+        {
+            mappingRowsV42.Add(new MappingRowV42{
+                Cell=header,OriginalRaw=header.RawValue,
+                HeaderRow=header.RowOffset,HeaderCol=header.ColumnOffset,
+                Header=header.RawValue,OriginalLabel=header.RawValue,
+                ReferenceCell=header.CellAddress,ValueCell="",
+                Value="",Kind="Reference",CellType=header.ValueKind
+            });
+        }
+        mappingGridV42!.ItemsSource=null;
+        mappingGridV42.ItemsSource=mappingRowsV42.ToArray();
+    }
+    private static void CommitCellEditsV42(DataGrid grid)
+    {
+        grid.CommitEdit(DataGridEditingUnit.Cell,true);
+        grid.CommitEdit(DataGridEditingUnit.Row,true);
+    }
+    private void SaveEditorV42()
+    {
+        if(editorBusyV42)return;
+        if(editingTemplateV42==null)
+            throw new InvalidOperationException("Select a saved mapping or capture Excel cells first.");
+        editorBusyV42=true;
+        try
+        {
+            CommitCellEditsV42(mappingGridV42!);
+            var edited=CloneV42(editingTemplateV42);
+            var title=mappingNameV42?.Text.Trim()??"";
+            if(title.Length==0)throw new InvalidOperationException("Enter a mapping name.");
+            if(title.Length>140)throw new InvalidOperationException("Use a shorter mapping name.");
+            edited.Name=title;
+            var addedHeaders=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach(var row in mappingRowsV42)
+            {
+                if(row.Cell==null)continue;
+                var cell=edited.Cells.FirstOrDefault(c=>
+                    c.RowOffset==row.Cell.RowOffset&&c.ColumnOffset==row.Cell.ColumnOffset);
+                if(cell==null)continue;
+                if(!row.Include){cell.Role="Ignore";continue;}
+                cell.Role=row.Kind=="Reference"?"Reference":
+                    row.Kind=="Formula"?"Formula":"Value";
+                if(row.Kind=="Reference")
+                {
+                    cell.RawValue=row.Header;
+                    cell.Display=row.Header;
+                    continue;
+                }
+                // A screenshot's guessed cell address is never accepted as
+                // authority: only workbook-verified destination positions
+                // can be used by the existing Paste Special safety gate.
+                if(edited.CoordinatesVerified &&
+                    !string.IsNullOrWhiteSpace(row.ValueCell) &&
+                    !string.Equals(row.ValueCell,cell.CellAddress,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "Destination "+row.ValueCell+" differs from its verified "+
+                        "Excel address "+cell.CellAddress+
+                        ". Capture the correct range again to move a cell.");
+                }
+                if(cell.ValueKind!="formula" && cell.ValueKind!="blank" &&
+                   row.Value!=row.OriginalRaw)
+                {
+                    cell.RawValue=row.Value;
+                    cell.Display=row.Value;
+                    if(cell.ValueKind=="number" &&
+                        !double.TryParse(row.Value,
+                            System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture,out _))
+                        cell.ValueKind="text";
+                }
+                cell.HeaderCellAddress=row.ReferenceCell;
+                if(!string.IsNullOrWhiteSpace(row.Header))
+                {
+                    var refCell=edited.Cells.FirstOrDefault(c=>
+                        string.Equals(c.CellAddress,row.ReferenceCell,
+                            StringComparison.OrdinalIgnoreCase) &&
+                        c.Role=="Reference");
+                    if(refCell!=null)
+                    {
+                        refCell.RawValue=row.Header;
+                        refCell.Display=row.Header;
+                    }
+                    else if(row.HeaderRow>=0 && row.HeaderCol>=0)
+                    {
+                        var anchor=edited.Anchors.FirstOrDefault(a=>
+                            a.RowOffset==row.HeaderRow &&
+                            a.ColumnOffset==row.HeaderCol);
+                        if(anchor!=null)anchor.Label=row.Header;
+                        else if(addedHeaders.Add(row.HeaderRow+":"+row.HeaderCol))
+                            edited.Anchors.Add(new DeskSpaceExcelAnchorV16{
+                                RowOffset=row.HeaderRow,ColumnOffset=row.HeaderCol,
+                                Label=row.Header
+                            });
+                    }
+                }
+            }
+            if(edited.Cells.Count==0)
+                throw new InvalidOperationException("No cells to save.");
+            // Reload before updating so a second DeskSpace window cannot
+            // overwrite mappings saved elsewhere since this view opened.
+            var disk=DeskSpaceExcelStoreV16.Load();
+            var existing=disk.FindIndex(x=>x.Id==edited.Id);
+            if(existing>=0)disk[existing]=edited;
+            else disk.Add(edited);
+            DeskSpaceExcelStoreV16.Save(disk);
+            saved.Clear();saved.AddRange(disk);
+            pendingSelection=null;
+            editingDraftV42=false;editingIdV42=edited.Id;
+            FilterLibraryV42();
+            selectionGuardV42=true;
+            try {templates.SelectedItem=saved.FirstOrDefault(x=>x.Id==edited.Id);}
+            finally {selectionGuardV42=false;}
+            LoadEditorV42(edited);
+            status.Text="Saved '"+edited.Name+"' with "+edited.Cells.Count+
+                " cell records. Original Excel workbook unchanged.";
+        }
+        finally{editorBusyV42=false;}
+    }
+}
