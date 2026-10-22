@@ -166,8 +166,15 @@ $new2=@'
             "Save mapping changes",
             "Preview matching cells"
 '@
-if(!$s.Contains($old2)){throw 'R42 cannot update R40 main Workspace Excel buttons'}
-$s=$s.Replace($old2,$new2)
+if($s.Contains($old2)){
+    $s=$s.Replace($old2,$new2)
+}else{
+    # The R39 button rewrite above already changes these shared labels.
+    # Do not fail solely because the legacy R40 exact text is gone.
+    foreach($label in @('"Refresh saved mappings"','"Save mapping changes"')){
+        if(!$s.Contains($label)){throw "R42 Workspace smoke missing revised action $label"}
+    }
+}
 # The original 14-wedge smoke source was created by R39. Replace its
 # unreachable extra outer wedge assertion and execute the 13-wedge test.
 if(!$s.Contains('    private static void TestDonut14()')){
