@@ -30,11 +30,16 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     private readonly List<DeskSpaceExcelTemplateV16> clips=new();
     private HwndSource? source;
     private IntPtr hwnd;
-    private bool disposed,ownClipboardWrite;
+    private bool disposed,ownClipboardWrite,manualOpen;
     private static DeskSpaceExcelClipboardV39? active;
     private int reposition;
     public static void CaptureNow()=>active?.CaptureSelection(false);
-    public static void ShowActive()=>active?.Enable();
+    public static void ShowActive()
+    {
+        if(active==null)return;
+        active.manualOpen=true;
+        active.Render();
+    }
 
     public DeskSpaceExcelClipboardV39(Window hostWindow)
     {
@@ -117,7 +122,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
         if(popup.IsOpen)popup.HorizontalOffset+=((++reposition%2)==0?0:.01);
     }
     private void Visible(object sender,DependencyPropertyChangedEventArgs e)
-    {if(!disposed)popup.IsOpen=(bool)e.NewValue && clips.Count>0;}
+    {if(!disposed)popup.IsOpen=(bool)e.NewValue && (clips.Count>0||manualOpen);}
     private void Closed(object? sender,EventArgs e)=>Dispose();
     private static TextBlock Label(string text,int size=12)=>new(){
         Text=text,Foreground=Brushes.White,FontSize=size,
@@ -134,12 +139,17 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     {
         if(disposed)return;
         list.Children.Clear();
-        if(clips.Count==0){popup.IsOpen=false;return;}
+        if(clips.Count==0&&!manualOpen){popup.IsOpen=false;return;}
         var head=new DockPanel{Margin=new Thickness(2,2,2,6)};
         var clear=Button("Clear",()=>{clips.Clear();Render();});
         DockPanel.SetDock(clear,Dock.Right);head.Children.Add(clear);
         head.Children.Add(Label("Excel clipboard · "+clips.Count,13));
         list.Children.Add(head);
+        if(clips.Count==0)
+        {
+            list.Children.Add(Label("Copy a range in Microsoft Excel to collect cells here."));
+            list.Children.Add(Button("Capture selected Excel cells",()=>CaptureSelection(false)));
+        }
         foreach(var clip in clips.ToArray())
         {
             var row=new StackPanel{Margin=new Thickness(2,2,2,6)};
