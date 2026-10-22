@@ -4,6 +4,8 @@ $path='DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelV16.cs'
 $s=[IO.File]::ReadAllText($path).Replace([string][char]13+[char]10,[string][char]10)
 function Must([string]$old,[string]$new)
 {
+ $old=$old.Replace([string][char]13+[char]10,[string][char]10)
+ $new=$new.Replace([string][char]13+[char]10,[string][char]10)
  if(!$script:s.Contains($old)){throw "R41 Excel UI preview batching missing anchor: $old"}
  $script:s=$script:s.Replace($old,$new)
 }
