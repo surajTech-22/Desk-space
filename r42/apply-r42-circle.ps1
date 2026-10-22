@@ -156,11 +156,19 @@ $excelArc=@'
         excelWheel??=new DeskSpaceExcelWheelV42(this,()=>{
             if(ringExpanded)CollapseRing();
         });
+        excelWheel.SetExcelAvailabilityChanged(open=>{
+            if(ringExpanded && activeModule==null && highlightedSector==12)
+                content.Text=open
+                    ? "Excel Functions"+Environment.NewLine+
+                      excelWheel.SavedCount+" saved"
+                    : "Excel Functions"+Environment.NewLine+"Excel is not open";
+        });
         if(!excelWheel.IsPasting && !excelWheel.IsArcOpen)
             excelWheel.Show();
         if(excelWheel.IsArcOpen)
-            content.Text="Excel"+Environment.NewLine+
-                excelWheel.SavedCount+" saved";
+            content.Text=DeskSpaceExcelWheelV42.ExcelIsOpen()
+                ? "Excel Functions"+Environment.NewLine+excelWheel.SavedCount+" saved"
+                : "Excel Functions"+Environment.NewLine+"Excel is not open";
     }
 
 '@

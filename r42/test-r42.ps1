@@ -30,6 +30,7 @@ foreach($check in @(
  'DeskSpaceExcelStoreV16.Load()',
  'TryCapturedDragAtScreen(', 'OnWheel(', 'Hover(', 'Preview(',
  'private void OpenExcelArc()', 'if(name=="Excel Functions")',
+ 'Excel is not open', 'ExcelIsOpen()',
  'if(selected==12 && ringExpanded',
  'private async System.Threading.Tasks.Task PasteAsync(',
  'DeskSpaceExcelWorkerV41.PreviewAsync(entry,',

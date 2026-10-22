@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -58,6 +59,43 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
                 Placement=PlacementMode.Relative,AllowsTransparency=true,
                 StaysOpen=true,Child=Surface};
         }
+    }
+    // Probe only the already-running Excel process; never start Office.
+    // A workbook is validated separately by the existing Excel COM bridge.
+    private static bool ExcelProcessExists()
+    {
+        try
+        {
+            var processes=Process.GetProcessesByName("EXCEL");
+            try { return processes.Length>0; }
+            finally { foreach(var process in processes)process.Dispose(); }
+        }
+        catch { return false; }
+    }
+    internal static Func<bool> ExcelProbe=ExcelProcessExists;
+    public static bool ExcelIsOpen()
+    {
+        try { return ExcelProbe(); }
+        catch { return false; }
+    }
+    private readonly DispatcherTimer excelTimer;
+    private Action<bool>? availabilityChanged;
+    private bool? lastExcelState;
+    public void SetExcelAvailabilityChanged(Action<bool> callback)
+    {
+        availabilityChanged=callback;
+        RefreshExcelAvailability();
+    }
+    private void RefreshExcelAvailability()
+    {
+        if(disposed)return;
+        bool open=ExcelIsOpen();
+        if(lastExcelState.HasValue && open==lastExcelState.Value)return;
+        lastExcelState=open;
+        availabilityChanged?.Invoke(open);
+        if(shelf.IsOpen && !open)
+            shelfMessage.Text="Excel is not open. Saved information can be viewed, "+
+                "but capture and paste actions are disabled.";
     }
     private bool disposed,pasting,previewOnly,suppressNextUp;
     private int tick;
@@ -129,6 +167,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             PlacementTarget=owner,Placement=PlacementMode.Relative,
             AllowsTransparency=true,StaysOpen=true,Child=shelfBorder
         };
+        excelTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};
+        excelTimer.Tick+=(_,_)=>RefreshExcelAvailability();
         pointerTimer=new DispatcherTimer{
             Interval=TimeSpan.FromMilliseconds(
                 DeskSpaceWheelHoverV35.PointerPollMilliseconds)};
@@ -188,10 +228,16 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
                              CY+radius*Math.Sin(rad));
         }
         var f=new PathFigure{StartPoint=Pt(Outer,a),IsClosed=true};
+        if(b-a>=359.9)f.Segments.Add(new ArcSegment{
+            Point=Pt(Outer,a+180),Size=new Size(Outer,Outer),
+            SweepDirection=SweepDirection.Clockwise});
         f.Segments.Add(new ArcSegment{
             Point=Pt(Outer,b),Size=new Size(Outer,Outer),
             SweepDirection=SweepDirection.Clockwise});
         f.Segments.Add(new LineSegment(Pt(Inner,b),true));
+        if(b-a>=359.9)f.Segments.Add(new ArcSegment{
+            Point=Pt(Inner,b-180),Size=new Size(Inner,Inner),
+            SweepDirection=SweepDirection.Counterclockwise});
         f.Segments.Add(new ArcSegment{
             Point=Pt(Inner,a),Size=new Size(Inner,Inner),
             SweepDirection=SweepDirection.Counterclockwise});
@@ -199,8 +245,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     // Each submenu occupies a separate transparent Popup; no existing
     // ring is redrawn or replaced when a group opens another level.
-    private static double Span(int count)=>
-        count<=1?15:Math.Min(57,12.0*count);
+    // Sub-donuts are full concentric rings, not detached pie-shaped fans.
+    private static double Span(int count)=>180;
     private double RootAngle(int slot)
     {
         double half=Span(displayed.Count);
@@ -250,6 +296,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     {
         if(disposed||!arc.IsOpen||pasting)return;
         CloseFrom(depth);
+        KeepConcentricRingOnScreen(Outer+depth*61);
         // Never silently flatten deep groups into the preceding donut.
         var ring=new ChildRing(depth,group,angle,owner);
         childRings.Add(ring);
@@ -347,10 +394,19 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             return new Point(CX+r*Math.Cos(rad),CY+r*Math.Sin(rad));
         }
         var figure=new PathFigure{StartPoint=P(outer,a),IsClosed=true};
+        // A single WPF ArcSegment cannot describe 360 degrees. Split
+        // whole-ring single-item segments into two 180-degree arcs.
+        bool full=b-a>=359.9;
+        if(full)figure.Segments.Add(new ArcSegment{Point=P(outer,a+180),
+            Size=new Size(outer,outer),
+            SweepDirection=SweepDirection.Clockwise});
         figure.Segments.Add(new ArcSegment{Point=P(outer,b),
             Size=new Size(outer,outer),
             SweepDirection=SweepDirection.Clockwise});
         figure.Segments.Add(new LineSegment(P(inner,b),true));
+        if(full)figure.Segments.Add(new ArcSegment{Point=P(inner,b-180),
+            Size=new Size(inner,inner),
+            SweepDirection=SweepDirection.Counterclockwise});
         figure.Segments.Add(new ArcSegment{Point=P(inner,a),
             Size=new Size(inner,inner),
             SweepDirection=SweepDirection.Counterclockwise});
@@ -420,9 +476,28 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(item.Command!="mapping" || !item.Id.HasValue)return;
         var format=formats.FirstOrDefault(f=>f.Id==item.Id.Value);
         if(format==null)return;
+        if(!ExcelIsOpen()){Preview(format);return;}
         HideArc();collapseParent();_=PasteAsync(format);
     }
 
+    // Move the *whole wheel* just enough for the complete sub-donut to fit
+    // on screen. Never reposition the child independently of the parent.
+    private void KeepConcentricRingOnScreen(double outerRadius)
+    {
+        if(!owner.IsLoaded || owner.WindowState!=WindowState.Normal)return;
+        Rect area=SystemParameters.WorkArea;
+        double radius=outerRadius*DeskSpaceDonutGeometryV43.Scale(owner)+10;
+        double w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
+        double h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
+        if(w<=0||h<=0)return;
+        double x=owner.Left+w/2,y=owner.Top+h/2;
+        if(area.Width>radius*2)
+            x=Math.Clamp(x,area.Left+radius,area.Right-radius);
+        if(area.Height>radius*2)
+            y=Math.Clamp(y,area.Top+radius,area.Bottom-radius);
+        if(Math.Abs(x-owner.Left-w/2)>1)owner.Left=x-w/2;
+        if(Math.Abs(y-owner.Top-h/2)>1)owner.Top=y-h/2;
+    }
     private void Position()
     {
         if(disposed)return;
@@ -466,9 +541,13 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             start=0;
             suppressNextUp=false;
             Render();
+            KeepConcentricRingOnScreen(Outer);
             Position();
             arc.IsOpen=true;
             pointerTimer.Start();
+            excelTimer.Start();
+            lastExcelState=null;
+            RefreshExcelAvailability();
         }
         catch(Exception ex)
         {
@@ -477,7 +556,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     public void HideArc()
     {
-        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();drillSlot=-1;drillDepth=-1;pageDirection=0;
+        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();excelTimer.Stop();drillSlot=-1;drillDepth=-1;pageDirection=0;
         CloseFrom(1);
         suppressNextUp=false;
         arc.IsOpen=false;hovered=-1;
@@ -536,7 +615,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         displayed.AddRange(visible);
         int count=visible.Length;
         if(count==0)return;
-        double half=count==1?15:Math.Min(57,12.0*count);
+        double half=Span(count);
         double step=half*2/count;
         var geometries=new List<Geometry>();
         Rect extent=Rect.Empty;
@@ -547,6 +626,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             geometries.Add(geometry);
             extent.Union(geometry.Bounds);
         }
+        // Full concentric ring; narrow detached arc geometry is prohibited.
         // Tight Popup bounds prevent WPF from shifting the entire Excel
         // wheel when the parent circle is near a monitor edge.
         const double margin=10;
@@ -736,6 +816,13 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         var item=displayed[slot];
         if(item.Command=="clipboard")
         {
+            if(!ExcelIsOpen())
+            {
+                Status("Excel is not open",
+                    "Excel Clipboard actions are disabled. You can still "+
+                    "open Information to view saved mappings and values.");
+                return;
+            }
             HideArc();collapseParent();
             DeskSpaceExcelClipboardV39.ShowActive();
             return;
@@ -770,6 +857,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(item.Command!="mapping" || !item.Id.HasValue)return;
         var entry=formats.FirstOrDefault(f=>f.Id==item.Id.Value);
         if(entry==null)return;
+        if(!ExcelIsOpen()){Preview(entry);return;}
         HideArc();collapseParent();
         _=PasteAsync(entry);
     }
@@ -803,7 +891,10 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             Grid.SetColumn(valueText,1);row.Children.Add(valueText);
             shelfBody.Children.Add(row);count++;
         }
-        shelfMessage.Text=entry.CoordinatesVerified
+        shelfMessage.Text=!ExcelIsOpen()
+            ? "Excel is not open. Viewing saved data only; capture and paste "+
+              "require a running Excel application."
+            : entry.CoordinatesVerified
             ? "Click this saved format to paste its "+entry.Cells.Count+
               " mapped cells as VALUES into the matching open Excel sheet. "+
               "Existing formulas and styles stay intact; a backup is created."
@@ -824,6 +915,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private async System.Threading.Tasks.Task PasteAsync(DeskSpaceExcelTemplateV16 entry)
     {
         if(disposed)return;
+        if(!ExcelIsOpen()){Preview(entry);return;}
         pasting=true;
         Status("Excel paste · "+entry.Name,
             "Locating matching labels and protecting Excel formulas…");
@@ -886,7 +978,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     {
         if(disposed)return;
         disposed=true;
-        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();successTimer.Stop();
+        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();successTimer.Stop();excelTimer.Stop();
         owner.LocationChanged-=OnOwnerMoved;
         owner.SizeChanged-=OnOwnerResized;
         CloseFrom(1);
