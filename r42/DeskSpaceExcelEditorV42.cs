@@ -128,7 +128,9 @@ internal sealed partial class DeskSpaceExcelV16
         };
         templates.SelectionChanged+=(_,_)=>OnLibrarySelectedV42();
         left.Children.Add(templates);
-        Grid.SetColumn(left,0);content.Children.Add(PanelV42(left));
+        var libraryPanel=PanelV42(left);
+        Grid.SetColumn(libraryPanel,0);
+        content.Children.Add(libraryPanel);
 
         // Right-side editor: one row shows Header -> Value -> Destination.
         // All edits are staged and saved explicitly; mere selection never
@@ -192,7 +194,9 @@ internal sealed partial class DeskSpaceExcelV16
                 "Edited mapping (unsaved). Click Save mapping changes to keep it.";
         };
         right.Children.Add(mappingGridV42);
-        Grid.SetColumn(right,1);content.Children.Add(PanelV42(right));
+        var editorPanel=PanelV42(right);
+        Grid.SetColumn(editorPanel,1);
+        content.Children.Add(editorPanel);
         // Optional controls stay accessible without forcing extra steps for
         // simple capture, review, edit, save, paste.
         var advanced=new Expander{
