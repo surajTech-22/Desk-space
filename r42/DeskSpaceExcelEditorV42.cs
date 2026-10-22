@@ -104,7 +104,7 @@ internal sealed partial class DeskSpaceExcelV16
         head.Children.Add(mainActions);
         DockPanel.SetDock(head,Dock.Top);root.Children.Add(head);
 
-        var content=new Grid{Margin=new Thickness(12,0,10,10)};
+        var content=new Grid{Margin=new Thickness(12,0,10,10),MinHeight=250};
         content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(235)});
         content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
         content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
@@ -192,8 +192,6 @@ internal sealed partial class DeskSpaceExcelV16
         };
         right.Children.Add(mappingGridV42);
         Grid.SetColumn(right,1);content.Children.Add(PanelV42(right));
-        root.Children.Add(content);
-
         // Optional controls stay accessible without forcing extra steps for
         // simple capture, review, edit, save, paste.
         var advanced=new Expander{
@@ -259,6 +257,7 @@ internal sealed partial class DeskSpaceExcelV16
             MaxHeight=260,Content=options};
         DockPanel.SetDock(advanced,Dock.Bottom);
         root.Children.Add(advanced);
+        root.Children.Add(content);
 
         root.IsVisibleChanged+=(_,e)=>{
             if(e.NewValue is true && !editorBusyV42) {
@@ -422,6 +421,9 @@ internal sealed partial class DeskSpaceExcelV16
         }
         mappingGridV42!.ItemsSource=null;
         mappingGridV42.ItemsSource=mappingRowsV42.ToArray();
+        if(editorInfoV42!=null)editorInfoV42.Text=
+            (entry.CoordinatesVerified?"Verified Excel addresses":"Screenshot positions need Excel verification")+
+            " · "+mappingRowsV42.Count+" visible header/value relationships";
     }
     private static void CommitCellEditsV42(DataGrid grid)
     {
