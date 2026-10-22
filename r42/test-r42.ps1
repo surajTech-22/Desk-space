@@ -99,6 +99,10 @@ if(!$wheel.Contains('enum ExcelLevel { Functions, Information }') -or
 if(!$wheel.Contains('successTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(3)}')){
     throw 'R42 successful Excel paste-only toast timer unavailable'
 }
+if(!$wheel.Contains('suppressNextUp=true;') -or
+   !$wheel.Contains('if(suppressNextUp)')){
+    throw 'R42 child navigation could accidentally paste on the same mouse up'
+}
 foreach($check in @('x.Source.Role=="Value"','ValueKind!="formula"',
  'ValueKind!="blank"','cell.Value2=TypedValue(change.Source);',
  'SaveCopyAs(backup)','if(!preview.Verified || !entry.CoordinatesVerified)'))
