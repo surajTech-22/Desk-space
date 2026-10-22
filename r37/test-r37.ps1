@@ -70,3 +70,17 @@ if($hostSource.Contains('Child=new DeskSpaceCalculatorV22().Create()')){
     throw 'R37 calculator incorrectly launches the internal DeskSpace arithmetic UI'
 }
 Write-Host 'R37 calendar navigation and circle geometry, Windows Calculator, seamless realistic sky and mute source gates passed.'
+
+# Temporary source-only diagnosis to determine the exact installed updater
+# preference format before distributing an updater settings checker.
+Write-Host '=== DESKSPACE UPDATE SETTINGS SOURCE DIAG ==='
+Get-Content "$root/DeskSpaceUpdater.cs" | Select-Object -First 175 | ForEach-Object { Write-Host $_ }
+Write-Host '=== WORKSPACE ROOT SOURCE DIAG ==='
+Get-ChildItem $root -Filter '*.cs' | ForEach-Object {
+    $file=$_.FullName
+    $hits=Select-String -LiteralPath $file -Pattern 'public static string Root|static readonly string Root|Path.Combine\(.*DeskSpace|AutomaticUpdates' -Context 4,4
+    if($hits){
+        Write-Host "-- $($_.Name) --"
+        foreach($hit in $hits){Write-Host ($hit.Context.PreContext -join [Environment]::NewLine);Write-Host $hit.Line;Write-Host ($hit.Context.PostContext -join [Environment]::NewLine)}
+    }
+}
