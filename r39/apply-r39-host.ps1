@@ -12,12 +12,12 @@ function ReplaceIn([string]$path,[string]$old,[string]$new)
  $s=$s.Replace($old,$new)
  [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
 }
-$host="$root/WidgetHost.cs"
-ReplaceIn $host '    private DeskSpaceDropShelfV15? attachedShelf;' @'
+$hostFile="$root/WidgetHost.cs"
+ReplaceIn $hostFile '    private DeskSpaceDropShelfV15? attachedShelf;' @'
     private DeskSpaceDropShelfV15? attachedShelf;
     private DeskSpaceExcelClipboardV39? excelClipboardShelf;
 '@
-ReplaceIn $host @'
+ReplaceIn $hostFile @'
             attachedShelf ??= new DeskSpaceDropShelfV15(this);
             attachedShelf.Enable();
 '@ @'
@@ -27,11 +27,11 @@ ReplaceIn $host @'
             excelClipboardShelf ??= new DeskSpaceExcelClipboardV39(this);
             excelClipboardShelf.Enable();
 '@
-ReplaceIn $host '            attachedShelf?.Dispose();' @'
+ReplaceIn $hostFile '            attachedShelf?.Dispose();' @'
             attachedShelf?.Dispose();
             excelClipboardShelf?.Dispose();
 '@
-ReplaceIn $host @'
+ReplaceIn $hostFile @'
         menu.Items.Add("Excel · reusable data",null,(_,_)=>Dispatcher.Invoke(
             ()=>OpenInWidget("Excel")));
 '@ @'
@@ -40,7 +40,7 @@ ReplaceIn $host @'
         menu.Items.Add("Excel Clipboard shelf",null,(_,_)=>Dispatcher.Invoke(
             DeskSpaceExcelClipboardV39.ShowActive));
 '@
-ReplaceIn $host @'
+ReplaceIn $hostFile @'
     private void ClickSegment(string name)
     {
         if(name=="Information")
@@ -55,5 +55,5 @@ ReplaceIn $host @'
         }
         if(name=="Information")
 '@
-ReplaceIn $host 'if(name is "Files" or "Search" or "Notes" or "Reminders" or "Calendar" or "Clipboard" or "Information" or "Settings")' 'if(name is "Files" or "Search" or "Notes" or "Reminders" or "Calendar" or "Clipboard" or "Information" or "Settings" or "Excel")'
+ReplaceIn $hostFile 'if(name is "Files" or "Search" or "Notes" or "Reminders" or "Calendar" or "Clipboard" or "Information" or "Settings")' 'if(name is "Files" or "Search" or "Notes" or "Reminders" or "Calendar" or "Clipboard" or "Information" or "Settings" or "Excel")'
 Write-Host 'R39 Excel clipboard follows circle, auto-collects copied Excel cells, has independent menu and module routing.'
