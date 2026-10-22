@@ -3,6 +3,7 @@ $ErrorActionPreference='Stop'
 ./r39/apply-r39-ui.ps1
 ./r39/apply-r39-updater.ps1
 ./r39/apply-r39-host.ps1
+./r39/apply-r39-ring.ps1
 $root='DeskSpace_Windows_R1/DeskSpace'
 $store=[IO.File]::ReadAllText("$root/DeskSpaceExcelStoreV16.cs")
 $bridge=[IO.File]::ReadAllText("$root/DeskSpaceExcelBridgeV16.cs")
@@ -46,3 +47,25 @@ foreach($key in @('AddClipboardFormatListener','WM_CLIPBOARDUPDATE',
 if(!(Test-Path "$root/DeskSpaceVaultV10.cs")){throw 'R39 vault source missing'}
 if(!(Test-Path "$root/DeskSpaceDropShelfV15.cs")){throw 'R39 Files shelf missing'}
 Write-Host 'R39 dual-input Excel review, separate clipboard, original data & updater safeguards PASS.'
+
+foreach($key in @(
+ '"Settings", "Excel",',
+ '"Files", "Tasks", "Excel Clipboard"',
+ 'for(int i=0;i<Segments.Length;i++)',
+ 'bool outer=i>=7;int slot=i%7;',
+ 'double step=360.0/7;',
+ 'if(selected==7)',
+ 'if(selected!=7',
+ 'if(name=="Excel Clipboard")'
+)){
+ if(!$host.Contains($key)){throw "R39 14 sector ring regression: $key"}
+}
+foreach($slot in 0..6)
+{
+    $step=360.0/7
+    $deg=-90+$slot*$step
+    $offset=($deg+90+$step/2+720)%360
+    $chosen=[int][Math]::Floor($offset/$step)
+    if($chosen -ne $slot){throw "R39 inner/outer hover ring mismatch for slot $slot"}
+}
+Write-Host 'R39 two new Excel ring sectors share click, hover and mouse drag geometry.'
