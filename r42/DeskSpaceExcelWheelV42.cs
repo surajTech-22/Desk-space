@@ -42,8 +42,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     // Its child arc follows the outer ring; Information remains at index 6.
     // Align the child arc with that wedge and use the Information wheel
     // positioning, click, pagination and shelf behavior.
-    private const double CX=325,CY=325,Outer=252,Inner=196;
-    private const double ArcCenter=-90+6*(360.0/7.0);
+    private const double CX=325,CY=325,Outer=260,Inner=207;
+    private static readonly double ArcCenter=DeskSpaceDonutGeometryV43.OuterSectorCenter(6);
     private static readonly Brush Accent=new SolidColorBrush(Color.FromRgb(69,88,175));
     private static readonly Brush Idle=new SolidColorBrush(Color.FromRgb(221,234,255));
     private static readonly Brush Selected=new SolidColorBrush(Color.FromRgb(156,184,239));
@@ -167,22 +167,28 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         var w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
         var h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
         if(w<=0||h<=0)return;
-        // Main donut coordinates are 420-based. Match its actual scale,
-        // then anchor a SMALL child-popup to the exact sector geometry.
-        // WPF must not slide a transparent 650x650 popup off-screen.
-        // Child-wheel geometry is in a 650x650 coordinate system (CX=CY=325).
-        // Scaling it as 420x420 places the arc far outside the parent ring.
-        // Keep child geometry aligned to the parent's centred circular viewport.
-        double scale=Math.Clamp(Math.Min(w,h)/650.0,.38,1.05);
+        // One shared 420-DIP logical coordinate contract with the parent.
+        // The child arc must sit OUTSIDE the main ring, never across its labels.
+        double scale=DeskSpaceDonutGeometryV43.Scale(owner);
         canvas.LayoutTransform=new ScaleTransform(scale,scale);
-        arc.HorizontalOffset=w/2-CX*scale+(localOriginX-10)*scale;
-        arc.VerticalOffset=h/2-CY*scale+(localOriginY-10)*scale;
+        Point offset=DeskSpaceDonutGeometryV43.PopupOffset(owner,CX,CY,
+            localOriginX-10,localOriginY-10);
+        arc.HorizontalOffset=offset.X;
+        arc.VerticalOffset=offset.Y;
         shelf.HorizontalOffset=arc.HorizontalOffset+
             canvas.Width*scale/2-shelfBorder.Width/2+(++tick%2)*.001;
         shelf.VerticalOffset=arc.VerticalOffset+canvas.Height*scale+4;
     }
     private void OnOwnerMoved(object? sender,EventArgs e)=>Position();
-    private void OnOwnerResized(object? sender,SizeChangedEventArgs e)=>Position();
+    private void OnOwnerResized(object? sender,SizeChangedEventArgs e)
+    {
+        if(owner.ActualWidth<300 || owner.ActualHeight<300)
+        {
+            HideArc(); // Parent collapsed: no detached Popup left on desktop.
+            return;
+        }
+        Position();
+    }
 
     public void Show()
     {

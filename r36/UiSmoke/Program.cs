@@ -28,6 +28,7 @@ internal static class Program
             TestCalendar();
             TestCalculator();
             TestMediaPill();
+            TestConnectedChildDonut();
             Console.WriteLine("R36 WPF visual smoke PASS: weather full disk, calendar navigation/event +, internal calculator 1+2=3, media pill controls and screenshots");
             app.Shutdown();
             return 0;
@@ -38,6 +39,21 @@ internal static class Program
             app.Shutdown();
             return 1;
         }
+    }
+    private static void TestConnectedChildDonut()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceDonutGeometryV43",true)!;
+        var center=type.GetMethod("OuterSectorCenter",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        var scale=type.GetMethod("Scale",BindingFlags.Static|
+            BindingFlags.NonPublic,null,new[]{typeof(double)},null)!;
+        double angle=(double)center.Invoke(null,new object[]{6,7})!;
+        double ratio=(double)scale.Invoke(null,new object[]{420.0})!;
+        Assert(Math.Abs(angle-244.2857142857143)<.0001,
+            "Excel child is not aligned with outer parent sector centre");
+        Assert(Math.Abs(ratio-1)<.0001,
+            "Child popup has wrong parent-ring coordinate scaling");
+        Console.WriteLine("R43 WPF connected sub-donut geometry PASS.");
     }
     private static object Make(string fullName,params object?[] args)
     {

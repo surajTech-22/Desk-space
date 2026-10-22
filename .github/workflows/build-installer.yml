@@ -981,6 +981,12 @@ jobs:
           ./r42/test-r42-installer.ps1
           ./r42/apply-r42-installer.ps1
 
+      - name: R43 shared connected child-donut geometry and collapse safety
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath r43/DeskSpaceDonutGeometryV43.cs -Destination DeskSpace_Windows_R1/DeskSpace/DeskSpaceDonutGeometryV43.cs -Force
+          ./r43/test-r43.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

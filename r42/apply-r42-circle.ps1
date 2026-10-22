@@ -213,6 +213,22 @@ $s=$s.Substring(0,$upBegin)+$up+$s.Substring($upEnd)
 
 # When leaving the parent's active wedge, hide only the Excel child arc,
 # preserving any status shelf and avoiding redundant heavy editor creation.
+# R43 shared contextual child-donut lifecycle: an independent WPF Popup
+# must close BEFORE its parent changes from expanded ring to compact circle.
+foreach($method in @('    private void CollapseRing()',
+                     '    private void BuildCompact()')){
+    $a=$s.IndexOf($method,[StringComparison]::Ordinal)
+    if($a -lt 0){throw "R43 missing parent lifecycle: $method"}
+    $b=$s.IndexOf('{',$a+[string]::new($method).Length,[StringComparison]::Ordinal)
+    if($b -lt 0){throw "R43 missing brace: $method"}
+    $guard=@'
+        excelWheel?.HideArc();
+        if(informationOverlay?.IsArcOpen==true)
+            informationOverlay.HideArc();
+'@
+    $s=$s.Insert($b+1,[string][char]10+
+        $guard.Replace([string][char]13+[char]10,[string][char]10))
+}
 [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R42 Excel sector now opens the Information-style saved-format child wheel, never the editor.'
 Write-Host 'R42 explicit saved-format selection performs direct, guarded Paste Special Values into open Excel.'

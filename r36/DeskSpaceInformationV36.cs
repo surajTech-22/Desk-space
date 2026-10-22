@@ -274,6 +274,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             all=Read().OrderByDescending(x=>x.UpdatedUtc).ToList();
             startIndex=Math.Min(startIndex,Math.Max(0,all.Count-4));
             RenderArc();
+            PositionArc();
             arc.IsOpen=true;
             pointerTimer.Start();
             changed();
@@ -710,12 +711,26 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             DispatcherPriority.Loaded);
     }
 
+    private void PositionArc()
+    {
+        if(disposed)return;
+        double scale=DeskSpaceDonutGeometryV43.Scale(owner);
+        arcCanvas.LayoutTransform=new ScaleTransform(scale,scale);
+        Point point=DeskSpaceDonutGeometryV43.PopupOffset(owner,
+            ArcCenterX,ArcCenterY,-5,-6);
+        arc.HorizontalOffset=point.X;
+        arc.VerticalOffset=point.Y;
+    }
     private void OwnerLocationChanged(object? sender,EventArgs e)
     {
+        if(arc.IsOpen)PositionArc();
         if(shelf.IsOpen)UpdateShelfPosition();
     }
     private void OwnerSizeChanged(object sender,SizeChangedEventArgs e)
     {
+        if(owner.ActualWidth<300 || owner.ActualHeight<300)
+            HideArc(); // Prevent detached Information fragments on collapse.
+        else if(arc.IsOpen)PositionArc();
         if(shelf.IsOpen)UpdateShelfPosition();
     }
     private void SetCompactShelfLayout(bool editing)
