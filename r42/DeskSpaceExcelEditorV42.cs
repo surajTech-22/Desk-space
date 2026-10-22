@@ -91,24 +91,24 @@ internal sealed partial class DeskSpaceExcelV16
 
         // The toolbar is limited to three normal actions; the source/target
         // options remain accessible in a collapsible section.
-        var head=new StackPanel{Margin=new Thickness(12,12,12,7)};
+        var head=new StackPanel{Margin=new Thickness(8,5,8,3)};
         head.Children.Add(new TextBlock{
-            Text="Your saved Excel formats",FontSize=18,
+            Text="Excel Mapping",FontSize=15,
             FontWeight=FontWeights.SemiBold,Foreground=ink});
-        head.Children.Add(HintV42("Select a saved format to review or edit its headers, values and cell destinations. Or capture a new range."));
+        // Keep explanatory text in the optional section to maximize the
+        // actual mapping area in short or restored Windows sizes.
         var mainActions=new WrapPanel();
         mainActions.Children.Add(ButtonV42(
             "Copy and analyze selected Excel cells",()=>Run(Capture),true));
         mainActions.Children.Add(ButtonV42(
-            "Upload screenshot + OCR",()=>OpenScreenshot()));
+            "Screenshot",()=>OpenScreenshot()));
         mainActions.Children.Add(ButtonV42("Refresh saved mappings",()=>Run(()=>ReloadSavedV42(true))));
         head.Children.Add(mainActions);
         DockPanel.SetDock(head,Dock.Top);root.Children.Add(head);
 
-        var content=new Grid{Margin=new Thickness(12,0,10,10),MinHeight=250};
-        content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(235)});
+        var content=new Grid{Margin=new Thickness(6,0,6,4),MinHeight=180};
+        content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(198)});
         content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-        content.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(0)});
         var left=new DockPanel{LastChildFill=true};
         var libraryHeader=new StackPanel();
         libraryHeader.Children.Add(new TextBlock{
@@ -169,16 +169,16 @@ internal sealed partial class DeskSpaceExcelV16
         editorHead.Children.Add(editButtons);
         DockPanel.SetDock(editorHead,Dock.Top);right.Children.Add(editorHead);
 
-        var footer=new StackPanel();
+        var footer=new StackPanel{Margin=new Thickness(0,2,0,0)};
         var pasteButtons=new WrapPanel();
         pasteButtons.Children.Add(ButtonV42("Preview matching cells",()=>Run(Preview)));
         pasteButtons.Children.Add(ButtonV42("Apply autofill",()=>Run(Apply),true));
         footer.Children.Add(pasteButtons);
-        matchSummary=HintV42("Preview shows the target cells before any Excel changes.");
+        matchSummary=HintV42("Preview before any Excel changes.",10);
         footer.Children.Add(matchSummary);
-        previewRows=new ListBox{Height=80,Margin=new Thickness(0,2,0,8),FontSize=11};
+        previewRows=new ListBox{Height=42,Margin=new Thickness(0,2,0,3),FontSize=11};
         footer.Children.Add(previewRows);
-        status=HintV42("Saved mappings appear on the left. Edits are saved only when you press Save mapping changes.");
+        status=HintV42("Choose a saved mapping.",10);
         footer.Children.Add(status);
         DockPanel.SetDock(footer,Dock.Bottom);right.Children.Add(footer);
 
@@ -214,10 +214,11 @@ internal sealed partial class DeskSpaceExcelV16
         // Optional controls stay accessible without forcing extra steps for
         // simple capture, review, edit, save, paste.
         var advanced=new Expander{
-            Header="More options: exact range, screenshot region and cell-by-cell review",
-            IsExpanded=false,Margin=new Thickness(14,2,14,4)
+            Header="More options and instructions",
+            IsExpanded=false,Margin=new Thickness(7,1,7,2)
         };
-        var options=new StackPanel{Margin=new Thickness(9)};
+        var options=new StackPanel{Margin=new Thickness(5)};
+        options.Children.Add(HintV42("Select an existing format on the left, change its group, header or value, then save. Verified Excel cell addresses are protected. Screenshot-only formats require linking to actual Excel cells before pasting."));
         name=Field("New mapping name","Excel mapping");
         range=Field("Optional source address e.g. B20:D25","");
         options.Children.Add(new TextBlock{Text="New mapping name",Foreground=ink});
