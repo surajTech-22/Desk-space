@@ -38,6 +38,78 @@ Require @'
         }
         if(name=="Excel Clipboard")
 '@
+# R39 introduced a separate 14th outer Excel Clipboard sector.
+# Replace it with one Excel Functions parent: 7 inner + 6 outer.
+# Preserve all original twelve sectors, their ordering and existing names.
+Require @'
+        "Search", "Calendar", "Calculator", "Clock", "Weather", "Settings", "Excel",
+        "Information", "Notes", "Reminders", "Clipboard", "Files", "Tasks", "Excel Clipboard"
+'@ @'
+        "Search", "Calendar", "Calculator", "Clock", "Weather", "Settings", "Excel Functions",
+        "Information", "Notes", "Reminders", "Clipboard", "Files", "Tasks"
+'@
+Require @'
+        "⌕", "▦", "⊞", "◷", "☀", "⚙", "▥",
+        "◆", "✎", "◉", "▣", "▤", "☑", "▦"
+'@ @'
+        "⌕", "▦", "⊞", "◷", "☀", "⚙", "▥",
+        "◆", "✎", "◉", "▣", "▤", "☑"
+'@
+# The existing independent Excel Clipboard remains alive, but must open
+# through the Excel Functions -> Clipboard child rather than a main wedge.
+$clickName='        if(name=="Excel")'
+if(!$s.Contains($clickName)){throw "R42 main Excel click handler missing"}
+$s=$s.Replace($clickName,'        if(name=="Excel Functions")')
+$outside='        if(name=="Excel Clipboard")'
+if($s.Contains($outside)){
+    $clickA=$s.IndexOf($outside,[StringComparison]::Ordinal)
+    $clickB=$s.IndexOf('        if(name=="Information")',$clickA,[StringComparison]::Ordinal)
+    if($clickB -le $clickA){throw 'R42 cannot isolate legacy Excel Clipboard sector action'}
+    $s=$s.Substring(0,$clickA)+$s.Substring($clickB)
+}
+
+# Different inner and outer wedge counts. No phantom blank Excel Clipboard
+# sector is drawn or hit-testable. Information remains index 7.
+$sectorA=$s.IndexOf('    private int SectorAt(',[StringComparison]::Ordinal)
+$sectorB=if($sectorA -ge 0){$s.IndexOf('    private ', $sectorA+24,[StringComparison]::Ordinal)}else{-1}
+if($sectorA -lt 0 -or $sectorB -le $sectorA){throw 'R42 SectorAt boundaries unavailable'}
+$sector=$s.Substring($sectorA,$sectorB-$sectorA)
+if(!$sector.Contains('const double sectors=7;') -or
+   !$sector.Contains('if(slot<0 || slot>=7')){
+    throw 'R42 expected 14-sector input hit geometry missing'
+}
+$sector=$sector.Replace('const double sectors=7;',
+    'double sectors=outer?6:7;')
+$sector=$sector.Replace('if(slot<0 || slot>=7',
+    'if(slot<0 || slot>=sectors')
+$s=$s.Substring(0,$sectorA)+$sector+$s.Substring($sectorB)
+
+$quickA=$s.IndexOf('    private int QuickAddHitAt(',[StringComparison]::Ordinal)
+$quickB=if($quickA -ge 0){$s.IndexOf('    private void BuildDonut()', $quickA,[StringComparison]::Ordinal)}else{-1}
+if($quickA -lt 0 -or $quickB -le $quickA){throw 'R42 QuickAddHitAt boundaries unavailable'}
+$quick=$s.Substring($quickA,$quickB-$quickA)
+$quick=$quick.Replace('int slot=i%7;',
+    'int slot=outer?i-7:i;')
+$quick=$quick.Replace('(-90+slot*(360.0/7))*Math.PI/180',
+    '(-90+slot*(360.0/(outer?6:7)))*Math.PI/180')
+$s=$s.Substring(0,$quickA)+$quick+$s.Substring($quickB)
+
+$drawA=$s.IndexOf('    private void BuildDonut()', [StringComparison]::Ordinal)
+$drawB=if($drawA -ge 0){$s.IndexOf('    private static Geometry Sector(', $drawA,[StringComparison]::Ordinal)}else{-1}
+if($drawA -lt 0 -or $drawB -le $drawA){throw 'R42 BuildDonut method boundaries unavailable'}
+$draw=$s.Substring($drawA,$drawB-$drawA)
+if(!$draw.Contains('bool outer=i>=7;int slot=i%7;') -or
+   !$draw.Contains('double step=360.0/7;')){
+    throw 'R42 expected 14-sector rendering geometry missing'
+}
+$draw=$draw.Replace('bool outer=i>=7;int slot=i%7;',
+    'bool outer=i>=7;int slot=outer?i-7:i;')
+$draw=$draw.Replace('double step=360.0/7;',
+    'double step=360.0/(outer?6:7);')
+$draw=$draw.Replace('(-90+slot*(360.0/7))*Math.PI/180',
+    '(-90+slot*(360.0/(outer?6:7)))*Math.PI/180')
+$s=$s.Substring(0,$drawA)+$draw+$s.Substring($drawB)
+
 # R29 replaced the R28 selector with a stable Information context state
 # machine. R39 added a seventh inner sector and moved Information to index 7
 # but did not rebase the selector's nonliteral "selected==6 &&" comparison.
