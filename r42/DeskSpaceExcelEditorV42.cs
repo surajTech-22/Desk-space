@@ -32,7 +32,7 @@ internal sealed partial class DeskSpaceExcelV16
         public string Formula {get;set;}="";
     }
 
-    private TextBox? librarySearchV42,mappingNameV42;
+    private TextBox? librarySearchV42,mappingNameV42,mappingGroupV42;
     private TextBlock? libraryInfoV42,editorInfoV42;
     private DataGrid? mappingGridV42;
     private readonly List<MappingRowV42> mappingRowsV42=new();
@@ -148,6 +148,15 @@ internal sealed partial class DeskSpaceExcelV16
                 hasUnsavedChangesV42=true;
         };
         editorHead.Children.Add(mappingNameV42);
+        // Group is a path under Excel Information (e.g. Clients / Audit).
+        // Empty means show the mapping directly, with no group donut.
+        mappingGroupV42=Field("Information group (optional): Clients / Audit");
+        mappingGroupV42.Margin=new Thickness(0,0,0,3);
+        mappingGroupV42.TextChanged+=(_,_)=>{
+            if(!loadingEditorV42 && editingTemplateV42!=null)
+                hasUnsavedChangesV42=true;
+        };
+        editorHead.Children.Add(mappingGroupV42);
         editorInfoV42=HintV42("Choose a saved mapping on the left, or capture cells from Excel.");
         editorHead.Children.Add(editorInfoV42);
 
@@ -300,8 +309,10 @@ internal sealed partial class DeskSpaceExcelV16
         var display=saved
             .Where(x=>term.Length==0 ||
                 x.Name.Contains(term,StringComparison.OrdinalIgnoreCase) ||
-                x.SourceSheet.Contains(term,StringComparison.OrdinalIgnoreCase))
-            .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+                x.SourceSheet.Contains(term,StringComparison.OrdinalIgnoreCase) ||
+                x.GroupPath.Contains(term,StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x=>x.GroupPath,StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
         selectionGuardV42=true;
         try
         {
@@ -417,6 +428,7 @@ internal sealed partial class DeskSpaceExcelV16
         try {
             RenderMappingRowsV42(editingTemplateV42);
             if(mappingNameV42!=null)mappingNameV42.Text=entry.Name;
+            if(mappingGroupV42!=null)mappingGroupV42.Text=entry.GroupPath;
         }
         finally {loadingEditorV42=false;}
         hasUnsavedChangesV42=false;
@@ -433,7 +445,11 @@ internal sealed partial class DeskSpaceExcelV16
         editingTemplateV42=candidate;
         editingIdV42=Guid.Empty;editingDraftV42=true;
         hasUnsavedChangesV42=true;
-        mappingNameV42!.Text=candidate.Name;
+        loadingEditorV42=true;
+        try {
+            mappingNameV42!.Text=candidate.Name;
+            if(mappingGroupV42!=null)mappingGroupV42.Text="";
+        } finally {loadingEditorV42=false;}
         RenderMappingRowsV42(candidate);
         editorInfoV42!.Text="New capture · "+candidate.SourceSheet+" · "+
             candidate.SourceAddress+" · "+candidate.Cells.Count+
@@ -522,6 +538,14 @@ internal sealed partial class DeskSpaceExcelV16
             if(title.Length==0)throw new InvalidOperationException("Enter a mapping name.");
             if(title.Length>140)throw new InvalidOperationException("Use a shorter mapping name.");
             edited.Name=title;
+            // Group segments are labels, not paths on the Windows filesystem.
+            var parts=(mappingGroupV42?.Text??"").Replace('\\','/')
+                .Split('/',StringSplitOptions.RemoveEmptyEntries|
+                           StringSplitOptions.TrimEntries);
+            if(parts.Length>8 || parts.Any(p=>p.Length>60))
+                throw new InvalidOperationException(
+                    "Information grouping supports up to eight names of 60 characters.");
+            edited.GroupPath=string.Join("/",parts);
             var addedHeaders=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach(var row in mappingRowsV42)
             {
