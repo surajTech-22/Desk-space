@@ -989,9 +989,9 @@ jobs:
         shell: pwsh
         run: ./r40/test-r40.ps1
 
-      - name: R41 inspect active Excel capture, WPF scroll integration
+      - name: R41 repair open Excel range capture and global smooth scrolling
         shell: pwsh
-        run: ./r41/inspect.ps1
+        run: ./r41/test-r41.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
@@ -1042,12 +1042,12 @@ jobs:
         shell: pwsh
         run: ./BUILD_DESKSPACE_SETUP.ps1
 
-      - name: R40 WPF test Workspace Excel, draggable clipboard and weather scenes
+      - name: R41 WPF test Excel, scroll and weather scenes
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- 'r36/UiSmoke/visual-evidence'
-          if($LASTEXITCODE -ne 0){throw 'R40 WPF Workspace Excel and clipboard smoke failed'}
+          if($LASTEXITCODE -ne 0){throw 'R41 WPF UI and clipboard smoke failed'}
           $screens=Get-ChildItem 'r36/UiSmoke/visual-evidence' -Filter '*.png'
           if($screens.Count -lt 6){throw 'R36 WPF screenshot evidence incomplete'}
           foreach($image in $screens){
@@ -1058,7 +1058,7 @@ jobs:
       - name: Upload R36 WPF visual verification images
         uses: actions/upload-artifact@v4
         with:
-          name: DeskSpace-R40-WPF-Visual-Smoke
+          name: DeskSpace-R41-WPF-Visual-Smoke
           path: r36/UiSmoke/visual-evidence/*.png
           if-no-files-found: error
 
