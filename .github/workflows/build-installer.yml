@@ -49,6 +49,7 @@ on:
       - "r38/**"
       - "r39/**"
       - "r40/**"
+      - "r41/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -987,6 +988,10 @@ jobs:
       - name: R40 dedicated Workspace Excel Mapping + movable Excel shelf
         shell: pwsh
         run: ./r40/test-r40.ps1
+
+      - name: R41 inspect active Excel capture, WPF scroll integration
+        shell: pwsh
+        run: ./r41/inspect.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
