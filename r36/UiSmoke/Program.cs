@@ -30,6 +30,7 @@ internal static class Program
             TestMediaPill();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
+            TestSubArcScreenFit();
             Console.WriteLine("R36 WPF visual smoke PASS: weather full disk, calendar navigation/event +, internal calculator 1+2=3, media pill controls and screenshots");
             app.Shutdown();
             return 0;
@@ -40,6 +41,35 @@ internal static class Program
             app.Shutdown();
             return 1;
         }
+    }
+    private static void TestSubArcScreenFit()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceSubArcGeometryV48",true)!;
+        var angleAt=type.GetMethod("FitAngleAt",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        var outer=type.GetMethod("Outer",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        var inner=type.GetMethod("Inner",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        double firstOuter=(double)outer.Invoke(null,new object[]{0})!;
+        double nextInner=(double)inner.Invoke(null,new object[]{1})!;
+        Assert(Math.Abs(nextInner-firstOuter-2)<.001,
+            "Excel Information sub-arcs are no longer attached with a 2-DIP gap");
+        var center=new Point(1380,310);
+        var desktop=new Rect(0,0,1650,880);
+        const double half=24;
+        double chosen=(double)angleAt.Invoke(null,new object[]{
+            3,205.0,half,center,desktop,1.0})!;
+        double radius=(double)outer.Invoke(null,new object[]{3})!;
+        for(int n=0;n<=16;n++)
+        {
+            double rad=(chosen-half+n*half*2/16)*Math.PI/180;
+            double x=center.X+radius*Math.Cos(rad);
+            double y=center.Y+radius*Math.Sin(rad);
+            Assert(x>=11&&x<=1639&&y>=11&&y<=869,
+                "Excel child sectors clip against the upper or lateral screen edge");
+        }
+        Console.WriteLine("R48 Information-reference contiguous arcs and screen edge checks PASS.");
     }
     private static void TestExcelPasteTimeDate()
     {
