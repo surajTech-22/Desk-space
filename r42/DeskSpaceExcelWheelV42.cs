@@ -23,10 +23,15 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private readonly Border shelfBorder;
     private readonly StackPanel shelfBody;
     private readonly TextBlock shelfTitle, shelfMessage;
-    private readonly DispatcherTimer pointerTimer,edgeTimer;
+    private readonly DispatcherTimer pointerTimer,edgeTimer,successTimer;
     private readonly List<(int Index,Guid? Id,Geometry Hit)> hitZones=new();
     private readonly List<System.Windows.Shapes.Path> sectors=new();
     private List<DeskSpaceExcelTemplateV16> formats=new();
+    private enum ExcelLevel { Functions, Information }
+    private ExcelLevel level=ExcelLevel.Functions;
+    private string groupPath="";
+    private readonly List<(string Label,string Command,string Group,Guid? Id)>
+        displayed=new();
     private int start,hovered=-1,pageDirection;
     private bool disposed,pasting,previewOnly;
     private int tick;
@@ -106,6 +111,11 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             Page(pageDirection);
             edgeTimer.Interval=TimeSpan.FromMilliseconds(140);
         };
+        successTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(3)};
+        successTimer.Tick+=(_,_)=>{
+            successTimer.Stop();
+            if(!disposed)shelf.IsOpen=false;
+        };
         owner.LocationChanged+=OnOwnerMoved;
         owner.SizeChanged+=OnOwnerResized;
     }
@@ -157,8 +167,11 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         try
         {
             formats=DeskSpaceExcelStoreV16.Load()
-                .OrderByDescending(x=>x.CreatedUtc).ThenBy(x=>x.Name).ToList();
-            start=Math.Clamp(start,0,Math.Max(0,formats.Count-PerPage));
+                .OrderBy(x=>x.GroupPath,StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();
+            level=ExcelLevel.Functions;
+            groupPath="";
+            start=0;
             Render();
             Position();
             arc.IsOpen=true;
@@ -179,55 +192,94 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(pasting)return;
         HideArc();shelf.IsOpen=false;
     }
+    private static string Group(DeskSpaceExcelTemplateV16 entry)=>
+        string.Join("/",(entry.GroupPath??"").Replace('\\','/')
+            .Split('/',StringSplitOptions.RemoveEmptyEntries|
+                StringSplitOptions.TrimEntries));
+
+    private List<(string Label,string Command,string Group,Guid? Id)> Entries()
+    {
+        var entries=new List<(string Label,string Command,string Group,Guid? Id)>();
+        if(level==ExcelLevel.Functions)
+        {
+            entries.Add(("Clipboard","clipboard","",null));
+            entries.Add(("Information","information","",null));
+            return entries;
+        }
+        var childGroups=new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach(var format in formats)
+        {
+            var g=Group(format);
+            string remainder;
+            if(groupPath.Length==0)remainder=g;
+            else if(g.StartsWith(groupPath+"/",StringComparison.OrdinalIgnoreCase))
+                remainder=g.Substring(groupPath.Length+1);
+            else continue;
+            if(remainder.Length>0)
+                childGroups.Add(remainder.Split('/')[0]);
+        }
+        foreach(var group in childGroups)
+            entries.Add(("▸ "+group,"group",
+                groupPath.Length==0?group:groupPath+"/"+group,null));
+        foreach(var entry in formats.Where(x=>
+            string.Equals(Group(x),groupPath,StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase))
+            entries.Add((entry.Name,"mapping",groupPath,entry.Id));
+        entries.Add(("← Back","back","",null));
+        entries.Add(("+ Manage","manage","",null));
+        return entries;
+    }
     private void Render()
     {
-        canvas.Children.Clear();sectors.Clear();hitZones.Clear();hovered=-1;
-        var visible=formats.Skip(start).Take(PerPage).ToArray();
-        int count=visible.Length+1;
+        canvas.Children.Clear();sectors.Clear();hitZones.Clear();displayed.Clear();
+        hovered=-1;
+        var all=Entries();
+        start=Math.Clamp(start,0,Math.Max(0,all.Count-PerPage));
+        var visible=all.Skip(start).Take(PerPage).ToArray();
+        displayed.AddRange(visible);
+        int count=visible.Length;
+        if(count==0)return;
         double half=count==1?15:Math.Min(57,12.0*count);
         double step=half*2/count;
         for(int i=0;i<count;i++)
         {
-            bool newItem=i==visible.Length;
-            Guid? id=newItem?null:visible[i].Id;
-            string full=newItem?"+ Manage":visible[i].Name;
+            var item=visible[i];
+            bool action=item.Command!="mapping";
             double a=ArcCenter-half+i*step,b=a+step;
             var geometry=Sector(a,b);
             var shape=new System.Windows.Shapes.Path{
                 Data=geometry,Stroke=Brushes.White,StrokeThickness=2,
-                Fill=newItem?Accent:Idle,Tag=i,
-                Cursor=Cursors.Hand,ToolTip=newItem?
-                   "Edit or create mappings in the Workspace's Excel Mapping tab":
-                   full+" — click to paste values into open Excel"
+                Fill=action?Accent:Idle,Tag=i,
+                Cursor=Cursors.Hand,ToolTip=item.Label
             };
             canvas.Children.Add(shape);sectors.Add(shape);
-            hitZones.Add((i,id,geometry));
+            hitZones.Add((i,item.Id,geometry));
             double mid=(a+b)*Math.PI/360;
             double radius=(Inner+Outer)/2;
             double x=CX+radius*Math.Cos(mid),
                    y=CY+radius*Math.Sin(mid);
-            var text=new TextBlock{
-                Text=full,Width=83,FontSize=11,
-                Foreground=newItem?Brushes.White:Ink,
-                FontWeight=newItem?FontWeights.SemiBold:FontWeights.Normal,
+            var label=new TextBlock{
+                Text=item.Label,Width=83,FontSize=11,
+                Foreground=action?Brushes.White:Ink,
+                FontWeight=action?FontWeights.SemiBold:FontWeights.Normal,
                 TextAlignment=TextAlignment.Center,
                 TextTrimming=TextTrimming.CharacterEllipsis,
-                ToolTip=full,IsHitTestVisible=false
+                ToolTip=item.Label,IsHitTestVisible=false
             };
-            Canvas.SetLeft(text,x-41.5);Canvas.SetTop(text,y-10);
-            canvas.Children.Add(text);
+            Canvas.SetLeft(label,x-41.5);Canvas.SetTop(label,y-10);
+            canvas.Children.Add(label);
         }
         if(start>0)
         {
             var previous=SmallButton("‹",()=>Page(-1));
-            previous.ToolTip="Previous saved Excel mappings";
+            previous.ToolTip="Previous Excel Information items";
             Canvas.SetLeft(previous,20);Canvas.SetTop(previous,185);
             canvas.Children.Add(previous);
         }
-        if(start+PerPage<formats.Count)
+        if(start+PerPage<all.Count)
         {
             var next=SmallButton("›",()=>Page(1));
-            next.ToolTip="More saved Excel mappings";
+            next.ToolTip="More Excel Information items";
             Canvas.SetLeft(next,25);Canvas.SetTop(next,273);
             canvas.Children.Add(next);
         }
@@ -239,11 +291,11 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         return -1;
     }
     private bool CanPage(int dir)=>dir<0
-        ?start>0:start+PerPage<formats.Count;
+        ?start>0:start+PerPage<Entries().Count;
     private void Page(int dir)
     {
         if(!CanPage(dir)){edgeTimer.Stop();pageDirection=0;return;}
-        start=Math.Clamp(start+dir,0,Math.Max(0,formats.Count-PerPage));
+        start=Math.Clamp(start+dir,0,Math.Max(0,Entries().Count-PerPage));
         Render();
         if(!CanPage(dir))edgeTimer.Stop();
     }
@@ -289,22 +341,28 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         hovered=slot;
         for(int i=0;i<sectors.Count;i++)
         {
-            bool manage=i==sectors.Count-1;
-            sectors[i].Fill=i==slot
-                ? (manage?new SolidColorBrush(Color.FromRgb(48,60,139)):Selected)
-                : (manage?Accent:Idle);
+            bool command=displayed[i].Command!="mapping";
+            sectors[i].Fill=i==slot?Selected:(command?Accent:Idle);
         }
-        // Preview is read-only. Hovering MUST NEVER modify an Excel workbook.
-        if(slot<0)return;
-        if(slot==hitZones.Count-1)
-            Status("Manage Excel formats","Rename and edit saved mapping rows from "+
-                "DeskSpace Workspace → Excel Mapping. Select a saved child "+
-                "in this wheel to paste values directly into the open workbook.");
-        else
+        // A hover preview is always read-only, without Excel automation.
+        if(slot<0 || slot>=displayed.Count)return;
+        var item=displayed[slot];
+        if(item.Command=="mapping")
         {
-            var format=formats.FirstOrDefault(x=>x.Id==hitZones[slot].Id);
+            var format=formats.FirstOrDefault(x=>x.Id==item.Id);
             if(format!=null)Preview(format);
         }
+        else if(item.Command=="clipboard")
+            Status("Excel Clipboard","Select to open the Excel-only copied ranges.");
+        else if(item.Command=="information")
+            Status("Excel Information","Saved mappings and optional groups.");
+        else if(item.Command=="group")
+            Status("Information · "+item.Label,"Open the group to find child items.");
+        else if(item.Command=="back")
+            Status("Back","Return to the previous Excel Information donut.");
+        else
+            Status("Manage Excel Information",
+                "Use Workspace → Excel Mapping to create, rename or group mappings.");
     }
     private void OnDown(object sender,MouseButtonEventArgs e)
     {
@@ -337,19 +395,47 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     private void Activate(int slot)
     {
-        if(disposed||pasting||slot<0||slot>=hitZones.Count)return;
-        var id=hitZones[slot].Id;
-        if(!id.HasValue)
+        if(disposed||pasting||slot<0||slot>=displayed.Count)return;
+        var item=displayed[slot];
+        if(item.Command=="clipboard")
         {
-            Status("Manage Excel mappings",
-                "Open DeskSpace Workspace → Excel Mapping to capture, rename "+
-                "or edit saved formats. Nothing was pasted.");
+            HideArc();collapseParent();
+            DeskSpaceExcelClipboardV39.ShowActive();
             return;
         }
-        var entry=formats.FirstOrDefault(f=>f.Id==id.Value);
+        if(item.Command=="information")
+        {
+            level=ExcelLevel.Information;groupPath="";start=0;Render();
+            Status("Excel Information","Select a direct mapping or its group.");
+            return;
+        }
+        if(item.Command=="group")
+        {
+            groupPath=item.Group;start=0;Render();
+            Status("Information · "+groupPath,"Select a mapping or nested group.");
+            return;
+        }
+        if(item.Command=="back")
+        {
+            if(groupPath.Length>0)
+            {
+                int cut=groupPath.LastIndexOf('/');
+                groupPath=cut<0?"":groupPath.Substring(0,cut);
+            }
+            else level=ExcelLevel.Functions;
+            start=0;Render();
+            return;
+        }
+        if(item.Command=="manage")
+        {
+            Status("Manage Excel Information",
+                "Open Workspace → Excel Mapping to add, edit or group mappings.");
+            return;
+        }
+        if(item.Command!="mapping" || !item.Id.HasValue)return;
+        var entry=formats.FirstOrDefault(f=>f.Id==item.Id.Value);
         if(entry==null)return;
-        HideArc();
-        collapseParent();
+        HideArc();collapseParent();
         _=PasteAsync(entry);
     }
     private void Preview(DeskSpaceExcelTemplateV16 entry)
@@ -393,6 +479,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     private void Status(string title,string message)
     {
+        successTimer.Stop();
         shelfTitle.Text=title;
         shelfBody.Children.Clear();
         shelfMessage.Text=message;
@@ -445,6 +532,9 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
                 ". Excel formatting and formulas were retained. "+
                 "Original workbook not auto-saved; review and save in Excel. "+
                 "Backup: "+backup);
+            // Three seconds only for confirmed Excel paste success.
+            // Blocked paste and other modules' messages are never timed out.
+            successTimer.Start();
         }
         catch(Exception ex)
         {
@@ -461,7 +551,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     {
         if(disposed)return;
         disposed=true;
-        pointerTimer.Stop();edgeTimer.Stop();
+        pointerTimer.Stop();edgeTimer.Stop();successTimer.Stop();
         owner.LocationChanged-=OnOwnerMoved;
         owner.SizeChanged-=OnOwnerResized;
         arc.IsOpen=false;shelf.IsOpen=false;
