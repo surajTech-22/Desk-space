@@ -9,7 +9,7 @@ foreach($file in $files){
     $errors=$null
     $ast=[System.Management.Automation.Language.Parser]::ParseFile(
         $file.FullName,[ref]$tokens,[ref]$errors)
-    if(@($errors).Count -gt 0){
+    if($null -ne $errors -and $errors.Length -gt 0){
         $message=(@($errors) | ForEach-Object {
             $_.Extent.File+':'+$_.Extent.StartLineNumber+': '+$_.Message
         }) -join [Environment]::NewLine
@@ -30,3 +30,36 @@ foreach($file in $files){
     }
 }
 Write-Host ('R42 PowerShell preflight PASS: '+$files.Count+' scripts parsed; no reserved Host assignments.')
+
+# Protect the manual Windows builder from malformed or duplicated workflow
+# stages, not only from parser errors in individual .ps1 files.
+$workflowPath='.github/workflows/build-installer.yml'
+if(!(Test-Path -LiteralPath $workflowPath)){throw 'Windows build workflow missing'}
+$workflow=[IO.File]::ReadAllText($workflowPath)
+$stepNames=@([regex]::Matches($workflow,'(?m)^      - name: ([^\r\n]+)$') |
+    ForEach-Object {$_.Groups[1].Value.Trim()})
+$duplicates=@($stepNames | Group-Object | Where-Object {$_.Count -gt 1})
+if($duplicates.Count -gt 0){
+    throw ('Duplicated Windows build steps: '+
+        (($duplicates | ForEach-Object {$_.Name}) -join ', '))
+}
+$required=@(
+    'R42 editable saved Excel mapping and simplified review',
+    'R42 PowerShell syntax and automatic-variable preflight',
+    'R42 user-approved current location and worldwide weather tests',
+    'R42 verified installed-app closure and corrected Inno Setup version label',
+    'Assign monotonic build version to installer and app',
+    'Compile, test and package self-contained app',
+    'R41 WPF test Excel, scroll and weather scenes',
+    'Confirm installer and checksum exist'
+)
+$previous=-1
+foreach($name in $required){
+    $index=[array]::IndexOf($stepNames,$name)
+    if($index -le $previous){
+        throw ('Missing or out-of-order build stage: '+$name)
+    }
+    $previous=$index
+}
+Write-Host ('R42 workflow preflight PASS: '+$stepNames.Count+
+    ' unique ordered build steps; no malformed duplicate tail.')
