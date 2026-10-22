@@ -15,25 +15,27 @@ foreach($check in @(
  'private async void Capture()', 'private async void Apply()'
 )){if(!$base.Contains($check)){throw "R42 main editor integration missing: $check"}}
 foreach($check in @(
- 'Your saved Excel formats','SAVED MAPPINGS','Header / Reference',
+ 'Excel Mapping','SAVED MAPPINGS','Header / Reference',
  'Value / Input','Value cell','ReferenceCell','Save mapping changes',
  'Rename mapping','Refresh saved mappings','LoadEditorV42(',
  'SaveEditorV42()','DeskSpaceExcelStoreV16.Load()',
  'DeskSpaceExcelStoreV16.Save(disk)','ShowCapturedV42(',
  'existing>=0)disk[existing]=edited',
- 'SourceWorkbook','CoordinatesVerified'))
+ 'SourceWorkbook','CoordinatesVerified','GroupPath','mappingGroupV42'))
 {if(!$editor.Contains($check)){throw "R42 saved mapping editor missing: $check"}}
 foreach($check in @(
  'class DeskSpaceExcelWheelV42',
  'DeskSpaceExcelStoreV16.Load()',
  'TryCapturedDragAtScreen(', 'OnWheel(', 'Hover(', 'Preview(',
- 'private void OpenExcelArc()', 'if(name=="Excel")',
+ 'private void OpenExcelArc()', 'if(name=="Excel Functions")',
  'if(selected==6 && ringExpanded',
  'private async System.Threading.Tasks.Task PasteAsync(',
  'DeskSpaceExcelWorkerV41.PreviewAsync(entry,',
  'selection:false,overwrite:true',
  'DeskSpaceExcelWorkerV41.ApplyAsync(',
- 'collapseParent();','Excel paste blocked','CoordinatesVerified'))
+ 'collapseParent();','Excel paste blocked','CoordinatesVerified',
+ '"Clipboard","clipboard"','"Information","information"',
+ 'groupPath','successTimer.Start();'))
 {
  if(!$wheel.Contains($check) -and !$hostSource.Contains($check)){
      throw "R42 direct-paste Excel circle missing: $check"
@@ -72,6 +74,31 @@ if(!$wheel.Contains('System.Windows.Shapes.Path')){
 }
 
 if(!$hostSource.Contains('excelWheel?.Dispose();')){throw 'Excel popup lifetime leak'}
+# The main wheel must have 13 sectors: seven inside including Excel Functions,
+# six outside including the original Information; never an independent Excel
+# Clipboard main wedge.
+$seg=$hostSource.IndexOf('private static readonly string[] Segments')
+$icons=$hostSource.IndexOf('private static readonly string[] SegmentIcons',$seg)
+if($seg -lt 0 -or $icons -le $seg){throw 'R42 main wheel labels unavailable'}
+$main=$hostSource.Substring($seg,$icons-$seg)
+foreach($check in @('"Excel Functions"','"Information"','"Clipboard"')){
+    if(!$main.Contains($check)){throw "R42 missing main sector: $check"}
+}
+if($main.Contains('"Excel Clipboard"')){throw 'R42 duplicate main Excel Clipboard sector remains'}
+if(!$hostSource.Contains('double sectors=outer?6:7;')){
+    throw 'R42 13-sector input geometry missing'
+}
+if(!$hostSource.Contains('double step=360.0/(outer?6:7);')){
+    throw 'R42 13-sector rendered geometry missing'
+}
+if(!$wheel.Contains('enum ExcelLevel { Functions, Information }') -or
+   !$wheel.Contains('entries.Add(("▸ "+group,"group"') -or
+   !$wheel.Contains('entries.Add((entry.Name,"mapping"')){
+    throw 'R42 Excel Information group hierarchy unavailable'
+}
+if(!$wheel.Contains('successTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(3)}')){
+    throw 'R42 successful Excel paste-only toast timer unavailable'
+}
 foreach($check in @('x.Source.Role=="Value"','ValueKind!="formula"',
  'ValueKind!="blank"','cell.Value2=TypedValue(change.Source);',
  'SaveCopyAs(backup)','if(!preview.Verified || !entry.CoordinatesVerified)'))
@@ -86,6 +113,12 @@ foreach($file in @('DeskSpaceExcelStoreV16.cs','DeskSpaceVaultV10.cs',
 }
 Write-Host 'R42 source safety gate PASS: contextual Excel child arc, direct values-only paste, mapping editor, original data.'
 
+# Data-format regression: GroupPath is optional and does not rename or
+# reidentify historical encrypted Excel mappings.
+$store=[IO.File]::ReadAllText("$root/DeskSpaceExcelStoreV16.cs")
+if(!$store.Contains('public string GroupPath {get;set;}=""')){
+    throw 'R42 optional group classification missing in saved mapping model'
+}
 # Update previously correct WPF screenshot acceptance tests to the new
 # simplified editor. Advanced-only controls are intentionally collapsed;
 # tests must validate primary visible actions.
@@ -110,6 +143,8 @@ $new=$new.Replace([string][char]13+[char]10,[string][char]10)
 $s=$s.Replace([string][char]13+[char]10,[string][char]10)
 if(!$s.Contains($old)){throw 'R42 cannot update legacy R39 screenshot Excel buttons'}
 $s=$s.Replace($old,$new)
+# The compact editor deliberately labels screenshot import more briefly.
+$s=$s.Replace('"Upload screenshot + OCR"','"Screenshot"')
 # R40 main Workspace smoke checked legacy deep advanced actions.
 $old2=@'
             "Verify screenshot against selected Excel range",
