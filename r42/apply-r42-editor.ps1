@@ -54,14 +54,10 @@ Patch $bridge @'
         dynamic sheet=app.ActiveSheet;
         int r,c;
 '@
-Patch $bridge @'
-            if(!verified)decision="Unconfirmed target";
-            else if(source.Role!="Value" || source.ValueKind=="formula")
-'@ @'
-            if(!verified)decision="Unconfirmed target";
-            else if(source.Role!="Value" || source.ValueKind=="formula" ||
-                    source.ValueKind=="blank")
-'@
+# R39 already classifies screenshot-only formula, reference and blank
+# entries as non-writable. Do not re-patch that guard with a stale R39
+# source pattern: it would cause a release-candidate build to fail before
+# compilation and waste Windows runner minutes.
 Patch $bridge @'
         if(!preview.Verified || !entry.CoordinatesVerified)
             throw new InvalidOperationException(
