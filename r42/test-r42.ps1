@@ -233,6 +233,8 @@ $method=@'
                 "Excel closed test probe did not report closed");
             Call(wheel,"Show");
             var canvas=Private<Canvas>(wheel,"canvas");
+            Assert(canvas.Width<=190 && canvas.Height<=190,
+                "Excel submenu exceeds allowed compact mini-wheel bounds");
             Render(canvas,650,650,"excel-child-wheel");
             Assert((bool)wheel.GetType().GetProperty("IsArcOpen")!
                     .GetValue(wheel)!,
@@ -276,6 +278,8 @@ $method=@'
                 var ring=levels[i]!;
                 var surface=(Canvas)ring.GetType().GetField("Surface",Any)!
                     .GetValue(ring)!;
+                Assert(surface.Width<=190 && surface.Height<=190,
+                    "Excel nested submenu became a full-screen ring");
                 Render(surface,Math.Max(200,(int)surface.Width),
                     Math.Max(200,(int)surface.Height),"excel-nested-level-"+(i+1));
             }

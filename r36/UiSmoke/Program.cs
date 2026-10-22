@@ -29,6 +29,7 @@ internal static class Program
             TestCalculator();
             TestMediaPill();
             TestConnectedChildDonut();
+            TestExcelPasteTimeDate();
             Console.WriteLine("R36 WPF visual smoke PASS: weather full disk, calendar navigation/event +, internal calculator 1+2=3, media pill controls and screenshots");
             app.Shutdown();
             return 0;
@@ -39,6 +40,25 @@ internal static class Program
             app.Shutdown();
             return 1;
         }
+    }
+    private static void TestExcelPasteTimeDate()
+    {
+        var actions=Product.GetType("DeskSpace.DeskSpaceExcelActionsV46",true)!;
+        var cell=Make("DeskSpace.DeskSpaceExcelCellV16");
+        cell.GetType().GetProperty("ValueKind")!.SetValue(cell,"action_static_date");
+        var method=actions.GetMethod("ValueAtPaste",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        double first=Convert.ToDouble(method.Invoke(null,new object[]{
+            cell,new DateTime(2026,10,22,13,45,0)})!);
+        double second=Convert.ToDouble(method.Invoke(null,new object[]{
+            cell,new DateTime(2026,10,23,7,30,0)})!);
+        Assert(second-first==1.0,
+            "Saved Excel date action does not evaluate when pasted");
+        var label=actions.GetMethod("FromShortcut",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        Assert((string)label.Invoke(null,new object[]{"Ctrl+;"})!==
+            "action_static_date","Excel Ctrl+; mapping not recognised");
+        Console.WriteLine("R46 Excel paste-time date and keyboard mapping PASS.");
     }
     private static void TestConnectedChildDonut()
     {

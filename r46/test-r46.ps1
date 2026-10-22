@@ -18,10 +18,12 @@ foreach($token in @('ValueAtPaste(cell,DateTime.Now)',
     if(!$bridge.Contains($token)){throw "R46 Excel bridge missing $token"}
 }
 foreach($token in @('DataGridComboBoxColumn','EditorKinds',
-    'Current date on paste','Excel keyboard shortcuts',
-    'Shortcut (enter Ctrl+;','FromShortcut(key)',
+    'Excel keyboard shortcuts','FromShortcut(key)',
     'KindFromEditor(')){
     if(!$editor.Contains($token)){throw "R46 UI field missing $token"}
+}
+if(!$engine.Contains('Current date on paste (Ctrl+;)')){
+    throw 'R46 current-date picker option missing'
 }
 if(!$wheel.Contains('DeskSpaceExcelActionsV46.PreviewText(value,DateTime.Now)')){
     throw 'R46 wheel does not show current dynamic values'

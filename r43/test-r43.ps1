@@ -29,13 +29,18 @@ foreach($method in @('private void CollapseRing()','private void BuildCompact()'
  }
 }
 $rootWheel=[IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelWheelV42.cs')
-if($rootWheel.Contains('private static double Span(int count)=>180;')){
-    throw 'R43 giant 360-degree overlay arc regression'
+foreach($part in @('MiniOuter=77,MiniInner=35,MiniSize=176',
+    'PlaceWheel(0,0,ArcCenter,MainOuterRadius+MiniOuter+3)',
+    'rootPositionReady',
+    'ring.Surface.Width=MiniSize',
+    'ring.Surface.Height=MiniSize',
+    'ArcCenter-270.0+(slot+.5)*360.0/displayed.Count')){
+    if(!$rootWheel.Contains($part)){
+        throw "R47 missing compact attached child wheel anchor: $part"
+    }
 }
-if(!$rootWheel.Contains('Math.Min(48.0,Math.Max(16.0,12.5*Math.Max(1,count)))')){
-    throw 'R43 angular sub-donut bounds missing'
+if($rootWheel.Contains('private static double Span(int count)=>180;') -or
+   $rootWheel.Contains('KeepConcentricRingOnScreen(')){
+    throw 'R47 massive Excel overlay geometry has returned'
 }
-if($rootWheel.Contains('KeepConcentricRingOnScreen(')){
-    throw 'R43 submenu must not move the main wheel on hover'
-}
-Write-Host 'R43 PASS: radial tether, bounded child arc, no moving main wheel, close popups on collapse.'
+Write-Host 'R47 PASS: compact 176-DIP Excel child donuts, stable parent anchor, nested tear-down.'

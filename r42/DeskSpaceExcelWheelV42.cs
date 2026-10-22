@@ -36,6 +36,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private int start,hovered=-1,pageDirection;
     private double localOriginX,localOriginY;
     private double rootCenterX,rootCenterY;
+    private bool rootPositionReady;
     private const double MiniOuter=77,MiniInner=35,MiniSize=176;
     private const double MainOuterRadius=194;
     private int drillSlot=-1;
@@ -519,9 +520,12 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         double scale=DeskSpaceDonutGeometryV43.Scale(owner);
         // Anchor to the ACTUAL Excel outer parent wedge, not a 650px
         // coordinate system or the parent wheel centre.
-        var wanted=Polar(MainOuterRadius+MiniOuter+3,ArcCenter);
-        var root=PlaceWheel(0,0,ArcCenter,MainOuterRadius+MiniOuter+3);
-        rootCenterX=root.X;rootCenterY=root.Y;
+        if(!rootPositionReady)
+        {
+            var root=PlaceWheel(0,0,ArcCenter,MainOuterRadius+MiniOuter+3);
+            rootCenterX=root.X;rootCenterY=root.Y;
+            rootPositionReady=true;
+        }
         canvas.LayoutTransform=new ScaleTransform(scale,scale);
         arc.HorizontalOffset=w/2+(rootCenterX-MiniSize/2)*scale;
         arc.VerticalOffset=h/2+(rootCenterY-MiniSize/2)*scale;
@@ -552,6 +556,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             level=ExcelLevel.Functions;
             groupPath="";
             start=0;
+            rootPositionReady=false;
             suppressNextUp=false;
             Render();
             Position();
@@ -572,6 +577,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         CloseFrom(1);
         suppressNextUp=false;
         arc.IsOpen=false;hovered=-1;
+        rootPositionReady=false;
     }
     public void Hide()
     {
