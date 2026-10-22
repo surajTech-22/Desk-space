@@ -55,9 +55,15 @@ $required=@(
 )
 $previous=-1
 foreach($name in $required){
-    $index=[array]::IndexOf($stepNames,$name)
+    $index=-1
+    for($i=0;$i -lt $stepNames.Count;$i++){
+        if([string]::Equals([string]$stepNames[$i],[string]$name,
+            [StringComparison]::Ordinal)){$index=$i;break}
+    }
     if($index -le $previous){
-        throw ('Missing or out-of-order build stage: '+$name)
+        throw ('Missing or out-of-order build stage: '+$name+
+            '; position='+$index+' after='+$previous+
+            '; available='+($stepNames -join ' | '))
     }
     $previous=$index
 }
