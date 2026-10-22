@@ -38,23 +38,44 @@ Require @'
         }
         if(name=="Excel Clipboard")
 '@
-Require @'
-        if(selected==7 && ringExpanded && activeModule==null)
-        {
-            // Parent wedge is reached: open contextual sub-donut on hover.
-'@ @'
+# R29 replaced the R28 selector with a stable Information context state
+# machine. R39 added a seventh inner sector and moved Information to index 7
+# but did not rebase the selector's nonliteral "selected==6 &&" comparison.
+# Patch the FUNCTION, not a historic comment, and guard both real indices.
+$paintBegin=$s.IndexOf('    private void UpdateHighlightedSector(',[StringComparison]::Ordinal)
+$paintEnd=if($paintBegin -ge 0){
+    $s.IndexOf('    private void BuildCompact()', $paintBegin,[StringComparison]::Ordinal)
+}else{-1}
+if($paintBegin -lt 0 -or $paintEnd -le $paintBegin){
+    throw 'R42 cannot locate live parent donut selector'
+}
+$paint=$s.Substring($paintBegin,$paintEnd-$paintBegin)
+foreach($required in @(
+    'if(selected>=0 && selected!=6)',
+    'else if(selected==6 && ringExpanded && activeModule==null)',
+    'CloseInformationContext();',
+    'OpenInformationArc();',
+    'if(selected==highlightedSector)return;'
+)){
+    if(!$paint.Contains($required)){throw "R42 live wheel selector changed: $required"}
+}
+$paint=$paint.Replace('if(selected>=0 && selected!=6)',
+    'if(selected>=0 && selected!=7)')
+$paint=$paint.Replace('else if(selected==6 && ringExpanded && activeModule==null)',
+    'else if(selected==7 && ringExpanded && activeModule==null)')
+$excelSelector=@'
+        // Excel is inner sector 6; Information is outer sector 7.
+        // Hover never writes to Excel. Only explicit child selection
+        // enters the guarded values-only paste path.
         if(selected==6 && ringExpanded && activeModule==null)
-        {
-            // Exactly like Information: show saved Excel format child arc.
-            // Hover only previews; a click/drag-release explicitly pastes.
             OpenExcelArc();
-        }
-        if(selected!=6 && excelWheel?.IsArcOpen==true)
+        if(selected>=0 && selected!=6 && excelWheel?.IsArcOpen==true)
             excelWheel.HideArc();
-        if(selected==7 && ringExpanded && activeModule==null)
-        {
-            // Parent wedge is reached: open contextual sub-donut on hover.
 '@
+$paint=$paint.Replace('        if(selected==highlightedSector)return;',
+    $excelSelector.Replace([string][char]13+[char]10,[string][char]10)+
+    '        if(selected==highlightedSector)return;')
+$s=$s.Substring(0,$paintBegin)+$paint+$s.Substring($paintEnd)
 # Same press/drag navigation and small status shelf as the Information
 # module; selected saved format directly pastes to the running Excel workbook.
 $excelArc=@'
