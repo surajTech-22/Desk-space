@@ -249,7 +249,14 @@ internal sealed partial class DeskSpaceExcelV16
         AddColumnV42("Header cell","ReferenceCell",93);
         AddColumnV42("Data value","Value",210);
         AddColumnV42("Value cell","ValueCell",90);
-        AddColumnV42("Type","Kind",98);
+        mappingGridV42.Columns.Add(new DataGridComboBoxColumn{
+            Header="Cell action / shortcut",
+            ItemsSource=DeskSpaceExcelActionsV46.EditorKinds,
+            SelectedItemBinding=new Binding("Kind"){
+                Mode=BindingMode.TwoWay,
+                UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged},
+            Width=new DataGridLength(225)
+        });
         mappingGridV42.CellEditEnding+=(_,_)=>{
             hasUnsavedChangesV42=true;
             latest=null;
@@ -262,6 +269,69 @@ internal sealed partial class DeskSpaceExcelV16
         content.Children.Add(editorPanel);
         // Optional controls stay accessible without forcing extra steps for
         // simple capture, review, edit, save, paste.
+        // Searchable Windows Excel keyboard reference. Only safe single-cell
+        // date/time shortcuts may be selected for automatic Excel mappings.
+        // All other listed shortcuts remain reference-only, never injected.
+        var shortcutPane=new Expander{
+            Header="Excel keyboard shortcuts / mapping actions",
+            IsExpanded=false,Margin=new Thickness(7,1,7,2)
+        };
+        var shortcutArea=new StackPanel{Margin=new Thickness(6)};
+        shortcutArea.Children.Add(HintV42(
+            "Search Windows Excel shortcuts. Select a saved cell row, then "+
+            "double-click Ctrl+; or Ctrl+Shift+; to map its paste-time action. "+
+            "Other shortcuts are reference-only for safety.",11));
+        var shortcutFilter=Field("Search shortcuts (date, Ctrl+B, filter...)");
+        shortcutArea.Children.Add(shortcutFilter);
+        var shortcutList=new ListBox{Height=130,FontSize=11};
+        shortcutArea.Children.Add(shortcutList);
+        void PopulateShortcutList()
+        {
+            var q=shortcutFilter.Text.Trim();
+            shortcutList.ItemsSource=DeskSpaceExcelActionsV46.Shortcuts
+                .Where(x=>q.Length==0 ||
+                    x.Keys.Contains(q,StringComparison.OrdinalIgnoreCase) ||
+                    x.Operation.Contains(q,StringComparison.OrdinalIgnoreCase) ||
+                    x.Category.Contains(q,StringComparison.OrdinalIgnoreCase))
+                .Select(x=>x.Keys+" — "+x.Operation+" ["+x.Category+"]")
+                .ToArray();
+        }
+        shortcutFilter.TextChanged+=(_,_)=>PopulateShortcutList();
+        shortcutList.MouseDoubleClick+=(_,_)=>{
+            string selected=shortcutList.SelectedItem as string??"";
+            if(selected.Length==0)return;
+            string key=selected.Split(" — ",StringSplitOptions.None)[0];
+            try
+            {
+                DeskSpaceExcelActionsV46.FromShortcut(key);
+                if(mappingGridV42?.SelectedItem is MappingRowV42 row)
+                {
+                    row.Kind=DeskSpaceExcelActionsV46.EditorKinds[8];
+                    row.Value=key;
+                    mappingGridV42.Items.Refresh();
+                    hasUnsavedChangesV42=true;
+                    if(status!=null)status.Text=
+                        "Shortcut "+key+" mapped. Save collection & data. "+
+                        "Its current value will be generated on each paste.";
+                }
+                else if(status!=null)
+                    status.Text="Select a data row in the table first.";
+            }
+            catch(InvalidOperationException ex)
+            {
+                if(status!=null)status.Text=ex.Message;
+            }
+        };
+        shortcutArea.Children.Add(ButtonV42(
+            "Full Microsoft Excel Windows shortcut documentation",()=>{
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    "https://support.microsoft.com/en-us/accessibility/excel/keyboard-shortcuts-in-excel"
+                ){UseShellExecute=true});
+            }));
+        shortcutPane.Content=shortcutArea;
+        PopulateShortcutList();
+        DockPanel.SetDock(shortcutPane,Dock.Bottom);
+        root.Children.Add(shortcutPane);
         var advanced=new Expander{
             Header="More options and instructions",
             IsExpanded=false,Margin=new Thickness(7,1,7,2)
@@ -562,8 +632,11 @@ internal sealed partial class DeskSpaceExcelV16
                 ValueCell=cell.CellAddress.Length>0?cell.CellAddress:
                     entry.CoordinatesVerified?CellReference(
                         entry.SourceRow+cell.RowOffset,entry.SourceColumn+cell.ColumnOffset):"Unverified",
-                Value=cell.ValueKind=="formula"?cell.Display:cell.RawValue,
-                Kind=cell.Role,CellType=cell.ValueKind,Formula=cell.FormulaR1C1,
+                Value=DeskSpaceExcelActionsV46.IsAction(cell.ValueKind)
+                    ?DeskSpaceExcelActionsV46.PreviewText(cell,DateTime.Now)
+                    :cell.ValueKind=="formula"?cell.Display:cell.RawValue,
+                Kind=DeskSpaceExcelActionsV46.Label(cell),
+                CellType=cell.ValueKind,Formula=cell.FormulaR1C1,
                 Include=true
             });
         }
@@ -643,7 +716,29 @@ internal sealed partial class DeskSpaceExcelV16
                         "Excel address "+cell.CellAddress+
                         ". Capture the correct range again to move a cell.");
                 }
-                if(cell.ValueKind!="formula" && row.Value!=row.OriginalRaw)
+                string requestedAction=DeskSpaceExcelActionsV46.KindFromEditor(
+                    row.Kind,row.Value??"");
+                if(requestedAction.Length>0)
+                {
+                    // These are symbolic commands, not saved date/time values.
+                    // Their actual value is computed at APPLY time in Excel.
+                    cell.Role="Value";
+                    cell.ValueKind=requestedAction;
+                    if(requestedAction==DeskSpaceExcelActionsV46.CustomFormula)
+                    {
+                        if(!row.Value.TrimStart().StartsWith("=",StringComparison.Ordinal))
+                            throw new InvalidOperationException(
+                                "A custom Excel formula must begin with =.");
+                        cell.FormulaR1C1=row.Value.Trim();
+                    }
+                    cell.RawValue="";
+                    cell.Display=DeskSpaceExcelActionsV46.PreviewText(
+                        cell,DateTime.Now);
+                    cell.NumberFormat=DeskSpaceExcelActionsV46.NumberFormat(
+                        requestedAction);
+                }
+                else if(!DeskSpaceExcelActionsV46.IsAction(cell.ValueKind) &&
+                    cell.ValueKind!="formula" && row.Value!=row.OriginalRaw)
                 {
                     cell.RawValue=row.Value;
                     cell.Display=row.Value;
@@ -659,6 +754,15 @@ internal sealed partial class DeskSpaceExcelV16
                             System.Globalization.NumberStyles.Any,
                             System.Globalization.CultureInfo.InvariantCulture,out _))
                         cell.ValueKind="text";
+                }
+                else if(DeskSpaceExcelActionsV46.IsAction(cell.ValueKind) &&
+                    row.Kind=="Value")
+                {
+                    // Switching back to ordinary input is explicit.
+                    cell.ValueKind="text";
+                    cell.RawValue=row.Value??"";
+                    cell.Display=cell.RawValue;
+                    cell.FormulaR1C1="";
                 }
                 cell.HeaderCellAddress=row.ReferenceCell;
                 if(!string.IsNullOrWhiteSpace(row.Header))
