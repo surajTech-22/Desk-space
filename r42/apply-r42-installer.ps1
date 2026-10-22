@@ -30,9 +30,36 @@ Set-Directive 'CloseApplicationsFilter' '*.exe,*.dll,*.chm'
 # Original installer displayed a stale "DeskSpace R10" title. Fix label
 # only; preserve stable AppId, installation directory and all user data.
 Set-Directive 'AppVerName' 'DeskSpace {#AppVersion}'
-[IO.File]::WriteAllText($p,$head+$setup+$tail,[Text.UTF8Encoding]::new($false))
+# Inno Setup sections MUST begin on their own line. When directives are
+# appended to [Setup], the previous version joined the final directive to
+# the following [Tasks] header (AppVerName=... [Tasks]), so Inno interpreted
+# "Name: desktopicon; ..." as a [Setup] directive and aborted.
+# Preserve the exact original text of every non-[Setup] section.
+if($tail.Length -gt 0 -and !$setup.EndsWith("`n")){$setup+="`n"}
+$built=$head+$setup+$tail
+$beforeSections=[regex]::Matches($s,'(?m)^\\[[^\\]\\r\\n]+\\][ \\t]*
+Write-Host 'R42 installer: automatic graceful close, no forced exit, no restart, current version label. Original AppId and data unchanged.'
+)
+$afterSections=[regex]::Matches($built,'(?m)^\\[[^\\]\\r\\n]+\\][ \\t]*
+Write-Host 'R42 installer: automatic graceful close, no forced exit, no restart, current version label. Original AppId and data unchanged.'
+)
+if($beforeSections.Count -ne $afterSections.Count){
+    throw 'Installer patch changed the number of Inno Setup sections'
+}
+for($i=0;$i -lt $beforeSections.Count;$i++){
+    if($beforeSections[$i].Value -ne $afterSections[$i].Value){
+        throw "Installer section header changed: $($beforeSections[$i].Value)"
+    }
+}
+if($setup -match '(?m)^[ \\t]*Name[ \\t]*:'){
+    throw 'Inno Tasks/Icons directive leaked into [Setup] section'
+}
+if($tail.Length -gt 0 -and !$built.Contains("`n"+$tail)){
+    throw 'Installer subsection boundary was not preserved'
+}
+[IO.File]::WriteAllText($p,$built,[Text.UTF8Encoding]::new($false))
 foreach($v in @('CloseApplications=yes','RestartApplications=no',
-'AppVerName=DeskSpace {#AppVersion}')){
-    if(![IO.File]::ReadAllText($p).Contains($v)){throw "Missing guarded installer setting: $v"}
+    'AppVerName=DeskSpace {#AppVersion}')){
+    if(!$built.Contains($v)){throw "Missing guarded installer setting: $v"}
 }
 Write-Host 'R42 installer: automatic graceful close, no forced exit, no restart, current version label. Original AppId and data unchanged.'
