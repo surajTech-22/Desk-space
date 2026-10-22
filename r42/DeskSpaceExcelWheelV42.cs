@@ -25,7 +25,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private readonly TextBlock shelfTitle, shelfMessage;
     private readonly DispatcherTimer pointerTimer,edgeTimer;
     private readonly List<(int Index,Guid? Id,Geometry Hit)> hitZones=new();
-    private readonly List<Path> sectors=new();
+    private readonly List<System.Windows.Shapes.Path> sectors=new();
     private List<DeskSpaceExcelTemplateV16> formats=new();
     private int start,hovered=-1,pageDirection;
     private bool disposed,pasting,previewOnly;
@@ -193,7 +193,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             string full=newItem?"+ Manage":visible[i].Name;
             double a=ArcCenter-half+i*step,b=a+step;
             var geometry=Sector(a,b);
-            var shape=new Path{
+            var shape=new System.Windows.Shapes.Path{
                 Data=geometry,Stroke=Brushes.White,StrokeThickness=2,
                 Fill=newItem?Accent:Idle,Tag=i,
                 Cursor=Cursors.Hand,ToolTip=newItem?
