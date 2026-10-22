@@ -25,7 +25,8 @@ Swap $excel @'
     {
         back=exit;
 '@ @'
-    public DeskSpaceExcelV16(Action exit,bool inMainWorkspace=false)
+    public DeskSpaceExcelV16(Action exit):this(exit,false) {}
+    public DeskSpaceExcelV16(Action exit,bool inMainWorkspace)
     {
         back=exit;
         inWorkspace=inMainWorkspace;
