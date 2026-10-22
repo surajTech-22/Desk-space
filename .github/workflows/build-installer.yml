@@ -50,6 +50,7 @@ on:
       - "r39/**"
       - "r40/**"
       - "r41/**"
+      - "r42/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
@@ -992,6 +993,10 @@ jobs:
       - name: R41 repair open Excel range capture and global smooth scrolling
         shell: pwsh
         run: ./r41/test-r41.ps1
+
+      - name: R42 editable saved Excel mapping and simplified review
+        shell: pwsh
+        run: ./r42/test-r42.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
