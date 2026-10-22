@@ -36,8 +36,43 @@ Write-Host ('R42 PowerShell preflight PASS: '+$files.Count+' scripts parsed; no 
 $workflowPath='.github/workflows/build-installer.yml'
 if(!(Test-Path -LiteralPath $workflowPath)){throw 'Windows build workflow missing'}
 $workflow=[IO.File]::ReadAllText($workflowPath)
-$stepNames=@([regex]::Matches($workflow,'(?m)^      - name: ([^\r\n]+)$') |
-    ForEach-Object {$_.Groups[1].Value.Trim()})
+$stepNames=@(foreach($stepMatch in [regex]::Matches(
+    $workflow,'(?m)^      - name: ([^\r\n]+)
+$duplicates=@($stepNames | Group-Object | Where-Object {$_.Count -gt 1})
+if($duplicates.Count -gt 0){
+    throw ('Duplicated Windows build steps: '+
+        (($duplicates | ForEach-Object {$_.Name}) -join ', '))
+}
+$required=@(
+    'R42 editable saved Excel mapping and simplified review',
+    'R42 PowerShell syntax and automatic-variable preflight',
+    'R42 user-approved current location and worldwide weather tests',
+    'R42 verified installed-app closure and corrected Inno Setup version label',
+    'Assign monotonic build version to installer and app',
+    'Compile, test and package self-contained app',
+    'R41 WPF test Excel, scroll and weather scenes',
+    'Confirm installer and checksum exist'
+)
+$previous=-1
+foreach($name in $required){
+    $index=-1
+    for($i=0;$i -lt $stepNames.Count;$i++){
+        if([string]::Equals([string]$stepNames[$i],[string]$name,
+            [StringComparison]::Ordinal)){$index=$i;break}
+    }
+    if($index -le $previous){
+        throw ('Missing or out-of-order build stage: '+$name+
+            '; position='+$index+' after='+$previous+
+            '; available='+($stepNames -join ' | '))
+    }
+    $previous=$index
+}
+Write-Host ('R42 workflow preflight PASS: '+$stepNames.Count+
+    ' unique ordered build steps; no malformed duplicate tail.')
+)){
+    $stepMatch.Groups[1].Value.Trim()
+})
+if($stepNames.Count -lt 40){throw "Workflow stage parser found only $($stepNames.Count) steps"}
 $duplicates=@($stepNames | Group-Object | Where-Object {$_.Count -gt 1})
 if($duplicates.Count -gt 0){
     throw ('Duplicated Windows build steps: '+
