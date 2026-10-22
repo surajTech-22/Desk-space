@@ -39,21 +39,21 @@ Require @'
         if(name=="Excel Clipboard")
 '@
 # R39 introduced a separate 14th outer Excel Clipboard sector.
-# Replace it with one Excel Functions parent: 7 inner + 6 outer.
+# Replace it with one Excel Functions parent: 6 inner + 7 outer.
 # Preserve all original twelve sectors, their ordering and existing names.
 Require @'
         "Search", "Calendar", "Calculator", "Clock", "Weather", "Settings", "Excel",
         "Information", "Notes", "Reminders", "Clipboard", "Files", "Tasks", "Excel Clipboard"
 '@ @'
-        "Search", "Calendar", "Calculator", "Clock", "Weather", "Settings", "Excel Functions",
-        "Information", "Notes", "Reminders", "Clipboard", "Files", "Tasks"
+        "Search", "Calendar", "Calculator", "Clock", "Weather", "Settings",
+        "Information", "Notes", "Reminders", "Clipboard", "Files", "Tasks", "Excel Functions"
 '@
 Require @'
         "⌕", "▦", "⊞", "◷", "☀", "⚙", "▥",
         "◆", "✎", "◉", "▣", "▤", "☑", "▦"
 '@ @'
-        "⌕", "▦", "⊞", "◷", "☀", "⚙", "▥",
-        "◆", "✎", "◉", "▣", "▤", "☑"
+        "⌕", "▦", "⊞", "◷", "☀", "⚙",
+        "◆", "✎", "◉", "▣", "▤", "☑", "▥"
 '@
 # The existing independent Excel Clipboard remains alive, but must open
 # through the Excel Functions -> Clipboard child rather than a main wedge.
@@ -69,7 +69,7 @@ if($s.Contains($outside)){
 }
 
 # Different inner and outer wedge counts. No phantom blank Excel Clipboard
-# sector is drawn or hit-testable. Information remains index 7.
+# sector is drawn or hit-testable. Information stays original index 6; Excel Functions is outer index 12.
 $sectorA=$s.IndexOf('    private int SectorAt(',[StringComparison]::Ordinal)
 $sectorB=if($sectorA -ge 0){$s.IndexOf('    private ', $sectorA+24,[StringComparison]::Ordinal)}else{-1}
 if($sectorA -lt 0 -or $sectorB -le $sectorA){throw 'R42 SectorAt boundaries unavailable'}
@@ -79,19 +79,22 @@ if(!$sector.Contains('const double sectors=7;') -or
     throw 'R42 expected 14-sector input hit geometry missing'
 }
 $sector=$sector.Replace('const double sectors=7;',
-    'double sectors=outer?6:7;')
+    'double sectors=outer?7:6;')
 $sector=$sector.Replace('if(slot<0 || slot>=7',
     'if(slot<0 || slot>=sectors')
+$sector=$sector.Replace('return (outer?7:0)+slot;',
+    'return (outer?6:0)+slot;')
 $s=$s.Substring(0,$sectorA)+$sector+$s.Substring($sectorB)
 
 $quickA=$s.IndexOf('    private int QuickAddHitAt(',[StringComparison]::Ordinal)
 $quickB=if($quickA -ge 0){$s.IndexOf('    private void BuildDonut()', $quickA,[StringComparison]::Ordinal)}else{-1}
 if($quickA -lt 0 -or $quickB -le $quickA){throw 'R42 QuickAddHitAt boundaries unavailable'}
 $quick=$s.Substring($quickA,$quickB-$quickA)
+$quick=$quick.Replace('bool outer=i>=7;','bool outer=i>=6;')
 $quick=$quick.Replace('int slot=i%7;',
-    'int slot=outer?i-7:i;')
+    'int slot=outer?i-6:i;')
 $quick=$quick.Replace('(-90+slot*(360.0/7))*Math.PI/180',
-    '(-90+slot*(360.0/(outer?6:7)))*Math.PI/180')
+    '(-90+slot*(360.0/(outer?7:6)))*Math.PI/180')
 $s=$s.Substring(0,$quickA)+$quick+$s.Substring($quickB)
 
 $drawA=$s.IndexOf('    private void BuildDonut()', [StringComparison]::Ordinal)
@@ -103,17 +106,15 @@ if(!$draw.Contains('bool outer=i>=7;int slot=i%7;') -or
     throw 'R42 expected 14-sector rendering geometry missing'
 }
 $draw=$draw.Replace('bool outer=i>=7;int slot=i%7;',
-    'bool outer=i>=7;int slot=outer?i-7:i;')
+    'bool outer=i>=6;int slot=outer?i-6:i;')
 $draw=$draw.Replace('double step=360.0/7;',
-    'double step=360.0/(outer?6:7);')
+    'double step=360.0/(outer?7:6);')
 $draw=$draw.Replace('(-90+slot*(360.0/7))*Math.PI/180',
-    '(-90+slot*(360.0/(outer?6:7)))*Math.PI/180')
+    '(-90+slot*(360.0/(outer?7:6)))*Math.PI/180')
 $s=$s.Substring(0,$drawA)+$draw+$s.Substring($drawB)
 
-# R29 replaced the R28 selector with a stable Information context state
-# machine. R39 added a seventh inner sector and moved Information to index 7
-# but did not rebase the selector's nonliteral "selected==6 &&" comparison.
-# Patch the FUNCTION, not a historic comment, and guard both real indices.
+# R29's original Information parent stays at outer index 6.
+# Add Excel Functions to outer index 12 without remapping Information.
 $paintBegin=$s.IndexOf('    private void UpdateHighlightedSector(',[StringComparison]::Ordinal)
 $paintEnd=if($paintBegin -ge 0){
     $s.IndexOf('    private void BuildCompact()', $paintBegin,[StringComparison]::Ordinal)
@@ -131,17 +132,13 @@ foreach($required in @(
 )){
     if(!$paint.Contains($required)){throw "R42 live wheel selector changed: $required"}
 }
-$paint=$paint.Replace('if(selected>=0 && selected!=6)',
-    'if(selected>=0 && selected!=7)')
-$paint=$paint.Replace('else if(selected==6 && ringExpanded && activeModule==null)',
-    'else if(selected==7 && ringExpanded && activeModule==null)')
+
 $excelSelector=@'
-        // Excel is inner sector 6; Information is outer sector 7.
-        // Hover never writes to Excel. Only explicit child selection
-        // enters the guarded values-only paste path.
-        if(selected==6 && ringExpanded && activeModule==null)
+        // Excel Functions is outer sector 12; Information stays outer 6.
+        // Hover cannot paste Excel data; child click/drag-release is required.
+        if(selected==12 && ringExpanded && activeModule==null)
             OpenExcelArc();
-        if(selected>=0 && selected!=6 && excelWheel?.IsArcOpen==true)
+        if(selected>=0 && selected!=12 && excelWheel?.IsArcOpen==true)
             excelWheel.HideArc();
 '@
 $paint=$paint.Replace('        if(selected==highlightedSector)return;',
