@@ -57,3 +57,25 @@ ReplaceIn $hostFile @'
 '@
 ReplaceIn $hostFile 'if(name is "Files" or "Search" or "Notes" or "Reminders" or "Calendar" or "Clipboard" or "Information" or "Settings")' 'if(name is "Files" or "Search" or "Notes" or "Reminders" or "Calendar" or "Clipboard" or "Information" or "Settings" or "Excel")'
 Write-Host 'R39 Excel clipboard follows circle, auto-collects copied Excel cells, has independent menu and module routing.'
+
+# Cancellation-safe closure for the async private widget show-request pipe.
+# The previous fire-and-forget WinForms synchronization continuation could
+# crash a process after its tray handle was disposed.
+ReplaceIn $hostFile '    private bool shutdown;' @'
+    private bool shutdown;
+    private readonly System.Threading.CancellationTokenSource
+        showRequestCancel=new();
+'@
+ReplaceIn $hostFile '        Closing += (_,_)=>{' @'
+        Closing += (_,_)=>{
+            showRequestCancel.Cancel();
+'@
+ReplaceIn $hostFile 'await server.WaitForConnectionAsync();' 'await server.WaitForConnectionAsync(showRequestCancel.Token).ConfigureAwait(false);'
+ReplaceIn $hostFile '            catch (IOException) { await Task.Delay(350); }' @'
+            catch (System.OperationCanceledException) { break; }
+            catch (IOException) {
+                if(shutdown)break;
+                await Task.Delay(350).ConfigureAwait(false);
+            }
+'@
+Write-Host 'R39 widget request pipe exits without posting to disposed WinForms tray handles.'
