@@ -197,7 +197,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
     private void CloudBand(double d,double x,double y,double scale,
         bool dark,int precip,double seconds)
     {
-        var ribbon=new Canvas { Width=d*3.5,Height=d*1.10,
+        var ribbon=new Canvas { Tag="CloudRibbon",Width=d*3.5,Height=d*1.10,
             IsHitTestVisible=false,ClipToBounds=false,
             Opacity=dark?.91:.84 };
         for(int copy=0;copy<3;copy++)
@@ -218,7 +218,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
     {
         CloudInstanceCount++;
         double unit=d*scale;
-        var puff=new Canvas { Width=unit*.53,Height=d*1.06,
+        var puff=new Canvas { Tag="CloudPuff",Width=unit*.53,Height=d*1.06,
             IsHitTestVisible=false,ClipToBounds=false };
         // Put rain BEHIND the cloud surface so droplets naturally emerge
         // from its underside, rather than being overlaid on the sky.
@@ -256,7 +256,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
         const double cloudBase=.209;
         double left=unit*.102,width=unit*.315;
         double limit=d*.80;
-        var column=new Canvas { Width=unit*.53,Height=d,
+        var column=new Canvas { Tag="CloudAttachedRain",Width=unit*.53,Height=d,
             Clip=new RectangleGeometry(
                 new Rect(left,unit*cloudBase,width,limit-unit*cloudBase)),
             IsHitTestVisible=false,Opacity=.86 };
@@ -290,7 +290,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
         SnowEmitterCount++;
         double left=unit*.095;
         var column=new Canvas {
-            Width=unit*.53,Height=d,Opacity=.91,IsHitTestVisible=false,
+            Tag="CloudAttachedSnow",Width=unit*.53,Height=d,Opacity=.91,IsHitTestVisible=false,
             Clip=new RectangleGeometry(
                 new Rect(left,unit*.21,unit*.33,d*.79-unit*.21))
         };
