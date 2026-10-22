@@ -10,7 +10,7 @@ $store=[IO.File]::ReadAllText("$root/DeskSpaceExcelStoreV16.cs")
 $bridge=[IO.File]::ReadAllText("$root/DeskSpaceExcelBridgeV16.cs")
 $ui=[IO.File]::ReadAllText("$root/DeskSpaceExcelV16.cs")
 $updater=[IO.File]::ReadAllText("$root/DeskSpaceUpdater.cs")
-$host=[IO.File]::ReadAllText("$root/WidgetHost.cs")
+$hostSource=[IO.File]::ReadAllText("$root/WidgetHost.cs")
 foreach($key in @('Role {get;set;}="Value"','FixedOrVariable','CellAddress',
     'ImageX','CoordinatesVerified {get;set;}=true','SourceKind'))
 {if(!$store.Contains($key)){throw "R39 missing compatible Excel model: $key"}}
@@ -32,7 +32,7 @@ foreach($key in @('Upload screenshot + OCR','Analyze marked image region',
 foreach($key in @('DeskSpaceExcelClipboardV39','excelClipboardShelf?.Dispose()',
     'new DeskSpaceExcelClipboardV39(this)','Excel Clipboard shelf',
     'if(name=="Excel Clipboard")','or "Excel"'))
-{if(!$host.Contains($key)){throw "R39 Excel clipboard / ring linkage missing: $key"}}
+{if(!$hostSource.Contains($key)){throw "R39 Excel clipboard / ring linkage missing: $key"}}
 foreach($key in @('TimeSpan.FromMinutes(1)','DispatcherPriority.Background',
     'host.Dispatcher.BeginInvoke','RunGh(new[] { "auth", "status"',
     'SHA256.HashDataAsync','CompleteDeskSpaceUpdate.ps1'))
@@ -59,7 +59,7 @@ foreach($key in @(
  'if(selected!=7',
  'if(name=="Excel Clipboard")'
 )){
- if(!$host.Contains($key)){throw "R39 14 sector ring regression: $key"}
+ if(!$hostSource.Contains($key)){throw "R39 14 sector ring regression: $key"}
 }
 foreach($slot in 0..6)
 {
