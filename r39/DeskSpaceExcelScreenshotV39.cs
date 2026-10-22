@@ -59,15 +59,36 @@ internal static class DeskSpaceExcelScreenshotV39
         foreach(var line in ocr.Lines)
         {
             if(line.Words.Count==0)continue;
-            double lx=line.Words.Min(w=>w.BoundingRect.X);
-            double ly=line.Words.Min(w=>w.BoundingRect.Y);
-            double right=line.Words.Max(w=>w.BoundingRect.X+w.BoundingRect.Width);
-            double bottom=line.Words.Max(w=>w.BoundingRect.Y+w.BoundingRect.Height);
-            if((lx+right)*.5<x0||(lx+right)*.5>x1||
-               (ly+bottom)*.5<y0||(ly+bottom)*.5>y1)continue;
-            var raw=line.Text.Trim();
-            if(raw.Length==0)continue;
-            lines.Add((lx,ly,right,bottom,raw));
+            // Windows OCR often merges several Excel cells into one text
+            // line. Split on sufficiently large horizontal gutters so the
+            // header/value cells can be reviewed independently.
+            var words=line.Words.OrderBy(w=>w.BoundingRect.X).ToArray();
+            double typicalHeight=words.Select(w=>w.BoundingRect.Height)
+                .OrderBy(h=>h).ElementAt(words.Length/2);
+            double gutter=Math.Max(17,typicalHeight*2.2);
+            var group=new List<OcrWord>();
+            void AddGroup()
+            {
+                if(group.Count==0)return;
+                double gx=group.Min(w=>w.BoundingRect.X);
+                double gy=group.Min(w=>w.BoundingRect.Y);
+                double gr=group.Max(w=>w.BoundingRect.X+w.BoundingRect.Width);
+                double gb=group.Max(w=>w.BoundingRect.Y+w.BoundingRect.Height);
+                string raw=string.Join(" ",group.Select(w=>w.Text)).Trim();
+                if(raw.Length>0 && (gx+gr)*.5>=x0 && (gx+gr)*.5<=x1 &&
+                    (gy+gb)*.5>=y0 && (gy+gb)*.5<=y1)
+                    lines.Add((gx,gy,gr,gb,raw));
+                group.Clear();
+            }
+            double lastRight=-1;
+            foreach(var word in words)
+            {
+                if(group.Count>0 && word.BoundingRect.X-lastRight>gutter)
+                    AddGroup();
+                group.Add(word);
+                lastRight=word.BoundingRect.X+word.BoundingRect.Width;
+            }
+            AddGroup();
         }
         lines=lines.OrderBy(x=>x.Y).ThenBy(x=>x.X).ToList();
         var entry=new DeskSpaceExcelTemplateV16 {
