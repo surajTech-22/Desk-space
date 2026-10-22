@@ -83,6 +83,14 @@ foreach($check in @('"Excel Functions"','"Information"','"Clipboard"')){
     if(!$main.Contains($check)){throw "R42 missing main sector: $check"}
 }
 if($main.Contains('"Excel Clipboard"')){throw 'R42 duplicate main Excel Clipboard sector remains'}
+$mainSegments=[regex]::Matches($main,'"[^"]+"') |
+    ForEach-Object {$_.Value.Trim('"')}
+if($mainSegments.Count -ne 13 -or
+   $mainSegments[5] -ne 'Settings' -or
+   $mainSegments[6] -ne 'Information' -or
+   $mainSegments[12] -ne 'Excel Functions'){
+    throw 'R42 Excel must be last OUTER sector; six original inner sectors preserved'
+}
 if(!$hostSource.Contains('double sectors=outer?7:6;')){
     throw 'R42 13-sector input geometry missing'
 }
@@ -169,9 +177,11 @@ $s=$s.Replace('    private static void TestDonut14()',
               '    private static void TestDonut13()')
 $s=$s.Replace('ring.Count==14','ring.Count==13')
 $s=$s.Replace('i<14;i++','i<13;i++')
-$s=$s.Replace('int slot=i%7;','int slot=i>=7?i-7:i;')
+$s=$s.Replace('int slot=i%7;','int slot=i>=6?i-6:i;')
+$s=$s.Replace('double distance=i>=7?161:95;',
+              'double distance=i>=6?161:95;')
 $s=$s.Replace('(-90+slot*(360.0/7))*Math.PI/180',
-              '(-90+slot*(360.0/(i>=7?6:7)))*Math.PI/180')
+              '(-90+slot*(360.0/(i>=6?7:6)))*Math.PI/180')
 $s=$s.Replace('14-sector donut mismatch','13-sector donut mismatch')
 $s=$s.Replace('donut-14-excel','donut-13-excel-functions')
 $s=$s.Replace('Excel/Excel Clipboard replaced a pre-existing sector',
