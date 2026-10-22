@@ -77,6 +77,50 @@ $excelArc=@'
 $pos=$s.IndexOf('    private void OpenInformationArc()', [StringComparison]::Ordinal)
 if($pos -lt 0){throw 'R42 cannot find Information arc for matching child-wheel behavior'}
 $s=$s.Substring(0,$pos)+$excelArc.Replace([string][char]13+[char]10,[string][char]10)+$s.Substring($pos)
+# Forward parent-captured click-and-drag gestures to Excel child sectors,
+# matching the already verified Information module's drag-to-select path.
+$moveBegin=$s.IndexOf('    private void OnGestureMove(',[StringComparison]::Ordinal)
+$moveEnd=$s.IndexOf('    private void OnGestureUp(',[Math]::Max(0,$moveBegin),[StringComparison]::Ordinal)
+if($moveBegin -lt 0 -or $moveEnd -le $moveBegin){throw 'R42 parent drag-move boundaries missing'}
+$move=$s.Substring($moveBegin,$moveEnd-$moveBegin)
+$move=$move.Replace('if(informationOverlay?.IsOpen==true)return;',
+  'if(informationOverlay?.IsOpen==true || excelWheel?.IsArcOpen==true)return;')
+$forward=@'
+        if(excelWheel?.IsArcOpen==true &&
+           excelWheel.TryCapturedDragAtScreen(PointToScreen(p),false))
+        {
+            e.Handled=true;
+            return;
+        }
+'@
+$before='        informationOverlay?.EndCapturedDrag();'
+if(!$move.Contains($before)){throw 'R42 Information drag-move anchor changed'}
+$move=$move.Replace($before,$forward.Replace([string][char]13+[char]10,[string][char]10)+$before)
+$s=$s.Substring(0,$moveBegin)+$move+$s.Substring($moveEnd)
+$upBegin=$s.IndexOf('    private void OnGestureUp(',[StringComparison]::Ordinal)
+$upEnd=$s.IndexOf('    private void ', $upBegin+26,[StringComparison]::Ordinal)
+if($upBegin -lt 0 -or $upEnd -le $upBegin){throw 'R42 parent drag-up boundaries missing'}
+$up=$s.Substring($upBegin,$upEnd-$upBegin)
+$anchor='        if(ringGesture && informationOverlay?.IsArcOpen==true &&'
+if(!$up.Contains($anchor)){throw 'R42 Information drag-up action missing'}
+$guard=@'
+        if(ringGesture && excelWheel?.IsArcOpen==true &&
+           excelWheel.TryCapturedDragAtScreen(
+               PointToScreen(e.GetPosition(this)),true))
+        {
+            holdTimer.Stop();
+            holdPending=false;
+            ringGesture=false;
+            highlightedSector=-1;
+            if(IsMouseCaptured)ReleaseMouseCapture();
+            e.Handled=true;
+            return;
+        }
+'@
+$up=$up.Replace($anchor,
+    $guard.Replace([string][char]13+[char]10,[string][char]10)+$anchor)
+$s=$s.Substring(0,$upBegin)+$up+$s.Substring($upEnd)
+
 # When leaving the parent's active wedge, hide only the Excel child arc,
 # preserving any status shelf and avoiding redundant heavy editor creation.
 [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
