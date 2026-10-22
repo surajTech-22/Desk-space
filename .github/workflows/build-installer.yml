@@ -993,7 +993,7 @@ jobs:
           ./r44/apply-r44.ps1
           ./r44/test-r44.ps1
 
-      - name: Assign stable version newer than manual 1.4.29412
+      - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
