@@ -36,8 +36,11 @@ Write-Host ('R42 PowerShell preflight PASS: '+$files.Count+' scripts parsed; no 
 $workflowPath='.github/workflows/build-installer.yml'
 if(!(Test-Path -LiteralPath $workflowPath)){throw 'Windows build workflow missing'}
 $workflow=[IO.File]::ReadAllText($workflowPath)
-$stepNames=@(foreach($stepMatch in [regex]::Matches(
-    $workflow,'(?m)^      - name: ([^\r\n]+)
+$stepNames=@()
+foreach($stepMatch in [regex]::Matches($workflow,'(?m)^      - name: ([^\r\n]+)$')){
+    $stepNames+= $stepMatch.Groups[1].Value.Trim()
+}
+if($stepNames.Count -lt 40){throw "Workflow stage parser found only $($stepNames.Count) steps"}
 $duplicates=@($stepNames | Group-Object | Where-Object {$_.Count -gt 1})
 if($duplicates.Count -gt 0){
     throw ('Duplicated Windows build steps: '+
