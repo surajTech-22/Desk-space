@@ -8,9 +8,10 @@ Copy-Item -LiteralPath $source -Destination $target -Force
 # Preserve original automatic release logic and update-version build stamp.
 # Intercept only USER-CALLED CheckAsync in host and Workspace UI sources.
 $count=0
-foreach($file in @('MainWindow.xaml.cs','WidgetHost.cs','DeskSpaceModuleV10.cs')){
-    $path=Join-Path $root $file
-    if(!(Test-Path $path)){continue}
+foreach($file in @(Get-ChildItem -LiteralPath $root -Filter '*.cs' -File)){
+    if($file.Name -eq 'DeskSpaceUpdater.cs' -or
+       $file.Name -eq 'DeskSpaceUpdateCheckV42.cs'){continue}
+    $path=$file.FullName
     $s=[IO.File]::ReadAllText($path)
     $key='DeskSpaceUpdater.CheckAsync('
     $found=([regex]::Matches($s,[regex]::Escape($key))).Count
