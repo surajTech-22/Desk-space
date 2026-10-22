@@ -33,7 +33,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private readonly List<(string Label,string Command,string Group,Guid? Id)>
         displayed=new();
     private int start,hovered=-1,pageDirection;
-    private bool disposed,pasting,previewOnly;
+    private bool disposed,pasting,previewOnly,suppressNextUp;
     private int tick;
     private const int PerPage=4;
     // The Excel wedge is the seventh inner sector of the 14-sector donut.
@@ -172,6 +172,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             level=ExcelLevel.Functions;
             groupPath="";
             start=0;
+            suppressNextUp=false;
             Render();
             Position();
             arc.IsOpen=true;
@@ -185,6 +186,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     public void HideArc()
     {
         pointerTimer.Stop();edgeTimer.Stop();pageDirection=0;
+        suppressNextUp=false;
         arc.IsOpen=false;hovered=-1;
     }
     public void Hide()
@@ -369,11 +371,21 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(!arc.IsOpen||pasting)return;
         int slot=Slot(e.GetPosition(canvas));
         if(slot<0)return;
+        // Navigation redraws the donut on mouse-down. The matching mouse-up
+        // must never activate the newly drawn child mapping at the same
+        // coordinate, which would be an unintended Excel paste.
+        suppressNextUp=true;
         Activate(slot);
         e.Handled=true;
     }
     private void OnUp(object sender,MouseButtonEventArgs e)
     {
+        if(suppressNextUp)
+        {
+            suppressNextUp=false;
+            e.Handled=true;
+            return;
+        }
         // Touch and accessibility devices can raise an up-only gesture.
         if(!arc.IsOpen||pasting||e.Handled)return;
         int slot=Slot(e.GetPosition(canvas));
