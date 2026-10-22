@@ -3,6 +3,7 @@ Set-StrictMode -Version Latest
 ./r41/apply-r41-excel.ps1
 ./r41/apply-r41-async.ps1
 ./r41/apply-r41-scroll.ps1
+./r41/apply-r41-batched-ui.ps1
 $root='DeskSpace_Windows_R1/DeskSpace'
 $excel=[IO.File]::ReadAllText("$root/DeskSpaceExcelBridgeV16.cs")
 $ui=[IO.File]::ReadAllText("$root/DeskSpaceExcelV16.cs")
@@ -24,7 +25,9 @@ foreach($key in @(
  'private async void Preview()', 'private async void Apply()',
  'await DeskSpaceExcelWorkerV41.PreviewAsync(', 'await DeskSpaceExcelWorkerV41.ApplyAsync(',
  'PresentCandidate(candidate);','Excel selection unavailable',
- 'Reference','Value','Formula','Ignore'
+ 'Reference','Value','Formula','Ignore',
+ 'await PresentCandidateAsync(candidate)',
+ 'Dispatcher.Yield(', 'rendered%32==0'
 )){
  if(!$ui.Contains($key)){throw "R41 asynchronous Excel mapping missing: $key"}
 }
