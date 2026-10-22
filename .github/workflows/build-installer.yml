@@ -5,8 +5,11 @@ on:
     branches: [main]
     paths-ignore:
       - 'releases/latest-build.txt'
+  # No expensive Windows build while a PR is still being edited.
+  # When review-ready, run once and replace superseded in-progress PR runs.
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - ".github/workflows/build-installer.yml"
       - "assets/source.part*.txt"
@@ -50,16 +53,26 @@ on:
       - "r39/**"
       - "r40/**"
       - "r41/**"
+      - "r42/**"
       - "BUILD_TRIGGER.txt"
   workflow_dispatch:
 
 permissions:
   contents: write
 
+# Prevent multiple simultaneous Windows installers from consuming quota.
+# Never cancel a main-branch production release job.
+concurrency:
+  group: deskspace-installer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
+    # Draft PRs consume no Windows runner minutes. The ready-for-review
+    # transition deliberately starts the release-candidate verification.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - name: Checkout DeskSpace
         uses: actions/checkout@v4
@@ -993,6 +1006,10 @@ jobs:
         shell: pwsh
         run: ./r41/test-r41.ps1
 
+      - name: R42 editable saved Excel mapping and simplified review
+        shell: pwsh
+        run: ./r42/test-r42.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1060,6 +1077,7 @@ jobs:
         with:
           name: DeskSpace-R41-WPF-Visual-Smoke
           path: r36/UiSmoke/visual-evidence/*.png
+          retention-days: 3
           if-no-files-found: error
 
       - name: Confirm installer and checksum exist
@@ -1077,6 +1095,7 @@ jobs:
           path: |
             release/DeskSpace_Setup.exe
             release/DeskSpace_Setup.sha256.txt
+          retention-days: 3
           if-no-files-found: error
 
 
