@@ -23,7 +23,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private readonly Border shelfBorder;
     private readonly StackPanel shelfBody;
     private readonly TextBlock shelfTitle, shelfMessage;
-    private readonly DispatcherTimer pointerTimer,edgeTimer,successTimer;
+    private readonly DispatcherTimer pointerTimer,edgeTimer,successTimer,drillTimer;
     private readonly List<(int Index,Guid? Id,Geometry Hit)> hitZones=new();
     private readonly List<System.Windows.Shapes.Path> sectors=new();
     private List<DeskSpaceExcelTemplateV16> formats=new();
@@ -33,6 +33,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private readonly List<(string Label,string Command,string Group,Guid? Id)>
         displayed=new();
     private int start,hovered=-1,pageDirection;
+    private double localOriginX,localOriginY;
+    private int drillSlot=-1;
     private bool disposed,pasting,previewOnly,suppressNextUp;
     private int tick;
     private const int PerPage=4;
@@ -40,7 +42,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     // Its child arc follows the outer ring; Information remains at index 6.
     // Align the child arc with that wedge and use the Information wheel
     // positioning, click, pagination and shelf behavior.
-    private const double CX=325,CY=325,Outer=260,Inner=207;
+    private const double CX=325,CY=325,Outer=252,Inner=196;
     private const double ArcCenter=-90+6*(360.0/7.0);
     private static readonly Brush Accent=new SolidColorBrush(Color.FromRgb(69,88,175));
     private static readonly Brush Idle=new SolidColorBrush(Color.FromRgb(221,234,255));
@@ -54,7 +56,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     public DeskSpaceExcelWheelV42(Window window,Action onCommit)
     {
         owner=window;collapseParent=onCommit;
-        canvas=new Canvas{Width=650,Height=650,
+        canvas=new Canvas{Width=300,Height=240,
             Background=null,Focusable=true};
         canvas.PreviewMouseLeftButtonDown+=OnDown;
         canvas.PreviewMouseLeftButtonUp+=OnUp;
@@ -106,6 +108,17 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             Interval=TimeSpan.FromMilliseconds(
                 DeskSpaceWheelHoverV35.PointerPollMilliseconds)};
         pointerTimer.Tick+=(_,_)=>PollPointer();
+        drillTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(160)};
+        drillTimer.Tick+=(_,_)=>{
+            drillTimer.Stop();
+            var slot=drillSlot;
+            drillSlot=-1;
+            if(disposed||pasting||!arc.IsOpen||slot<0||
+               slot>=displayed.Count||slot!=hovered)return;
+            var command=displayed[slot].Command;
+            if(command=="information"||command=="group")
+                Activate(slot); // Navigate on hover; NEVER paste a mapping.
+        };
         edgeTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(190)};
         edgeTimer.Tick+=(_,_)=>{
             if(!arc.IsOpen || pageDirection==0 || pasting){edgeTimer.Stop();return;}
@@ -154,10 +167,16 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         var w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
         var h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
         if(w<=0||h<=0)return;
-        arc.HorizontalOffset=w/2-CX;
-        arc.VerticalOffset=h/2-CY;
-        shelf.HorizontalOffset=(w-shelfBorder.Width)/2+(++tick%2)*.001;
-        shelf.VerticalOffset=h+5;
+        // Main donut coordinates are 420-based. Match its actual scale,
+        // then anchor a SMALL child-popup to the exact sector geometry.
+        // WPF must not slide a transparent 650x650 popup off-screen.
+        double scale=Math.Clamp(Math.Min(w,h)/420.0,.60,1.60);
+        canvas.LayoutTransform=new ScaleTransform(scale,scale);
+        arc.HorizontalOffset=w/2-CX*scale+(localOriginX-10)*scale;
+        arc.VerticalOffset=h/2-CY*scale+(localOriginY-10)*scale;
+        shelf.HorizontalOffset=arc.HorizontalOffset+
+            canvas.Width*scale/2-shelfBorder.Width/2+(++tick%2)*.001;
+        shelf.VerticalOffset=arc.VerticalOffset+canvas.Height*scale+4;
     }
     private void OnOwnerMoved(object? sender,EventArgs e)=>Position();
     private void OnOwnerResized(object? sender,SizeChangedEventArgs e)=>Position();
@@ -186,7 +205,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     public void HideArc()
     {
-        pointerTimer.Stop();edgeTimer.Stop();pageDirection=0;
+        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();drillSlot=-1;pageDirection=0;
         suppressNextUp=false;
         arc.IsOpen=false;hovered=-1;
     }
@@ -234,6 +253,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     private void Render()
     {
+        drillTimer.Stop();drillSlot=-1;
         canvas.Children.Clear();sectors.Clear();hitZones.Clear();displayed.Clear();
         hovered=-1;
         var all=Entries();
@@ -244,12 +264,31 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(count==0)return;
         double half=count==1?15:Math.Min(57,12.0*count);
         double step=half*2/count;
+        var geometries=new List<Geometry>();
+        Rect extent=Rect.Empty;
+        for(int i=0;i<count;i++)
+        {
+            var geometry=Sector(ArcCenter-half+i*step,
+                                ArcCenter-half+(i+1)*step);
+            geometries.Add(geometry);
+            extent.Union(geometry.Bounds);
+        }
+        // Tight Popup bounds prevent WPF from shifting the entire Excel
+        // wheel when the parent circle is near a monitor edge.
+        const double margin=10;
+        localOriginX=extent.Left;
+        localOriginY=extent.Top;
+        canvas.Width=Math.Max(100,extent.Width+2*margin);
+        canvas.Height=Math.Max(80,extent.Height+2*margin);
+        var translation=new TranslateTransform(-localOriginX+margin,
+                                               -localOriginY+margin);
         for(int i=0;i<count;i++)
         {
             var item=visible[i];
             bool action=item.Command!="mapping";
-            double a=ArcCenter-half+i*step,b=a+step;
-            var geometry=Sector(a,b);
+            var original=geometries[i];
+            var geometry=original.Clone();
+            geometry.Transform=translation;
             var shape=new System.Windows.Shapes.Path{
                 Data=geometry,Stroke=Brushes.White,StrokeThickness=2,
                 Fill=action?Accent:Idle,Tag=i,
@@ -257,35 +296,37 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             };
             canvas.Children.Add(shape);sectors.Add(shape);
             hitZones.Add((i,item.Id,geometry));
-            double mid=(a+b)*Math.PI/360;
+            double mid=(ArcCenter-half+(i+.5)*step)*Math.PI/180;
             double radius=(Inner+Outer)/2;
-            double x=CX+radius*Math.Cos(mid),
-                   y=CY+radius*Math.Sin(mid);
+            double x=CX+radius*Math.Cos(mid)-localOriginX+margin;
+            double y=CY+radius*Math.Sin(mid)-localOriginY+margin;
             var label=new TextBlock{
-                Text=item.Label,Width=83,FontSize=11,
+                Text=item.Label,Width=88,FontSize=11,
                 Foreground=action?Brushes.White:Ink,
                 FontWeight=action?FontWeights.SemiBold:FontWeights.Normal,
                 TextAlignment=TextAlignment.Center,
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 ToolTip=item.Label,IsHitTestVisible=false
             };
-            Canvas.SetLeft(label,x-41.5);Canvas.SetTop(label,y-10);
+            Canvas.SetLeft(label,x-44);Canvas.SetTop(label,y-10);
             canvas.Children.Add(label);
         }
         if(start>0)
         {
             var previous=SmallButton("‹",()=>Page(-1));
             previous.ToolTip="Previous Excel Information items";
-            Canvas.SetLeft(previous,20);Canvas.SetTop(previous,185);
+            Canvas.SetLeft(previous,0);Canvas.SetTop(previous,0);
             canvas.Children.Add(previous);
         }
         if(start+PerPage<all.Count)
         {
             var next=SmallButton("›",()=>Page(1));
             next.ToolTip="More Excel Information items";
-            Canvas.SetLeft(next,25);Canvas.SetTop(next,273);
+            Canvas.SetLeft(next,Math.Max(0,canvas.Width-38));
+            Canvas.SetTop(next,Math.Max(0,canvas.Height-30));
             canvas.Children.Add(next);
         }
+        Position();
     }
     private int Slot(Point p)
     {
@@ -320,52 +361,37 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private void Hover(Point p)
     {
         if(disposed||!arc.IsOpen||pasting)return;
-        int edge=p.X>=10 && p.X<=80 && p.Y>=150 && p.Y<=225
-            && CanPage(-1) ? -1 :
-            p.X>=10 && p.X<=85 && p.Y>=230 && p.Y<=315
-            && CanPage(1) ? 1 : 0;
-        if(edge!=0)
-        {
-            if(pageDirection!=edge || !edgeTimer.IsEnabled)
-            {
-                pageDirection=edge;
-                edgeTimer.Interval=TimeSpan.FromMilliseconds(190);
-                edgeTimer.Start();
-            }
-            return;
-        }
-        if(pageDirection!=0)
-        {
-            pageDirection=0;
-            edgeTimer.Stop();
-        }
         int slot=Slot(p);
         if(slot==hovered)return;
+        drillTimer.Stop();drillSlot=-1;
         hovered=slot;
         for(int i=0;i<sectors.Count;i++)
         {
             bool command=displayed[i].Command!="mapping";
             sectors[i].Fill=i==slot?Selected:(command?Accent:Idle);
         }
-        // A hover preview is always read-only, without Excel automation.
-        if(slot<0 || slot>=displayed.Count)return;
+        if(slot<0||slot>=displayed.Count)return;
         var item=displayed[slot];
-        if(item.Command=="mapping")
+        // Information and grouped categories are navigable on HOVER:
+        // same behavior as the rest of the DeskSpace parent/child donut.
+        // Never paste merely because the pointer hovers a mapping.
+        if(item.Command=="information"||item.Command=="group")
+        {
+            shelf.IsOpen=false;
+            drillSlot=slot;
+            drillTimer.Start();
+        }
+        else if(item.Command=="mapping")
         {
             var format=formats.FirstOrDefault(x=>x.Id==item.Id);
             if(format!=null)Preview(format);
         }
         else if(item.Command=="clipboard")
-            Status("Excel Clipboard","Select to open the Excel-only copied ranges.");
-        else if(item.Command=="information")
-            Status("Excel Information","Saved mappings and optional groups.");
-        else if(item.Command=="group")
-            Status("Information · "+item.Label,"Open the group to find child items.");
+            shelf.IsOpen=false; // leaf action still requires explicit selection
         else if(item.Command=="back")
-            Status("Back","Return to the previous Excel Information donut.");
+            shelf.IsOpen=false; // click Back; hover must not bounce up/down
         else
-            Status("Manage Excel Information",
-                "Use Workspace → Excel Mapping to create, rename or group mappings.");
+            shelf.IsOpen=false;
     }
     private void OnDown(object sender,MouseButtonEventArgs e)
     {
@@ -419,13 +445,11 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(item.Command=="information")
         {
             level=ExcelLevel.Information;groupPath="";start=0;Render();
-            Status("Excel Information","Select a direct mapping or its group.");
             return;
         }
         if(item.Command=="group")
         {
             groupPath=item.Group;start=0;Render();
-            Status("Information · "+groupPath,"Select a mapping or nested group.");
             return;
         }
         if(item.Command=="back")
@@ -564,7 +588,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     {
         if(disposed)return;
         disposed=true;
-        pointerTimer.Stop();edgeTimer.Stop();successTimer.Stop();
+        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();successTimer.Stop();
         owner.LocationChanged-=OnOwnerMoved;
         owner.SizeChanged-=OnOwnerResized;
         arc.IsOpen=false;shelf.IsOpen=false;
