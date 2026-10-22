@@ -14,6 +14,7 @@ $method=@'
             (Action)(()=>back++));
         var view=(FrameworkElement)(Call(model,"Create")
             ??throw new Exception("Excel module has no WPF view"));
+        Render(view,710,720,"excel-review");
         foreach(string label in new[]{
             "Upload screenshot + OCR",
             "Analyze marked image region",
@@ -25,7 +26,6 @@ $method=@'
             "Apply autofill",
             "← Circle"
         })ButtonWith(view,label);
-        Render(view,710,720,"excel-review");
         ButtonWith(view,"← Circle").RaiseEvent(
             new RoutedEventArgs(Button.ClickEvent));
         Assert(back==1,"Excel did not return to Circle");
