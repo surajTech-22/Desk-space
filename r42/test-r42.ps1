@@ -220,8 +220,16 @@ $method=@'
             WindowStyle=WindowStyle.None };
         var wheel=Make("DeskSpace.DeskSpaceExcelWheelV42",
             owner,(Action)(()=>{}));
+        // Excel is deliberately absent in this test. Saved-information
+        // browsing MUST remain usable and must never initiate COM/paste.
+        var probe=wheel.GetType().GetField("ExcelProbe",Any)!;
+        var originalProbe=probe.GetValue(null);
+        probe.SetValue(null,(Func<bool>)(()=>false));
         try
         {
+            Assert(!(bool)wheel.GetType().GetMethod("ExcelIsOpen",
+                BindingFlags.Public|BindingFlags.Static)!.Invoke(null,null)!,
+                "Excel closed test probe did not report closed");
             Call(wheel,"Show");
             var canvas=Private<Canvas>(wheel,"canvas");
             Render(canvas,650,650,"excel-child-wheel");
@@ -246,6 +254,13 @@ $method=@'
             var second=levels[1]!;
             activate.Invoke(wheel,new object[]{second,0}); // Audit
             Assert(levels.Count==3,"Audit group must open a third attached ring");
+            // A selection while Excel is closed is a READ-ONLY preview.
+            // It must NOT collapse the wheel or call the workbook writer.
+            activate.Invoke(wheel,new object[]{levels[2]!,0});
+            Assert(levels.Count==3,"Closed-Excel preview removed child rings");
+            var message=Private<TextBlock>(wheel,"shelfMessage").Text;
+            Assert(message.Contains("Excel is not open"),
+                "Closed-Excel preview did not explain why paste is disabled");
             Assert((bool)wheel.GetType().GetProperty("IsArcOpen")!
                     .GetValue(wheel)!,"Opening nested rings closed original Excel ring");
             for(int i=0;i<3;i++)
@@ -264,6 +279,7 @@ $method=@'
         }
         finally
         {
+            probe.SetValue(null,originalProbe);
             ((IDisposable)wheel).Dispose();
             owner.Close();
         }
