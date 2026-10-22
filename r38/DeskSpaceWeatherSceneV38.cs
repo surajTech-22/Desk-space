@@ -50,7 +50,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
             IsHitTestVisible=false },0,0);
         // Large soft atmospheric glows simulate depth across the whole sky.
         Draw(Disc(diameter*.96,Glow(day?
-            Color.FromRgb(255,247,226):Color.FromRgb(107,138,205)),day?.28:.23),
+            Color.FromRgb(255,247,226):Color.FromRgb(107,138,205)),day ? .28 : .23),
             -diameter*.26,-diameter*.27);
         Draw(Disc(diameter*.80,Glow(day?
             Color.FromRgb(234,251,255):Color.FromRgb(69,111,188)),.25),
@@ -121,9 +121,9 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
     private void DrawSun(double d,bool obscured)
     {
         double size=d*.20,x=d*.68,y=d*.19;
-        var halo=Disc(d*.47,Glow(Color.FromRgb(255,229,141)),obscured?.29:.68);
+        var halo=Disc(d*.47,Glow(Color.FromRgb(255,229,141)),obscured ? .29 : .68);
         Draw(halo,x-d*.13,y-d*.13);
-        halo.BeginAnimation(OpacityProperty,Pulse(.32,obscured?.46:.81,6.8));
+        halo.BeginAnimation(OpacityProperty,Pulse(.32,obscured ? .46 : .81,6.8));
         ambientMotion.Add(halo);
         var rays=new Canvas { Width=size*2,Height=size*2,
             IsHitTestVisible=false };
@@ -151,14 +151,14 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
     }
     private void DrawMoonAndStars(double d,bool visible)
     {
-        var halo=Disc(d*.50,Glow(Color.FromRgb(216,231,255)),visible?.58:.17);
+        var halo=Disc(d*.50,Glow(Color.FromRgb(216,231,255)),visible ? .58 : .17);
         Draw(halo,d*.46,-d*.05);
-        halo.BeginAnimation(OpacityProperty,Pulse(visible?.32:.10,
-            visible?.66:.22,5.8));
+        halo.BeginAnimation(OpacityProperty,Pulse(visible ? .32 : .10,
+            visible ? .66 : .22,5.8));
         ambientMotion.Add(halo);
         Draw(Disc(d*.22,new RadialGradientBrush(
             Color.FromRgb(255,250,221),Color.FromRgb(179,207,245)),
-            visible?.95:.28),d*.67,d*.15);
+            visible ? .95 : .28),d*.67,d*.15);
         if(!visible)return;
         for(int i=0;i<12;i++)
         {
@@ -199,7 +199,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
     {
         var ribbon=new Canvas { Tag="CloudRibbon",Width=d*3.5,Height=d*1.10,
             IsHitTestVisible=false,ClipToBounds=false,
-            Opacity=dark?.91:.84 };
+            Opacity=dark ? .91 : .84 };
         for(int copy=0;copy<3;copy++)
         {
             var puff=MakeCloud(d,scale,dark,precip,copy);
@@ -243,7 +243,7 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
         Blob(.085,.155,.392,.078,.98);
         Blob(.181,.041,.149,.112,.72);
         // Clouds are soft; rainfall itself stays sharp.
-        var mist=Disc(unit*.37,Glow(high),dark?.15:.32);
+        var mist=Disc(unit*.37,Glow(high),dark ? .15 : .32);
         Canvas.SetLeft(mist,unit*.095);Canvas.SetTop(mist,unit*.022);
         puff.Children.Add(mist);
         return puff;
@@ -271,9 +271,9 @@ internal sealed class DeskSpaceWeatherSceneV11 : Canvas
             // immediately. Each streak emerges ONLY inside its parent puff.
             double ty=unit*cloudBase + d*.46*((i*41+copy*19)%100)/100.0;
             var line=new Line {
-                X1=tx,Y1=ty,X2=tx-d*.012,Y2=ty+d*(heavy?.071:.056),
+                X1=tx,Y1=ty,X2=tx-d*.012,Y2=ty+d*(heavy ? .071 : .056),
                 Stroke=brush,Opacity=.62+((i%4)*.085),
-                StrokeThickness=Math.Max(1.2,d*(heavy?.0075:.006)),
+                StrokeThickness=Math.Max(1.2,d*(heavy ? .0075 : .006)),
                 StrokeStartLineCap=PenLineCap.Round,
                 IsHitTestVisible=false
             };
