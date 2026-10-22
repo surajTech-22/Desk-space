@@ -28,7 +28,7 @@ foreach($check in @(
  'DeskSpaceExcelStoreV16.Load()',
  'TryCapturedDragAtScreen(', 'OnWheel(', 'Hover(', 'Preview(',
  'private void OpenExcelArc()', 'if(name=="Excel Functions")',
- 'if(selected==6 && ringExpanded',
+ 'if(selected==12 && ringExpanded',
  'private async System.Threading.Tasks.Task PasteAsync(',
  'DeskSpaceExcelWorkerV41.PreviewAsync(entry,',
  'selection:false,overwrite:true',
@@ -41,27 +41,26 @@ foreach($check in @(
      throw "R42 direct-paste Excel circle missing: $check"
  }
 }
-# WPF donut index 6 is Excel and index 7 is Information. Inspect the
-# actual updated selector rather than accepting loose tokens elsewhere:
-# R29 and R39 changed its structure and older comment-based anchors failed.
+# Information remains outer ring index 6; Excel Functions is outer 12.
+# Test the live selector, not comments in other methods.
 $paintStart=$hostSource.IndexOf('    private void UpdateHighlightedSector(',[StringComparison]::Ordinal)
 $paintEnd=$hostSource.IndexOf('    private void BuildCompact()', [Math]::Max(0,$paintStart),[StringComparison]::Ordinal)
 if($paintStart -lt 0 -or $paintEnd -le $paintStart) {
     throw 'R42 cannot locate updated WPF hover selector'
 }
 $paint=$hostSource.Substring($paintStart,$paintEnd-$paintStart)
-foreach($required in @('if(selected>=0 && selected!=7)',
-    'else if(selected==7 && ringExpanded && activeModule==null)',
+foreach($required in @('if(selected>=0 && selected!=6)',
+    'else if(selected==6 && ringExpanded && activeModule==null)',
     'OpenInformationArc();',
-    'if(selected==6 && ringExpanded && activeModule==null)',
+    'if(selected==12 && ringExpanded && activeModule==null)',
     'OpenExcelArc();',
-    'if(selected>=0 && selected!=6 && excelWheel?.IsArcOpen==true)',
+    'if(selected>=0 && selected!=12 && excelWheel?.IsArcOpen==true)',
     'excelWheel.HideArc();'))
 {
     if(!$paint.Contains($required)){throw "R42 Excel/Information ring-index regression: $required"}
 }
-if($paint.Contains('if(selected>=0 && selected!=6)')) {
-    throw 'R42: R29 still mistakes Excel for Information'
+if($paint.Contains('else if(selected==7 && ringExpanded')) {
+    throw 'R42: Information was moved from its original outer sector 6'
 }
 # Reject the compiler-reported ambiguous Path token before dotnet build.
 foreach($bad in @('List<Path>', 'new Path{')){
@@ -74,9 +73,8 @@ if(!$wheel.Contains('System.Windows.Shapes.Path')){
 }
 
 if(!$hostSource.Contains('excelWheel?.Dispose();')){throw 'Excel popup lifetime leak'}
-# The main wheel must have 13 sectors: seven inside including Excel Functions,
-# six outside including the original Information; never an independent Excel
-# Clipboard main wedge.
+# The wheel must have 13 sectors: SIX original inner and SEVEN outer,
+# with Excel Functions last, and no main Excel Clipboard wedge.
 $seg=$hostSource.IndexOf('private static readonly string[] Segments')
 $icons=$hostSource.IndexOf('private static readonly string[] SegmentIcons',$seg)
 if($seg -lt 0 -or $icons -le $seg){throw 'R42 main wheel labels unavailable'}
@@ -85,10 +83,10 @@ foreach($check in @('"Excel Functions"','"Information"','"Clipboard"')){
     if(!$main.Contains($check)){throw "R42 missing main sector: $check"}
 }
 if($main.Contains('"Excel Clipboard"')){throw 'R42 duplicate main Excel Clipboard sector remains'}
-if(!$hostSource.Contains('double sectors=outer?6:7;')){
+if(!$hostSource.Contains('double sectors=outer?7:6;')){
     throw 'R42 13-sector input geometry missing'
 }
-if(!$hostSource.Contains('double step=360.0/(outer?6:7);')){
+if(!$hostSource.Contains('double step=360.0/(outer?7:6);')){
     throw 'R42 13-sector rendered geometry missing'
 }
 if(!$wheel.Contains('enum ExcelLevel { Functions, Information }') -or
