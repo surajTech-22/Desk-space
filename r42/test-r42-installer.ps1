@@ -39,29 +39,29 @@ try {
             ForEach-Object {$_.Value})
         $expected=@('[Setup]','[Tasks]','[Icons]','[Files]')
         if(($sections -join '|') -ne ($expected -join '|')){
-            throw "R42 Inno fixture $variant: section headers lost"
+            throw "R42 Inno fixture ${variant}: section headers lost"
         }
         $setupText=$result.Substring($result.IndexOf('[Setup]')+7,
             $result.IndexOf('[Tasks]')-($result.IndexOf('[Setup]')+7))
         foreach($setting in @('CloseApplications=yes',
             'RestartApplications=no','AppVerName=DeskSpace {#AppVersion}')){
             if(!$setupText.Contains($setting)){
-                throw "R42 Inno fixture $variant: missing $setting"
+                throw "R42 Inno fixture ${variant}: missing $setting"
             }
         }
         if($setupText.Contains('Name: "desktopicon"') -or
            $result.Contains('AppVerName=DeskSpace {#AppVersion}[Tasks]')){
-            throw "R42 Inno fixture $variant: [Tasks] leaked into [Setup]"
+            throw "R42 Inno fixture ${variant}: [Tasks] leaked into [Setup]"
         }
         foreach($unchanged in @(
             'DefaultDirName={localappdata}\Programs\DeskSpace',
             'Name: "desktopicon"; Description: "Create a desktop shortcut"',
             'Name: "{group}\DeskSpace"; Filename: "{app}\DeskSpace.exe"')){
             if(!$result.Contains($unchanged)){
-                throw "R42 Inno fixture $variant: existing installer data was modified"
+                throw "R42 Inno fixture ${variant}: existing installer data was modified"
             }
         }
-        Write-Host "R42 Inno fixture $variant: PASS (valid [Setup]/[Tasks]/[Icons]/[Files] boundaries)"
+        Write-Host "R42 Inno fixture ${variant}: PASS (valid [Setup]/[Tasks]/[Icons]/[Files] boundaries)"
     }
 }
 finally {
