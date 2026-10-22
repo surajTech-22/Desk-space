@@ -403,7 +403,7 @@ internal sealed partial class DeskSpaceExcelV16
                         entry.SourceRow+cell.RowOffset,entry.SourceColumn+cell.ColumnOffset):"Unverified",
                 Value=cell.ValueKind=="formula"?cell.Display:cell.RawValue,
                 Kind=cell.Role,CellType=cell.ValueKind,Formula=cell.FormulaR1C1,
-                Include=cell.ValueKind!="blank"
+                Include=true
             });
         }
         // Header-only ranges are not discarded; they are visible for
@@ -473,12 +473,18 @@ internal sealed partial class DeskSpaceExcelV16
                         "Excel address "+cell.CellAddress+
                         ". Capture the correct range again to move a cell.");
                 }
-                if(cell.ValueKind!="formula" && cell.ValueKind!="blank" &&
-                   row.Value!=row.OriginalRaw)
+                if(cell.ValueKind!="formula" && row.Value!=row.OriginalRaw)
                 {
                     cell.RawValue=row.Value;
                     cell.Display=row.Value;
-                    if(cell.ValueKind=="number" &&
+                    if(cell.ValueKind=="blank")
+                    {
+                        cell.ValueKind=double.TryParse(row.Value,
+                            System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture,out _)
+                            ? "number":"text";
+                    }
+                    else if(cell.ValueKind=="number" &&
                         !double.TryParse(row.Value,
                             System.Globalization.NumberStyles.Any,
                             System.Globalization.CultureInfo.InvariantCulture,out _))
