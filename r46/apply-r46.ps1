@@ -20,13 +20,12 @@ rollback.Add((cell,previous,hadFormula,
                     hadFormula?Text(cell.FormulaR1C1):"",
                     Text(cell.NumberFormat)));
 '@
-Replace-Once 'if(change.Source.ValueKind=="formula")' @'
+# R42 intentionally removed replay of CAPTURED Excel formulas. Keep that
+# protection; only explicit NEW user-selected formula actions are executable.
+Replace-Once 'cell.Value2=TypedValue(change.Source);' @'
 if(DeskSpaceExcelActionsV46.IsFormulaAction(change.Source.ValueKind))
                     cell.FormulaR1C1=DeskSpaceExcelActionsV46.Formula(change.Source);
-                else if(change.Source.ValueKind=="formula")
-'@
-Replace-Once 'else cell.Value2=TypedValue(change.Source);' @'
-else cell.Value2=TypedValue(change.Source);
+                else cell.Value2=TypedValue(change.Source);
                 if(DeskSpaceExcelActionsV46.IsAction(change.Source.ValueKind))
                     cell.NumberFormat=DeskSpaceExcelActionsV46.NumberFormat(
                         change.Source.ValueKind);
