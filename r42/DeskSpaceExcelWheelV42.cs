@@ -35,6 +35,30 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private int start,hovered=-1,pageDirection;
     private double localOriginX,localOriginY;
     private int drillSlot=-1;
+    private int drillDepth=-1; // 0 = Excel parent arc, 1+ = attached rings
+    private readonly List<ChildRing> childRings=new();
+    private sealed class ChildRing
+    {
+        internal readonly int Depth;
+        internal readonly string Group;
+        internal readonly double Angle;
+        internal readonly Popup Popup;
+        internal readonly Canvas Surface;
+        internal readonly List<(string Label,string Command,string Group,Guid? Id)> Items=new();
+        internal readonly List<Geometry> Zones=new();
+        internal readonly List<System.Windows.Shapes.Path> Wedges=new();
+        internal int Start,Hovered=-1;
+        internal bool SuppressNextUp;
+        internal double OriginX,OriginY;
+        internal ChildRing(int depth,string group,double angle,Window owner)
+        {
+            Depth=depth;Group=group;Angle=angle;
+            Surface=new Canvas{Background=null,Focusable=true};
+            Popup=new Popup{PlacementTarget=owner,
+                Placement=PlacementMode.Relative,AllowsTransparency=true,
+                StaysOpen=true,Child=Surface};
+        }
+    }
     private bool disposed,pasting,previewOnly,suppressNextUp;
     private int tick;
     private const int PerPage=4;
@@ -48,7 +72,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private static readonly Brush Idle=new SolidColorBrush(Color.FromRgb(221,234,255));
     private static readonly Brush Selected=new SolidColorBrush(Color.FromRgb(156,184,239));
     private static readonly Brush Ink=new SolidColorBrush(Color.FromRgb(37,51,79));
-    public bool IsOpen=>arc.IsOpen || shelf.IsOpen;
+    public bool IsOpen=>arc.IsOpen || shelf.IsOpen ||
+        childRings.Any(r=>r.Popup.IsOpen);
     public bool IsArcOpen=>arc.IsOpen;
     public bool IsPasting=>pasting;
     public int SavedCount=>formats.Count;
@@ -111,13 +136,24 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         drillTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(160)};
         drillTimer.Tick+=(_,_)=>{
             drillTimer.Stop();
-            var slot=drillSlot;
-            drillSlot=-1;
-            if(disposed||pasting||!arc.IsOpen||slot<0||
-               slot>=displayed.Count||slot!=hovered)return;
-            var command=displayed[slot].Command;
-            if(command=="information"||command=="group")
-                Activate(slot); // Navigate on hover; NEVER paste a mapping.
+            int slot=drillSlot,depth=drillDepth;
+            drillSlot=-1;drillDepth=-1;
+            if(disposed||pasting||!arc.IsOpen||slot<0)return;
+            if(depth==0)
+            {
+                if(slot>=displayed.Count||hovered!=slot)return;
+                if(displayed[slot].Command=="information")
+                    ExpandRing(1,"",RootAngle(slot));
+            }
+            else
+            {
+                var ring=childRings.FirstOrDefault(x=>x.Depth==depth);
+                if(ring==null||!ring.Popup.IsOpen||
+                   slot>=ring.Items.Count||ring.Hovered!=slot)return;
+                var item=ring.Items[slot];
+                if(item.Command=="group")
+                    ExpandRing(depth+1,item.Group,RingAngle(ring,slot));
+            }
         };
         edgeTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(190)};
         edgeTimer.Tick+=(_,_)=>{
@@ -161,6 +197,232 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             SweepDirection=SweepDirection.Counterclockwise});
         return new PathGeometry(new[]{f});
     }
+    // Each submenu occupies a separate transparent Popup; no existing
+    // ring is redrawn or replaced when a group opens another level.
+    private static double Span(int count)=>
+        count<=1?15:Math.Min(57,12.0*count);
+    private double RootAngle(int slot)
+    {
+        double half=Span(displayed.Count);
+        return ArcCenter-half+(slot+.5)*2*half/displayed.Count;
+    }
+    private static double RingAngle(ChildRing ring,int slot)
+    {
+        double half=Span(ring.Items.Count);
+        return ring.Angle-half+(slot+.5)*2*half/ring.Items.Count;
+    }
+    private void CloseFrom(int depth)
+    {
+        drillTimer.Stop();drillSlot=-1;drillDepth=-1;
+        foreach(var ring in childRings.Where(r=>r.Depth>=depth).ToArray())
+        {
+            ring.Popup.IsOpen=false;
+            ring.Surface.Children.Clear();
+            childRings.Remove(ring);
+        }
+    }
+    private List<(string Label,string Command,string Group,Guid? Id)>
+        BranchItems(string selectedGroup)
+    {
+        var entries=new List<(string Label,string Command,string Group,Guid? Id)>();
+        var groups=new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach(var format in formats)
+        {
+            var path=Group(format);
+            string tail;
+            if(selectedGroup.Length==0)tail=path;
+            else if(path.StartsWith(selectedGroup+"/",StringComparison.OrdinalIgnoreCase))
+                tail=path.Substring(selectedGroup.Length+1);
+            else continue;
+            if(tail.Length>0)groups.Add(tail.Split('/')[0]);
+        }
+        foreach(var group in groups)
+            entries.Add(("▸ "+group,"group",
+                selectedGroup.Length==0?group:selectedGroup+"/"+group,null));
+        foreach(var format in formats.Where(x=>
+            string.Equals(Group(x),selectedGroup,StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase))
+            entries.Add((format.Name,"mapping",selectedGroup,format.Id));
+        entries.Add(("+ Manage","manage",selectedGroup,null));
+        return entries;
+    }
+    private void ExpandRing(int depth,string group,double angle)
+    {
+        if(disposed||!arc.IsOpen||pasting)return;
+        CloseFrom(depth);
+        // Never silently flatten deep groups into the preceding donut.
+        var ring=new ChildRing(depth,group,angle,owner);
+        childRings.Add(ring);
+        RenderRing(ring);
+        ring.Surface.MouseMove+=(_,e)=>HoverRing(ring,e.GetPosition(ring.Surface));
+        ring.Surface.PreviewMouseLeftButtonDown+=(_,e)=>{
+            int slot=RingSlot(ring,e.GetPosition(ring.Surface));
+            if(slot<0)return;
+            ring.SuppressNextUp=true;
+            ActivateRing(ring,slot);e.Handled=true;
+        };
+        ring.Surface.PreviewMouseLeftButtonUp+=(_,e)=>{
+            if(ring.SuppressNextUp){ring.SuppressNextUp=false;e.Handled=true;return;}
+            int slot=RingSlot(ring,e.GetPosition(ring.Surface));
+            if(slot>=0){ActivateRing(ring,slot);e.Handled=true;}
+        };
+        ring.Surface.MouseWheel+=(_,e)=>{
+            PageRing(ring,e.Delta<0?1:-1);e.Handled=true;
+        };
+        ring.Popup.IsOpen=true;
+    }
+    private void RenderRing(ChildRing ring)
+    {
+        var all=BranchItems(ring.Group);
+        ring.Start=Math.Clamp(ring.Start,0,Math.Max(0,all.Count-PerPage));
+        ring.Items.Clear();
+        ring.Items.AddRange(all.Skip(ring.Start).Take(PerPage));
+        ring.Surface.Children.Clear();ring.Zones.Clear();ring.Wedges.Clear();
+        ring.Hovered=-1;
+        int count=ring.Items.Count;
+        if(count==0)return;
+        // Parent's outer edge and child's inner edge differ by only 7 DIPs.
+        double inner=Inner+ring.Depth*61;
+        double outer=Outer+ring.Depth*61;
+        double half=Span(count),step=2*half/count;
+        var geometries=new List<Geometry>();
+        Rect bounds=Rect.Empty;
+        for(int i=0;i<count;i++)
+        {
+            var geometry=SectorAtRadius(
+                ring.Angle-half+i*step,ring.Angle-half+(i+1)*step,
+                inner,outer);
+            geometries.Add(geometry);
+            bounds.Union(geometry.Bounds);
+        }
+        const double margin=10;
+        ring.OriginX=bounds.Left;ring.OriginY=bounds.Top;
+        ring.Surface.Width=bounds.Width+2*margin;
+        ring.Surface.Height=bounds.Height+2*margin;
+        var translation=new TranslateTransform(-bounds.Left+margin,
+                                                -bounds.Top+margin);
+        for(int i=0;i<count;i++)
+        {
+            var item=ring.Items[i];
+            var hit=geometries[i].Clone();hit.Transform=translation;
+            var wedge=new System.Windows.Shapes.Path{
+                Data=hit,Stroke=Brushes.White,StrokeThickness=2,
+                Fill=item.Command=="mapping"?Idle:Accent,
+                Cursor=Cursors.Hand,ToolTip=item.Label
+            };
+            ring.Surface.Children.Add(wedge);
+            ring.Wedges.Add(wedge);ring.Zones.Add(hit);
+            double mid=(ring.Angle-half+(i+.5)*step)*Math.PI/180;
+            double r=(inner+outer)/2;
+            var label=new TextBlock{Text=item.Label,Width=90,FontSize=11,
+                Foreground=item.Command=="mapping"?Ink:Brushes.White,
+                TextAlignment=TextAlignment.Center,
+                TextTrimming=TextTrimming.CharacterEllipsis,
+                ToolTip=item.Label,IsHitTestVisible=false};
+            Canvas.SetLeft(label,CX+r*Math.Cos(mid)-bounds.Left+margin-45);
+            Canvas.SetTop(label,CY+r*Math.Sin(mid)-bounds.Top+margin-9);
+            ring.Surface.Children.Add(label);
+        }
+        if(ring.Start>0)
+        {
+            var prev=SmallButton("‹",()=>PageRing(ring,-1));
+            Canvas.SetLeft(prev,0);Canvas.SetTop(prev,0);
+            ring.Surface.Children.Add(prev);
+        }
+        if(ring.Start+PerPage<all.Count)
+        {
+            var next=SmallButton("›",()=>PageRing(ring,1));
+            Canvas.SetLeft(next,Math.Max(0,ring.Surface.Width-34));
+            Canvas.SetTop(next,Math.Max(0,ring.Surface.Height-30));
+            ring.Surface.Children.Add(next);
+        }
+        PositionRing(ring);
+    }
+    private static Geometry SectorAtRadius(
+        double a,double b,double inner,double outer)
+    {
+        static Point P(double r,double degrees)
+        {
+            double rad=degrees*Math.PI/180;
+            return new Point(CX+r*Math.Cos(rad),CY+r*Math.Sin(rad));
+        }
+        var figure=new PathFigure{StartPoint=P(outer,a),IsClosed=true};
+        figure.Segments.Add(new ArcSegment{Point=P(outer,b),
+            Size=new Size(outer,outer),
+            SweepDirection=SweepDirection.Clockwise});
+        figure.Segments.Add(new LineSegment(P(inner,b),true));
+        figure.Segments.Add(new ArcSegment{Point=P(inner,a),
+            Size=new Size(inner,inner),
+            SweepDirection=SweepDirection.Counterclockwise});
+        return new PathGeometry(new[]{figure});
+    }
+    private void PositionRing(ChildRing ring)
+    {
+        double scale=DeskSpaceDonutGeometryV43.Scale(owner);
+        ring.Surface.LayoutTransform=new ScaleTransform(scale,scale);
+        Point offset=DeskSpaceDonutGeometryV43.PopupOffset(owner,
+            CX,CY,ring.OriginX-10,ring.OriginY-10);
+        ring.Popup.HorizontalOffset=offset.X;
+        ring.Popup.VerticalOffset=offset.Y;
+    }
+    private int RingSlot(ChildRing ring,Point p)
+    {
+        for(int i=0;i<ring.Zones.Count;i++)
+            if(ring.Zones[i].FillContains(p))return i;
+        return -1;
+    }
+    private void PageRing(ChildRing ring,int dir)
+    {
+        ring.Start=Math.Clamp(ring.Start+dir,0,
+            Math.Max(0,BranchItems(ring.Group).Count-PerPage));
+        CloseFrom(ring.Depth+1);
+        RenderRing(ring);
+    }
+    private void HoverRing(ChildRing ring,Point p)
+    {
+        if(!ring.Popup.IsOpen||pasting)return;
+        int slot=RingSlot(ring,p);
+        if(slot==ring.Hovered)return;
+        // Hovering a sibling only closes deeper descendants of this ring.
+        CloseFrom(ring.Depth+1);
+        ring.Hovered=slot;
+        for(int i=0;i<ring.Wedges.Count;i++)
+            ring.Wedges[i].Fill=i==slot?Selected:
+                (ring.Items[i].Command=="mapping"?Idle:Accent);
+        if(slot<0)return;
+        var entry=ring.Items[slot];
+        if(entry.Command=="group")
+        {
+            drillSlot=slot;drillDepth=ring.Depth;
+            drillTimer.Start();
+        }
+        else if(entry.Command=="mapping")
+        {
+            var item=formats.FirstOrDefault(x=>x.Id==entry.Id);
+            if(item!=null)Preview(item);
+        }
+    }
+    private void ActivateRing(ChildRing ring,int slot)
+    {
+        if(!ring.Popup.IsOpen||slot<0||slot>=ring.Items.Count||pasting)return;
+        var item=ring.Items[slot];
+        if(item.Command=="group")
+        {
+            ExpandRing(ring.Depth+1,item.Group,RingAngle(ring,slot));
+            return;
+        }
+        if(item.Command=="manage")
+        {
+            Status("Manage Excel Information",
+                "Use Workspace → Excel Mapping to create or edit collections and data.");
+            return;
+        }
+        if(item.Command!="mapping" || !item.Id.HasValue)return;
+        var format=formats.FirstOrDefault(f=>f.Id==item.Id.Value);
+        if(format==null)return;
+        HideArc();collapseParent();_=PasteAsync(format);
+    }
+
     private void Position()
     {
         if(disposed)return;
@@ -178,6 +440,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         shelf.HorizontalOffset=arc.HorizontalOffset+
             canvas.Width*scale/2-shelfBorder.Width/2+(++tick%2)*.001;
         shelf.VerticalOffset=arc.VerticalOffset+canvas.Height*scale+4;
+        foreach(var ring in childRings)PositionRing(ring);
     }
     private void OnOwnerMoved(object? sender,EventArgs e)=>Position();
     private void OnOwnerResized(object? sender,SizeChangedEventArgs e)
@@ -214,7 +477,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     public void HideArc()
     {
-        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();drillSlot=-1;pageDirection=0;
+        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();drillSlot=-1;drillDepth=-1;pageDirection=0;
+        CloseFrom(1);
         suppressNextUp=false;
         arc.IsOpen=false;hovered=-1;
     }
@@ -262,7 +526,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     private void Render()
     {
-        drillTimer.Stop();drillSlot=-1;
+        drillTimer.Stop();drillSlot=-1;drillDepth=-1;
+        CloseFrom(1);
         canvas.Children.Clear();sectors.Clear();hitZones.Clear();displayed.Clear();
         hovered=-1;
         var all=Entries();
@@ -360,7 +625,18 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private void PollPointer()
     {
         if(!arc.IsOpen || !canvas.IsLoaded || disposed)return;
-        try {Hover(DeskSpaceWheelHoverV35.MouseIn(canvas));}
+        try
+        {
+            // Deepest visible child gets pointer priority; the main wedge
+            // must not close a branch merely because the pointer left it.
+            foreach(var ring in childRings.OrderByDescending(x=>x.Depth).ToArray())
+            {
+                if(!ring.Popup.IsOpen||!ring.Surface.IsLoaded)continue;
+                Point p=DeskSpaceWheelHoverV35.MouseIn(ring.Surface);
+                if(RingSlot(ring,p)>=0){HoverRing(ring,p);return;}
+            }
+            Hover(DeskSpaceWheelHoverV35.MouseIn(canvas));
+        }
         catch(InvalidOperationException){}
     }
     private void OnMove(object sender,MouseEventArgs e)
@@ -372,7 +648,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(disposed||!arc.IsOpen||pasting)return;
         int slot=Slot(p);
         if(slot==hovered)return;
-        drillTimer.Stop();drillSlot=-1;
+        drillTimer.Stop();drillSlot=-1;drillDepth=-1;
+        if(slot>=0)CloseFrom(1);
         hovered=slot;
         for(int i=0;i<sectors.Count;i++)
         {
@@ -387,7 +664,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         if(item.Command=="information"||item.Command=="group")
         {
             shelf.IsOpen=false;
-            drillSlot=slot;
+            drillSlot=slot;drillDepth=0;
             drillTimer.Start();
         }
         else if(item.Command=="mapping")
@@ -435,6 +712,18 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         Point local;
         try{local=canvas.PointFromScreen(p);}
         catch(InvalidOperationException){return false;}
+        foreach(var ring in childRings.OrderByDescending(x=>x.Depth).ToArray())
+        {
+            if(!ring.Popup.IsOpen||!ring.Surface.IsLoaded)continue;
+            Point childPoint;
+            try {childPoint=ring.Surface.PointFromScreen(p);}
+            catch(InvalidOperationException){continue;}
+            int selected=RingSlot(ring,childPoint);
+            if(selected<0)continue;
+            HoverRing(ring,childPoint);
+            if(released)ActivateRing(ring,selected);
+            return true;
+        }
         int slot=Slot(local);
         if(slot<0)return false;
         Hover(local);
@@ -453,7 +742,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         }
         if(item.Command=="information")
         {
-            level=ExcelLevel.Information;groupPath="";start=0;Render();
+            ExpandRing(1,"",RootAngle(slot));
             return;
         }
         if(item.Command=="group")
@@ -600,6 +889,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();successTimer.Stop();
         owner.LocationChanged-=OnOwnerMoved;
         owner.SizeChanged-=OnOwnerResized;
+        CloseFrom(1);
         arc.IsOpen=false;shelf.IsOpen=false;
     }
 }
