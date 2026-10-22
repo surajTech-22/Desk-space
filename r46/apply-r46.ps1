@@ -9,14 +9,10 @@ function Replace-Once([string]$before,[string]$after) {
     $script:s=$script:s.Replace($before,$after)
 }
 Replace-Once 'NewValue=source.Display,' 'NewValue=DeskSpaceExcelActionsV46.PreviewText(source,DateTime.Now),'
-Replace-Once @'
-    private static object? TypedValue(DeskSpaceExcelCellV16 cell)
-    {
-'@ @'
-    private static object? TypedValue(DeskSpaceExcelCellV16 cell)
-    {
+Replace-Once '        if(cell.ValueKind=="boolean")' @'
         if(DeskSpaceExcelActionsV46.IsStaticDateTime(cell.ValueKind))
             return DeskSpaceExcelActionsV46.ValueAtPaste(cell,DateTime.Now);
+        if(cell.ValueKind=="boolean")
 '@
 Replace-Once 'var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula)>();' 'var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula,string Format)>();'
 Replace-Once @'

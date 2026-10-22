@@ -6,10 +6,10 @@ $wheel=[IO.File]::ReadAllText((Join-Path $root 'DeskSpaceExcelWheelV42.cs'))
 $updater=[IO.File]::ReadAllText((Join-Path $root 'DeskSpaceUpdateCheckV42.cs'))
 $oldUpdater=[IO.File]::ReadAllText((Join-Path $root 'DeskSpaceUpdater.cs'))
 foreach($v in @(
-    'canvas.Width=Math.Max(100,extent.Width+2*margin)',
+    'canvas.Width=MiniSize;canvas.Height=MiniSize;',
     'canvas.LayoutTransform=new ScaleTransform(scale,scale)',
-    'localOriginX=extent.Left',
-    'geometry.Transform=translation',
+    'rootCenterX=root.X;rootCenterY=root.Y',
+    'PlaceWheel(0,0,ArcCenter,MainOuterRadius+MiniOuter+3)',
     'drillTimer.Start();',
     'item.Command=="information"||item.Command=="group"',
     'if(item.Command!="mapping" || !item.Id.HasValue)return;',

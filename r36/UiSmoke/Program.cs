@@ -56,7 +56,7 @@ internal static class Program
             "Saved Excel date action does not evaluate when pasted");
         var label=actions.GetMethod("FromShortcut",
             BindingFlags.Static|BindingFlags.NonPublic)!;
-        Assert((string)label.Invoke(null,new object[]{"Ctrl+;"})!==
+        Assert((string)label.Invoke(null,new object[]{"Ctrl+;"})!=
             "action_static_date","Excel Ctrl+; mapping not recognised");
         Console.WriteLine("R46 Excel paste-time date and keyboard mapping PASS.");
     }
