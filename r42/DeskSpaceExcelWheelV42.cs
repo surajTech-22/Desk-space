@@ -504,6 +504,9 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         CloseFrom(1);
         suppressNextUp=false;
         arc.IsOpen=false;hovered=-1;
+        // Preview popups must never remain floating when the parent
+        // sector is no longer selected. An active paste reopens status.
+        if(!pasting)shelf.IsOpen=false;
     }
     public void Hide()
     {
