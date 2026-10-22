@@ -1,65 +1,68 @@
-# R42 manual installer safety: preserve files/user data and coordinate running DeskSpace.
+# R42 Inno safety: preserve all sections, user data, and install identity.
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $p='installer/DeskSpace.iss'
 if(!(Test-Path -LiteralPath $p)){throw 'Inno Setup script missing'}
 $s=[IO.File]::ReadAllText($p).Replace([string][char]13+[char]10,[string][char]10)
-$matches=[regex]::Matches($s,'(?m)^\[Setup\][ \t]*$')
-if($matches.Count -ne 1){throw 'Expected exactly one Inno Setup [Setup] section'}
-$from=$matches[0].Index+$matches[0].Length
-$next=[regex]::Match($s.Substring($from),'(?m)^\[[^\]\r\n]+\][ \t]*$')
-$to=if($next.Success){$from+$next.Index}else{$s.Length}
+$lf=[string][char]10
+$sectionPattern='(?m)^\[[^\]\r\n]+\][ \t]*$'
+$headers=[regex]::Matches($s,$sectionPattern)
+$setupHeaders=@($headers | Where-Object {$_.Value.Trim() -eq '[Setup]'})
+if($setupHeaders.Count -ne 1){throw 'Expected exactly one [Setup] section'}
+$setupHeader=$setupHeaders[0]
+$from=$setupHeader.Index+$setupHeader.Length
+$next=$headers | Where-Object {$_.Index -gt $setupHeader.Index} | Select-Object -First 1
+$to=if($null -ne $next){$next.Index}else{$s.Length}
 $head=$s.Substring(0,$from)
 $setup=$s.Substring($from,$to-$from)
 $tail=$s.Substring($to)
 function Set-Directive([string]$key,[string]$value){
     $pattern='(?mi)^'+[regex]::Escape($key)+'[ \t]*=[^\n]*$'
     $hits=[regex]::Matches($script:setup,$pattern)
-    if($hits.Count -gt 1){throw "Ambiguous original Inno directive: $key"}
+    if($hits.Count -gt 1){throw "Ambiguous Inno directive: $key"}
     if($hits.Count -eq 1){
-        $script:setup=[regex]::Replace($script:setup,$pattern,($key+'='+$value))
+        $script:setup=[regex]::Replace($script:setup,$pattern,
+            [System.Text.RegularExpressions.MatchEvaluator]{
+                param($m)
+                return $key+'='+$value
+            })
     }else{
-        $script:setup+="`n"+$key+'='+$value
+        # Always terminate appended directive with a newline before the
+        # following [Tasks] or [Icons] section.
+        if(!$script:setup.EndsWith($script:lf)){$script:setup+=$script:lf}
+        $script:setup+=($key+'='+$value+$script:lf)
     }
 }
-# Windows Restart Manager closes any still-running app using install files.
-# Never use "force" since it might lose unsaved workspace edits.
+# Ask Windows Restart Manager to shut down DeskSpace gracefully.
+# Never force-close processes and lose unsaved workspace edits.
 Set-Directive 'CloseApplications' 'yes'
 Set-Directive 'RestartApplications' 'no'
 Set-Directive 'CloseApplicationsFilter' '*.exe,*.dll,*.chm'
-# Original installer displayed a stale "DeskSpace R10" title. Fix label
-# only; preserve stable AppId, installation directory and all user data.
 Set-Directive 'AppVerName' 'DeskSpace {#AppVersion}'
-# Inno Setup sections MUST begin on their own line. When directives are
-# appended to [Setup], the previous version joined the final directive to
-# the following [Tasks] header (AppVerName=... [Tasks]), so Inno interpreted
-# "Name: desktopicon; ..." as a [Setup] directive and aborted.
-# Preserve the exact original text of every non-[Setup] section.
-if($tail.Length -gt 0 -and !$setup.EndsWith("`n")){$setup+="`n"}
+if($tail.Length -gt 0 -and !$setup.EndsWith($lf)){$setup+=$lf}
 $built=$head+$setup+$tail
-$beforeSections=[regex]::Matches($s,'(?m)^\\[[^\\]\\r\\n]+\\][ \\t]*
-Write-Host 'R42 installer: automatic graceful close, no forced exit, no restart, current version label. Original AppId and data unchanged.'
-)
-$afterSections=[regex]::Matches($built,'(?m)^\\[[^\\]\\r\\n]+\\][ \\t]*
-Write-Host 'R42 installer: automatic graceful close, no forced exit, no restart, current version label. Original AppId and data unchanged.'
-)
-if($beforeSections.Count -ne $afterSections.Count){
-    throw 'Installer patch changed the number of Inno Setup sections'
+# Verify every original Inno section header stays intact.
+$afterHeaders=[regex]::Matches($built,$sectionPattern)
+if($headers.Count -ne $afterHeaders.Count){
+    throw 'R42 installer patch changed section count'
 }
-for($i=0;$i -lt $beforeSections.Count;$i++){
-    if($beforeSections[$i].Value -ne $afterSections[$i].Value){
-        throw "Installer section header changed: $($beforeSections[$i].Value)"
+for($i=0;$i -lt $headers.Count;$i++){
+    if($headers[$i].Value -ne $afterHeaders[$i].Value){
+        throw 'R42 installer patch damaged a section header'
     }
 }
-if($setup -match '(?m)^[ \\t]*Name[ \\t]*:'){
-    throw 'Inno Tasks/Icons directive leaked into [Setup] section'
+if($setup -match '(?m)^[ \t]*Name[ \t]*:'){
+    throw 'R42 installer [Tasks]/[Icons] entries leaked into [Setup]'
 }
-if($tail.Length -gt 0 -and !$built.Contains("`n"+$tail)){
-    throw 'Installer subsection boundary was not preserved'
+if($tail.Length -gt 0 -and !$built.Contains($lf+$tail)){
+    throw 'R42 installer did not preserve [Tasks]/[Icons] section boundary'
+}
+if($tail.Length -gt 0 -and !$built.EndsWith($tail)){
+    throw 'R42 installer changed original non-Setup sections'
+}
+foreach($value in @('CloseApplications=yes','RestartApplications=no',
+    'AppVerName=DeskSpace {#AppVersion}')){
+    if(!$setup.Contains($value)){throw "R42 missing installer setting: $value"}
 }
 [IO.File]::WriteAllText($p,$built,[Text.UTF8Encoding]::new($false))
-foreach($v in @('CloseApplications=yes','RestartApplications=no',
-    'AppVerName=DeskSpace {#AppVersion}')){
-    if(!$built.Contains($v)){throw "Missing guarded installer setting: $v"}
-}
-Write-Host 'R42 installer: automatic graceful close, no forced exit, no restart, current version label. Original AppId and data unchanged.'
+Write-Host 'R42 Inno: graceful app close, version label, original section boundaries verified.'
