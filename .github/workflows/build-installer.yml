@@ -1077,54 +1077,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $ErrorActionPreference='Stop'
-          $exe='release/DeskSpace_Setup.exe'
-          $checksum='release/DeskSpace_Setup.sha256.txt'
-          if(!(Test-Path $exe) -or !(Test-Path $checksum)){throw 'Verified setup and checksum required'}
-          $digest=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expected=((Get-Content $checksum -Raw).Trim() -split '\\s+')[0].ToLowerInvariant()
-          if($digest -ne $expected){throw 'Installer SHA256 mismatch'}
-          $versionLine=Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
           $ErrorActionPreference = 'Stop'
-          $match = Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"$' | Select-Object -First 1
-          if (!$match) { throw 'Cannot read compiled DeskSpace release version' }
-          $tag = 'v' + $match.Matches[0].Groups[1].Value
-          $repo = 'surajTech-22/Desk-space'
-          gh release view $tag --repo $repo *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Refusing to replace existing tagged release $tag" }
-          gh release create $tag 'release/DeskSpace_Setup.exe' 'release/DeskSpace_Setup.sha256.txt' --repo $repo --target $env:GITHUB_SHA --title 'DeskSpace R5 automatic updater' --notes 'Private verified Windows release. The DeskSpace updater authenticates using the official GitHub CLI.'
-          if ($LASTEXITCODE -ne 0) { throw 'Automatic update release publishing failed' }
-          $status = "$tag|$env:GITHUB_SHA|release-published"
-          $base64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($status))
-          $receiptPath = "repos/$repo/contents/releases/latest-build.txt"
-          # The file already exists after the first release. GitHub's contents API
-          # requires its CURRENT blob SHA for every subsequent update.
-          $oldSha = gh api $receiptPath --jq '.sha'
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($oldSha)) { throw 'Cannot verify current release receipt SHA' }
-          $body = @{
-            message='Record verified DeskSpace automatic-release publication'
-            content=$base64
-            branch='main'
-            sha=$oldSha.Trim()
-          }
-          $request = $body | ConvertTo-Json -Compress
-          $receiptFile = Join-Path $env:RUNNER_TEMP 'deskspace-release-receipt.json'
-          [IO.File]::WriteAllText($receiptFile,$request,[Text.UTF8Encoding]::new($false))
-          gh api --method PUT $receiptPath --input $receiptFile
-          if ($LASTEXITCODE -ne 0) { throw 'Release published, but publication receipt could not be saved' }
- | Select-Object -First 1
-          if(!$versionLine){throw 'Installer version missing'}
-          $version=$versionLine.Matches[0].Groups[1].Value
-          $tag='r42-test-'+$env:GITHUB_SHA.Substring(0,12)+'-v'+$version
+          $exe = 'release/DeskSpace_Setup.exe'
+          $checksum = 'release/DeskSpace_Setup.sha256.txt'
+          if (!(Test-Path $exe) -or !(Test-Path $checksum)) { throw 'Installer and checksum required' }
+          $digest = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = ((Get-Content $checksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          if ($digest -ne $expected) { throw 'Installer SHA256 mismatch' }
+          $versionLine = Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"$' | Select-Object -First 1
+          if (!$versionLine) { throw 'Installer version missing' }
+          $version = $versionLine.Matches[0].Groups[1].Value
+          $tag = 'r42-test-' + $env:GITHUB_SHA.Substring(0,12) + '-v' + $version
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if($LASTEXITCODE -eq 0){throw "Refusing to overwrite $tag"}
-          gh release create $tag $exe $checksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 Windows tester $version" --notes "R42 test build from $env:GITHUB_SHA. Run only after checking release SHA256. Preserves original installed application data." --prerelease --latest=false
-          if($LASTEXITCODE -ne 0){throw 'Release publish failed'}
+          if ($LASTEXITCODE -eq 0) { throw "Refusing to overwrite $tag" }
+          gh release create $tag $exe $checksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 Windows tester $version" --notes "R42 test candidate at $env:GITHUB_SHA. Verify SHA256 before installation." --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'Tester release publishing failed' }
 
       - name: Publish successful version to private GitHub Releases
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
