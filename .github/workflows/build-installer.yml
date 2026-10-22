@@ -960,6 +960,26 @@ jobs:
         shell: pwsh
         run: ./r42/test-r42.ps1
 
+      - name: R42 PowerShell source syntax preflight before packaging
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $psScripts=@(Get-ChildItem -LiteralPath 'r42' -Filter '*.ps1' -File -Recurse)
+          if($psScripts.Count -lt 4){throw 'R42 PowerShell source files missing'}
+          foreach($script in $psScripts){
+            $tokens=$null
+            $parseErrors=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+                $script.FullName,[ref]$tokens,[ref]$parseErrors)
+            if($parseErrors.Count -gt 0){
+              $details=($parseErrors | ForEach-Object {
+                "$($_.Extent.File):$($_.Extent.StartLineNumber): $($_.Message)"
+              }) -join [Environment]::NewLine
+              throw "R42 PowerShell source parse error: $details"
+            }
+          }
+          Write-Host "R42 syntax preflight: $($psScripts.Count) scripts parsed without errors."
+
       - name: R42 verified installed-app closure and corrected Inno Setup version label
         shell: pwsh
         run: |
