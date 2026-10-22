@@ -36,7 +36,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private bool disposed,pasting,previewOnly,suppressNextUp;
     private int tick;
     private const int PerPage=4;
-    // The Excel wedge is the seventh inner sector of the 14-sector donut.
+    // Excel Functions is the seventh OUTER sector (index 12) of 13.
+    // Its child arc follows the outer ring; Information remains at index 6.
     // Align the child arc with that wedge and use the Information wheel
     // positioning, click, pagination and shelf behavior.
     private const double CX=325,CY=325,Outer=260,Inner=207;
