@@ -993,20 +993,14 @@ jobs:
           ./r44/apply-r44.ps1
           ./r44/test-r44.ps1
 
-      - name: Assign higher stable version than legacy local 1.4 builds
+      - name: Assign stable version newer than manual 1.4.29412
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $number = [int]$env:GITHUB_RUN_NUMBER
           if ($number -le 0) { throw 'Cannot determine new release build number' }
-          # 1.4.29412 exists on user PCs from the old local builder. A
-          # 1.4.3xx public release is NOT an update to that installation.
-          # Moving the minor version above 1.4 makes the next stable release
-          # strictly newer without weakening System.Version comparisons.
           $version = "1.5.$number"
-          if ([version]$version -le [version]"1.4.29412") {
-            throw "Release must supersede legacy installed v1.4.29412"
-          }
+          if([version]$version -le [version]'1.4.29412'){throw 'Legacy manual version would block upgrade'}
           $iss = 'installer/DeskSpace.iss'
           $inno = [IO.File]::ReadAllText($iss)
           $from = '#define AppVersion "1.4.0"'
@@ -1021,22 +1015,21 @@ jobs:
           [IO.File]::WriteAllText($cs,$code,[Text.UTF8Encoding]::new($false))
           Write-Host "Release version assigned: $version"
 
-      - name: Verify version is above legacy local installs
+      - name: Verify upgrade version and automatic updater linkage
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $setup = [IO.File]::ReadAllText('installer/DeskSpace.iss')
-          $match = [regex]::Match($setup, '#define AppVersion "([0-9]+[.][0-9]+[.][0-9]+)"')
-          if (!$match.Success) { throw 'Installer version missing' }
-          $v = [version]$match.Groups[1].Value
-          if ($v -le [version]'1.4.29412') { throw 'Release older than legacy PC install' }
-          $updater = [IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs')
-          $stamp = 'InstalledVersion = new(' + $v.Major + ', ' + $v.Minor + ', ' + $v.Build + ');'
-          if (!$updater.Contains($stamp)) { throw 'App version differs from installer' }
-          if (!$updater.Contains('DeskSpacePublicUpdaterV44.StartAutomaticChecks(host)')) {
-            throw 'Automatic updater not connected'
+          $ErrorActionPreference='Stop'
+          $versionLine=Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"$' | Select-Object -First 1
+          if(!$versionLine){throw 'Installer version missing'}
+          $v=[version]$versionLine.Matches[0].Groups[1].Value
+          if($v -le [version]'1.4.29412'){throw 'Version must exceed installed manual updater version'}
+          $code=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs' -Raw
+          $expected='InstalledVersion = new('+$v.Major+', '+$v.Minor+', '+$v.Build+');'
+          if(!$code.Contains($expected)){throw 'App/installer version mismatch'}
+          if(!$code.Contains('DeskSpacePublicUpdaterV44.StartAutomaticChecks(host)')){
+            throw 'Background stable updater linkage is missing'
           }
-          Write-Host ('Version gate PASS: ' + $v)
+          Write-Host ('Manual to automatic upgrade gate PASS: '+$v)
 
       - name: Verify official GitHub CLI is available for bundled updater
         shell: pwsh
@@ -1050,6 +1043,7 @@ jobs:
           $cli=Get-Command gh.exe -ErrorAction SilentlyContinue
           if (!$cli) { throw 'The updater needs the official gh.exe on the Windows build runner' }
           gh --version
+
       - name: Install .NET 8 SDK on GitHub build runner
         uses: actions/setup-dotnet@v4
         with:
@@ -1094,24 +1088,22 @@ jobs:
           $bytes = [IO.File]::ReadAllBytes((Resolve-Path 'release/DeskSpace_Setup.exe'))
           if ($bytes.Length -lt 5000000 -or $bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw 'Invalid Windows installer' }
 
-      - name: Package compatibility Update.exe for previous manual installations
+      - name: Package Update.exe bridge for existing manually updated PCs
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $setup='release/DeskSpace_Setup.exe'
-          $legacy='release/Update.exe'
+          $exe='release/DeskSpace_Setup.exe'
           $checksum='release/DeskSpace_Setup.sha256.txt'
-          if(!(Test-Path $setup) -or !(Test-Path $checksum)) { throw 'Verified installer files missing' }
-          $actual=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          if(!(Test-Path $exe) -or !(Test-Path $checksum)){throw 'Verified Setup files missing'}
           $expected=((Get-Content $checksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
-          if($actual -ne $expected) { throw 'Setup SHA256 mismatch' }
-          Copy-Item -LiteralPath $setup -Destination $legacy -Force
-          $actualUpdate=(Get-FileHash $legacy -Algorithm SHA256).Hash.ToLowerInvariant()
-          if($actualUpdate -ne $expected) { throw 'Compatibility Update.exe checksum mismatch' }
+          $sha=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($sha -ne $expected){throw 'Original setup checksum mismatch'}
+          Copy-Item -LiteralPath $exe -Destination 'release/Update.exe' -Force
+          $copied=(Get-FileHash 'release/Update.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($copied -ne $expected){throw 'Update.exe is not identical to verified setup'}
           [IO.File]::WriteAllText('release/Update.sha256.txt',
-            ($actualUpdate + '  Update.exe' + [Environment]::NewLine),
-            [Text.UTF8Encoding]::new($false))
-          Write-Host 'Manual Update.exe compatibility bridge matches the verified stable installer.'
+            ($copied+'  Update.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))
+
       - name: Upload real Windows installer
         uses: actions/upload-artifact@v4
         with:
@@ -1139,64 +1131,21 @@ jobs:
           $digest = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
           $expected = ((Get-Content $checksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
           if ($digest -ne $expected) { throw 'Installer SHA256 mismatch' }
-          $legacy='release/Update.exe'
-          $legacyChecksum='release/Update.sha256.txt'
-          if(!(Test-Path $legacy) -or !(Test-Path $legacyChecksum)) {
-            throw 'Legacy Update.exe bridge missing'
+          $update='release/Update.exe'
+          $updateChecksum='release/Update.sha256.txt'
+          if(!(Test-Path $update) -or !(Test-Path $updateChecksum)){throw 'Update.exe bridge missing'}
+          $copied=(Get-FileHash $update -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expectedUpdate=((Get-Content $updateChecksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          if($copied -ne $digest -or $expectedUpdate -ne $digest){
+            throw 'Update.exe SHA256 does not match trusted Setup.exe'
           }
-          $bridgeDigest=(Get-FileHash $legacy -Algorithm SHA256).Hash.ToLowerInvariant()
-          if($bridgeDigest -ne $digest) { throw 'Legacy Update.exe differs from verified setup' }
-          $bridgeExpected=((Get-Content $legacyChecksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
-          if($bridgeExpected -ne $digest) { throw 'Legacy Update.exe checksum invalid' }
-          $versionLine = Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"
+          $versionLine = Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"$' | Select-Object -First 1
           if (!$versionLine) { throw 'Installer version missing' }
           $version = $versionLine.Matches[0].Groups[1].Value
           $tag = 'v' + $version
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) { throw "Refusing to overwrite stable release $tag" }
-          gh release create $tag $exe $checksum $legacy $legacyChecksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 automatic update $version" --notes "Stable DeskSpace R42 automatic-channel release from commit $env:GITHUB_SHA. Windows build, WPF smoke tests, installer validation, and SHA-256 verification passed. Installs through the existing supervised updater." 
-          if ($LASTEXITCODE -ne 0) { throw 'Automatic stable release publication failed' }
-
-      - name: Publish successful version to private GitHub Releases
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $match = Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"$' | Select-Object -First 1
-          if (!$match) { throw 'Cannot read compiled DeskSpace release version' }
-          $tag = 'v' + $match.Matches[0].Groups[1].Value
-          $repo = 'surajTech-22/Desk-space'
-          gh release view $tag --repo $repo *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Refusing to replace existing tagged release $tag" }
-          gh release create $tag 'release/DeskSpace_Setup.exe' 'release/DeskSpace_Setup.sha256.txt' --repo $repo --target $env:GITHUB_SHA --title 'DeskSpace R5 automatic updater' --notes 'Private verified Windows release. The DeskSpace updater authenticates using the official GitHub CLI.'
-          if ($LASTEXITCODE -ne 0) { throw 'Automatic update release publishing failed' }
-          $status = "$tag|$env:GITHUB_SHA|release-published"
-          $base64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($status))
-          $receiptPath = "repos/$repo/contents/releases/latest-build.txt"
-          # The file already exists after the first release. GitHub's contents API
-          # requires its CURRENT blob SHA for every subsequent update.
-          $oldSha = gh api $receiptPath --jq '.sha'
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($oldSha)) { throw 'Cannot verify current release receipt SHA' }
-          $body = @{
-            message='Record verified DeskSpace automatic-release publication'
-            content=$base64
-            branch='main'
-            sha=$oldSha.Trim()
-          }
-          $request = $body | ConvertTo-Json -Compress
-          $receiptFile = Join-Path $env:RUNNER_TEMP 'deskspace-release-receipt.json'
-          [IO.File]::WriteAllText($receiptFile,$request,[Text.UTF8Encoding]::new($false))
-          gh api --method PUT $receiptPath --input $receiptFile
-          if ($LASTEXITCODE -ne 0) { throw 'Release published, but publication receipt could not be saved' }
- | Select-Object -First 1
-          if (!$versionLine) { throw 'Installer version missing' }
-          $version = $versionLine.Matches[0].Groups[1].Value
-          $tag = 'v' + $version
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Refusing to overwrite stable release $tag" }
-          gh release create $tag $exe $checksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 automatic update $version" --notes "Stable DeskSpace R42 automatic-channel release from commit $env:GITHUB_SHA. Windows build, WPF smoke tests, installer validation, and SHA-256 verification passed. Installs through the existing supervised updater." 
+          gh release create $tag $exe $checksum $update $updateChecksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 automatic update $version" --notes "Stable DeskSpace R42 automatic-channel release from commit $env:GITHUB_SHA. Windows build, WPF smoke tests, installer validation, and SHA-256 verification passed. Installs through the existing supervised updater." 
           if ($LASTEXITCODE -ne 0) { throw 'Automatic stable release publication failed' }
 
       - name: Publish successful version to private GitHub Releases
