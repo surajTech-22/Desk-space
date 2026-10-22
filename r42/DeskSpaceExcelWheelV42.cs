@@ -242,7 +242,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         ?start>0:start+PerPage<formats.Count;
     private void Page(int dir)
     {
-        if(!CanPage(dir)){edgeTimer.Stop();return;}
+        if(!CanPage(dir)){edgeTimer.Stop();pageDirection=0;return;}
         start=Math.Clamp(start+dir,0,Math.Max(0,formats.Count-PerPage));
         Render();
         if(!CanPage(dir))edgeTimer.Stop();
@@ -265,6 +265,25 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private void Hover(Point p)
     {
         if(disposed||!arc.IsOpen||pasting)return;
+        int edge=p.X>=10 && p.X<=80 && p.Y>=150 && p.Y<=225
+            && CanPage(-1) ? -1 :
+            p.X>=10 && p.X<=85 && p.Y>=230 && p.Y<=315
+            && CanPage(1) ? 1 : 0;
+        if(edge!=0)
+        {
+            if(pageDirection!=edge || !edgeTimer.IsEnabled)
+            {
+                pageDirection=edge;
+                edgeTimer.Interval=TimeSpan.FromMilliseconds(190);
+                edgeTimer.Start();
+            }
+            return;
+        }
+        if(pageDirection!=0)
+        {
+            pageDirection=0;
+            edgeTimer.Stop();
+        }
         int slot=Slot(p);
         if(slot==hovered)return;
         hovered=slot;
