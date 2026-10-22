@@ -296,7 +296,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     {
         if(disposed||!arc.IsOpen||pasting)return;
         CloseFrom(depth);
-        KeepConcentricRingOnScreen(Outer+depth*61);
+        KeepConcentricRingOnScreen(Outer+depth*54);
         // Never silently flatten deep groups into the preceding donut.
         var ring=new ChildRing(depth,group,angle,owner);
         childRings.Add(ring);
@@ -329,8 +329,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         int count=ring.Items.Count;
         if(count==0)return;
         // Parent's outer edge and child's inner edge differ by only 7 DIPs.
-        double inner=Inner+ring.Depth*61;
-        double outer=Outer+ring.Depth*61;
+        double inner=Inner+ring.Depth*54;
+        double outer=Outer+ring.Depth*54;
         double half=Span(count),step=2*half/count;
         var geometries=new List<Geometry>();
         Rect bounds=Rect.Empty;
