@@ -21,3 +21,13 @@ The GitHub Windows workflow now runs `r42/apply-r42-installer.ps1` before versio
 The V4 local launcher includes `INSTALL_EXISTING_R42.bat` for the **already-compiled, checksum-verified** `DeskSpace_Setup_R42_Local_*.exe` in Downloads, so no recompilation is needed. It asks the running installed DeskSpace to shut down gracefully; if the tray process remains, it requires the user to exit it rather than force-killing it. Then it makes a user-data backup outside the installed app, launches the installer with explicit close-application flags, records an installation log, and reports nonzero installer exit codes as failures.
 
 For future source changes, use `UPDATE_APP.bat` from the V4 ZIP. The build still pulls the latest R42 private GitHub branch and uses no GitHub Actions minutes.
+
+## V5 — Excel Functions hierarchy and private tester installer
+
+The R42 main donut now has one **Excel Functions** segment, not separate Excel and Excel Clipboard segments. It opens **Clipboard** and **Information** child segments in the same curved donut style. Under Information, mappings with an empty optional group path appear directly. Mappings classified into `Clients/Audit` appear under **Clients → Audit**; there is no third main grouping segment. Hover is read-only; an explicit mapping selection is still required for paste.
+
+Excel Mapping in the Workspace has a compact short-window layout and an editable optional **Information group** field. The success notice is dismissed three seconds **only after a successful Excel paste**. Failed/blocked paste messages and other modules are not timed out.
+
+**Installer distribution:** The V5 `UPDATE_APP.bat` runs the pinned private R42 Windows build. Only after the full source gates, .NET compilation, WPF smoke checks, installer checksum, and guarded local installation succeed does it invoke `r42/manual-update/PUBLISH_VERIFIED_INSTALLER.ps1`. That script uploads the setup EXE and checksum as a **private GitHub pre-release** for testers. It does not replace the stable release, does not run GitHub Actions and refuses to overwrite an existing test release. If the Windows compiler or installation fails, no R42 installer is published.
+
+This repository currently provides the implementation and publication mechanism; **the new V5 installer binary is not yet built/verified/uploaded by this chat session** because native Windows compilation must occur on a Windows computer. The resulting private test release will appear under [GitHub Releases](https://github.com/surajTech-22/Desk-space/releases) after the Windows build succeeds.
