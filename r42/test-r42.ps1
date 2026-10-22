@@ -175,6 +175,14 @@ if($s.Contains($old2)){
         if(!$s.Contains($label)){throw "R42 Workspace smoke missing revised action $label"}
     }
 }
+# R40's separate Workspace test still contains legacy labels not adjacent to
+# the R39 block. Match the actual revised UI in every smoke assertion.
+$s=$s.Replace('"Verify screenshot against selected Excel range"','"Refresh saved mappings"')
+$s=$s.Replace('"Save checked values"','"Save mapping changes"')
+if($s.Contains('"Verify screenshot against selected Excel range"') -or
+   $s.Contains('"Save checked values"')){
+    throw 'R42 smoke retained outdated Excel Workspace actions'
+}
 # The original 14-wedge smoke source was created by R39. Replace its
 # unreachable extra outer wedge assertion and execute the 13-wedge test.
 if(!$s.Contains('    private static void TestDonut14()')){
