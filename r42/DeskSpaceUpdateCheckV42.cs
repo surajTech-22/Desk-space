@@ -62,7 +62,10 @@ internal static class DeskSpaceUpdateCheckV42
             try { process.Kill(true); }catch(InvalidOperationException){}
             throw new TimeoutException("GitHub update check timed out.");
         }
-        return (process.ExitCode,(await output)+"\n"+(await errors));
+        var stdout=await output;
+        var stderr=await errors;
+        return (process.ExitCode,process.ExitCode==0?stdout:stderr+"
+"+stdout);
     }
 
     private static void OpenReleases()
@@ -121,7 +124,7 @@ internal static class DeskSpaceUpdateCheckV42
                     OpenReleases();
                 return;
             }
-            var installed=DeskSpaceUpdater.InstalledVersion;
+            var installed=Version.Parse(DeskSpaceUpdater.CurrentVersion);
             string? newerTag=null;
             Version? newerVersion=null;
             using(var json=JsonDocument.Parse(result.Output.Trim()))
