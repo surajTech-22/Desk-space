@@ -386,6 +386,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         pasting=true;
         Status("Excel paste · "+entry.Name,
             "Locating matching labels and protecting Excel formulas…");
+        bool applying=false;
         try
         {
             if(!entry.CoordinatesVerified)
@@ -416,6 +417,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             Status("Excel paste · "+entry.Name,
                 "Matched "+preview.SheetName+". Backing up the workbook and "+
                 "pasting "+ready+" values…");
+            applying=true;
             var backup=await DeskSpaceExcelWorkerV41.ApplyAsync(
                 preview,entry,overwrite:true);
             if(disposed)return;
@@ -429,8 +431,10 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         {
             if(!disposed)
                 Status("Excel paste blocked",
-                    ex.Message+" Nothing was pasted if destination "+
-                    "verification or backup failed.");
+                    ex.Message+(applying
+                        ? " Check the target workbook and its backup. "+
+                          "A partially completed write may require recovery."
+                        : " No workbook changes were made."));
         }
         finally {pasting=false;}
     }
