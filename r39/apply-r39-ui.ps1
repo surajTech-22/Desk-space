@@ -27,6 +27,10 @@ Replace @'
             "save screen. Only Excel itself can verify exact cell addresses and formulas.",12));
 '@
 Replace 'Content="Save formulas as formulas (otherwise save their displayed values)"' 'Content="Record formulas for analysis only (never paste formulas)"'
+Replace 'IsChecked=false,Margin=new Thickness(5,5,0,6),FontSize=12' 'IsChecked=true,IsEnabled=false,Margin=new Thickness(5,5,0,6),FontSize=12'
+# On mouse release capture the LAST drag position before dropping the capture.
+Replace '        marking=false;drawing.ReleaseMouseCapture();DrawMove(sender,e);' '        DrawMove(sender,e);marking=false;drawing.ReleaseMouseCapture();'
+
 Replace '        body.Children.Add(Caption("Choose exactly which captured values to save",12,true));' '        body.Children.Add(Caption("Review Reference Cell / Value Cell / formulas and select what to save",12,true));'
 Replace @'
             ActionButton("Capture selected Excel cells",()=>Run(Capture))
