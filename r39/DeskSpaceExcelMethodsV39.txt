@@ -61,7 +61,7 @@
                         candidate.SourceColumn+cell.ColumnOffset):cell.CellAddress)
                 : "Image row "+(cell.RowOffset+1)+", item "+(cell.ColumnOffset+1);
             var checkbox=new CheckBox{
-                Tag=cell,IsChecked=cell.ValueKind!="formula",
+                Tag=cell,IsChecked=cell.ValueKind!="formula" && cell.ValueKind!="blank",
                 FontSize=12,Foreground=ink,Margin=new Thickness(4,3,4,4),
                 ToolTip="Select to save exactly this text and its classification"
             };
