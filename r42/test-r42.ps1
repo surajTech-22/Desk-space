@@ -344,12 +344,12 @@ $method=@'
                 var ringItems=(System.Collections.ICollection)
                     level.GetType().GetField("Items",Any)!.GetValue(level)!;
                 int count=ringItems.Count;
-                double half=(double)halfSweep.Invoke(
+                double branchHalf=(double)halfSweep.Invoke(
                     null,new object[]{count})!;
                 double fitted=(double)chooseAngle.Invoke(null,new object[]{
-                    k+1,selected,half,centre,desktop,1.0})!;
-                double firstAngle=fitted-half;
-                double step=2*half/count;
+                    k+1,selected,branchHalf,centre,desktop,1.0})!;
+                double firstAngle=fitted-branchHalf;
+                double step=2*branchHalf/count;
                 Draw(k+1,firstAngle,step,count);
                 selected=firstAngle+.5*step; // first nested collection
             }
