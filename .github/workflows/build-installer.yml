@@ -10,11 +10,12 @@ on:
 permissions:
   contents: write
 
-# Prevent multiple simultaneous Windows installers from consuming quota.
-# Never cancel a main-branch production release job.
+# Public runners build independently by source SHA. A canceled Windows job
+# can remain in GitHub's teardown state and must not block new safety fixes.
+# Only the CURRENT branch head is allowed to publish a stable release.
 concurrency:
-  group: deskspace-installer-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/r42-excel-mapping-editor' }}
+  group: deskspace-installer-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -1125,6 +1126,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $currentHead=(gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/r42-excel-mapping-editor" --jq '.object.sha').Trim()
+          if($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentHead)){
+            throw 'Cannot verify current R42 branch head'
+          }
+          if($currentHead -ne $env:GITHUB_SHA){
+            Write-Host 'Obsolete commit; verified release intentionally not published'
+            exit 0
+          }
           $exe = 'release/DeskSpace_Setup.exe'
           $checksum = 'release/DeskSpace_Setup.sha256.txt'
           if (!(Test-Path $exe) -or !(Test-Path $checksum)) { throw 'Installer and checksum required' }
