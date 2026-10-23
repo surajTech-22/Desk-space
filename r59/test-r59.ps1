@@ -17,8 +17,8 @@ if($watch.Contains('candidates.Add(drive.RootDirectory.FullName);') -or
     throw 'R59 still watches entire local drives'
 }
 foreach($t in @('BaseInner=197,BaseOuter=242,SubInner=244,SubOuter=288',
-    'TextWrapping=TextWrapping.Wrap','center-40',
-    'start+i*20,start+(i+1)*20',
+    'TextWrapping=TextWrapping.Wrap','ApplicationsParentCenter',
+    'start+i*step,start+(i+1)*step',
     'SnapshotApplications()','Path.GetDirectoryName(x.Path)')){
     if(!$apps.Contains($t)){throw "R59 Apps geometry/name fix missing $t"}
 }
