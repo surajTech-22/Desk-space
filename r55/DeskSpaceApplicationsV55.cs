@@ -26,8 +26,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private readonly Brush normal=new SolidColorBrush(Color.FromRgb(217,229,248));
     private readonly Brush selected=new SolidColorBrush(Color.FromRgb(143,172,235));
     private readonly Brush accent=new SolidColorBrush(Color.FromRgb(78,98,180));
-    private const double Center=340,BaseInner=217,BaseOuter=268,SubInner=273,SubOuter=322;
-    private int page,childPage,hovered=-1;
+    private const double Center=340,BaseInner=197,BaseOuter=242,SubInner=244,SubOuter=288;
+    private int childPage,hovered=-1;
     private string group="";
     private bool disposed;
     private int placementTick;
@@ -72,26 +72,41 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         fills.Add(shape);hitZones.Add((geom,kind,path));
         canvas.Children.Add(shape);
         var point=At((r0+r1)*.5,(a+b)*.5);
-        var text=new TextBlock{Text=label,Width=76,TextAlignment=TextAlignment.Center,
-            FontSize=11,TextTrimming=TextTrimming.CharacterEllipsis,
+        var text=new TextBlock{Text=label,Width=76,MaxHeight=30,
+            TextWrapping=TextWrapping.Wrap,
+            TextAlignment=TextAlignment.Center,
+            FontSize=10.5,TextTrimming=TextTrimming.CharacterEllipsis,
             Foreground=kind=="add"?Brushes.White:
                 new SolidColorBrush(Color.FromRgb(37,51,79)),
             IsHitTestVisible=false,ToolTip=label};
-        Canvas.SetLeft(text,point.X-38);Canvas.SetTop(text,point.Y-9);
+        Canvas.SetLeft(text,point.X-38);Canvas.SetTop(text,point.Y-14);
         canvas.Children.Add(text);
     }
     private List<(string Label,string Kind,string Path)> Children()
     {
-        var items=(group=="pinned"
+        // Use the actual Windows app display name, not the ambiguous EXE
+        // basename shown multiple times in the reported screenshots.
+        var applications=group=="pinned"
             ? pinned().Where(IsLaunchable)
+                .Select(p=>(Name:System.IO.Path.GetFileNameWithoutExtension(p),Path:p))
             : DeskSpaceSearchIndexV13.SnapshotApplications()
-                .Select(x=>x.OpenTarget).Where(IsLaunchable))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x=>System.IO.Path.GetFileNameWithoutExtension(x),
-                StringComparer.OrdinalIgnoreCase).ToList();
-        return items.Skip(childPage*4).Take(4)
-            .Select(p=>(System.IO.Path.GetFileNameWithoutExtension(p),"launch",p))
-            .ToList();
+                .Where(h=>IsLaunchable(h.OpenTarget))
+                .Select(h=>(Name:string.IsNullOrWhiteSpace(h.Name)?
+                    System.IO.Path.GetFileNameWithoutExtension(h.OpenTarget):h.Name,
+                    Path:h.OpenTarget));
+        var distinct=applications
+            .GroupBy(x=>x.Path,StringComparer.OrdinalIgnoreCase)
+            .Select(g=>g.First())
+            .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();
+        return distinct.Skip(childPage*4).Take(4)
+            .Select(x=>{
+                bool ambiguous=distinct.Count(y=>string.Equals(y.Name,x.Name,
+                    StringComparison.OrdinalIgnoreCase))>1;
+                var parent=System.IO.Path.GetFileName(
+                    System.IO.Path.GetDirectoryName(x.Path)??"");
+                var title=ambiguous?x.Name+" ("+parent+")":x.Name;
+                return (Label:title,Kind:"launch",Path:x.Path);
+            }).ToList();
     }
     private static bool IsLaunchable(string p)
     {
@@ -113,10 +128,13 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         };
         var center=DeskSpaceDonutGeometryV43.OuterSectorCenter(4);
         // The Applications replacement is outer slot 4 (overall index 10).
-        double start=center-51;
+        // Wedges are immediately adjacent to the parent's 195-DIP outer
+        // radius and share its exact origin; the former 217-DIP opening
+        // produced a visibly detached arc, especially on scaled screens.
+        double start=center-40;
         for(int i=0;i<roots.Length;i++)
             AddWedge(roots[i].Item1,roots[i].Item2,roots[i].Item3,
-                start+i*25.5,start+(i+1)*25.5,BaseInner,BaseOuter);
+                start+i*20,start+(i+1)*20,BaseInner,BaseOuter);
         if(group.Length>0)
         {
             var children=Children();
@@ -124,7 +142,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 AddWedge("No apps","empty","",center-16,center+16,SubInner,SubOuter);
             else
             {
-                double width=Math.Min(90,children.Count*23);
+                double width=Math.Min(84,children.Count*21);
                 double begin=center-width/2;
                 for(int i=0;i<children.Count;i++)
                     AddWedge(children[i].Label,"launch",children[i].Path,
@@ -134,7 +152,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             // Keep page actions attached to the circle, not a separate window.
             if(childPage>0)
                 AddWedge("‹ Back","pageback","",center-66,center-47,SubInner,SubOuter);
-            if(Children().Count==4)
+            if((group=="pinned"?pinned().Count:
+                DeskSpaceSearchIndexV13.SnapshotApplications().Count)>(childPage+1)*4)
                 AddWedge("More ›","pagenext","",center+47,center+66,SubInner,SubOuter);
         }
     }
@@ -150,7 +169,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     public void Show()
     {
         if(disposed)return;
-        group="";childPage=0;page=0;
+        group="";childPage=0;
         Render();Position();arc.IsOpen=owner.IsVisible;
     }
     public void HideArc()
