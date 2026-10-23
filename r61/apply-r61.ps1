@@ -123,10 +123,10 @@ One '                status.Text=found.Count+" results · all categories"+' @'
                     :found.Count+" results · all categories"+
 '@
 One @'
-        frame.Loaded+=(_,_)=>{resize(72);field.Focus();Keyboard.Focus(field);};
+        frame.Loaded+=(_,_)=>{resize(48);field.Focus();Keyboard.Focus(field);};
 '@ @'
         frame.Loaded+=(_,_)=>{
-            resize(72);field.Focus();Keyboard.Focus(field);
+            resize(48);field.Focus();Keyboard.Focus(field);
             if(appPinMode)
             {
                 // Discovery of Start menu apps is asynchronous. Refresh on
