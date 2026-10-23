@@ -60,4 +60,19 @@ if($begin -lt 0 -or $end -le $begin){throw 'R76 missing reminder form block'}
 $replacement=[IO.File]::ReadAllText('r76/ReminderEditorV76.fragment.txt')
 $s=$s.Substring(0,$begin)+$replacement+$s.Substring($end)
 SaveText $p $s
+# R42 created a legacy 13-sector WPF smoke AFTER source checkout. The
+# approved merge removes only the duplicate Tasks wedge: test twelve.
+$p='r36/UiSmoke/Program.cs'
+$s=[IO.File]::ReadAllText($p)
+$s=One $s '    private static void TestDonut13()' '    private static void TestDonut12()' 'WPF donut method'
+$s=One $s '            TestDonut13();' '            TestDonut12();' 'WPF donut caller'
+$s=One $s 'ring.Count==13' 'ring.Count==12' 'WPF ring sector count'
+$s=One $s 'i<13;i++' 'i<12;i++' 'WPF hit testing loop'
+$s=One $s '(360.0/(i>=6?7:6))' '(360.0/(i>=6?6:6))' 'WPF hit angles'
+$s=$s.Replace('13-sector donut mismatch','12-sector donut mismatch')
+$s=$s.Replace('donut-13-excel-functions','donut-12-merged-reminders')
+$s=$s.Replace('Excel Functions removed an original 12-sector feature',
+  'R76 merged Tasks and Reminders into one of twelve sectors')
+SaveText $p $s
+
 Write-Host 'R76 source patched: 6+6 rings; single Reminders module; sound/file/app choices persisted without changing old data.'
