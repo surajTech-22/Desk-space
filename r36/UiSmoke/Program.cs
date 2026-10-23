@@ -815,10 +815,15 @@ internal static class Program
                 "R80 main Workspace missing URL mode or search container");
             choice.SelectedIndex=2; // Open file
             var tabs=(TabControl)main.FindName("MainTabs")!;
-            tabs.SelectedItem=tabs.Items.OfType<TabItem>().First(x=>
+            var reminderTab=tabs.Items.OfType<TabItem>().First(x=>
                 (x.Tag as string)=="Reminders");
+            tabs.SelectedItem=reminderTab;
+            var tabRoot=(FrameworkElement)reminderTab.Content;
+            tabRoot.Measure(new Size(960,630));
+            tabRoot.Arrange(new Rect(0,0,960,630));
+            tabRoot.UpdateLayout();
             var root=(FrameworkElement)main.Content;
-            ButtonWith(root,"Search in DeskSpace")
+            ButtonWith(tabRoot,"Search in DeskSpace")
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert(panel.Children.Count==1 &&
                 Walk(panel).OfType<StackPanel>().Any(p=>
