@@ -35,6 +35,7 @@ internal static class Program
             TestStandardSubDonutScroll();
             TestMiddleButtonSubDonutScroll();
             TestWeatherClockContrast();
+            TestWheelOverVisibleInformationItem();
             TestInformationSelectionPreviewGate();
             TestApplicationsArcAndPinSearch();
             TestConnectedChildDonut();
@@ -368,6 +369,74 @@ internal static class Program
         }
         finally
         {
+            ((IDisposable)info).Dispose();
+            window.Close();
+        }
+    }
+    private static void TestWheelOverVisibleInformationItem()
+    {
+        // Real WPF Popup geometry and routed PreviewMouseWheel over the
+        // fourth visible wedge, not a call to the pagination function.
+        var window=new Window{Width=420,Height=420,Left=290,Top=175,
+            WindowStyle=WindowStyle.None,ShowInTaskbar=false,Opacity=.65};
+        var info=Make("DeskSpace.DeskSpaceInformationV36",window,
+            (Action)(()=>{}),(Action)(()=>{}));
+        var original=System.Windows.Forms.Control.MousePosition;
+        try
+        {
+            window.Show();
+            var model=Product.GetType("DeskSpace.DeskSpaceInformationV36",true)!
+                .GetNestedType("Collection",BindingFlags.NonPublic)!;
+            var list=(System.Collections.IList)Activator.CreateInstance(
+                typeof(List<>).MakeGenericType(model))!;
+            for(int i=0;i<10;i++)
+            {
+                var item=Activator.CreateInstance(model,true)!;
+                model.GetProperty("Name")!.SetValue(item,"Item "+(i+1));
+                list.Add(item);
+            }
+            Set(info,"all",list);
+            Call(info,"RenderArc");
+            var canvas=Private<Canvas>(info,"arcCanvas");
+            var arc=Private<System.Windows.Controls.Primitives.Popup>(info,"arc");
+            arc.IsOpen=true;
+            var frame=new DispatcherFrame();
+            var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(160)};
+            timer.Tick+=(_,_)=>{timer.Stop();frame.Continue=false;};
+            timer.Start();Dispatcher.PushFrame(frame);
+            // Information uses five 22.8-degree wedges starting at -147.
+            // Index three is the fourth named collection, where users wheel.
+            double angle=(-147+3.5*22.8)*Math.PI/180.0;
+            var local=new Point(244+233.5*Math.Cos(angle),
+                306+233.5*Math.Sin(angle));
+            var absolute=canvas.PointToScreen(local);
+            System.Windows.Forms.Control.MousePosition=new System.Drawing.Point(
+                (int)Math.Round(absolute.X),(int)Math.Round(absolute.Y));
+            frame=new DispatcherFrame();
+            timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(110)};
+            timer.Tick+=(_,_)=>{timer.Stop();frame.Continue=false;};
+            timer.Start();Dispatcher.PushFrame(frame);
+            var pointer=canvas.PointFromScreen(new Point(
+                System.Windows.Forms.Control.MousePosition.X,
+                System.Windows.Forms.Control.MousePosition.Y));
+            Assert(canvas.InputHitTest(pointer)!=null,
+                "Fourth visible Information item is not WPF hit-testable");
+            Assert(Private<int>(info,"startIndex")==0,
+                "Unexpected initial Information paging position");
+            var wheel=new MouseWheelEventArgs(Mouse.PrimaryDevice,
+                Environment.TickCount,-120){
+                RoutedEvent=Mouse.PreviewMouseWheelEvent};
+            canvas.RaiseEvent(wheel);
+            Assert(wheel.Handled,
+                "Mouse wheel over visible Information item was not consumed");
+            Assert(Private<int>(info,"startIndex")==1,
+                "Wheel over fourth item did not reveal next hidden item");
+            Console.WriteLine("R64 WPF PASS: pointer over fourth Information "+
+                "wedge receives native routed wheel and advances exactly one.");
+        }
+        finally
+        {
+            System.Windows.Forms.Control.MousePosition=original;
             ((IDisposable)info).Dispose();
             window.Close();
         }
