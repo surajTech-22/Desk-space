@@ -8,10 +8,18 @@ function Replace-Once([string]$before,[string]$after) {
     if(!$script:s.Contains($before)){throw "R46 missing Excel bridge anchor: $before"}
     $script:s=$script:s.Replace($before,$after)
 }
+Replace-Once '    private static string Text(object? o)' @'
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr handle);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    private static string Text(object? o)
+'@
 Replace-Once 'NewValue=source.Display,' 'NewValue=DeskSpaceExcelActionsV46.PreviewText(source,DateTime.Now),'
 Replace-Once '        if(cell.ValueKind=="boolean")' @'
-        if(DeskSpaceExcelActionsV46.IsStaticDateTime(cell.ValueKind))
-            return DeskSpaceExcelActionsV46.ValueAtPaste(cell,DateTime.Now);
+        if(DeskSpaceExcelActionsV46.IsNativeShortcut(cell.ValueKind))
+            throw new InvalidOperationException(
+                "Excel shortcuts must execute in Excel, never be converted to values.");
         if(cell.ValueKind=="boolean")
 '@
 Replace-Once 'var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula)>();' 'var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula,string Format)>();'
@@ -24,15 +32,39 @@ rollback.Add((cell,previous,hadFormula,
 # protection; only explicit NEW user-selected formula actions are executable.
 Replace-Once 'cell.Value2=TypedValue(change.Source);' @'
 if(DeskSpaceExcelActionsV46.IsFormulaAction(change.Source.ValueKind))
-                    cell.FormulaR1C1=DeskSpaceExcelActionsV46.Formula(change.Source);
+                {
+                    // The formula itself goes to Excel, not its calculated
+                    // result. Formula accepts native A1 references.
+                    cell.Formula=DeskSpaceExcelActionsV46.Formula(change.Source);
+                }
+                else if(DeskSpaceExcelActionsV46.IsNativeShortcut(change.Source.ValueKind))
+                {
+                    // Excel executes its OWN keyboard command. Verify that
+                    // Windows foreground is Excel, never send to another app.
+                    dynamic excelWindow=app.ActiveWindow;
+                    excelWindow.Activate();
+                    IntPtr excelHwnd=new IntPtr((int)app.Hwnd);
+                    SetForegroundWindow(excelHwnd);
+                    if(GetForegroundWindow()!=excelHwnd)
+                        throw new InvalidOperationException(
+                            "Activate Excel on this PC before using keyboard "+
+                            "mappings. No keys were sent elsewhere.");
+                    cell.Select();
+                    if(!string.Equals(Text(app.ActiveCell.Address),
+                          change.CellAddress,StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException(
+                            "Excel active cell differs from verified target.");
+                    app.SendKeys(DeskSpaceExcelActionsV46.NativeSendKeys(
+                        change.Source.ValueKind),true);
+                }
                 else cell.Value2=TypedValue(change.Source);
-                if(DeskSpaceExcelActionsV46.IsAction(change.Source.ValueKind))
-                    cell.NumberFormat=DeskSpaceExcelActionsV46.NumberFormat(
-                        change.Source.ValueKind);
+                if(DeskSpaceExcelActionsV46.IsAction(change.Source.ValueKind) &&
+                   !string.IsNullOrWhiteSpace(change.Source.NumberFormat))
+                    cell.NumberFormat=change.Source.NumberFormat;
 '@
 Replace-Once 'else x.Cell.Value2=x.Old;' @'
 else x.Cell.Value2=x.Old;
                     if(x.Format.Length>0)x.Cell.NumberFormat=x.Format;
 '@
 [IO.File]::WriteAllText($bridge,$s,[Text.UTF8Encoding]::new($false))
-Write-Host 'R46 Excel value engine wired: capture-time date is never frozen; live formulas explicit; rollback includes number format.'
+Write-Host 'R51: Excel executes keyboard shortcuts directly, formulas enter as formulas, workbook backup/rollback and custom display format retained.'
