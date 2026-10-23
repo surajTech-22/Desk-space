@@ -229,6 +229,33 @@ internal sealed partial class DeskSpaceExcelV16
         DockPanel.SetDock(editorHead,Dock.Top);right.Children.Add(editorHead);
 
         var footer=new StackPanel{Margin=new Thickness(0,2,0,0)};
+        // Excel's custom number-format codes remain editable verbatim.
+        // Presets are conveniences, not a closed set of supported formats.
+        var formatBar=new WrapPanel{Margin=new Thickness(0,0,0,3)};
+        formatBar.Children.Add(HintV42("Format selected cell:",10));
+        var preset=new ComboBox{Width=250,Height=29,IsEditable=true,
+            ItemsSource=new[]{
+                "General","dd-mm-yyyy","dd/mm/yyyy","yyyy-mm-dd",
+                "dd-mmm-yyyy","mmm d, yyyy","dddd, dd mmmm yyyy",
+                "mm/dd/yyyy","dd-mm-yyyy hh:mm","yyyy-mm-dd hh:mm:ss",
+                "hh:mm","hh:mm:ss","h:mm AM/PM","0","0.00",
+                "#,##0","#,##0.00","0%","0.00%","₹#,##0.00",
+                "$#,##0.00","@"}};
+        formatBar.Children.Add(preset);
+        formatBar.Children.Add(ButtonV42("Apply format",()=>{
+            CommitCellEditsV42(mappingGridV42!);
+            if(mappingGridV42?.SelectedItem is MappingRowV42 row)
+            {
+                var code=preset.Text.Trim();
+                if(code.Length==0||code.Length>160)
+                    throw new InvalidOperationException(
+                        "Enter an Excel format code (maximum 160 characters).");
+                row.ExcelFormat=code;hasUnsavedChangesV42=true;
+                mappingGridV42.Items.Refresh();
+            }
+            else if(status!=null)status.Text="Select a mapped cell first.";
+        }));
+        footer.Children.Add(formatBar);
         var pasteButtons=new WrapPanel();
         pasteButtons.Children.Add(RequiresExcel("Preview matching cells",()=>Run(Preview)));
         pasteButtons.Children.Add(RequiresExcel("Apply autofill",()=>Run(Apply),true));
@@ -667,7 +694,7 @@ internal sealed partial class DeskSpaceExcelV16
         if(string.IsNullOrWhiteSpace(code))return false;
         // Ignore quoted text and escaped literal characters in formats.
         var bare=System.Text.RegularExpressions.Regex.Replace(code,
-            "\\"[^\\"]*\\"|\\\\.", "");
+            "\"[^\"]*\"", "");
         return System.Text.RegularExpressions.Regex.IsMatch(bare,
             @"(?i)(d+|y+|h+|s+|m+[/\\-]d+|d+[/\\-]m+)");
     }
