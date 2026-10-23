@@ -1038,6 +1038,12 @@ jobs:
           ./r56/apply-r56.ps1
           ./r56/test-r56.ps1
 
+      - name: R58 hidden/cache file filtering and Search consistency
+        shell: pwsh
+        run: |
+          ./r58/apply-r58.ps1
+          ./r58/test-r58.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
