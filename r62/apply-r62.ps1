@@ -95,8 +95,8 @@ Swap '        internal ChildRing(int depth,string group,double angle,Window owne
 Swap '            Depth=depth;Group=group;Angle=angle;' @'
             Depth=depth;Group=group;Angle=angle;ParentSweep=parentSweep;
 '@
-$oldRoot='                    ExpandRing(1,"",RootAngle(slot));'
-$newRoot='                    ExpandRing(1,"",RootAngle(slot),rootStep);'
+$oldRoot='ExpandRing(1,"",RootAngle(slot));'
+$newRoot='ExpandRing(1,"",RootAngle(slot),rootStep);'
 if(([regex]::Matches($s,[regex]::Escape($oldRoot))).Count -ne 2){
     throw 'R62 expected both delayed and direct Excel information expansion sites'
 }
