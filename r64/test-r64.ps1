@@ -4,7 +4,7 @@ $root='DeskSpace_Windows_R1/DeskSpace'
 $info=Get-Content "$root/DeskSpaceInformationV36.cs" -Raw
 $wheel=Get-Content "$root/DeskSpaceMiddleScrollV63.cs" -Raw
 $weather=Get-Content "$root/DeskSpaceWeatherContrastV64.cs" -Raw
-$host=Get-Content "$root/WidgetHost.cs" -Raw
+$widgetSource=Get-Content "$root/WidgetHost.cs" -Raw
 $ui=Get-Content 'r36/UiSmoke/Program.cs' -Raw
 foreach($t in @('private bool transientPreview;',
     'private void CloseTransientPreview()',
@@ -45,12 +45,12 @@ foreach($t in @('LightScene(WeatherReading? weather,bool showWeather)',
     'internal static double ContrastRatio(')){
  if(!$weather.Contains($t)){throw "R64 weather contrast missing: $t"}
 }
-if($host.Contains('weather.City.Equals(prefs.WeatherCity')){
+if($widgetSource.Contains('weather.City.Equals(prefs.WeatherCity')){
  throw 'R64 weather text must not use city-name equality to select contrast'
 }
 foreach($t in @('DeskSpaceWeatherContrastV64.Apply(content,weather,prefs.ShowWeather)',
     'private void ApplyWeatherContrast()','ApplyWeatherContrast();')){
- if(!$host.Contains($t)){throw "R64 clock contrast runtime missing: $t"}
+ if(!$widgetSource.Contains($t)){throw "R64 clock contrast runtime missing: $t"}
 }
 foreach($t in @('TestInformationSelectionPreviewGate()',
     'R64 WPF PASS: immediate Information hover preview',
