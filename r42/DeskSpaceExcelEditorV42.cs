@@ -861,7 +861,7 @@ internal sealed partial class DeskSpaceExcelV16
                             requestedAction);
                 }
                 else if(!DeskSpaceExcelActionsV46.IsAction(cell.ValueKind) &&
-                    cell.ValueKind!="formula" && row.Value!=row.OriginalShown
+                    cell.ValueKind!="formula" && row.Value!=row.OriginalShown)
                 {
                     if(cell.ValueKind=="number" &&
                         DateFormattedV50(cell.NumberFormat) &&
