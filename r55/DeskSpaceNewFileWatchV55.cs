@@ -191,8 +191,15 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
             {
                 var folder=Path.GetFileName(parent.TrimEnd(
                     Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
-                if(InternalFolders.Contains(folder)||
-                    folder.StartsWith(".",StringComparison.Ordinal))
+                // Explicit test roots may live beneath Windows Temp/AppData.
+                // Keep testing genuine source filenames without treating the
+                // test harness' ancestor folder as the user's cache.
+                if((!allowTestRoot || 
+                    (!folder.Equals("temp",StringComparison.OrdinalIgnoreCase) &&
+                     !folder.Equals("tmp",StringComparison.OrdinalIgnoreCase) &&
+                     !folder.Equals("appdata",StringComparison.OrdinalIgnoreCase))) &&
+                   (InternalFolders.Contains(folder) ||
+                    folder.StartsWith(".",StringComparison.Ordinal)))
                     return false;
                 if(!allowTestRoot)
                 {
