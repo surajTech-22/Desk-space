@@ -720,9 +720,9 @@ internal static class Program
                 Stroke=Brushes.White,StrokeThickness=2});
         }
         var twoHidden=View(7,0,-90);
-        int moved=0;
+        int whiteSceneShift=0;
         indicators.Invoke(null,new object[]{whiteScene,twoHidden,350.0,
-            (Action<int>)(d=>moved=d)});
+            (Action<int>)(d=>whiteSceneShift=d)});
         var twoButton=whiteScene.Children.OfType<Button>().Single();
         Assert((string)twoButton.Content=="2" && 
             !whiteScene.Children.OfType<Border>().Any(),
@@ -754,7 +754,7 @@ internal static class Program
         Assert(darkInkOutside>=4,
             "R69 hidden digit disappears into white outside purple end wedge");
         twoButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,twoButton));
-        Assert(moved==1,"R69 clear numeral must still click-to-scroll");
+        Assert(whiteSceneShift==1,"R69 clear numeral must still click-to-scroll");
         Console.WriteLine("R69 WPF PASS: full purple end-line count readable against white background without a badge.");
 
         // A clipped Popup arc stores translated sector geometry; the same
