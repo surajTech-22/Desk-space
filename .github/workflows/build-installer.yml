@@ -1032,6 +1032,12 @@ jobs:
           ./r55/apply-r55.ps1
           ./r55/test-r55.ps1
 
+      - name: R56 startup-warmed Information and Excel subdonuts
+        shell: pwsh
+        run: |
+          ./r56/apply-r56.ps1
+          ./r56/test-r56.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
