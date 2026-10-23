@@ -1115,6 +1115,11 @@ jobs:
         run: |
           ./r72/test-r72.ps1
 
+      - name: R73 reminder and widget source forensic probe (no release)
+        shell: pwsh
+        run: |
+          ./r73/probe-r73.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
