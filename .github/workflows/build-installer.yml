@@ -1074,6 +1074,12 @@ jobs:
           ./r64/apply-r64.ps1
           ./r64/test-r64.ps1
 
+      - name: R65 wedge-integrated counter tabs, app logos, reversible edge expansion
+        shell: pwsh
+        run: |
+          ./r65/apply-r65.ps1
+          ./r65/test-r65.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
