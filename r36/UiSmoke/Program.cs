@@ -368,7 +368,7 @@ internal static class Program
             var searchType=Product.GetType("DeskSpace.DeskSpaceSearchV11",true)!;
             var pinFlag=searchType.GetField("nextApplicationPinMode",
                 BindingFlags.Static|BindingFlags.NonPublic)!;
-            Assert((int)pinFlag.GetValue(null)!==1,
+            Assert(((int)pinFlag.GetValue(null)!)==1,
                 "Pin mode was not passed into the circle Search module");
             pinFlag.SetValue(null,0);
             Console.WriteLine("R61 WPF PASS: bounded arc attachment and in-circle app search trigger.");
