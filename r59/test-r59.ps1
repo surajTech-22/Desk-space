@@ -18,8 +18,9 @@ if($watch.Contains('candidates.Add(drive.RootDirectory.FullName);') -or
 }
 foreach($t in @('BaseInner=202,BaseOuter=255,SubInner=257,SubOuter=310',
     'TextWrapping=TextWrapping.Wrap','ApplicationsParentCenter',
-    'start+i*step,start+(i+1)*step',
-    'SnapshotApplications()','Path.GetDirectoryName(x.Path)')){
+    'DeskSpaceSubDonutStandardV62.Plan(roots.Length,0,centre)',
+    'DeskSpaceSubDonutStandardV62.DrawHiddenCounters',
+    'System.IO.Path.GetFileNameWithoutExtension(p)')){
     if(!$apps.Contains($t)){throw "R59 Apps geometry/name fix missing $t"}
 }
 foreach($t in @('SelectWatchedFolder()',
