@@ -20,6 +20,8 @@ One '    private sealed record Held(string Name,string StagedPath);' @'
 One '    private readonly List<Held> held=new();' @'
     private readonly List<Held> held=new();
     private readonly List<Held> detected=new();
+    // A successfully held original must not reappear as another new suggestion.
+    private readonly HashSet<string> pinnedSourcePaths=new(StringComparer.OrdinalIgnoreCase);
     private DeskSpaceNewFileWatchV53? newFiles;
 '@
 One @'
@@ -33,6 +35,25 @@ One @'
                 HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled
             },AllowDrop=true
 '@
+One @'
+    private void Receive(object sender,DragEventArgs e)
+    {
+        if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
+        e.Effects=DragDropEffects.Copy;
+'@ @'
+    private void Receive(object sender,DragEventArgs e)
+    {
+        if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
+        // Never claim a drop succeeded if a copy is already in progress or
+        // the shelf is full. Leave the new-file suggestion available to retry.
+        if(disposed||busy||held.Count>=25)
+        {
+            e.Effects=DragDropEffects.None;
+            e.Handled=true;
+            return;
+        }
+        e.Effects=DragDropEffects.Copy;
+'@
 One '    public void Enable(){if(!disposed)Render();}' @'
     public void Enable()
     {
@@ -44,6 +65,7 @@ One '    public void Enable(){if(!disposed)Render();}' @'
     private void OfferNewFile(string path)
     {
         if(disposed||!File.Exists(path))return;
+        if(pinnedSourcePaths.Contains(Path.GetFullPath(path)))return;
         if(held.Any(x=>string.Equals(x.StagedPath,path,
             StringComparison.OrdinalIgnoreCase))||
            detected.Any(x=>string.Equals(x.StagedPath,path,
@@ -63,8 +85,9 @@ One @'
                 // The user deliberately dragged this newly detected source
                 // ONTO the circle: convert the discovery row into the same
                 // durable, staged copy already used for manually dropped files.
-                detected.RemoveAll(x=>string.Equals(x.StagedPath,source,
+                int removed=detected.RemoveAll(x=>string.Equals(x.StagedPath,source,
                     StringComparison.OrdinalIgnoreCase));
+                if(removed>0)pinnedSourcePaths.Add(Path.GetFullPath(source));
                 held.Add(new Held(Path.GetFileName(destination),destination));
                 Render();
 '@
