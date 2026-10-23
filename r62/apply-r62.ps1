@@ -104,6 +104,9 @@ $s=$s.Replace($oldRoot,$newRoot)
 Swap '                    ExpandRing(depth+1,item.Group,RingAngle(ring,slot));' @'
                     ExpandRing(depth+1,item.Group,RingAngle(ring,slot),ring.StepAngle);
 '@
+Swap '            ExpandRing(ring.Depth+1,item.Group,RingAngle(ring,slot));' @'
+            ExpandRing(ring.Depth+1,item.Group,RingAngle(ring,slot),ring.StepAngle);
+'@
 Swap '    private void ExpandRing(int depth,string group,double angle)' @'
     private void ExpandRing(int depth,string group,double angle,double parentSweep)
 '@
