@@ -67,10 +67,10 @@ One @'
                 switch(operation)
 '@
 One @'
-            foreach(var hit in found.Take(20))
+            foreach(var hit in found.Take(45))
             {
 '@ @'
-            foreach(var hit in found.Take(20))
+            foreach(var hit in found.Take(45))
             {
                 if(appPinMode && hit.Category!="Applications")continue;
 '@
