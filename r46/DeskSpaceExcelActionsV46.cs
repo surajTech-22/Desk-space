@@ -7,7 +7,8 @@ internal static class DeskSpaceExcelActionsV46
 {
     internal const string Date="action_static_date", Time="action_static_time",
         DateTimeKind="action_static_datetime", Today="action_formula_today",
-        Now="action_formula_now", CustomFormula="action_custom_formula";
+        Now="action_formula_now", CustomFormula="action_custom_formula",
+        CapturedFormula="action_captured_formula_r1c1";
     internal static readonly string[] EditorKinds={
         "Value","Reference","Formula","Current date on paste (Ctrl+;)",
         "Current time on paste (Ctrl+Shift+;)","Current date and time on paste",
@@ -15,11 +16,12 @@ internal static class DeskSpaceExcelActionsV46
         "Excel Shortcut (enter Ctrl+; or Ctrl+Shift+;)","Custom formula (paste)"
     };
     internal static bool IsAction(string k)=>k is Date or Time or DateTimeKind
-        or Today or Now or CustomFormula;
+        or Today or Now or CustomFormula or CapturedFormula;
     internal static string Label(DeskSpaceExcelCellV16 c)=>c.ValueKind switch
     {
         Date=>EditorKinds[3],Time=>EditorKinds[4],
         DateTimeKind=>EditorKinds[5],Today=>EditorKinds[6],Now=>EditorKinds[7],
+        CustomFormula or CapturedFormula=>EditorKinds[9],
         _ when c.Role=="Reference"=>"Reference",
         _ when c.ValueKind=="formula"=>"Formula",_=>"Value"
     };
@@ -60,7 +62,8 @@ internal static class DeskSpaceExcelActionsV46
         _=>throw new InvalidOperationException(
             "Not a supported cell-local Excel keyboard shortcut.")
     };
-    internal static bool IsFormulaAction(string k)=>k is Today or Now or CustomFormula;
+    internal static bool IsFormulaAction(string k)=>
+        k is Today or Now or CustomFormula or CapturedFormula;
     // Diagnostic compatibility only: never use this to write a shortcut.
     // Live paste dispatches to Excel's own keyboard engine below.
     internal static object ValueAtPaste(DeskSpaceExcelCellV16 c,DateTime clock)=>
@@ -74,7 +77,8 @@ internal static class DeskSpaceExcelActionsV46
     internal static string Formula(DeskSpaceExcelCellV16 c)=>c.ValueKind switch
     {
         Today=>"=TODAY()",Now=>"=NOW()",
-        CustomFormula when c.FormulaR1C1.StartsWith("=",StringComparison.Ordinal)
+        CustomFormula or CapturedFormula
+            when c.FormulaR1C1.StartsWith("=",StringComparison.Ordinal)
             =>c.FormulaR1C1,
         _=>throw new InvalidOperationException("Missing user-approved formula")
     };
@@ -90,7 +94,7 @@ internal static class DeskSpaceExcelActionsV46
         DateTimeKind=>"Excel inserts the current date and time on paste",
         Today=>"=TODAY() (Excel formula; recalculates)",
         Now=>"=NOW() (Excel formula; recalculates)",
-        CustomFormula=>c.FormulaR1C1,_=>c.Display
+        CustomFormula or CapturedFormula=>c.FormulaR1C1,_=>c.Display
     };
     // Excel Windows reference. Only safe, cell-local value shortcuts above
     // are executable mapping actions; others are documentation/search aids.
