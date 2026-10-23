@@ -29,6 +29,7 @@ internal static class Program
             TestCalculator();
             TestMediaPill();
             TestNewFileNotifications();
+            TestApplicationSaveEvents();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
             TestSubArcScreenFit();
@@ -41,6 +42,67 @@ internal static class Program
             Console.Error.WriteLine("R36 WPF visual smoke FAILED: "+ex);
             app.Shutdown();
             return 1;
+        }
+    }
+    private static void TestApplicationSaveEvents()
+    {
+        // Save patterns used by editors: update an existing workbook,
+        // atomically rename a temporary export, then delete the original.
+        string folder=Path.Combine(Path.GetTempPath(),
+            "DeskSpace-AppSave-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string workbook=Path.Combine(folder,"existing.xlsx");
+        File.WriteAllText(workbook,"original");
+        var window=new Window{Width=250,Height=250,
+            WindowStyle=WindowStyle.None,ShowInTaskbar=false};
+        var saved=new List<string>();
+        var deleted=new List<string>();
+        var watch=Make("DeskSpace.DeskSpaceNewFileWatchV53",
+            window,(Action<string>)(p=>saved.Add(p)),
+            (IEnumerable<string>)new[]{folder},
+            (Action<string>)(p=>deleted.Add(p)));
+        void Pump()
+        {
+            var frame=new DispatcherFrame();
+            var timer=new DispatcherTimer{
+                Interval=TimeSpan.FromMilliseconds(100)};
+            timer.Tick+=(_,_)=>{timer.Stop();frame.Continue=false;};
+            timer.Start();
+            Dispatcher.PushFrame(frame);
+        }
+        try
+        {
+            Call(watch,"Start");
+            File.AppendAllText(workbook," plus application changes");
+            string temp=Path.Combine(folder,"save.tmp");
+            string final=Path.Combine(folder,"saved-document.pdf");
+            File.WriteAllText(temp,"complete content");
+            File.Move(temp,final);
+            var end=DateTime.UtcNow.AddSeconds(10);
+            while(DateTime.UtcNow<end &&
+                  (!saved.Any(p=>p.Equals(workbook,StringComparison.OrdinalIgnoreCase)) ||
+                   !saved.Any(p=>p.Equals(final,StringComparison.OrdinalIgnoreCase))))
+                Pump();
+            Assert(saved.Any(p=>p.Equals(workbook,StringComparison.OrdinalIgnoreCase)),
+                "R57 application saving existing Excel was not detected");
+            Assert(saved.Any(p=>p.Equals(final,StringComparison.OrdinalIgnoreCase)),
+                "R57 renamed application PDF was not detected");
+            Assert(File.ReadAllText(workbook)=="original plus application changes",
+                "R57 original workbook was corrupted");
+            File.Delete(workbook);
+            end=DateTime.UtcNow.AddSeconds(5);
+            while(DateTime.UtcNow<end &&
+                  !deleted.Any(p=>p.Equals(workbook,StringComparison.OrdinalIgnoreCase)))
+                Pump();
+            Assert(deleted.Any(p=>p.Equals(workbook,StringComparison.OrdinalIgnoreCase)),
+                "R57 file deletion was not reflected");
+            Console.WriteLine("R57 PASS: application-created/saved Excel, renamed PDF, deleted file, and original integrity.");
+        }
+        finally
+        {
+            ((IDisposable)watch).Dispose();
+            try{Directory.Delete(folder,true);}catch(IOException){}
+            window.Close();
         }
     }
     private static void TestNewFileNotifications()
