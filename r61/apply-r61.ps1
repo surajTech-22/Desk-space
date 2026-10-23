@@ -74,37 +74,29 @@ One @'
             {
                 if(appPinMode && hit.Category!="Applications")continue;
 '@
+# R19 uses a single context menu, not the old five hover chips.
+# In app-pin mode the context menu must offer only pinning.
 One @'
-                chips.Children.Add(Chip("↗","Open",hit,"open"));
+                AddAction("Open","open");
+                AddAction("Copy path","path",hit.Category!="Notes");
+                AddAction("Copy file","file",File.Exists(hit.OpenTarget));
+                AddAction("Pin to DeskSpace","pin",
+                    hit.Category=="Files"||hit.Category=="Applications");
+                AddAction("Show in Explorer","folder",
+                    File.Exists(hit.OpenTarget)||Directory.Exists(hit.OpenTarget));
 '@ @'
                 if(appPinMode)
-                    chips.Children.Add(Chip("＋","Pin application",hit,"pin"));
+                    AddAction("Pin application","pin");
                 else
-                    chips.Children.Add(Chip("↗","Open",hit,"open"));
-'@
-One @'
-                if(hit.Category!="Notes")
-                    chips.Children.Add(Chip("⧉","Copy path",hit,"path"));
-'@ @'
-                if(!appPinMode && hit.Category!="Notes")
-                    chips.Children.Add(Chip("⧉","Copy path",hit,"path"));
-'@
-One @'
-                if(File.Exists(hit.OpenTarget))
-                    chips.Children.Add(Chip("▤","Copy file",hit,"file"));
-'@ @'
-                if(!appPinMode && File.Exists(hit.OpenTarget))
-                    chips.Children.Add(Chip("▤","Copy file",hit,"file"));
-'@
-One @'
-                if(hit.Category=="Files"||hit.Category=="Applications")
-'@ @'
-                if(!appPinMode && (hit.Category=="Files"||hit.Category=="Applications"))
-'@
-One @'
-                if(File.Exists(hit.OpenTarget)||Directory.Exists(hit.OpenTarget))
-'@ @'
-                if(!appPinMode && (File.Exists(hit.OpenTarget)||Directory.Exists(hit.OpenTarget)))
+                {
+                    AddAction("Open","open");
+                    AddAction("Copy path","path",hit.Category!="Notes");
+                    AddAction("Copy file","file",File.Exists(hit.OpenTarget));
+                    AddAction("Pin to DeskSpace","pin",
+                        hit.Category=="Files"||hit.Category=="Applications");
+                    AddAction("Show in Explorer","folder",
+                        File.Exists(hit.OpenTarget)||Directory.Exists(hit.OpenTarget));
+                }
 '@
 One 'if(!button){Do(hit,"open");e.Handled=true;}' 'if(!button){Do(hit,appPinMode?"pin":"open");e.Handled=true;}'
 One 'else if(e.Key==Key.Enter && hits.Count>0){Do(hits[0],"open");e.Handled=true;}' 'else if(e.Key==Key.Enter && hits.Count>0){Do(hits[0],appPinMode?"pin":"open");e.Handled=true;}'
