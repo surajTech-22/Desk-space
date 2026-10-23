@@ -83,6 +83,31 @@ Swap '    private const int PerPage=4;' @'
     private const int PerPage=DeskSpaceSubDonutStandardV62.Visible;
     private readonly DeskSpaceSubDonutStandardV62.Wheel rootWheel=new();
 '@
+# A nested ring inherits the angular width of its selected parent item,
+# so it can use at most HALF of each adjacent sibling's available space.
+Swap '        internal readonly double Angle;' @'
+        internal readonly double Angle;
+        internal readonly double ParentSweep;
+'@
+Swap '        internal ChildRing(int depth,string group,double angle,Window owner)' @'
+        internal ChildRing(int depth,string group,double angle,double parentSweep,Window owner)
+'@
+Swap '            Depth=depth;Group=group;Angle=angle;' @'
+            Depth=depth;Group=group;Angle=angle;ParentSweep=parentSweep;
+'@
+Swap '                    ExpandRing(1,"",RootAngle(slot));' @'
+                    ExpandRing(1,"",RootAngle(slot),rootStep);
+'@
+Swap '                    ExpandRing(depth+1,item.Group,RingAngle(ring,slot));' @'
+                    ExpandRing(depth+1,item.Group,RingAngle(ring,slot),ring.StepAngle);
+'@
+Swap '    private void ExpandRing(int depth,string group,double angle)' @'
+    private void ExpandRing(int depth,string group,double angle,double parentSweep)
+'@
+Swap '        var ring=new ChildRing(depth,group,angle,owner);' @'
+        var ring=new ChildRing(depth,group,angle,parentSweep,owner);
+'@
+
 Swap '        internal int Start,Hovered=-1;' @'
         internal int Start,Hovered=-1;
         internal readonly DeskSpaceSubDonutStandardV62.Wheel Wheel=new();
@@ -102,7 +127,7 @@ Swap @'
         if(count==0)return;
         // Standard shared five-slot sweep and relative WPF Popup positioning.
         double half=DeskSpaceSubDonutStandardV62.Plan(
-            count,0,ring.Angle).Half;
+            count,0,ring.Angle,ring.ParentSweep).Half;
 '@
 Swap @'
         int count=displayed.Count;
