@@ -1132,6 +1132,12 @@ jobs:
         run: |
           ./r77/test-r77.ps1
 
+      - name: R78 reminder time typing, completed-list filtering and editor screenshot
+        shell: pwsh
+        run: |
+          ./r78/apply-r78.ps1
+          ./r78/test-r78.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

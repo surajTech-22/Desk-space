@@ -35,6 +35,7 @@ internal static class Program
             TestFileClassification();
             TestDueShelfV74();
             TestReminderV76();
+            TestReminderV78();
             TestStandardSubDonutScroll();
             TestDonutHomeAndApplicationIcons();
             TestMiddleButtonSubDonutScroll();
@@ -589,7 +590,61 @@ internal static class Program
         Console.WriteLine("R65 WPF PASS: donut returns to original location "+
             "and application logos are real, cached shell icons.");
     }
-        private static void TestReminderV76()
+        private static void TestReminderV78()
+    {
+        var clock=Product.GetType("DeskSpace.DeskSpaceReminderTimeV78",true)!;
+        var parse=clock.GetMethod("TryParse",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        void Expect(string input,string display,TimeSpan target)
+        {
+            object?[] args={input,default(TimeSpan),""};
+            bool parsed=(bool)parse.Invoke(null,args)!;
+            Assert(parsed && (string)args[2]! == display &&
+                (TimeSpan)args[1]! == target,
+                "R78 time parser case: "+input+" -> "+args[2]);
+        }
+        Expect("72345","07:23:45",new TimeSpan(7,23,45));
+        Expect("122345","12:23:45",new TimeSpan(12,23,45));
+        Expect("72345 PM","07:23:45 PM",new TimeSpan(19,23,45));
+        Expect("122345 AM","12:23:45 AM",new TimeSpan(0,23,45));
+        Expect("122345pm","12:23:45 PM",new TimeSpan(12,23,45));
+        Expect("235959","23:59:59",new TimeSpan(23,59,59));
+        Expect("9:00","09:00:00",new TimeSpan(9,0,0));
+        Expect("7:23:45 pm","07:23:45 PM",new TimeSpan(19,23,45));
+        foreach(string invalid in new[]{
+            "246000","256159","0:20:00 PM","13:00 AM","7:99:20","foo"})
+        {
+            object?[] args={invalid,default(TimeSpan),""};
+            Assert(!(bool)parse.Invoke(null,args)!,
+                "R78 time parser case: rejected "+invalid);
+        }
+
+        var editor=Make("DeskSpace.DeskSpaceInlineV11",
+            "Reminders","Circle",(Action)(()=>{}));
+        var form=(FrameworkElement)Call(editor,"Create")!;
+        form.Measure(new Size(420,525));
+        form.Arrange(new Rect(0,0,420,525));
+        form.UpdateLayout();
+        var seen=Walk(form).ToArray();
+        var labels=seen.OfType<TextBlock>().Select(x=>x.Text).ToArray();
+        Assert(labels.Contains("Sound / Tune") &&
+            labels.Contains("Perform action when due (optional)"),
+            "R78 sound and perform action controls must be visible");
+        foreach(string button in new[]{"Test sound","Browse WAV",
+            "Perform action","Browse target","Complete","+ Add"})
+            ButtonWith(form,button);
+        var active=seen.OfType<ListBox>().FirstOrDefault();
+        Assert(active!=null && active.Items.Cast<object>()
+            .OfType<ReminderItem>().All(x=>!x.Done),
+            "R78 completed entries must not appear in active list");
+        Assert(seen.OfType<TextBox>().Any(x=>x.Text=="09:00:00"),
+            "R78 clock entry must include seconds");
+        Render(form,420,525,"reminders-v78-controls");
+        Call(editor,"Dispose");
+        Console.WriteLine("R78 WPF PASS: real reminder editor shows tune/actions and seconds input.");
+    }
+
+    private static void TestReminderV76()
     {
         var type=Product.GetType("DeskSpace.DeskSpaceDueShelfV74",true)!;
         var action=type.GetMethod("IsAllowedAction",BindingFlags.Static|
