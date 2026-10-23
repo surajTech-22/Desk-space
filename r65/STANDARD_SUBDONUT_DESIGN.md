@@ -1,0 +1,11 @@
+# DeskSpace — Standard sub-donut contract (R65)
+
+- **Main donut:** Keep all current rings, modules, and compact/expanded behavior unchanged.
+- **Child origin:** Every sub-donut begins at the selected parent sector’s center; nested levels follow the same geometry.
+- **Capacity:** At most five visible items per ring; use one-item wheel/touchpad scrolling, with the standard ease animation.
+- **Overflow:** The first and last VISIBLE wedges carry small, integrated continuation tabs showing hidden counts for each side. These are part of the sector's border/visual treatment, never floating outside the arc. Each tab is clickable; the normal mouse wheel works while pointed over any visible item.
+- **Maximum spread:** A ring can cover the parent sector and up to half of each immediately neighboring sector; deeper levels inherit the same parent-relative limit.
+- **Apps:** Display the actual Windows application or shortcut icon beside its label, with text fallback if extraction fails; icon lookup must never execute the program.
+- **Preview:** Hover may show temporary Information previews; explicitly clicked items persist, and unselected previews close on exit.
+- **Placement:** Expanded arcs may be fitted temporarily at monitor edges, but the user’s compact circle always returns to the exact pre-expansion location on collapse.
+- **Extensibility:** New modules provide a source list, action handler and optional icon; all layout, paging, counters and keyboard/mouse behavior remains in the shared standard.
