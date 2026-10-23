@@ -425,8 +425,10 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         }
         if(item.Command=="manage")
         {
-            Status("Manage Excel Information",
-                "Use Workspace → Excel Mapping to create or edit collections and data.");
+            // Manage is a command, not a placeholder instruction.
+            // Navigate to the existing in-app Excel Mapping page.
+            HideArc();collapseParent();
+            _=DeskSpaceExcelManageV49.OpenInsideWorkspaceAsync();
             return;
         }
         if(item.Command!="mapping" || !item.Id.HasValue)return;
@@ -787,8 +789,10 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         }
         if(item.Command=="manage")
         {
-            Status("Manage Excel Information",
-                "Open Workspace → Excel Mapping to add, edit or group mappings.");
+            // Manage is a command, not a placeholder instruction.
+            // Navigate to the existing in-app Excel Mapping page.
+            HideArc();collapseParent();
+            _=DeskSpaceExcelManageV49.OpenInsideWorkspaceAsync();
             return;
         }
         if(item.Command!="mapping" || !item.Id.HasValue)return;
