@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 
@@ -65,35 +66,60 @@ internal static class DeskSpaceSubDonutStandardV62
     internal static int Advance(View view,int delta)=>
         Math.Clamp(view.Start+delta,0,Math.Max(0,view.Total-view.Count));
 
+    // One universal visual rule: counts are extensions of the LEFT/RIGHT
+    // VISIBLE WEDGES, not disconnected badges at the top of the screen.
+    // The same renderer is used by Information, Apps and every Excel depth.
     internal static void DrawHiddenCounters(Canvas canvas,View view,
         double verticalCentre,Action<int> move)
     {
+        if(view.HiddenLeft==0&&view.HiddenRight==0)return;
+        var wedges=canvas.Children.OfType<System.Windows.Shapes.Path>()
+            .Where(p=>p.Data!=null&&!p.Data.Bounds.IsEmpty)
+            .ToArray();
+        if(wedges.Length==0)return;
+        int actual=Math.Min(view.Count,wedges.Length);
+        if(actual==0)return;
         if(view.HiddenLeft>0)
-        {
-            var left=Counter("‹ "+view.HiddenLeft,()=>move(-1));
-            Canvas.SetLeft(left,1);
-            Canvas.SetTop(left,Math.Max(0,verticalCentre-left.Height/2));
-            canvas.Children.Add(left);
-        }
+            AddEdgeTab(canvas,wedges[0],view.HiddenLeft,true,()=>move(-1));
         if(view.HiddenRight>0)
-        {
-            var right=Counter(view.HiddenRight+" ›",()=>move(1));
-            Canvas.SetLeft(right,Math.Max(0,canvas.Width-right.Width-1));
-            Canvas.SetTop(right,Math.Max(0,verticalCentre-right.Height/2));
-            canvas.Children.Add(right);
-        }
+            AddEdgeTab(canvas,wedges[actual-1],view.HiddenRight,false,()=>move(1));
     }
-    private static Button Counter(string text,Action action)
+    private static void AddEdgeTab(Canvas canvas,System.Windows.Shapes.Path wedge,
+        int amount,bool leading,Action advance)
     {
-        var b=new Button{
-            Content=text,Width=39,Height=26,FontSize=11,FontWeight=FontWeights.SemiBold,
-            Padding=new Thickness(1),ToolTip="Scroll to reveal hidden items",
+        // Wedge geometry is in the submenu Canvas coordinate system.
+        // Anchor INSIDE its visible sector at the extreme edge, preserving
+        // the same border and background as the sector being continued.
+        Rect area=wedge.Data.Bounds;
+        const double width=33,height=23;
+        double x=leading?area.Left+2:area.Right-width-2;
+        double y=area.Top+(area.Height-height)/2;
+        x=Math.Clamp(x,0,Math.Max(0,canvas.Width-width));
+        y=Math.Clamp(y,0,Math.Max(0,canvas.Height-height));
+        var tab=new Button{
+            Content=leading?"‹ "+amount:amount+" ›",
+            Width=width,Height=height,FontSize=10.5,
+            FontWeight=FontWeights.SemiBold,
+            Padding=new Thickness(0),
+            Background=wedge.Fill,
             Foreground=Brushes.White,
-            Background=new SolidColorBrush(Color.FromArgb(238,70,89,160)),
-            BorderThickness=new Thickness(0),Cursor=System.Windows.Input.Cursors.Hand
+            BorderBrush=wedge.Stroke??Brushes.White,
+            BorderThickness=new Thickness(1.5),
+            Cursor=System.Windows.Input.Cursors.Hand,
+            ToolTip=(leading?"Hidden before: ":"Hidden after: ")+amount+
+                " · wheel to reveal"
         };
-        b.Click+=(_,_)=>action();
-        return b;
+        var ring=new Border{
+            CornerRadius=new CornerRadius(5),
+            BorderThickness=new Thickness(0),
+            Child=tab
+        };
+        Canvas.SetLeft(ring,x);
+        Canvas.SetTop(ring,y);
+        Canvas.SetZIndex(ring,40);
+        ring.ClipToBounds=true;
+        tab.Click+=(_,_)=>advance();
+        canvas.Children.Add(ring);
     }
 
     internal static void Animate(Canvas canvas,int direction,
