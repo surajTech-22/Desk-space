@@ -331,7 +331,7 @@ internal static class DeskSpaceSubDonutStandardV62
     // geometries are: divider segment, upper dot, actual numeral glyph,
     // lower dot, divider segment. The click target is invisible.
     private static System.Windows.Shapes.Path DrawInlineCountInk(
-        Canvas canvas,Geometry shape,bool leading,string count)
+        Canvas canvas,Geometry shape,Brush? sectorFill,bool leading,string count)
     {
         var pg=shape as PathGeometry;
         if(pg==null||pg.Figures.Count==0||
@@ -368,7 +368,13 @@ internal static class DeskSpaceSubDonutStandardV62
             f.Segments.Add(new LineSegment(a-perpendicular,true));
             return new PathGeometry(new[]{f});
         }
-        var dark=new SolidColorBrush(Color.FromRgb(23,32,64));
+        var dark=new SolidColorBrush(CounterInk(sectorFill));
+        // The count text belongs INSIDE the narrow wedge edge; not half on
+        // the white desktop. Its two DOTS remain on the original radial
+        // divider. No additional lines or background plates are drawn.
+        Vector perpendicular=new Vector(-axis.Y,axis.X);
+        Vector inward=perpendicular*(leading?-1:1);
+        Point glyphCenter=center+inward*5.5;
         var font=new Typeface(new FontFamily("Segoe UI"),
             FontStyles.Normal,FontWeights.Bold,FontStretches.Normal);
         var formatted=new FormattedText(count,
@@ -381,7 +387,8 @@ internal static class DeskSpaceSubDonutStandardV62
             -bounds.Left-bounds.Width/2,-bounds.Top-bounds.Height/2));
         placement.Children.Add(new RotateTransform(
             DividerAngle(shape,leading)));
-        placement.Children.Add(new TranslateTransform(center.X,center.Y));
+        placement.Children.Add(new TranslateTransform(
+            glyphCenter.X,glyphCenter.Y));
         digits.Transform=placement;
         var whole=new GeometryGroup();
         // The wedge already owns both halves of the divider. Do not draw
@@ -413,7 +420,7 @@ internal static class DeskSpaceSubDonutStandardV62
         // Nothing extends beyond the existing radial end divider.
         double width=Math.Max(21,8+count.Length*10),height=39;
         Color color=CounterInk(wedge.Fill);
-        DrawInlineCountInk(canvas,wedge.Data,leading,count);
+        DrawInlineCountInk(canvas,wedge.Data,wedge.Fill,leading,count);
         var button=new Button{
             Content=count,
             Width=width,Height=height,

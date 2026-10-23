@@ -1127,6 +1127,11 @@ jobs:
           ./r76/apply-r76.ps1
           ./r76/test-r76.ps1
 
+      - name: R77 inlay hidden count inside original divider without floating
+        shell: pwsh
+        run: |
+          ./r77/test-r77.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

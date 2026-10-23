@@ -894,11 +894,21 @@ internal static class Program
         Render(whiteScene,700,700,"subdonut-dot-joined-divider");
         Render(whiteScene,700,700,"subdonut-actual-inline-count-ink");
         Render(whiteScene,700,700,"subdonut-r74-no-extra-lines");
+        Render(whiteScene,700,700,"subdonut-r77-inset-count");
         Assert(whiteScene.Children.OfType<System.Windows.Shapes.Path>()
             .Where(p=>(p.Tag as string)=="DeskSpaceHiddenCountInline")
             .All(p=>p.Data is GeometryGroup group &&
                 group.Children.Count==3 && p.Stroke==null),
             "R74: hidden count must NOT add extra divider lines");
+        var integrated=(GeometryGroup)singleInk.Data;
+        var digits=(Geometry)integrated.Children[1];
+        var centerOfDigits=new Point(
+            digits.Bounds.Left+digits.Bounds.Width/2,
+            digits.Bounds.Top+digits.Bounds.Height/2);
+        Assert(lastGeometry!.FillContains(centerOfDigits) &&
+            (centerOfDigits-textPoint).Length>=4.5 &&
+            ((SolidColorBrush)singleInk.Fill).Color.R>190,
+            "R77 hidden numeral must be inlayed INTO colored wedge, not halfway outside");
         var preview=new RenderTargetBitmap(700,700,96,96,
             PixelFormats.Pbgra32);
         preview.Render(whiteScene);
