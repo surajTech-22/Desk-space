@@ -12,8 +12,17 @@ namespace DeskSpace;
 // the clock must follow the rendered SCENE, not exact city-name equality.
 internal static class DeskSpaceWeatherContrastV64
 {
-    internal static bool LightScene(WeatherReading? weather,bool showWeather)=>
-        showWeather&&weather!=null&&weather.IsDay&&weather.Code<=3;
+    internal static bool LightScene(WeatherReading? weather,bool showWeather)
+    {
+        if(!showWeather||weather==null||!weather.IsDay)return false;
+        int code=weather.Code;
+        // Keep ink selection IDENTICAL to DeskSpaceWeatherSceneV11's sky
+        // palette. Overcast code 3 uses the dark palette, unlike code 2.
+        bool muted=(code>=51&&code<=67)||(code>=80&&code<=82)||
+            code>=95||(code>=71&&code<=77)||(code>=85&&code<=86)||
+            code==3||code==45||code==48;
+        return !muted;
+    }
 
     internal static Color ClockColor(WeatherReading? weather,bool showWeather)=>
         LightScene(weather,showWeather)
