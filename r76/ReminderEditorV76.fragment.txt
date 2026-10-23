@@ -1,0 +1,102 @@
+    private void BuildReminders(StackPanel body)
+    {
+        var items=new ListBox{MaxHeight=123,MinHeight=65,
+            Margin=new Thickness(2,0,2,5)};
+        body.Children.Add(items);
+        var title=Field("Reminder / task title");
+        var date=new DatePicker{SelectedDate=DateTime.Today,
+            Margin=new Thickness(2,2,2,5)};
+        var time=Field("Time, HH:mm");time.Text="09:00";
+        // Time controls retain the existing stored time until the requested
+        // detailed time workflow is specified; alert display already shows
+        // hh:mm:ss AM/PM from the Windows system clock.
+        body.Children.Add(Text("New reminder or task"));body.Children.Add(title);
+        var row=new WrapPanel();
+        row.Children.Add(date);time.Width=95;row.Children.Add(time);
+        body.Children.Add(row);
+
+        var tune=new ComboBox{Width=140,Height=30,Margin=new Thickness(2),
+            ItemsSource=new[]{"Exclamation","Beep","Asterisk","Hand",
+                "None","Custom WAV"},SelectedItem="Exclamation"};
+        var soundPath=Field("Optional .wav sound file");
+        soundPath.Width=235;
+        var tuneRow=new WrapPanel();
+        tuneRow.Children.Add(tune);
+        tuneRow.Children.Add(Button("▶ Test",()=>{
+            var probe=new ReminderItem{AlertSound=tune.SelectedItem?.ToString()
+                ??"Exclamation",AlertSoundFile=soundPath.Text.Trim()};
+            DeskSpaceDueShelfV74.PlaySound(probe);
+        }));
+        tuneRow.Children.Add(Button("Browse WAV",()=>{
+            var dialog=new Microsoft.Win32.OpenFileDialog{
+                Filter="WAV audio (*.wav)|*.wav",CheckFileExists=true};
+            if(dialog.ShowDialog()==true){
+                soundPath.Text=dialog.FileName;tune.SelectedItem="Custom WAV";
+            }
+        }));
+        body.Children.Add(Text("Tune / notification sound",12));
+        body.Children.Add(tuneRow);body.Children.Add(soundPath);
+
+        var action=new ComboBox{Width=148,Height=30,Margin=new Thickness(2),
+            ItemsSource=new[]{"None","Open application","Open file"},
+            SelectedItem="None"};
+        var target=Field("Choose an application or file");
+        target.Width=230;
+        var actionRow=new WrapPanel();
+        actionRow.Children.Add(action);
+        actionRow.Children.Add(Button("Browse",()=>{
+            var choice=action.SelectedItem?.ToString()??"None";
+            if(choice=="None"){MessageBox.Show("Select an action first.");return;}
+            var dialog=new Microsoft.Win32.OpenFileDialog{
+                Filter=choice=="Open application"
+                    ?"Applications (*.exe)|*.exe"
+                    :"All files (*.*)|*.*",CheckFileExists=true};
+            if(dialog.ShowDialog()==true)target.Text=dialog.FileName;
+        }));
+        body.Children.Add(Text("Optional action at reminder time",12));
+        body.Children.Add(actionRow);body.Children.Add(target);
+        action.SelectionChanged+=(_,_)=>{
+            target.IsEnabled=(action.SelectedItem?.ToString()??"None")!="None";};
+        target.IsEnabled=false;
+
+        void Reload()=>items.ItemsSource=store.Load().Reminders
+            .OrderBy(n=>n.Done).ThenBy(n=>n.Due).ToList();
+        var buttons=new WrapPanel();body.Children.Add(buttons);
+        buttons.Children.Add(Button("+ Add",()=>{
+            if(string.IsNullOrWhiteSpace(title.Text)||date.SelectedDate==null)return;
+            if(!TimeSpan.TryParse(time.Text,out var tm) ||
+               tm<TimeSpan.Zero||tm>=TimeSpan.FromDays(1)){
+                MessageBox.Show("Use a valid 24-hour HH:mm time.");return;}
+            var actionName=action.SelectedItem?.ToString()??"None";
+            var actionPath=target.Text.Trim();
+            if(!DeskSpaceDueShelfV74.IsAllowedAction(actionName,actionPath)){
+                MessageBox.Show("Choose an existing application (.exe) or a valid file.");
+                return;
+            }
+            if(tune.SelectedItem?.ToString()=="Custom WAV" &&
+               (!System.IO.File.Exists(soundPath.Text.Trim()) ||
+                !System.IO.Path.GetExtension(soundPath.Text.Trim())
+                   .Equals(".wav",StringComparison.OrdinalIgnoreCase))){
+                MessageBox.Show("Select an existing WAV sound.");return;
+            }
+            try{
+                Edit(ws=>ws.Reminders.Add(new ReminderItem{
+                    Title=title.Text.Trim(),Due=date.SelectedDate.Value.Date+tm,
+                    AlertSound=tune.SelectedItem?.ToString()??"Exclamation",
+                    AlertSoundFile=soundPath.Text.Trim(),
+                    AlertAction=actionName,AlertTarget=actionPath
+                }));
+                title.Clear();Reload();
+            }catch(Exception e){Error(e);}
+        }));
+        buttons.Children.Add(Button("Complete",()=>{
+            if(items.SelectedItem is not ReminderItem r)return;
+            try{Edit(ws=>{var item=ws.Reminders.FirstOrDefault(x=>x.Id==r.Id);
+                if(item!=null)item.Done=!item.Done;});Reload();}catch(Exception e){Error(e);}
+        }));
+        buttons.Children.Add(Button("Delete",()=>{
+            if(items.SelectedItem is not ReminderItem r)return;
+            try{Edit(ws=>ws.Reminders.RemoveAll(x=>x.Id==r.Id));Reload();}catch(Exception e){Error(e);}
+        }));
+        Reload();
+    }

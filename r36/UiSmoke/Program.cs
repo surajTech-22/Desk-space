@@ -34,6 +34,7 @@ internal static class Program
             TestRecentFileStartupRecovery();
             TestFileClassification();
             TestDueShelfV74();
+            TestReminderV76();
             TestStandardSubDonutScroll();
             TestDonutHomeAndApplicationIcons();
             TestMiddleButtonSubDonutScroll();
@@ -588,7 +589,42 @@ internal static class Program
         Console.WriteLine("R65 WPF PASS: donut returns to original location "+
             "and application logos are real, cached shell icons.");
     }
-        private static void TestDueShelfV74()
+        private static void TestReminderV76()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceDueShelfV74",true)!;
+        var action=type.GetMethod("IsAllowedAction",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        bool Can(string mode,string target)=>(bool)action.Invoke(null,
+            new object[]{mode,target})!;
+        Assert(Can("None","") && !Can("Open file","") &&
+            !Can("Open application",@"C:\Windows\System32\cmd.exe /c calc") &&
+            !Can("Open file","https://example.com"),
+            "R76 unsafe or unsupported reminder launch target accepted");
+        var model=new ReminderItem{Title="Saved",AlertSound="Hand",
+            AlertAction="Open file",AlertTarget=@"C:\fake\note.txt"};
+        var ws=new Workspace();ws.Reminders.Add(model);
+        var json=System.Text.Json.JsonSerializer.Serialize(ws);
+        var restored=System.Text.Json.JsonSerializer.Deserialize<Workspace>(json)!;
+        Assert(restored.Reminders.Single().AlertSound=="Hand" &&
+            restored.Reminders.Single().AlertTarget==model.AlertTarget,
+            "R76 sound/action preferences were not persisted");
+        var view=type.GetMethod("Preview",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var alertType=Product.GetType("DeskSpace.DeskSpaceDueShelfV74+DueAlert",true)!;
+        var alert=Activator.CreateInstance(alertType,
+            new object[]{model.Id,model.Title,new DateTime(2026,10,23,19,30,45)})!;
+        var array=Array.CreateInstance(alertType,1);array.SetValue(alert,0);
+        var preview=(FrameworkElement)view.Invoke(null,new object[]{
+            array,new DateTime(2026,10,23,19,30,45),
+            (Action<Guid>)(_=>{}),(Action<Guid>)(_=>{})})!;
+        Assert(Walk(preview).OfType<Border>().Any(b=>
+            b.Background is LinearGradientBrush),
+            "R76 rainbow animation should live inside due-alert perimeter");
+        Render(preview,310,140,"r76-rainbow-due-reminder");
+        Console.WriteLine("R76 PASS: user-configured sound/action serialization, launch restrictions, rainbow due display.");
+    }
+
+    private static void TestDueShelfV74()
     {
         var type=Product.GetType("DeskSpace.DeskSpaceDueShelfV74",true)!;
         var modelType=Product.GetType("DeskSpace.DeskSpaceDueShelfV74+DueAlert",true)!;

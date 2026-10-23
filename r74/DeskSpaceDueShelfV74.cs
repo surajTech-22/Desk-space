@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Windows.Media.Animation;
 using System.Linq;
 using System.Media;
 using System.Windows;
@@ -22,6 +24,8 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
     private readonly DispatcherTimer timer=new(){Interval=TimeSpan.FromSeconds(1)};
     private readonly List<DueAlert> awaiting=new();
     private readonly HashSet<Guid> accepted=new();
+    private readonly Dictionary<Guid,DateTime> shownAt=new();
+    private static readonly TimeSpan VisibleFor=TimeSpan.FromSeconds(20);
     private long lastScan;
     private bool disposed;
 
@@ -100,18 +104,77 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
                     awaiting.RemoveAll(x=>due.Any(d=>d.Id==x.Id));
                     throw;
                 }
-                SystemSounds.Exclamation.Play();
+                foreach(var alert in due)
+                {
+                    shownAt[alert.Id]=now;
+                    var entry=workspace.Reminders.First(x=>x.Id==alert.Id);
+                    PlaySound(entry);
+                    RunAction(entry);
+                }
                 Render();
             }
             // Completion/deletion in another module immediately removes
             // obsolete alerts, even when the main widget is displaying an editor.
             if(awaiting.RemoveAll(x=>!workspace.Reminders.Any(r=>
-                r.Id==x.Id && !r.Done))>0)Render();
+                r.Id==x.Id && !r.Done) ||
+                (shownAt.TryGetValue(x.Id,out var created) &&
+                 now-created>=VisibleFor))>0)Render();
         }
         catch(Exception exception)
         {
             Debug.WriteLine("DeskSpace due-alert scan: "+exception);
         }
+    }
+
+
+    internal static bool IsAllowedAction(string mode,string target)
+    {
+        if(mode=="None")return true;
+        if(mode is not ("Open application" or "Open file"))return false;
+        if(string.IsNullOrWhiteSpace(target)||!Path.IsPathFullyQualified(target) ||
+           !File.Exists(target))return false;
+        return mode!="Open application" ||
+            Path.GetExtension(target).Equals(".exe",StringComparison.OrdinalIgnoreCase);
+    }
+    internal static void PlaySound(ReminderItem reminder)
+    {
+        try
+        {
+            switch(reminder.AlertSound)
+            {
+                case "None":break;
+                case "Beep":SystemSounds.Beep.Play();break;
+                case "Asterisk":SystemSounds.Asterisk.Play();break;
+                case "Hand":SystemSounds.Hand.Play();break;
+                case "Custom WAV":
+                    if(!string.IsNullOrWhiteSpace(reminder.AlertSoundFile) &&
+                       Path.IsPathFullyQualified(reminder.AlertSoundFile) &&
+                       File.Exists(reminder.AlertSoundFile) &&
+                       Path.GetExtension(reminder.AlertSoundFile)
+                           .Equals(".wav",StringComparison.OrdinalIgnoreCase))
+                    {
+                        using var player=new SoundPlayer(reminder.AlertSoundFile);
+                        player.Load();
+                        player.Play();
+                    }
+                    break;
+                default:SystemSounds.Exclamation.Play();break;
+            }
+        }
+        catch(Exception error){Debug.WriteLine("DeskSpace sound: "+error);}
+    }
+    internal static void RunAction(ReminderItem reminder)
+    {
+        if(reminder.AlertAction=="None")return;
+        if(!IsAllowedAction(reminder.AlertAction,reminder.AlertTarget))return;
+        try
+        {
+            Process.Start(new ProcessStartInfo{
+                FileName=reminder.AlertTarget,
+                UseShellExecute=true
+            });
+        }
+        catch(Exception error){Debug.WriteLine("DeskSpace reminder action: "+error);}
     }
 
     internal static Rect PlaceAtCircle(Rect circle,Rect work,double width,double height)
@@ -158,6 +221,7 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
     private void Dismiss(Guid id)
     {
         awaiting.RemoveAll(x=>x.Id==id);
+        shownAt.Remove(id);
         Render();
     }
 
@@ -169,7 +233,7 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
         var panel=new StackPanel{Margin=new Thickness(12,10,12,10)};
         var header=new DockPanel{LastChildFill=true};
         var clock=new TextBlock{
-            Text=localSystemTime.ToString("HH:mm"),
+            Text=localSystemTime.ToString("hh:mm:ss tt"),
             FontSize=11,Foreground=muted,
             VerticalAlignment=VerticalAlignment.Center};
         DockPanel.SetDock(clock,Dock.Right);header.Children.Add(clock);
@@ -203,7 +267,7 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
                 MaxWidth=183,Foreground=ink,
                 ToolTip=alert.Title});
             content.Children.Add(new TextBlock{
-                Text=alert.Due.ToString("ddd dd MMM • h:mm tt"),
+                Text=alert.Due.ToString("ddd dd MMM • hh:mm:ss tt"),
                 FontSize=10.5,Foreground=muted});
             line.Children.Add(content);
             panel.Children.Add(line);
@@ -211,13 +275,33 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
         if(due.Count>3)panel.Children.Add(new TextBlock{
             Text=$"+{due.Count-3} more due",
             Foreground=muted,FontSize=11,Margin=new Thickness(0,5,0,0)});
+        var rainbow=new LinearGradientBrush{
+            StartPoint=new Point(0,0),EndPoint=new Point(1,1)
+        };
+        foreach(var color in new[]{
+            Color.FromRgb(255,79,124),Color.FromRgb(255,190,84),
+            Color.FromRgb(247,226,82),Color.FromRgb(76,205,145),
+            Color.FromRgb(62,173,240),Color.FromRgb(122,106,238),
+            Color.FromRgb(241,110,216)})
+            rainbow.GradientStops.Add(new GradientStop(color,
+                rainbow.GradientStops.Count/6.0));
+        var rotation=new RotateTransform(0,.5,.5);
+        rainbow.RelativeTransform=rotation;
+        rotation.BeginAnimation(RotateTransform.AngleProperty,
+            new DoubleAnimation(0,360,TimeSpan.FromSeconds(5)){
+                RepeatBehavior=RepeatBehavior.Forever});
+        // Rainbow flows just INSIDE the rounded alert perimeter; the text
+        // remains on a calm, legible pastel surface without flashing.
         return new Border{
             Width=292,
-            Background=new SolidColorBrush(Color.FromArgb(250,247,246,255)),
-            BorderBrush=new SolidColorBrush(Color.FromRgb(187,182,226)),
-            BorderThickness=new Thickness(1),
-            CornerRadius=new CornerRadius(13),
-            Child=panel
+            Background=rainbow,
+            CornerRadius=new CornerRadius(14),
+            Padding=new Thickness(3),
+            Child=new Border{
+                Background=new SolidColorBrush(Color.FromArgb(250,247,246,255)),
+                CornerRadius=new CornerRadius(11),
+                Child=panel
+            }
         };
     }
 

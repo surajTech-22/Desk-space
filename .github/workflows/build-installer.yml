@@ -1121,10 +1121,11 @@ jobs:
           ./r74/apply-r74.ps1
           ./r74/test-r74.ps1
 
-      - name: R75 inspect precise ring and reminder data model
+      - name: R76 unified reminders, selectable tunes, safe file/app actions
         shell: pwsh
         run: |
-          ./r75/inspect-r75.ps1
+          ./r76/apply-r76.ps1
+          ./r76/test-r76.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
