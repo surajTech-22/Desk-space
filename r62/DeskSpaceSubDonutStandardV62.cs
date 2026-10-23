@@ -1,6 +1,8 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Media.Effects;
 using System.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -114,34 +116,83 @@ internal static class DeskSpaceSubDonutStandardV62
         return new Point((outer.X+inner.X)/2,(outer.Y+inner.Y)/2);
     }
 
+    // WCAG-style luminance keeps the numeral high contrast without a stark
+    // badge. For gradients, choose the ink with the stronger *minimum*
+    // contrast across the available stops; plain pastel wedges use dark ink.
+    private static double RelativeLuminance(Color c)
+    {
+        static double Channel(byte b)
+        {
+            double v=b/255.0;
+            return v<=0.04045?v/12.92:Math.Pow((v+0.055)/1.055,2.4);
+        }
+        return 0.2126*Channel(c.R)+0.7152*Channel(c.G)+
+               0.0722*Channel(c.B);
+    }
+    private static double InkContrast(Color a,Color b)
+    {
+        double x=RelativeLuminance(a),y=RelativeLuminance(b);
+        return (Math.Max(x,y)+0.05)/(Math.Min(x,y)+0.05);
+    }
+    internal static Color CounterInk(Brush? sectorFill)
+    {
+        var samples=new System.Collections.Generic.List<Color>();
+        if(sectorFill is SolidColorBrush solid)
+            samples.Add(solid.Color);
+        else if(sectorFill is GradientBrush gradient)
+            samples.AddRange(gradient.GradientStops.Select(x=>x.Color));
+        if(samples.Count==0)samples.Add(Color.FromRgb(222,229,247));
+        Color dark=Color.FromRgb(22,31,52);
+        Color white=Color.FromRgb(255,255,255);
+        double darkMinimum=samples.Min(c=>InkContrast(dark,c));
+        double whiteMinimum=samples.Min(c=>InkContrast(white,c));
+        return darkMinimum>=whiteMinimum?dark:white;
+    }
+
+    // A chrome-free button retains accessibility/keyboard activation but
+    // removes WPF's default rectangular hover/focus plate. Only the small
+    // text gap masks the divider; the wedge stroke continues above/below.
+    private static ControlTemplate NumberOnlyTemplate(Color ink)
+    {
+        var glyph=new FrameworkElementFactory(typeof(TextBlock));
+        var parent=new RelativeSource(RelativeSourceMode.TemplatedParent);
+        glyph.SetBinding(TextBlock.TextProperty,
+            new Binding("Content"){RelativeSource=parent});
+        glyph.SetBinding(TextBlock.ForegroundProperty,
+            new Binding("Foreground"){RelativeSource=parent});
+        glyph.SetValue(TextBlock.FontFamilyProperty,
+            new FontFamily("Segoe UI"));
+        glyph.SetValue(TextBlock.FontWeightProperty,FontWeights.Bold);
+        glyph.SetValue(TextBlock.FontSizeProperty,12.5);
+        glyph.SetValue(TextBlock.TextAlignmentProperty,TextAlignment.Center);
+        glyph.SetValue(TextBlock.TextTrimmingProperty,TextTrimming.None);
+        glyph.SetValue(UIElement.EffectProperty,new DropShadowEffect{
+            Color=ink.R>190?Color.FromRgb(11,19,45):Colors.White,
+            ShadowDepth=0,BlurRadius=1.3,Opacity=.25});
+        return new ControlTemplate(typeof(Button)){VisualTree=glyph};
+    }
+
     private static void AddDividerCount(Canvas canvas,
         System.Windows.Shapes.Path wedge,int hidden,bool leading,Action move)
     {
         Point midpoint=DividerMidpoint(wedge.Data,leading);
-        // Exactly on the end divider, halfway along its radial height.
-        // Matching wedge fill masks ONLY the central few pixels of the
-        // stroke. The existing white line remains visible above/below.
         string count=hidden.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        double width=Math.Max(17,9+count.Length*8),height=19;
-        Brush ink=Brushes.White;
-        if(wedge.Fill is SolidColorBrush paint)
-        {
-            double brightness=.2126*paint.Color.R+
-                .7152*paint.Color.G+.0722*paint.Color.B;
-            if(brightness>=135)
-                ink=new SolidColorBrush(Color.FromRgb(26,37,72));
-        }
+        // Larger bold digits with a smaller surrounding mask than R66.
+        // Nothing extends beyond the existing radial end divider.
+        double width=Math.Max(15,4+count.Length*9),height=17;
+        Color color=CounterInk(wedge.Fill);
         var button=new Button{
             Content=count,
             Width=width,Height=height,
-            FontSize=11,FontWeight=FontWeights.SemiBold,
+            FontSize=12.5,FontWeight=FontWeights.Bold,
             HorizontalContentAlignment=HorizontalAlignment.Center,
             VerticalContentAlignment=VerticalAlignment.Center,
             Padding=new Thickness(0),
-            Background=wedge.Fill??Brushes.Transparent,
-            Foreground=ink,
+            Background=Brushes.Transparent,
+            Foreground=new SolidColorBrush(color),
             BorderThickness=new Thickness(0),
             FocusVisualStyle=null,
+            Template=NumberOnlyTemplate(color),
             Cursor=System.Windows.Input.Cursors.Hand,
             ToolTip=(leading?"Hidden before: ":"Hidden after: ")+hidden+
                 " · scroll or select to reveal"
@@ -150,7 +201,7 @@ internal static class DeskSpaceSubDonutStandardV62
             Child=button,
             Background=wedge.Fill??Brushes.Transparent,
             BorderThickness=new Thickness(0),
-            CornerRadius=new CornerRadius(1),
+            CornerRadius=new CornerRadius(0),
             SnapsToDevicePixels=true
         };
         Canvas.SetLeft(embedded,midpoint.X-width/2);
