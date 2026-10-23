@@ -33,6 +33,7 @@ internal static class Program
             TestRecentFileStartupRecovery();
             TestFileClassification();
             TestStandardSubDonutScroll();
+            TestMiddleButtonSubDonutScroll();
             TestApplicationsArcAndPinSearch();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
@@ -313,6 +314,63 @@ internal static class Program
         Assert((string)label.Invoke(null,new object[]{"Ctrl+;"})==
             "action_static_date","Excel Ctrl+; mapping not recognised");
         Console.WriteLine("R51 Excel-native keyboard and formula dispatch PASS.");
+    }
+    private static void TestMiddleButtonSubDonutScroll()
+    {
+        var api=Product.GetType("DeskSpace.DeskSpaceMiddleScrollV63",true)!;
+        var direction=api.GetMethod("Direction",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        int Dir(Point from,Point to)=>(int)direction.Invoke(null,
+            new object[]{from,to})!;
+        var center=new Point(50,50);
+        Assert(Dir(center,new Point(55,55))==0,
+            "Middle scroll activates within the dead zone");
+        Assert(Dir(center,new Point(50,92))==1,
+            "Middle scroll should reveal hidden items below");
+        Assert(Dir(center,new Point(50,8))==-1,
+            "Middle scroll should reveal hidden items above");
+        Assert(Dir(center,new Point(100,50))==1 &&
+            Dir(center,new Point(0,50))==-1,
+            "Middle scroll also needs left/right radial movement");
+        var type=api.GetNestedType("Controller",BindingFlags.NonPublic)!;
+        var surface=new Canvas{Width=220,Height=140};
+        int shifted=0;
+        bool visible=true,hasHidden=true;
+        var control=Activator.CreateInstance(type,Any,null,
+            new object[]{surface,(Func<bool>)(()=>hasHidden),
+                (Func<bool>)(()=>visible),
+                (Action<int>)(d=>shifted+=d)},null)!;
+        var start=type.GetMethod("Start",Any)!;
+        var pulse=type.GetMethod("Pulse",Any)!;
+        var stop=type.GetMethod("Stop",Any)!;
+        var active=type.GetProperty("IsActive",Any)!;
+        try
+        {
+            start.Invoke(control,new object[]{center});
+            Assert((bool)active.GetValue(control)!,
+                "Middle autoscroll did not enter active mode");
+            pulse.Invoke(control,new object[]{new Point(52,52)});
+            Assert(shifted==0,"Autoscroll should have a pointer dead zone");
+            pulse.Invoke(control,new object[]{new Point(50,95)});
+            Assert(shifted==1,
+                "Middle autoscroll did not advance a hidden item");
+            pulse.Invoke(control,new object[]{new Point(50,2)});
+            Assert(shifted==0,
+                "Middle autoscroll did not reverse direction");
+            hasHidden=false;
+            pulse.Invoke(control,new object[]{new Point(50,95)});
+            Assert(!(bool)active.GetValue(control)!,
+                "Autoscroll remained active without hidden items");
+            hasHidden=true;start.Invoke(control,new object[]{center});
+            visible=false;
+            pulse.Invoke(control,new object[]{new Point(50,95)});
+            Assert(!(bool)active.GetValue(control)!,
+                "Middle autoscroll did not stop when parent closed");
+            stop.Invoke(control,null);
+            Console.WriteLine("R63 WPF PASS: middle-click scroll activation, "+
+                "dead zone, both directions, and automatic cleanup.");
+        }
+        finally{((IDisposable)control).Dispose();}
     }
     private static void TestStandardSubDonutScroll()
     {
