@@ -37,6 +37,7 @@ internal static class Program
             TestReminderV76();
             TestReminderV78();
             TestRealReminderEditorsV79();
+            TestReminderV80();
             TestStandardSubDonutScroll();
             TestDonutHomeAndApplicationIcons();
             TestMiddleButtonSubDonutScroll();
@@ -662,7 +663,7 @@ internal static class Program
             labels.Contains("Perform action when due (optional)"),
             "R79 actual widget reminder V36 still uses old editor");
         foreach(var key in new[]{"Test sound","Browse WAV","Perform action",
-            "Browse target","Complete","+ Add"})
+            "Search in DeskSpace","Browse file","Browse app","Complete","+ Add"})
             ButtonWith(widgetForm,key);
         Assert(widgetChildren.OfType<TextBox>()
             .Any(x=>x.Text=="09:00:00"),
@@ -688,7 +689,7 @@ internal static class Program
                 active!=null && tabs!=null,
                 "R79 main Workspace still has legacy Reminder form");
             Assert(clock!.Text=="09:00:00" &&
-                sound!.Items.Count==6 && action!.Items.Count==3,
+                sound!.Items.Count==6 && action!.Items.Count==4,
                 "R79 main Workspace time/sound/action controls are missing");
             Assert(active!.ItemsSource is
                     System.ComponentModel.ICollectionView collection &&
@@ -710,7 +711,8 @@ internal static class Program
             panel.Arrange(new Rect(0,0,980,580));
             panel.UpdateLayout();
             foreach(var key in new[]{"Test sound","Browse WAV",
-                "Perform action","Browse target","Add reminder","Mark done"})
+                "Perform action","Search in DeskSpace","Browse file",
+                "Browse app","Add reminder","Mark done"})
                 ButtonWith(panel,key);
             // Capture the exact MAIN Workspace root and its selected tab,
             // rather than isolating transparent TabItem content against
@@ -721,6 +723,117 @@ internal static class Program
             Console.WriteLine("R79 PASS: actual V36 widget and main Workspace show sound/actions, HH:mm:ss, active-only reminders.");
         }
         finally{main.Close();}
+    }
+
+    private static void TestReminderV80()
+    {
+        var browser=Product.GetType("DeskSpace.DeskSpaceReminderBrowserV80",true)!;
+        var normalize=browser.GetMethod("TryUrl",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        bool Url(string input,out string output)
+        {
+            object?[] args={input,""};
+            bool ok=(bool)normalize.Invoke(null,args)!;
+            output=(string)args[1]!;
+            return ok;
+        }
+        Assert(Url("www.example.com",out var formatted) &&
+            formatted=="https://www.example.com/" &&
+            Url("https://example.org/path",out formatted) &&
+            formatted=="https://example.org/path",
+            "R80 must normalize pasted URLs to http(s)");
+        foreach(var invalid in new[]{
+            "javascript:alert(1)","file:///C:/Windows",
+            "https://user:secret@example.com","hello world","ftp://example.com"})
+            Assert(!Url(invalid,out _),"R80 accepted unsafe URL: "+invalid);
+        var due=Product.GetType("DeskSpace.DeskSpaceDueShelfV74",true)!;
+        var can=due.GetMethod("IsAllowedAction",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        bool Allowed(string mode,string target)=>(bool)can.Invoke(null,
+            new object[]{mode,target})!;
+        Assert(Allowed("Open URL","https://example.com") &&
+            !Allowed("Open URL","javascript:alert(1)"),
+            "R80 reminder action URL validation is not wired");
+        var prepare=browser.GetMethod("ShouldPrepare",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var now=new DateTime(2026,10,23,21,41,0);
+        var reminder=new ReminderItem{AlertAction="Open URL",
+            AlertTarget="https://example.com/",Due=now.AddSeconds(11)};
+        bool Prep()=>(bool)prepare.Invoke(null,new object[]{reminder,now})!;
+        Assert(Prep(),"R80 URL should prepare roughly 12 seconds before due");
+        reminder.Due=now.AddSeconds(16);
+        Assert(!Prep(),"R80 URL must not prepare more than 15 seconds early");
+        reminder.Due=now.AddSeconds(-1);
+        Assert(!Prep(),"R80 URL must not preopen after due");
+        reminder.Due=now.AddSeconds(11);reminder.Done=true;
+        Assert(!Prep(),"R80 completed task must not open URL");
+        reminder.Done=false;reminder.LastAlert=now;
+        Assert(!Prep(),"R80 already-alerted task must not preopen URL");
+        var searchType=Product.GetType("DeskSpace.DeskSpaceReminderPickerV80",true)!;
+        var choose=searchType.GetMethod("CanChoose",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var testFile=System.IO.Path.GetTempFileName();
+        try
+        {
+            var hit=new SearchHit{Name="test file",Category="Files",
+                OpenTarget=testFile};
+            Assert((bool)choose.Invoke(null,new object[]{hit,"Open file"})! &&
+                !(bool)choose.Invoke(null,new object[]{hit,"Open application"})!,
+                "R80 picker must filter existing paths by action");
+        }
+        finally{System.IO.File.Delete(testFile);}
+
+        // The real widget class is V36, not the superseded V11.
+        var widget=Make("DeskSpace.DeskSpaceInlineV36",
+            "Reminders","Circle",(Action)(()=>{}),false);
+        var view=(FrameworkElement)Call(widget,"Create")!;
+        view.Measure(new Size(380,525));view.Arrange(new Rect(0,0,380,525));
+        view.UpdateLayout();
+        var mode=Walk(view).OfType<ComboBox>().First(x=>
+            x.Items.Cast<object>().Any(v=>v?.ToString()=="Open URL"));
+        mode.SelectedItem="Open file";
+        var search=ButtonWith(view,"Search in DeskSpace");
+        Assert(search.Visibility==Visibility.Visible,
+            "R80 widget search must be visible when Open file is selected");
+        search.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(Walk(view).OfType<StackPanel>()
+            .Any(p=>(p.Tag as string)=="DeskSpaceReminderEmbeddedSearch"),
+            "R80 widget must show embedded search inside reminder panel");
+        Render(view,380,525,"r80-widget-search-in-reminder");
+        mode.SelectedItem="Open URL";
+        Assert(Walk(view).OfType<TextBlock>().Any(t=>
+            t.Text.Contains("Windows default browser")),
+            "R80 widget must expose pasted URL instructions");
+        Call(widget,"Dispose");
+
+        var main=(Window)Make("DeskSpace.MainWindow");
+        try
+        {
+            var choice=main.FindName("ReminderActionChoice") as ComboBox;
+            var panel=main.FindName("ReminderEmbeddedSearch") as StackPanel;
+            Assert(choice!=null && choice.Items.Count==4 && panel!=null,
+                "R80 main Workspace missing URL mode or search container");
+            choice.SelectedIndex=2; // Open file
+            var tabs=(TabControl)main.FindName("MainTabs")!;
+            tabs.SelectedItem=tabs.Items.OfType<TabItem>().First(x=>
+                (x.Tag as string)=="Reminders");
+            var root=(FrameworkElement)main.Content;
+            ButtonWith(root,"Search in DeskSpace")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert(panel.Children.Count==1 &&
+                Walk(panel).OfType<StackPanel>().Any(p=>
+                    (p.Tag as string)=="DeskSpaceReminderEmbeddedSearch"),
+                "R80 main Workspace must embed existing search results");
+            Render(root,1000,740,"r80-main-search-in-reminder");
+            choice.SelectedIndex=3;
+            Assert(((TextBox)main.FindName("ReminderActionPath")!).Visibility==
+                    Visibility.Visible &&
+                ((TextBlock)main.FindName("ReminderUrlNote")!).Visibility==
+                    Visibility.Visible,
+                "R80 main Workspace cannot paste a URL");
+        }
+        finally{main.Close();}
+        Console.WriteLine("R80 PASS: real V36/Main UI, embedded universal search, URL validation and 12-second preopen policy.");
     }
 
     private static void TestReminderV76()

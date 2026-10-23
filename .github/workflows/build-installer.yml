@@ -1144,6 +1144,12 @@ jobs:
           ./r79/apply-r79.ps1
           ./r79/test-r79.ps1
 
+      - name: R80 embedded global search and timed default-browser actions
+        shell: pwsh
+        run: |
+          ./r80/apply-r80.ps1
+          ./r80/test-r80.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

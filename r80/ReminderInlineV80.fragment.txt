@@ -1,0 +1,190 @@
+    private void BuildReminders(StackPanel body)
+    {
+        body.Children.Add(Text("REMINDERS · SOUND & ACTIONS",12));
+        var list=new ListBox{MinHeight=55,MaxHeight=92,
+            Margin=new Thickness(2,0,2,4)};
+        body.Children.Add(list);
+        var title=Field("Reminder or task title");
+        body.Children.Add(title);
+        var due=new DatePicker{SelectedDate=DateTime.Today,
+            Width=152,Margin=new Thickness(2,2,2,3)};
+        var time=Field("Enter 72345, 122345 or 72345 PM",32);
+        time.Text="09:00:00";time.Width=148;
+        var clockRow=new WrapPanel();
+        clockRow.Children.Add(due);clockRow.Children.Add(time);
+        body.Children.Add(Text("Date and time · seconds supported",12));
+        body.Children.Add(clockRow);
+        var preview=Text("Time: 09:00:00",11);
+        body.Children.Add(preview);
+        void ShowParsedTime()
+        {
+            preview.Text=DeskSpaceReminderTimeV78.TryParse(time.Text,
+                out _,out var normal)
+                ?"Time: "+normal
+                :"Enter HMMSS or HHMMSS, optional AM/PM";
+        }
+        time.TextChanged+=(_,_)=>ShowParsedTime();
+        time.LostKeyboardFocus+=(_,_)=>{
+            if(DeskSpaceReminderTimeV78.TryParse(time.Text,
+                out _,out var normalized))
+                time.Text=normalized;
+        };
+
+        var tune=new ComboBox{Width=151,Height=29,Margin=new Thickness(2),
+            ItemsSource=new[]{"Exclamation","Beep","Asterisk","Hand",
+                "None","Custom WAV"},SelectedItem="Exclamation"};
+        var wav=Field("Select custom WAV sound",31);
+        wav.Width=279;
+        var sounds=new WrapPanel();
+        sounds.Children.Add(tune);
+        sounds.Children.Add(Button("Test sound",()=>{
+            DeskSpaceDueShelfV74.PlaySound(new ReminderItem{
+                AlertSound=tune.SelectedItem?.ToString()??"Exclamation",
+                AlertSoundFile=wav.Text.Trim()
+            });
+        }));
+        sounds.Children.Add(Button("Browse WAV",()=>{
+            var dialog=new Microsoft.Win32.OpenFileDialog{
+                Filter="WAV sound (*.wav)|*.wav",CheckFileExists=true
+            };
+            if(dialog.ShowDialog()==true){
+                wav.Text=dialog.FileName;tune.SelectedItem="Custom WAV";
+            }
+        }));
+        body.Children.Add(Text("Sound / Tune",12));
+        body.Children.Add(sounds);body.Children.Add(wav);
+        void UpdateWav()=>wav.Visibility=
+            tune.SelectedItem?.ToString()=="Custom WAV"?
+                Visibility.Visible:Visibility.Collapsed;
+        tune.SelectionChanged+=(_,_)=>UpdateWav();
+        UpdateWav();
+
+        var action=new ComboBox{Width=155,Height=29,
+            Margin=new Thickness(2),ItemsSource=new[]{
+                "None","Open application","Open file","Open URL"
+            },SelectedItem="None"};
+        var target=Field("Choose executable or file",31);
+        target.Width=279;
+        var actions=new WrapPanel();
+        var pickerPanel=new StackPanel{Visibility=Visibility.Collapsed};
+        var searchButton=Button("Search in DeskSpace",()=>{
+            string mode=action.SelectedItem?.ToString()??"None";
+            if(mode is not ("Open application" or "Open file"))return;
+            pickerPanel.Children.Clear();
+            pickerPanel.Children.Add(DeskSpaceReminderPickerV80.Create(
+                mode,path=>{target.Text=path;pickerPanel.Visibility=Visibility.Collapsed;}));
+            pickerPanel.Visibility=Visibility.Visible;
+        });
+        var browseFile=Button("Browse file",()=>{
+            if(action.SelectedItem?.ToString()!="Open file")return;
+            var dlg=new Microsoft.Win32.OpenFileDialog{
+                Filter="All files (*.*)|*.*",CheckFileExists=true
+            };
+            if(dlg.ShowDialog()==true)target.Text=dlg.FileName;
+        });
+        var browseApplication=Button("Browse app",()=>{
+            if(action.SelectedItem?.ToString()!="Open application")return;
+            var dlg=new Microsoft.Win32.OpenFileDialog{
+                Filter="Applications (*.exe;*.lnk)|*.exe;*.lnk",
+                CheckFileExists=true};
+            if(dlg.ShowDialog()==true)target.Text=dlg.FileName;
+        });
+        actions.Children.Add(action);
+        actions.Children.Add(Button("Perform action",()=>{
+            action.Focus();action.IsDropDownOpen=true;
+        }));
+        actions.Children.Add(searchButton);
+        actions.Children.Add(browseFile);
+        actions.Children.Add(browseApplication);
+        body.Children.Add(Text("Perform action when due (optional)",12));
+        body.Children.Add(actions);body.Children.Add(target);
+        body.Children.Add(pickerPanel);
+        var urlNote=Text("Paste the website URL; DeskSpace uses your Windows default browser. "+
+            "An existing browser tab is prepared about 12 seconds before due.",11);
+        body.Children.Add(urlNote);
+        void UpdateAction()
+        {
+            string mode=action.SelectedItem?.ToString()??"None";
+            target.Visibility=mode=="None"?Visibility.Collapsed:Visibility.Visible;
+            target.ToolTip=mode=="Open URL"?"Paste https://example.com or www.example.com":
+                "Selected application or file";
+            urlNote.Visibility=mode=="Open URL"?Visibility.Visible:Visibility.Collapsed;
+            searchButton.Visibility=mode is ("Open application" or "Open file")?
+                Visibility.Visible:Visibility.Collapsed;
+            browseFile.Visibility=mode=="Open file"?Visibility.Visible:Visibility.Collapsed;
+            browseApplication.Visibility=mode=="Open application"?Visibility.Visible:Visibility.Collapsed;
+            pickerPanel.Children.Clear();pickerPanel.Visibility=Visibility.Collapsed;
+        }
+        action.SelectionChanged+=(_,_)=>UpdateAction();
+        UpdateAction();
+
+        void Reload()
+        {
+            var active=store.Load().Reminders.Where(x=>!x.Done)
+                .OrderBy(x=>x.Due).ToList();
+            list.ItemsSource=active;
+            list.Visibility=active.Count==0?Visibility.Collapsed:Visibility.Visible;
+        }
+        var row=new WrapPanel();body.Children.Add(row);
+        row.Children.Add(Button("+ Add",()=>{
+            if(string.IsNullOrWhiteSpace(title.Text)||due.SelectedDate==null)
+                return;
+            if(!DeskSpaceReminderTimeV78.TryParse(time.Text,
+                out var parsed,out var normalized)){
+                MessageBox.Show("Invalid time. Try 72345, 122345, "+
+                    "7:23:45 PM, or 23:59:59.");return;
+            }
+            time.Text=normalized;
+            var actionName=action.SelectedItem?.ToString()??"None";
+            var actionPath=target.Text.Trim();
+            if(actionName=="Open URL" &&
+               DeskSpaceReminderBrowserV80.TryUrl(actionPath,out var normalizedUrl))
+                actionPath=normalizedUrl;
+            if(!DeskSpaceDueShelfV74.IsAllowedAction(actionName,actionPath)){
+                MessageBox.Show("Choose an existing application/file or a valid http(s) URL.");
+                return;
+            }
+            if(tune.SelectedItem?.ToString()=="Custom WAV" &&
+               (!System.IO.File.Exists(wav.Text.Trim()) ||
+                !System.IO.Path.GetExtension(wav.Text.Trim())
+                    .Equals(".wav",StringComparison.OrdinalIgnoreCase))){
+                MessageBox.Show("Choose an existing WAV file.");return;
+            }
+            try{
+                Edit(ws=>ws.Reminders.Add(new ReminderItem{
+                    Title=title.Text.Trim(),Due=due.SelectedDate.Value.Date+parsed,
+                    AlertSound=tune.SelectedItem?.ToString()??"Exclamation",
+                    AlertSoundFile=wav.Text.Trim(),AlertAction=actionName,
+                    AlertTarget=actionPath
+                }));
+                title.Clear();Reload();
+            }catch(Exception e){Error(e);}
+        }));
+        row.Children.Add(Button("Complete",()=>{
+            if(list.SelectedItem is not ReminderItem selected)return;
+            try{
+                Edit(ws=>{
+                    var r=ws.Reminders.FirstOrDefault(x=>x.Id==selected.Id);
+                    if(r!=null)r.Done=true;
+                });
+                Reload();
+            }catch(Exception e){Error(e);}
+        }));
+        row.Children.Add(Button("Delete",()=>{
+            if(list.SelectedItem is not ReminderItem selected)return;
+            try{
+                Edit(ws=>ws.Reminders.RemoveAll(x=>x.Id==selected.Id));
+                Reload();
+            }catch(Exception e){Error(e);}
+        }));
+        // Quick-add from the donut's + button must open this SAME editor.
+        startNew=()=>{
+            list.SelectedItem=null;
+            title.Clear();
+            due.SelectedDate=DateTime.Today;
+            time.Text="09:00:00";
+            title.Focus();
+        };
+        Reload();
+    }
+
