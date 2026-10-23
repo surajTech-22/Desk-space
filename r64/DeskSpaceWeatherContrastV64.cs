@@ -50,8 +50,6 @@ internal static class DeskSpaceWeatherContrastV64
             control.Foreground=ink;
             control.Effect=outline;
         }
-        else if(parent is UIElement visual)
-            visual.Effect=outline;
         // A time/date widget may use independent TextBlocks inside an element;
         // unlike inherited Foreground this overrides their prior local colors.
         if(parent is Visual || parent is System.Windows.Media.Media3D.Visual3D)
