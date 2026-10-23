@@ -645,7 +645,8 @@ internal static class Program
             (Action<int>)(d=>shifted=d)});
         var buttons=board.Children.OfType<Button>().ToArray();
         var outlines=board.Children.OfType<System.Windows.Shapes.Path>()
-            .Where(p=>!p.IsHitTestVisible).ToArray();
+            .Where(p=>!p.IsHitTestVisible &&
+                (p.Tag as string)!="DeskSpaceHiddenCountInline").ToArray();
         Assert(!board.Children.OfType<Border>().Any(),
             "Hidden counters must have NO separate background box");
         Assert(outlines.Length==2,
