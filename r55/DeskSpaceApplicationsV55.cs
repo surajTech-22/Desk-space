@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace DeskSpace;
 
@@ -31,7 +32,15 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private string group="";
     private bool disposed;
     private int placementTick;
-    public bool IsArcOpen=>arc.IsOpen;
+    // Parent drawing starts each outer wedge at -90 + slot * (360/7).
+    // The old helper returned the wedge midpoint half a sector too far left.
+    internal static double ApplicationsParentCenter=>
+        DeskSpaceDonutGeometryV43.OuterSectorCenter(4)-360.0/14.0;
+    private Popup? pinPalette;
+    private TextBox? pinSearch;
+    private StackPanel? pinMatches;
+    private DispatcherTimer? pinRefresh;
+    public bool IsArcOpen=>arc.IsOpen || pinPalette?.IsOpen==true;
     public int PinnedCount=>pinned().Count;
     public DeskSpaceApplicationsV55(Window owner,Func<IReadOnlyList<string>> pinned,
         Action<string> addPin,Action<string> removePin,Action openSearch)
@@ -72,14 +81,16 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         fills.Add(shape);hitZones.Add((geom,kind,path));
         canvas.Children.Add(shape);
         var point=At((r0+r1)*.5,(a+b)*.5);
-        var text=new TextBlock{Text=label,Width=76,MaxHeight=30,
+        double arcWidth=(r0+r1)*.5*Math.Abs(b-a)*Math.PI/180.0;
+        double textWidth=Math.Clamp(arcWidth*.91,40.0,90.0);
+        var text=new TextBlock{Text=label,Width=textWidth,MaxHeight=30,
             TextWrapping=TextWrapping.Wrap,
             TextAlignment=TextAlignment.Center,
             FontSize=10.5,TextTrimming=TextTrimming.CharacterEllipsis,
             Foreground=kind=="add"?Brushes.White:
                 new SolidColorBrush(Color.FromRgb(37,51,79)),
             IsHitTestVisible=false,ToolTip=label};
-        Canvas.SetLeft(text,point.X-38);Canvas.SetTop(text,point.Y-14);
+        Canvas.SetLeft(text,point.X-textWidth/2);Canvas.SetTop(text,point.Y-14);
         canvas.Children.Add(text);
     }
     private List<(string Label,string Kind,string Path)> Children()
@@ -122,19 +133,22 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         canvas.Children.Clear();hitZones.Clear();fills.Clear();hovered=-1;
         var roots=new[]{
             ("Pinned","pinned",""),
-            ("Installed","installed",""),
+            ("All apps","installed",""),
             ("+ Pin","add",""),
             ("Search","search","")
         };
-        var center=DeskSpaceDonutGeometryV43.OuterSectorCenter(4);
+        var center=ApplicationsParentCenter;
         // The Applications replacement is outer slot 4 (overall index 10).
         // Wedges are immediately adjacent to the parent's 195-DIP outer
         // radius and share its exact origin; the former 217-DIP opening
         // produced a visibly detached arc, especially on scaled screens.
-        double start=center-40;
+        // Exactly cover the same 360/7-degree angular sector as the
+        // Applications parent. No overlap with Tasks or Clipboard.
+        double step=360.0/(7*4);
+        double start=center-360.0/14.0;
         for(int i=0;i<roots.Length;i++)
             AddWedge(roots[i].Item1,roots[i].Item2,roots[i].Item3,
-                start+i*20,start+(i+1)*20,BaseInner,BaseOuter);
+                start+i*step,start+(i+1)*step,BaseInner,BaseOuter);
         if(group.Length>0)
         {
             var children=Children();
@@ -165,6 +179,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         var offset=DeskSpaceDonutGeometryV43.PopupOffset(owner,Center,Center,0,0);
         arc.HorizontalOffset=offset.X+(++placementTick%2)*.001;
         arc.VerticalOffset=offset.Y;
+        if(pinPalette?.IsOpen==true)
+            PositionPinPalette();
     }
     public void Show()
     {
@@ -175,6 +191,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     public void HideArc()
     {
         arc.IsOpen=false;group="";childPage=0;
+        if(pinPalette!=null)pinPalette.IsOpen=false;
+        pinRefresh?.Stop();
     }
     private int Slot(Point point)
     {
@@ -239,18 +257,145 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             case "pagenext":childPage++;Render();return true;
             case "search":HideArc();owner.Dispatcher.BeginInvoke(openSearch);return true;
             case "add":
-                // Explicit user-selected executable/shortcut; never automatically
-                // execute discovered applications or change registration.
-                var chooser=new Microsoft.Win32.OpenFileDialog{
-                    Title="Pin an application to DeskSpace",
-                    Filter="Apps and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*",
-                    CheckFileExists=true,Multiselect=false};
-                if(chooser.ShowDialog(owner)==true && IsLaunchable(chooser.FileName))
-                {addPin(chooser.FileName);group="pinned";childPage=0;Render();}
+                // Search discovered applications in our own compact widget
+                // panel. Never navigate users into a raw file-picker dialog.
+                ShowApplicationPinSearch();
                 return true;
         }
         return false;
     }
+    private void PositionPinPalette()
+    {
+        if(pinPalette==null)return;
+        double w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
+        double h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
+        pinPalette.HorizontalOffset=w/2-156;
+        pinPalette.VerticalOffset=h/2+140;
+    }
+    private void EnsurePinPalette()
+    {
+        if(pinPalette!=null)return;
+        var surface=new StackPanel{Width=312,Margin=new Thickness(9,9,9,8)};
+        var heading=new DockPanel{LastChildFill=true,
+            Margin=new Thickness(0,0,0,8)};
+        var close=new Button{Content="×",Width=27,Height=27,
+            Padding=new Thickness(0),FontSize=17,
+            ToolTip="Close application search"};
+        close.Click+=(_,_)=>{if(pinPalette!=null)pinPalette.IsOpen=false;};
+        DockPanel.SetDock(close,Dock.Right);
+        heading.Children.Add(close);
+        heading.Children.Add(new TextBlock{
+            Text="Find an application to pin",
+            FontSize=14,FontWeight=FontWeights.SemiBold,
+            Foreground=Brushes.White,VerticalAlignment=VerticalAlignment.Center});
+        surface.Children.Add(heading);
+        pinSearch=new TextBox{FontSize=13,Height=33,
+            Padding=new Thickness(8,6,6,4),
+            ToolTip="Search installed applications by name",
+            Background=new SolidColorBrush(Color.FromRgb(248,249,255)),
+            Foreground=new SolidColorBrush(Color.FromRgb(28,38,64))};
+        pinSearch.TextChanged+=(_,_)=>RefreshPinMatches();
+        pinSearch.KeyDown+=(_,e)=>{
+            if(e.Key==Key.Escape){if(pinPalette!=null)pinPalette.IsOpen=false;e.Handled=true;}
+            else if(e.Key==Key.Enter)
+            {
+                // Enter chooses the first visible match, same as click.
+                var found=ApplicationMatches().FirstOrDefault();
+                if(found!=null){PinFoundApp(found.OpenTarget);e.Handled=true;}
+            }
+        };
+        surface.Children.Add(pinSearch);
+        pinMatches=new StackPanel{Margin=new Thickness(0,4,0,3)};
+        surface.Children.Add(new ScrollViewer{Content=pinMatches,
+            MaxHeight=265,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});
+        surface.Children.Add(new TextBlock{
+            Text="Choose an installed application. Your files are not opened.",
+            FontSize=10,Foreground=Brushes.LightGray,
+            Margin=new Thickness(2,6,2,0),
+            TextWrapping=TextWrapping.Wrap});
+        pinPalette=new Popup{PlacementTarget=owner,Placement=PlacementMode.Relative,
+            AllowsTransparency=true,StaysOpen=true,PopupAnimation=PopupAnimation.Fade,
+            Child=new Border{Background=new SolidColorBrush(
+                    Color.FromRgb(30,40,73)),
+                BorderBrush=new SolidColorBrush(Color.FromRgb(136,157,211)),
+                BorderThickness=new Thickness(1.2),
+                CornerRadius=new CornerRadius(12),Child=surface}};
+        pinRefresh=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};
+        pinRefresh.Tick+=(_,_)=>{if(pinPalette?.IsOpen==true)RefreshPinMatches();};
+        pinPalette.Opened+=(_,_)=>{pinSearch.Focus();Keyboard.Focus(pinSearch);};
+        pinPalette.Closed+=(_,_)=>pinRefresh?.Stop();
+    }
+    private List<SearchHit> ApplicationMatches()
+    {
+        var term=pinSearch?.Text.Trim()??"";
+        return DeskSpaceSearchIndexV13.SnapshotApplications()
+            .Where(a=>IsLaunchable(a.OpenTarget) &&
+                (term.Length==0 ||
+                 a.Name.Contains(term,StringComparison.OrdinalIgnoreCase) ||
+                 a.OpenTarget.Contains(term,StringComparison.OrdinalIgnoreCase)))
+            .GroupBy(a=>a.OpenTarget,StringComparer.OrdinalIgnoreCase)
+            .Select(g=>g.First())
+            .OrderBy(a=>a.Name,StringComparer.OrdinalIgnoreCase)
+            .Take(30).ToList();
+    }
+    private void RefreshPinMatches()
+    {
+        if(pinMatches==null)return;
+        pinMatches.Children.Clear();
+        var matches=ApplicationMatches();
+        if(matches.Count==0)
+        {
+            pinMatches.Children.Add(new TextBlock{
+                Text="Searching installed applications… or no matching apps found.",
+                Margin=new Thickness(6,12,5,12),
+                Foreground=Brushes.White,TextWrapping=TextWrapping.Wrap});
+            return;
+        }
+        var pinnedPaths=pinned();
+        foreach(var app in matches)
+        {
+            bool already=pinnedPaths.Any(p=>string.Equals(p,app.OpenTarget,
+                StringComparison.OrdinalIgnoreCase));
+            string name=string.IsNullOrWhiteSpace(app.Name)?
+                System.IO.Path.GetFileNameWithoutExtension(app.OpenTarget):app.Name;
+            var button=new Button{
+                Content=(already?"✓  ":"＋  ")+name,
+                ToolTip=app.OpenTarget,Height=33,
+                FontSize=12,HorizontalContentAlignment=HorizontalAlignment.Left,
+                Padding=new Thickness(9,2,8,2),
+                Margin=new Thickness(0,2,0,2),
+                IsEnabled=!already,
+                Foreground=Brushes.White,
+                Background=new SolidColorBrush(Color.FromRgb(58,74,122)),
+                BorderThickness=new Thickness(0)};
+            var path=app.OpenTarget;
+            button.Click+=(_,_)=>PinFoundApp(path);
+            pinMatches.Children.Add(button);
+        }
+    }
+    private void PinFoundApp(string path)
+    {
+        if(!IsLaunchable(path))return;
+        if(!pinned().Any(p=>string.Equals(p,path,StringComparison.OrdinalIgnoreCase)))
+            addPin(path);
+        if(pinPalette!=null)pinPalette.IsOpen=false;
+        pinRefresh?.Stop();
+        group="pinned";childPage=0;
+        Render();Position();arc.IsOpen=owner.IsVisible;
+    }
+    private void ShowApplicationPinSearch()
+    {
+        DeskSpaceSearchIndexV13.WarmStart();
+        EnsurePinPalette();
+        arc.IsOpen=false;
+        pinSearch!.Text="";
+        RefreshPinMatches();
+        PositionPinPalette();
+        pinPalette!.IsOpen=owner.IsVisible;
+        pinRefresh?.Start();
+        pinSearch.Focus();
+    }
+
     private void Wheel(object sender,MouseWheelEventArgs e)
     {
         if(group.Length==0)return;
@@ -265,6 +410,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     public void Dispose()
     {
         if(disposed)return;disposed=true;HideArc();
+        pinRefresh?.Stop();
         owner.LocationChanged-=Moved;owner.SizeChanged-=Resized;
     }
 }
