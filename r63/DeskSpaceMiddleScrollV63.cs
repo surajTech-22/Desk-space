@@ -27,6 +27,7 @@ internal static class DeskSpaceMiddleScrollV63
         private readonly Func<bool> hasOverflow,menuVisible;
         private readonly Action<int> scroll;
         private readonly DispatcherTimer timer;
+        private readonly DeskSpaceSubDonutStandardV62.Wheel normalWheel=new();
         private Point anchor;
         private Cursor? previousCursor;
         private bool disposed;
@@ -42,7 +43,40 @@ internal static class DeskSpaceMiddleScrollV63
                 Interval=TimeSpan.FromMilliseconds(170)};
             timer.Tick+=OnTick;
             surface.PreviewMouseDown+=OnMouseDown;
+            surface.PreviewMouseWheel+=OnWheel;
+            // WPF child Popups have their own HWND. Forward preview-wheel
+            // input only when the pointer is inside a visible subdonut item.
+            InputManager.Current.PreProcessInput+=OnPreProcessWheel;
             surface.PreviewKeyDown+=OnKeyDown;
+        }
+        private bool IsPointerOverVisiblePart()
+        {
+            if(disposed||!menuVisible()||!hasOverflow()||!surface.IsLoaded)
+                return false;
+            try
+            {
+                var at=DeskSpaceWheelHoverV35.MouseIn(surface);
+                return at.X>=0&&at.Y>=0&&
+                    at.X<=surface.ActualWidth&&at.Y<=surface.ActualHeight&&
+                    surface.InputHitTest(at)!=null;
+            }
+            catch(InvalidOperationException){return false;}
+        }
+        private void ScrollWheel(MouseWheelEventArgs e)
+        {
+            if(e.Handled||!IsPointerOverVisiblePart())return;
+            if(IsActive)Stop();
+            int amount=normalWheel.Step(e.Delta);
+            if(amount!=0)scroll(amount);
+            // Even a fine-grained touchpad delta belongs to this wheel.
+            e.Handled=true;
+        }
+        private void OnWheel(object sender,MouseWheelEventArgs e)=>ScrollWheel(e);
+        private void OnPreProcessWheel(object sender,PreProcessInputEventArgs e)
+        {
+            if(e.StagingItem.Input is MouseWheelEventArgs wheel &&
+               wheel.RoutedEvent==Mouse.PreviewMouseWheelEvent)
+                ScrollWheel(wheel);
         }
         private void OnMouseDown(object sender,MouseButtonEventArgs e)
         {
@@ -102,6 +136,8 @@ internal static class DeskSpaceMiddleScrollV63
         {
             if(disposed)return;
             Stop();disposed=true;
+            InputManager.Current.PreProcessInput-=OnPreProcessWheel;
+            surface.PreviewMouseWheel-=OnWheel;
             surface.PreviewMouseDown-=OnMouseDown;
             surface.PreviewKeyDown-=OnKeyDown;
             timer.Tick-=OnTick;
