@@ -325,6 +325,84 @@ internal static class DeskSpaceSubDonutStandardV62
         return new ControlTemplate(typeof(Button)){VisualTree=root};
     }
 
+
+    // A hidden count is ONE drawn piece of the radial divider, not a
+    // separate text/button painted over a white line. These five filled
+    // geometries are: divider segment, upper dot, actual numeral glyph,
+    // lower dot, divider segment. The click target is invisible.
+    private static System.Windows.Shapes.Path DrawInlineCountInk(
+        Canvas canvas,Geometry shape,bool leading,string count)
+    {
+        var pg=shape as PathGeometry;
+        if(pg==null||pg.Figures.Count==0||
+           pg.Figures[0].Segments.Count<3||
+           pg.Figures[0].Segments[0] is not ArcSegment outerArc||
+           pg.Figures[0].Segments[1] is not LineSegment radialLine||
+           pg.Figures[0].Segments[2] is not ArcSegment innerArc)
+            throw new ArgumentException("Invalid hidden-count divider");
+        var fig=pg.Figures[0];
+        Point outer=leading?fig.StartPoint:outerArc.Point;
+        Point inner=leading?innerArc.Point:radialLine.Point;
+        if(shape.Transform is Transform trans)
+        {
+            outer=trans.Transform(outer);
+            inner=trans.Transform(inner);
+        }
+        Vector axis=inner-outer;
+        if(axis.Length<1)throw new ArgumentException("Zero-length divider");
+        axis.Normalize();
+        Point center=new Point((outer.X+inner.X)/2,
+                               (outer.Y+inner.Y)/2);
+        double radius=HiddenCountDotDiameter/2.0;
+        Point topDot=center-axis*HiddenCountDotOffset;
+        Point lowerDot=center+axis*HiddenCountDotOffset;
+        Point topEnd=topDot-axis*radius;
+        Point lowerStart=lowerDot+axis*radius;
+
+        Geometry Segment(Point a,Point b)
+        {
+            Vector perpendicular=new Vector(-axis.Y,axis.X)*.9;
+            var f=new PathFigure{StartPoint=a+perpendicular,IsClosed=true};
+            f.Segments.Add(new LineSegment(b+perpendicular,true));
+            f.Segments.Add(new LineSegment(b-perpendicular,true));
+            f.Segments.Add(new LineSegment(a-perpendicular,true));
+            return new PathGeometry(new[]{f});
+        }
+        var dark=new SolidColorBrush(Color.FromRgb(23,32,64));
+        var font=new Typeface(new FontFamily("Segoe UI"),
+            FontStyles.Normal,FontWeights.Bold,FontStretches.Normal);
+        var formatted=new FormattedText(count,
+            System.Globalization.CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,font,13.5,dark,1.0);
+        Geometry digits=formatted.BuildGeometry(new Point(0,0));
+        Rect bounds=digits.Bounds;
+        var placement=new TransformGroup();
+        placement.Children.Add(new TranslateTransform(
+            -bounds.Left-bounds.Width/2,-bounds.Top-bounds.Height/2));
+        placement.Children.Add(new RotateTransform(
+            DividerAngle(shape,leading)));
+        placement.Children.Add(new TranslateTransform(center.X,center.Y));
+        digits.Transform=placement;
+        var whole=new GeometryGroup();
+        whole.Children.Add(Segment(outer,topEnd));
+        whole.Children.Add(new EllipseGeometry(topDot,radius,radius));
+        whole.Children.Add(digits);
+        whole.Children.Add(new EllipseGeometry(lowerDot,radius,radius));
+        whole.Children.Add(Segment(lowerStart,inner));
+        var ink=new System.Windows.Shapes.Path{
+            Data=whole,
+            Tag="DeskSpaceHiddenCountInline",
+            Fill=dark,
+            Stroke=Brushes.White,
+            StrokeThickness=.65,
+            IsHitTestVisible=false,
+            SnapsToDevicePixels=true
+        };
+        Canvas.SetZIndex(ink,40);
+        canvas.Children.Add(ink);
+        return ink;
+    }
+
     private static void AddDividerCount(Canvas canvas,
         System.Windows.Shapes.Path wedge,int hidden,bool leading,Action move)
     {
@@ -334,6 +412,7 @@ internal static class DeskSpaceSubDonutStandardV62
         // Nothing extends beyond the existing radial end divider.
         double width=Math.Max(21,8+count.Length*10),height=39;
         Color color=CounterInk(wedge.Fill);
+        DrawInlineCountInk(canvas,wedge.Data,leading,count);
         var button=new Button{
             Content=count,
             Width=width,Height=height,
@@ -342,6 +421,7 @@ internal static class DeskSpaceSubDonutStandardV62
             VerticalContentAlignment=VerticalAlignment.Center,
             Padding=new Thickness(0),
             Background=Brushes.Transparent,
+            Opacity=0,
             Foreground=new SolidColorBrush(color),
             BorderThickness=new Thickness(0),
             FocusVisualStyle=null,
@@ -355,7 +435,7 @@ internal static class DeskSpaceSubDonutStandardV62
         };
         Canvas.SetLeft(button,midpoint.X-width/2);
         Canvas.SetTop(button,midpoint.Y-height/2);
-        Canvas.SetZIndex(button,40);
+        Canvas.SetZIndex(button,41);
         button.Click+=(_,_)=>move();
         canvas.Children.Add(button);
     }

@@ -1110,6 +1110,11 @@ jobs:
         run: |
           ./r71/test-r71.ps1
 
+      - name: R72 render count and end-divider as one WPF geometry
+        shell: pwsh
+        run: |
+          ./r72/test-r72.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

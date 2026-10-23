@@ -653,6 +653,30 @@ internal static class Program
         Assert(buttons.Length==2 && (string)buttons[0].Content=="4" &&
             (string)buttons[1].Content=="3",
             "Hidden counts must be numerals embedded in radial end lines");
+        var inlineInk=board.Children.OfType<System.Windows.Shapes.Path>()
+            .Where(p=>(p.Tag as string)=="DeskSpaceHiddenCountInline")
+            .ToArray();
+        Assert(inlineInk.Length==2 && buttons.All(b=>b.Opacity==0),
+            "R72: hidden-count number must be actual divider ink, not an overlay");
+        foreach(var part in inlineInk)
+        {
+            Assert(part.Data is GeometryGroup g &&
+                g.Children.Count==5 &&
+                g.Children[0] is PathGeometry &&
+                g.Children[1] is EllipseGeometry &&
+                g.Children[2] is Geometry &&
+                g.Children[3] is EllipseGeometry &&
+                g.Children[4] is PathGeometry,
+                "R72 line-dots-number-dots-line must be ONE drawn geometry");
+            var group=(GeometryGroup)part.Data;
+            var topDot=(EllipseGeometry)group.Children[1];
+            var bottomDot=(EllipseGeometry)group.Children[3];
+            Assert(Math.Abs((topDot.Center-bottomDot.Center).Length-26)<.1,
+                "R72 dots must be one shared line, not floating labels");
+            Assert(((SolidColorBrush)part.Fill).Color.R<60 &&
+                part.IsHitTestVisible==false,
+                "R72 all parts of the number-line must share visible dark ink");
+        }
         for(int side=0;side<2;side++)
         {
             var wedge=(System.Windows.Shapes.Path)board.Children[side==0?0:4];
@@ -764,6 +788,12 @@ internal static class Program
         indicators.Invoke(null,new object[]{whiteScene,twoHidden,350.0,
             (Action<int>)(d=>whiteSceneShift=d)});
         var twoButton=whiteScene.Children.OfType<Button>().Single();
+        var singleInk=whiteScene.Children.OfType<System.Windows.Shapes.Path>()
+            .Single(p=>(p.Tag as string)=="DeskSpaceHiddenCountInline");
+        Assert(twoButton.Opacity==0 &&
+            singleInk.Data is GeometryGroup &&
+            ((GeometryGroup)singleInk.Data).Children.Count==5,
+            "R72: purple end count must be drawn with its divider, not in button overlay");
         Assert((string)twoButton.Content=="2" && 
             !whiteScene.Children.OfType<Border>().Any(),
             "R69 purple end-line numeral has a separate badge or wrong count");
@@ -780,6 +810,7 @@ internal static class Program
         Render(whiteScene,700,700,"subdonut-purple-new-white-background");
         Render(whiteScene,700,700,"subdonut-purple-oriented-count-dots");
         Render(whiteScene,700,700,"subdonut-dot-joined-divider");
+        Render(whiteScene,700,700,"subdonut-actual-inline-count-ink");
         var preview=new RenderTargetBitmap(700,700,96,96,
             PixelFormats.Pbgra32);
         preview.Render(whiteScene);
