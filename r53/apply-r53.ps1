@@ -150,7 +150,7 @@ One '                ToolTip="Drag to another application to copy · click copy 
 One '                ToolTip="Discard temporary copy"};' @'
                 ToolTip=item.AutoDetected
                     ?"Dismiss this suggestion (original file stays)"
-                    :"Discard temporary copy"};' 
+                    :"Discard temporary copy"};
 '@
 One '            fileInfo.Children.Add(Text("⋮⋮ "+item.Name,12,Brushes.White));' @'
             fileInfo.Children.Add(Text(
