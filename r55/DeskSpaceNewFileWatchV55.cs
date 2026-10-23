@@ -387,6 +387,7 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
         // Reconcile the same approved roots being watched, including opted-in
         // custom Save As folders, without visiting whole disks or caches.
         var likely=roots.ToArray();
+        bool first=true;
         while(!token.IsCancellationRequested)
         {
             try
