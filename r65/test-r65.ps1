@@ -9,14 +9,20 @@ $widgetHostSource=Get-Content "$root/WidgetHost.cs" -Raw
 $test=Get-Content 'r36/UiSmoke/Program.cs' -Raw
 
 foreach($t in @('var wedges=canvas.Children.OfType<System.Windows.Shapes.Path>()',
-    'AddEdgeTab(canvas,wedges[0],view.HiddenLeft,true',
-    'AddEdgeTab(canvas,wedges[actual-1],view.HiddenRight,false',
-    'double x=leading?area.Left+2:area.Right-width-2;',
-    'Background=wedge.Fill,',
-    'BorderBrush=wedge.Stroke??Brushes.White',
-    'Canvas.SetZIndex(ring,40)',
-    'tab.Click+=(_,_)=>advance();')){
- if(!$shared.Contains($t)){throw "R65 shared integrated count tab missing: $t"}
+    'AddDividerCount(canvas,wedges[0],view.HiddenLeft,true',
+    'AddDividerCount(canvas,wedges[count-1],view.HiddenRight,false',
+    'Point midpoint=DividerMidpoint(wedge.Data,leading);',
+    'Canvas.SetLeft(embedded,midpoint.X-width/2);',
+    'Canvas.SetTop(embedded,midpoint.Y-height/2);',
+    'Content=count,',
+    'BorderThickness=new Thickness(0)',
+    'Background=wedge.Fill??Brushes.Transparent',
+    'button.Click+=(_,_)=>move();')){
+ if(!$shared.Contains($t)){throw "R66 vertical divider numeral missing: $t"}
+}
+if($shared.Contains('AddEdgeTab(') -or
+   $shared.Contains('double x=leading?area.Left+2')){
+ throw 'R66 must not render rectangle-bound badges instead of real divider counts'
 }
 if($shared.Contains('Canvas.SetTop(left,') -or
    $shared.Contains('Canvas.SetTop(right,')){
@@ -45,8 +51,8 @@ foreach($t in @('private readonly DeskSpaceDonutHomeV65 donutHome=new();',
 }
 foreach($t in @('TestDonutHomeAndApplicationIcons()',
     'R65 WPF PASS: donut returns to original location',
-    'Hidden counts must attach inside both end sectors',
-    'Hidden numbers detached from the first or last wedge')){
+    'Hidden counts must be numerals embedded in radial end lines',
+    'Hidden count not centered on actual vertical/radial end line')){
  if(!$test.Contains($t)){throw "R65 real Windows test missing: $t"}
 }
 Write-Host 'R65 PASS: universal wedge-integrated counts, app icon lookup and exact original donut position recovery.'
