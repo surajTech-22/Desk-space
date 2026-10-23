@@ -1080,6 +1080,11 @@ jobs:
           ./r65/apply-r65.ps1
           ./r65/test-r65.ps1
 
+      - name: R66 universal hidden numerals centered on vertical end dividers
+        shell: pwsh
+        run: |
+          ./r66/test-r66.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
