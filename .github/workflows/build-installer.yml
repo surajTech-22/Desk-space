@@ -1006,6 +1006,12 @@ jobs:
           ./r46/apply-r46.ps1
           ./r46/test-r46.ps1
 
+      - name: R49 Manage in-app Workspace navigation and immutable Excel mapping save
+        shell: pwsh
+        run: |
+          ./r49/apply-r49.ps1
+          ./r49/test-r49.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
