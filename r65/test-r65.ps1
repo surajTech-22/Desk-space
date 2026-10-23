@@ -5,7 +5,7 @@ $shared=Get-Content "$root/DeskSpaceSubDonutStandardV62.cs" -Raw
 $app=Get-Content "$root/DeskSpaceApplicationsV55.cs" -Raw
 $icon=Get-Content "$root/DeskSpaceApplicationIconsV65.cs" -Raw
 $homeSource=Get-Content "$root/DeskSpaceDonutHomeV65.cs" -Raw
-$host=Get-Content "$root/WidgetHost.cs" -Raw
+$widgetHostSource=Get-Content "$root/WidgetHost.cs" -Raw
 $test=Get-Content 'r36/UiSmoke/Program.cs' -Raw
 
 foreach($t in @('var wedges=canvas.Children.OfType<System.Windows.Shapes.Path>()',
@@ -41,7 +41,7 @@ foreach($t in @('internal void Capture(Window owner)',
 foreach($t in @('private readonly DeskSpaceDonutHomeV65 donutHome=new();',
     'if(!ringExpanded && activeModule==null) donutHome.Capture(this);',
     'if(activeModule==null && donutHome.Restore(this)) SavePosition();')){
- if(!$host.Contains($t)){throw "R65 WidgetHost reversible expansion missing: $t"}
+ if(!$widgetHostSource.Contains($t)){throw "R65 WidgetHost reversible expansion missing: $t"}
 }
 foreach($t in @('TestDonutHomeAndApplicationIcons()',
     'R65 WPF PASS: donut returns to original location',
