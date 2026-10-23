@@ -15,10 +15,10 @@ foreach($requirement in @(
     'if(index<0)throw new InvalidOperationException(',
     'disk.Add(edited);',
     'OriginalShown=shown',
-    'DateFormattedV50(cell.NumberFormat)',
     'ExcelFormat=cell.NumberFormat',
-    'DateTime.TryParse(row.Value',
-    'DateTime.TryParse('
+    'Format note (not applied)',
+    'cell.RawValue=row.Value;',
+    'cell.NumberFormat=row.ExcelFormat;'
 )){
     if(!$editor.Contains($requirement)){throw "R50 mapping update/date format missing: $requirement"}
 }
@@ -33,7 +33,6 @@ foreach($bad in @('if(existing>=0)disk[existing]=edited;',
 foreach($token in @('cell.Formula=DeskSpaceExcelActionsV46.Formula(change.Source)',
      'app.SendKeys(DeskSpaceExcelActionsV46.NativeSendKeys(',
      'GetForegroundWindow()!=excelHwnd',
-     'cell.NumberFormat=change.Source.NumberFormat',
      'app.ActiveWindow')){
     if(!$bridge.Contains($token)){throw "R51 Excel action not native: $token"}
 }
@@ -44,4 +43,12 @@ foreach($required in @('Ctrl+; → Excel inserts','Excel inserts the current',
      'NativeSendKeys(string kind)')){
     if(!$actions.Contains($required)){throw "R51 symbolic shortcut display missing: $required"}
 }
-Write-Host 'R50/R51 PASS: existing mapping ID updated, new fields merged; native Excel formula and keystroke actions, exact date format kept.'
+if($bridge.Contains('cell.NumberFormat=change.Source.NumberFormat') -or
+   $bridge.Contains('cell.NumberFormat=DeskSpaceExcelActionsV46.NumberFormat(')){
+    throw 'R52 must not overwrite the destination Excel format'
+}
+if($editor.Contains('DateFormattedV50(cell.NumberFormat)') -or
+   $editor.Contains('DateTime.TryParse(row.Value')){
+    throw 'R52 mapped values must not depend on a formatting note'
+}
+Write-Host 'R52 PASS: immutable mapping updates, raw mapped values, optional inert Excel format note and native actions.'

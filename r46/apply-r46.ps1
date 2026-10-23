@@ -22,14 +22,6 @@ Replace-Once '        if(cell.ValueKind=="boolean")' @'
                 "Excel shortcuts must execute in Excel, never be converted to values.");
         if(cell.ValueKind=="boolean")
 '@
-Replace-Once 'var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula)>();' 'var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula,string Format)>();'
-Replace-Once 'rollback.Add((cell,previous,hadFormula,hadFormula?Text(cell.FormulaR1C1):""));' @'
-rollback.Add((cell,previous,hadFormula,
-                    hadFormula?Text(cell.FormulaR1C1):"",
-                    Text(cell.NumberFormat)));
-'@
-# R42 intentionally removed replay of CAPTURED Excel formulas. Keep that
-# protection; only explicit NEW user-selected formula actions are executable.
 Replace-Once 'cell.Value2=TypedValue(change.Source);' @'
 if(DeskSpaceExcelActionsV46.IsFormulaAction(change.Source.ValueKind))
                 {
@@ -60,14 +52,6 @@ if(DeskSpaceExcelActionsV46.IsFormulaAction(change.Source.ValueKind))
                         change.Source.ValueKind),true);
                 }
                 else cell.Value2=TypedValue(change.Source);
-                if(!string.IsNullOrWhiteSpace(change.Source.NumberFormat) &&
-                   (DeskSpaceExcelActionsV46.IsAction(change.Source.ValueKind) ||
-                    change.Source.ValueKind=="number"))
-                    cell.NumberFormat=change.Source.NumberFormat;
-'@
-Replace-Once 'else x.Cell.Value2=x.Old;' @'
-else x.Cell.Value2=x.Old;
-                    if(x.Format.Length>0)x.Cell.NumberFormat=x.Format;
 '@
 [IO.File]::WriteAllText($bridge,$s,[Text.UTF8Encoding]::new($false))
-Write-Host 'R51: Excel executes keyboard shortcuts directly, formulas enter as formulas, workbook backup/rollback and custom display format retained.'
+Write-Host 'R52: Excel writes only verified values, formulas or native shortcuts. No target format changes; existing workbook and backup/rollback retained.'

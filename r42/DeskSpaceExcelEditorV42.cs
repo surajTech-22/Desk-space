@@ -232,7 +232,7 @@ internal sealed partial class DeskSpaceExcelV16
         // Excel's custom number-format codes remain editable verbatim.
         // Presets are conveniences, not a closed set of supported formats.
         var formatBar=new WrapPanel{Margin=new Thickness(0,0,0,3)};
-        formatBar.Children.Add(HintV42("Format selected cell:",10));
+        formatBar.Children.Add(HintV42("Excel format note (not pasted):",10));
         var preset=new ComboBox{Width=250,Height=29,IsEditable=true,
             ItemsSource=new[]{
                 "General","dd-mm-yyyy","dd/mm/yyyy","yyyy-mm-dd",
@@ -242,7 +242,7 @@ internal sealed partial class DeskSpaceExcelV16
                 "#,##0","#,##0.00","0%","0.00%","₹#,##0.00",
                 "$#,##0.00","@"}};
         formatBar.Children.Add(preset);
-        formatBar.Children.Add(ButtonV42("Apply format",()=>{
+        formatBar.Children.Add(ButtonV42("Keep format note",()=>{
             CommitCellEditsV42(mappingGridV42!);
             if(mappingGridV42?.SelectedItem is MappingRowV42 row)
             {
@@ -286,7 +286,7 @@ internal sealed partial class DeskSpaceExcelV16
         AddColumnV42("Header cell","ReferenceCell",93);
         AddColumnV42("Data value","Value",210);
         AddColumnV42("Value cell","ValueCell",90);
-        AddColumnV42("Excel format","ExcelFormat",160);
+        AddColumnV42("Format note (not applied)","ExcelFormat",160);
         mappingGridV42.Columns.Add(new DataGridComboBoxColumn{
             Header="Cell action / shortcut",
             ItemsSource=DeskSpaceExcelActionsV46.EditorKinds,
@@ -730,14 +730,12 @@ internal sealed partial class DeskSpaceExcelV16
                     string.Equals(c.CellAddress,cell.HeaderCellAddress,StringComparison.OrdinalIgnoreCase));
                 if(specific!=null){header=specific.RawValue;refRow=specific.RowOffset;refCol=specific.ColumnOffset;}
             }
+            // Display the actual mapped Excel Value2, not a value
+            // inferred or re-rendered from a saved number-format note.
             var shown=DeskSpaceExcelActionsV46.IsAction(cell.ValueKind)
                 ? DeskSpaceExcelActionsV46.PreviewText(cell,DateTime.Now)
                 : cell.ValueKind=="formula"?cell.FormulaR1C1
-                : cell.ValueKind=="number" &&
-                    DateFormattedV50(cell.NumberFormat) &&
-                    !string.IsNullOrWhiteSpace(cell.Display) &&
-                    !cell.Display.Contains("###",StringComparison.Ordinal)
-                    ?cell.Display:cell.RawValue;
+                : cell.RawValue;
             mappingRowsV42.Add(new MappingRowV42{
                 Cell=cell,OriginalRaw=cell.RawValue,
                 OriginalShown=shown,ExcelFormat=cell.NumberFormat,
@@ -811,8 +809,8 @@ internal sealed partial class DeskSpaceExcelV16
                 if(!row.Include){cell.Role="Ignore";continue;}
                 cell.Role=row.Kind=="Reference"?"Reference":
                     row.Kind=="Formula"?"Formula":"Value";
-                // Keep Excel's original custom format unless explicitly
-                // changed in the editor. Excel applies this to the target.
+                // Retain the optional format note for later editing only.
+                // Never apply it to a destination cell.
                 if(row.ExcelFormat.Length>0)
                 {
                     if(row.ExcelFormat.Length>160)
@@ -864,28 +862,15 @@ internal sealed partial class DeskSpaceExcelV16
                     cell.RawValue="";
                     cell.Display=DeskSpaceExcelActionsV46.PreviewText(
                         cell,DateTime.Now);
-                    if(string.IsNullOrWhiteSpace(row.ExcelFormat))
-                        cell.NumberFormat=DeskSpaceExcelActionsV46.NumberFormat(
-                            requestedAction);
+                    // No NumberFormat is inferred from an Excel action.
                 }
                 else if(!DeskSpaceExcelActionsV46.IsAction(cell.ValueKind) &&
                     cell.ValueKind!="formula" && row.Value!=row.OriginalShown)
                 {
-                    if(cell.ValueKind=="number" &&
-                        DateFormattedV50(cell.NumberFormat) &&
-                        DateTime.TryParse(row.Value,
-                            System.Globalization.CultureInfo.CurrentCulture,
-                            System.Globalization.DateTimeStyles.None,out var date))
-                    {
-                        cell.RawValue=date.ToOADate().ToString(
-                            System.Globalization.CultureInfo.InvariantCulture);
-                        cell.Display=row.Value;
-                    }
-                    else
-                    {
-                        cell.RawValue=row.Value;
-                        cell.Display=row.Value;
-                    }
+                    // A format note must not convert a value to a date
+                    // or precompute anything to insert into Excel.
+                    cell.RawValue=row.Value;
+                    cell.Display=row.Value;
                     if(cell.ValueKind=="blank")
                     {
                         cell.ValueKind=double.TryParse(row.Value,
@@ -894,7 +879,6 @@ internal sealed partial class DeskSpaceExcelV16
                             ? "number":"text";
                     }
                     else if(cell.ValueKind=="number" &&
-                        !DateFormattedV50(cell.NumberFormat) &&
                         !double.TryParse(row.Value,
                             System.Globalization.NumberStyles.Any,
                             System.Globalization.CultureInfo.InvariantCulture,out _))
