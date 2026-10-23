@@ -32,7 +32,8 @@ foreach($required in @(
   'ConcurrentDictionary<string,byte> LivePaths',
   'foreach(var path in LivePaths.Keys)',
   'LivePaths.TryRemove(path,out _)',
-  'Path.GetFileName(path),OpenTarget=path'
+  'Name=Path.GetFileName(path)',
+  'OpenTarget=path,Location=path'
 )){
  if(!$search.Contains($required)){throw "R54 search missing: $required"}
 }
