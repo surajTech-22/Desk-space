@@ -31,6 +31,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private const double BaseInner=202,BaseOuter=255,SubInner=257,SubOuter=310;
     private Rect bounds=Rect.Empty;
     private int childPage,hovered=-1,placementTick;
+    private readonly DeskSpaceSubDonutStandardV62.Wheel scrollWheel=new();
+    private DeskSpaceSubDonutStandardV62.View currentChildView;
     private string group="";
     private bool disposed;
     public bool IsArcOpen=>arc.IsOpen;
@@ -64,25 +66,15 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     }
     private List<(string Label,string Kind,string Path)> Children()
     {
-        var apps=group=="pinned"
-            ?pinned().Where(IsLaunchable).Select(p=>(
-                Name:System.IO.Path.GetFileNameWithoutExtension(p),Path:p))
-            :DeskSpaceSearchIndexV13.SnapshotApplications()
-                .Where(h=>IsLaunchable(h.OpenTarget))
-                .Select(h=>(Name:string.IsNullOrWhiteSpace(h.Name)?
-                    System.IO.Path.GetFileNameWithoutExtension(h.OpenTarget):h.Name,
-                    Path:h.OpenTarget));
-        var distinct=apps.GroupBy(x=>x.Path,StringComparer.OrdinalIgnoreCase)
-            .Select(x=>x.First()).OrderBy(x=>x.Name,
-                StringComparer.OrdinalIgnoreCase).ToList();
-        return distinct.Skip(childPage*4).Take(4).Select(x=>{
-            bool repeated=distinct.Count(y=>string.Equals(y.Name,x.Name,
-                StringComparison.OrdinalIgnoreCase))>1;
-            string folder=System.IO.Path.GetFileName(
-                System.IO.Path.GetDirectoryName(x.Path)??"");
-            return (Label:repeated?x.Name+" ("+folder+")":x.Name,
-                Kind:"launch",Path:x.Path);
-        }).ToList();
+        // The installed-app list belongs in Search. The Applications wheel
+        // shows PINNED shortcuts and provides + Pin / Search actions only.
+        var source=pinned().Where(IsLaunchable).Distinct(
+            StringComparer.OrdinalIgnoreCase).OrderBy(p=>
+            System.IO.Path.GetFileNameWithoutExtension(p),
+            StringComparer.OrdinalIgnoreCase).ToList();
+        return source.Select(p=>(
+            Label:System.IO.Path.GetFileNameWithoutExtension(p),
+            Kind:"launch",Path:p)).ToList();
     }
     private void Add(string label,string kind,string path,double a,double b,int depth)
         =>items.Add((label,kind,path,a,b,depth));
@@ -91,32 +83,26 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         items.Clear();hitZones.Clear();fills.Clear();canvas.Children.Clear();hovered=-1;
         double centre=ApplicationsParentCenter;
         var roots=new[]{
-            ("Pinned","pinned"),("All apps","installed"),
-            ("+ Pin","add"),("Search","search")};
-        // The parent-sector wedge is 360/7 wide. Four small root commands
-        // fill exactly this angle, followed by one deeper concentric band.
-        double start=centre-360.0/14,step=360.0/(7*roots.Length);
+            ("Pinned","pinned"),("+ Pin","add"),("Search","search")};
+        var rootPlan=DeskSpaceSubDonutStandardV62.Plan(roots.Length,0,centre);
         for(int i=0;i<roots.Length;i++)
             Add(roots[i].Item1,roots[i].Item2,"",
-                start+i*step,start+(i+1)*step,0);
-        if(group.Length>0)
+                rootPlan.From(i),rootPlan.To(i),0);
+        currentChildView=default;
+        if(group=="pinned")
         {
             var children=Children();
+            currentChildView=DeskSpaceSubDonutStandardV62.Plan(
+                children.Count,childPage,centre,rootPlan.Step);
+            childPage=currentChildView.Start;
             if(children.Count==0)
-                Add("No apps","empty","",centre-16,centre+16,1);
-            else
+                Add("No pins","empty","",centre-12,centre+12,1);
+            for(int i=0;i<currentChildView.Count;i++)
             {
-                double width=Math.Min(76,children.Count*19);
-                double from=centre-width/2;
-                for(int i=0;i<children.Count;i++)
-                    Add(children[i].Label,children[i].Kind,children[i].Path,
-                        from+i*width/children.Count,
-                        from+(i+1)*width/children.Count,1);
+                var item=children[currentChildView.Start+i];
+                Add(item.Label,item.Kind,item.Path,
+                    currentChildView.From(i),currentChildView.To(i),1);
             }
-            if(childPage>0)Add("‹","pageback","",centre-58,centre-40,1);
-            if((group=="pinned"?pinned().Count:
-                DeskSpaceSearchIndexV13.SnapshotApplications().Count)>(childPage+1)*4)
-                Add("›","pagenext","",centre+40,centre+58,1);
         }
         var shapes=items.Select(x=>
             DeskSpaceSubArcGeometryV48.Sector(x.Depth,x.A,x.B)).ToArray();
@@ -156,7 +142,20 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 bounds.Top+margin-13);
             canvas.Children.Add(label);
         }
+        if(group=="pinned")
+            DeskSpaceSubDonutStandardV62.DrawHiddenCounters(canvas,
+                currentChildView,canvas.Height/2,MoveChild);
         Position();
+    }
+    private void MoveChild(int delta)
+    {
+        if(group!="pinned")return;
+        int next=DeskSpaceSubDonutStandardV62.Advance(currentChildView,delta);
+        if(next==childPage)return;
+        childPage=next;
+        Render();
+        DeskSpaceSubDonutStandardV62.Animate(canvas,delta,
+            ApplicationsParentCenter);
     }
     private void Position()
     {
@@ -193,7 +192,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 hitZones[j].Kind=="add"?accent:normal;
         if(i<0)return;
         var kind=hitZones[i].Kind;
-        if((kind=="pinned"||kind=="installed")&&group!=kind)
+        if(kind=="pinned"&&group!=kind)
         {group=kind;childPage=0;Render();}
     }
     private void Move(object sender,MouseEventArgs e)
@@ -223,7 +222,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         var item=hitZones[slot];
         switch(item.Kind)
         {
-            case "pinned":case "installed":
+            case "pinned":
                 group=item.Kind;childPage=0;Render();return true;
             case "launch":
                 if(IsLaunchable(item.Path))
@@ -232,8 +231,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                     catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
                 }
                 return true;
-            case "pageback":childPage=Math.Max(0,childPage-1);Render();return true;
-            case "pagenext":childPage++;Render();return true;
+            case "pageback":MoveChild(-1);return true;
+            case "pagenext":MoveChild(1);return true;
             case "search":HideArc();owner.Dispatcher.BeginInvoke(openSearch);return true;
             case "add":ShowApplicationPinSearch();return true;
         }
@@ -259,12 +258,10 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     }
     private void Wheel(object sender,MouseWheelEventArgs e)
     {
-        if(group.Length==0)return;
-        int count=group=="pinned"?pinned().Count:
-            DeskSpaceSearchIndexV13.SnapshotApplications().Count;
-        childPage=Math.Clamp(childPage+(e.Delta<0?1:-1),0,
-            Math.Max(0,(count-1)/4));
-        Render();e.Handled=true;
+        if(group!="pinned")return;
+        int delta=scrollWheel.Step(e.Delta);
+        if(delta!=0)MoveChild(delta);
+        e.Handled=true;
     }
     private void Moved(object? sender,EventArgs e)
     {if(arc.IsOpen)Position();}
