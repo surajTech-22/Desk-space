@@ -92,12 +92,28 @@ Swap '            PageRing(ring,e.Delta<0?1:-1);e.Handled=true;' @'
             if(amount!=0)PageRing(ring,amount);
             e.Handled=true;
 '@
-Swap '        double half=DeskSpaceSubArcGeometryV48.Half(count);' @'
+Swap @'
+        int count=ring.Items.Count;
+        if(count==0)return;
+        // Information's exact half-sweep and relative WPF Popup positioning.
+        double half=DeskSpaceSubArcGeometryV48.Half(count);
+'@ @'
+        int count=ring.Items.Count;
+        if(count==0)return;
+        // Standard shared five-slot sweep and relative WPF Popup positioning.
         double half=DeskSpaceSubDonutStandardV62.Plan(
             count,0,ring.Angle).Half;
 '@
-# second occurrence in root uses the same expression except ring.Angle
-Swap '        double half=DeskSpaceSubArcGeometryV48.Half(count);' @'
+Swap @'
+        int count=displayed.Count;
+        if(count==0)return;
+        // Same small partial sector arc used by the working Information
+        // submenu, centered precisely on Excel's existing outer wedge.
+        double half=DeskSpaceSubArcGeometryV48.Half(count);
+'@ @'
+        int count=displayed.Count;
+        if(count==0)return;
+        // Shared standard root arc, centered on Excel's existing outer wedge.
         double half=DeskSpaceSubDonutStandardV62.Plan(
             count,0,ArcCenter).Half;
 '@
