@@ -4,7 +4,7 @@ $root='DeskSpace_Windows_R1/DeskSpace'
 $shared=Get-Content "$root/DeskSpaceSubDonutStandardV62.cs" -Raw
 $app=Get-Content "$root/DeskSpaceApplicationsV55.cs" -Raw
 $icon=Get-Content "$root/DeskSpaceApplicationIconsV65.cs" -Raw
-$home=Get-Content "$root/DeskSpaceDonutHomeV65.cs" -Raw
+$homeSource=Get-Content "$root/DeskSpaceDonutHomeV65.cs" -Raw
 $host=Get-Content "$root/WidgetHost.cs" -Raw
 $test=Get-Content 'r36/UiSmoke/Program.cs' -Raw
 
@@ -36,7 +36,7 @@ foreach($t in @('internal void Capture(Window owner)',
     'internal bool Restore(Window owner)',
     'owner.Left=position.X','owner.Top=position.Y',
     'owner.BeginAnimation(Window.LeftProperty,null);')){
- if(!$home.Contains($t)){throw "R65 original position retention missing: $t"}
+ if(!$homeSource.Contains($t)){throw "R65 original position retention missing: $t"}
 }
 foreach($t in @('private readonly DeskSpaceDonutHomeV65 donutHome=new();',
     'if(!ringExpanded && activeModule==null) donutHome.Capture(this);',
