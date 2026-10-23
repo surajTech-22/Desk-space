@@ -1056,6 +1056,12 @@ jobs:
           ./r61/apply-r61.ps1
           ./r60/test-r60.ps1
 
+      - name: R62 reusable five-item nested donut, smooth scroll and hidden counters
+        shell: pwsh
+        run: |
+          ./r62/apply-r62.ps1
+          ./r62/test-r62.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
