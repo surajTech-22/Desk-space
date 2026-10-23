@@ -5,11 +5,9 @@ $smoke=Get-Content 'r36/UiSmoke/Program.cs' -Raw
 foreach($token in @(
   'private static System.Windows.Shapes.Path DrawInlineCountInk(',
   'Tag="DeskSpaceHiddenCountInline"',
-  'whole.Children.Add(Segment(outer,topEnd));',
   'whole.Children.Add(new EllipseGeometry(topDot,radius,radius));',
   'whole.Children.Add(digits);',
   'whole.Children.Add(new EllipseGeometry(lowerDot,radius,radius));',
-  'whole.Children.Add(Segment(lowerStart,inner));',
   'DrawInlineCountInk(canvas,wedge.Data,leading,count);',
   'Opacity=0,',
   'FormattedText(count,',

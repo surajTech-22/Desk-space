@@ -1115,10 +1115,11 @@ jobs:
         run: |
           ./r72/test-r72.ps1
 
-      - name: R73 reminder and widget source forensic probe (no release)
+      - name: R74 system-clock alerts below circle and original divider only
         shell: pwsh
         run: |
-          ./r73/probe-r73.ps1
+          ./r74/apply-r74.ps1
+          ./r74/test-r74.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh

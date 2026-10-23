@@ -33,6 +33,7 @@ internal static class Program
             TestApplicationSaveEvents();
             TestRecentFileStartupRecovery();
             TestFileClassification();
+            TestDueShelfV74();
             TestStandardSubDonutScroll();
             TestDonutHomeAndApplicationIcons();
             TestMiddleButtonSubDonutScroll();
@@ -587,6 +588,52 @@ internal static class Program
         Console.WriteLine("R65 WPF PASS: donut returns to original location "+
             "and application logos are real, cached shell icons.");
     }
+        private static void TestDueShelfV74()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceDueShelfV74",true)!;
+        var modelType=Product.GetType("DeskSpace.DeskSpaceDueShelfV74+DueAlert",true)!;
+        var find=type.GetMethod("FindDue",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var now=new DateTime(2026,10,23,19,30,0);
+        var dueItem=new ReminderItem{Title="Invoice due",Due=now.AddMinutes(-1)};
+        var future=new ReminderItem{Title="Tomorrow",Due=now.AddDays(1)};
+        var completed=new ReminderItem{Title="Completed",
+            Due=now.AddHours(-1),Done=true};
+        var notified=new ReminderItem{Title="Already notified",
+            Due=now.AddHours(-1),LastAlert=now.AddMinutes(-1)};
+        var ws=new Workspace();
+        ws.Reminders.AddRange(new[]{dueItem,future,completed,notified});
+        var due=(System.Collections.IEnumerable)find.Invoke(null,new object[]{ws,now})!;
+        var count=due.Cast<object>().Count();
+        Assert(count==1,
+            "R74 due scheduling uses Windows local system time");
+        var placement=type.GetMethod("PlaceAtCircle",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        var bounds=(Rect)placement.Invoke(null,new object[]{
+            new Rect(350,180,150,150),new Rect(0,0,1050,800),
+            298.0,106.0})!;
+        Assert(Math.Abs(bounds.Top-338)<.1 &&
+            Math.Abs(bounds.Left-276)<.1,
+            "R74 due shelf stays directly below circle");
+        var nearBottom=(Rect)placement.Invoke(null,new object[]{
+            new Rect(350,690,150,100),new Rect(0,0,1050,800),
+            298.0,106.0})!;
+        Assert(nearBottom.Bottom<=690 && nearBottom.Top>=0,
+            "R74 due shelf must fit screen edge without losing visibility");
+        var alert=Activator.CreateInstance(modelType,
+            new object[]{dueItem.Id,dueItem.Title,dueItem.Due})!;
+        var list=Array.CreateInstance(modelType,1);
+        list.SetValue(alert,0);
+        var preview=type.GetMethod("Preview",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var shown=(FrameworkElement)preview.Invoke(null,new object[]{
+            list,now,(Action<Guid>)(_=>{}),(Action<Guid>)(_=>{})})!;
+        Render(shown,310,135,"r74-due-shelf");
+        Assert(Walk(shown).OfType<Button>().Count()==2,
+            "R74 due shelf requires completion and dismiss actions");
+        Console.WriteLine("R74 WPF PASS: local time, due-only, no duplicates, anchored compact alert.");
+    }
+
     private static void TestStandardSubDonutScroll()
     {
         var type=Product.GetType("DeskSpace.DeskSpaceSubDonutStandardV62",true)!;
@@ -662,20 +709,18 @@ internal static class Program
         foreach(var part in inlineInk)
         {
             Assert(part.Data is GeometryGroup g &&
-                g.Children.Count==5 &&
-                g.Children[0] is PathGeometry &&
-                g.Children[1] is EllipseGeometry &&
-                g.Children[2] is Geometry &&
-                g.Children[3] is EllipseGeometry &&
-                g.Children[4] is PathGeometry,
+                g.Children.Count==3 &&
+                g.Children[0] is EllipseGeometry &&
+                g.Children[1] is Geometry &&
+                g.Children[2] is EllipseGeometry,
                 "R72 line-dots-number-dots-line must be ONE drawn geometry");
             var group=(GeometryGroup)part.Data;
-            var topDot=(EllipseGeometry)group.Children[1];
-            var bottomDot=(EllipseGeometry)group.Children[3];
+            var topDot=(EllipseGeometry)group.Children[0];
+            var bottomDot=(EllipseGeometry)group.Children[2];
             Assert(Math.Abs((topDot.Center-bottomDot.Center).Length-26)<.1,
                 "R72 dots must be one shared line, not floating labels");
             Assert(((SolidColorBrush)part.Fill).Color.R<60 &&
-                part.IsHitTestVisible==false,
+                part.Stroke==null && part.IsHitTestVisible==false,
                 "R72 all parts of the number-line must share visible dark ink");
         }
         for(int side=0;side<2;side++)
@@ -793,7 +838,7 @@ internal static class Program
             .Single(p=>(p.Tag as string)=="DeskSpaceHiddenCountInline");
         Assert(twoButton.Opacity==0 &&
             singleInk.Data is GeometryGroup &&
-            ((GeometryGroup)singleInk.Data).Children.Count==5,
+            ((GeometryGroup)singleInk.Data).Children.Count==3,
             "R72: purple end count must be drawn with its divider, not in button overlay");
         Assert((string)twoButton.Content=="2" && 
             !whiteScene.Children.OfType<Border>().Any(),
@@ -812,6 +857,12 @@ internal static class Program
         Render(whiteScene,700,700,"subdonut-purple-oriented-count-dots");
         Render(whiteScene,700,700,"subdonut-dot-joined-divider");
         Render(whiteScene,700,700,"subdonut-actual-inline-count-ink");
+        Render(whiteScene,700,700,"subdonut-r74-no-extra-lines");
+        Assert(whiteScene.Children.OfType<System.Windows.Shapes.Path>()
+            .Where(p=>(p.Tag as string)=="DeskSpaceHiddenCountInline")
+            .All(p=>p.Data is GeometryGroup group &&
+                group.Children.Count==3 && p.Stroke==null),
+            "R74: hidden count must NOT add extra divider lines");
         var preview=new RenderTargetBitmap(700,700,96,96,
             PixelFormats.Pbgra32);
         preview.Render(whiteScene);

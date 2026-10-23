@@ -384,17 +384,18 @@ internal static class DeskSpaceSubDonutStandardV62
         placement.Children.Add(new TranslateTransform(center.X,center.Y));
         digits.Transform=placement;
         var whole=new GeometryGroup();
-        whole.Children.Add(Segment(outer,topEnd));
+        // The wedge already owns both halves of the divider. Do not draw
+        // a second set of lines here: only the glyph and the two dots fill
+        // its genuine stroke gap. This eliminates doubled/background lines.
         whole.Children.Add(new EllipseGeometry(topDot,radius,radius));
         whole.Children.Add(digits);
         whole.Children.Add(new EllipseGeometry(lowerDot,radius,radius));
-        whole.Children.Add(Segment(lowerStart,inner));
         var ink=new System.Windows.Shapes.Path{
             Data=whole,
             Tag="DeskSpaceHiddenCountInline",
             Fill=dark,
-            Stroke=Brushes.White,
-            StrokeThickness=.65,
+            Stroke=null,
+            StrokeThickness=0,
             IsHitTestVisible=false,
             SnapsToDevicePixels=true
         };
