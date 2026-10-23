@@ -54,7 +54,9 @@ foreach($t in @('DeskSpaceWeatherContrastV64.Apply(content,weather,prefs.ShowWea
 }
 foreach($t in @('TestInformationSelectionPreviewGate()',
     'R64 WPF PASS: immediate Information hover preview',
-    'TestWeatherClockContrast()','R64 WPF PASS: bright/day')){
+    'TestWeatherClockContrast()','R64 WPF PASS: bright/day',
+    'TestWheelOverVisibleInformationItem()',
+    'R64 WPF PASS: pointer over fourth Information')){
  if(!$ui.Contains($t)){throw "R64 Windows behavioral checks missing: $t"}
 }
 Write-Host 'R64 PASS: transient hover previews restored, mouse-wheel routed over actual wedges, scene-backed weather clock ink re-evaluated.'
