@@ -315,64 +315,68 @@ internal static class Program
     }
     private static void TestApplicationsArcAndPinSearch()
     {
-        // The previous Apps child-wheel angle was offset by half a sector,
-        // leaving its root arc floating left of the Apps parent.
         var type=Product.GetType("DeskSpace.DeskSpaceApplicationsV55",true)!;
-        var centerProperty=type.GetProperty("ApplicationsParentCenter",
+        var centreProperty=type.GetProperty("ApplicationsParentCenter",
             BindingFlags.Static|BindingFlags.NonPublic)!;
-        double center=(double)centerProperty.GetValue(null)!;
-        double expected=-90+4*360.0/7;
-        Assert(Math.Abs(center-expected)<.001,
-            "Applications submenu not centered on the actual Apps parent wedge");
-        var window=new Window{Width=420,Height=420,Left=100,Top=100,
-            ShowInTaskbar=false,WindowStyle=WindowStyle.None,Opacity=.01};
-        var pinned=new List<string>();
+        double centre=(double)centreProperty.GetValue(null)!;
+        Assert(Math.Abs(centre-(-90+4*360.0/7))<.001,
+            "Applications sector midpoint differs from actual parent anchor");
+        var window=new Window{Width=420,Height=420,Left=360,Top=160,
+            ShowInTaskbar=false,WindowStyle=WindowStyle.None,Opacity=.5};
+        var pins=new List<string>();
+        int searchOpened=0;
         var apps=Make("DeskSpace.DeskSpaceApplicationsV55",
-            window,(Func<IReadOnlyList<string>>)(()=>pinned.ToArray()),
-            (Action<string>)(p=>pinned.Add(p)),
-            (Action<string>)(p=>pinned.Remove(p)),
-            (Action)(()=>{}));
-        var testFile=Path.Combine(Path.GetTempPath(),
-            "deskspace-pin-smoke-"+Guid.NewGuid().ToString("N")+".exe");
-        File.WriteAllText(testFile,"pin integration dummy - must never execute");
+            window,(Func<IReadOnlyList<string>>)(()=>pins.ToArray()),
+            (Action<string>)(p=>pins.Add(p)),
+            (Action<string>)(p=>pins.Remove(p)),
+            (Action)(()=>searchOpened++));
         try
         {
             window.Show();
             Call(apps,"Show");
             var canvas=Private<Canvas>(apps,"canvas");
+            var bounds=Private<Rect>(apps,"bounds");
+            Assert(canvas.Width<420 && canvas.Height<420,
+                "Applications submenu still allocates an oversized detached Popup");
             Assert(canvas.Children.OfType<TextBlock>().Count()>=4,
-                "Applications root arc does not show its four child actions");
-            // Check the rendered text points themselves, not just a constant:
-            // root actions must lie INSIDE the exact 360/7 parent wedge.
+                "Applications root options are missing");
+            var popup=Private<System.Windows.Controls.Primitives.Popup>(apps,"arc");
+            var geoType=Product.GetType("DeskSpace.DeskSpaceSubArcGeometryV48",true)!;
+            double cx=325,cy=325;
+            var offset=window.ActualWidth/2-cx+bounds.Left-10;
+            Assert(Math.Abs(popup.HorizontalOffset-offset)<2,
+                "Applications arc popup not anchored to parent circle");
+            double centerX=cx-bounds.Left+10,centerY=cy-bounds.Top+10;
             foreach(var label in canvas.Children.OfType<TextBlock>().Take(4))
             {
-                double x=Canvas.GetLeft(label)+label.Width/2-340;
-                double y=Canvas.GetTop(label)+14-340;
+                double x=Canvas.GetLeft(label)+label.Width/2-centerX;
+                double y=Canvas.GetTop(label)+13-centerY;
                 double angle=Math.Atan2(y,x)*180/Math.PI;
-                Assert(Math.Abs(angle-center)<360.0/14+1,
+                Assert(Math.Abs(angle-centre)<360.0/14+1,
                     "Application submenu action drawn outside parent wedge");
             }
-            Render(canvas,680,680,"applications-aligned-parent");
+            Render(canvas,(int)Math.Ceiling(canvas.Width),
+                (int)Math.Ceiling(canvas.Height),"applications-aligned-parent");
             Call(apps,"ShowApplicationPinSearch");
-            var palette=Private<System.Windows.Controls.Primitives.Popup>(apps,"pinPalette");
-            var input=Private<TextBox>(apps,"pinSearch");
-            var results=Private<StackPanel>(apps,"pinMatches");
-            Assert(palette.IsOpen && input!=null && results!=null,
-                "+ Pin did not open the in-app application search");
-            Render((FrameworkElement)palette.Child,340,365,
-                "applications-pin-search");
-            Call(apps,"PinFoundApp",testFile);
-            Assert(pinned.Contains(testFile),
-                "Selecting a searched application did not update shared pins");
-            Assert(!palette.IsOpen,"App selection did not close pin search panel");
-            Console.WriteLine("R60 WPF PASS: parent arc alignment, searchable in-app pin palette, shared pins.");
+            var frame=new DispatcherFrame();
+            var timer=new DispatcherTimer{
+                Interval=TimeSpan.FromMilliseconds(180)};
+            timer.Tick+=(_,_)=>{timer.Stop();frame.Continue=false;};
+            timer.Start();Dispatcher.PushFrame(frame);
+            Assert(searchOpened==1,
+                "Search was not opened from the wheel + Pin command");
+            var searchType=Product.GetType("DeskSpace.DeskSpaceSearchV11",true)!;
+            var pinFlag=searchType.GetField("nextApplicationPinMode",
+                BindingFlags.Static|BindingFlags.NonPublic)!;
+            Assert((int)pinFlag.GetValue(null)!==1,
+                "Pin mode was not passed into the circle Search module");
+            pinFlag.SetValue(null,0);
+            Console.WriteLine("R61 WPF PASS: bounded arc attachment and in-circle app search trigger.");
         }
         finally
         {
             Call(apps,"Dispose");
             window.Close();
-            try{File.Delete(testFile);}catch(IOException){}
-            catch(UnauthorizedAccessException){}
         }
     }
     private static void TestConnectedChildDonut()

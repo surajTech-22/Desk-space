@@ -16,7 +16,7 @@ if($watch.Contains('candidates.Add(drive.RootDirectory.FullName);') -or
     $watch.Contains('folders.Add(drive.RootDirectory.FullName);')){
     throw 'R59 still watches entire local drives'
 }
-foreach($t in @('BaseInner=197,BaseOuter=242,SubInner=244,SubOuter=288',
+foreach($t in @('BaseInner=202,BaseOuter=255,SubInner=257,SubOuter=310',
     'TextWrapping=TextWrapping.Wrap','ApplicationsParentCenter',
     'start+i*step,start+(i+1)*step',
     'SnapshotApplications()','Path.GetDirectoryName(x.Path)')){

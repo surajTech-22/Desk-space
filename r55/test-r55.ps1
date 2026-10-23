@@ -37,8 +37,8 @@ foreach($token in @('"Applications", "Tasks", "Excel Functions"',
 }
 if($widget.Contains('"Clipboard", "Files", "Tasks"')){
     throw 'R55 redundant Files sector remains'}
-foreach($token in @('private readonly Popup arc','SubInner=244',
-    'IsArcOpen','TryCapturedDragAtScreen','Path.GetFileNameWithoutExtension(p)',
+foreach($token in @('private readonly Popup arc','SubInner=257',
+    'IsArcOpen','TryCapturedDragAtScreen','GetFileNameWithoutExtension(p)',
     'Process.Start(new ProcessStartInfo(item.Path)','openSearch',
     'ShowApplicationPinSearch()','PinFoundApp(string path)')){
     if(!$app.Contains($token)){throw "R55 application wheel missing $token"}

@@ -1055,6 +1055,12 @@ jobs:
         run: |
           ./r60/test-r60.ps1
 
+      - name: R61 native wheel geometry and in-circle application pin search
+        shell: pwsh
+        run: |
+          ./r61/apply-r61.ps1
+          ./r60/test-r60.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
