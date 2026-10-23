@@ -146,7 +146,7 @@ $old=@'
 '@
 $new=@'
             "Refresh saved mappings",
-            "Capture selected Excel cells",
+            "Capture / add fields",
             "Copy and analyze selected Excel cells",
             "Save collection & data",
             "Delete selected data",
