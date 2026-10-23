@@ -30,6 +30,7 @@ internal static class Program
             TestMediaPill();
             TestNewFileNotifications();
             TestApplicationSaveEvents();
+            TestFileClassification();
             TestHiddenCacheFiltering();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
@@ -105,6 +106,54 @@ internal static class Program
                     File.SetAttributes(d,FileAttributes.Directory);
                 Directory.Delete(folder,true);
             }catch(IOException){}catch(UnauthorizedAccessException){}
+        }
+    }
+    private static void TestFileClassification()
+    {
+        string folder=Path.Combine(Path.GetTempPath(),
+            "DeskSpace-R58-Policy-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var type=Product.GetType("DeskSpace.DeskSpaceNewFileWatchV53")!;
+        var classifier=type.GetMethod("IsOrdinaryUserFile",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        bool Allowed(string path)=>(bool)classifier.Invoke(null,new object[]{path,true})!;
+        string Create(string name,string? baseDir=null)
+        {
+            string path=Path.Combine(baseDir??folder,name);
+            File.WriteAllText(path,"synthetic content");
+            return path;
+        }
+        try
+        {
+            foreach(var name in new[]{"invoice.pdf","report.xlsx","note.txt",
+                "image.jpg","archive.zip","extensionless","custom.xyz"})
+                Assert(Allowed(Create(name)),"R58 rejected legitimate file "+name);
+            foreach(var name in new[]{"download.crdownload","office.tmp",
+                "thumbs.db",".hidden.pdf","~$office.xlsx","debug.dmp"})
+                Assert(!Allowed(Create(name)),"R58 accepted generated file "+name);
+            string hidden=Create("hidden-attribute.xlsx");
+            File.SetAttributes(hidden,File.GetAttributes(hidden)|FileAttributes.Hidden);
+            Assert(!Allowed(hidden),"R58 accepted hidden-attribute file");
+            string cache=Path.Combine(folder,"GPUCache");
+            Directory.CreateDirectory(cache);
+            Assert(!Allowed(Create("cached.pdf",cache)),"R58 accepted cache-folder content");
+            string hiddenDir=Path.Combine(folder,".cache");
+            Directory.CreateDirectory(hiddenDir);
+            Assert(!Allowed(Create("invisible.xlsx",hiddenDir)),
+                "R58 accepted hidden-folder content");
+            Console.WriteLine("R58 PASS: normal files accepted, caches and hidden files excluded.");
+        }
+        finally
+        {
+            try
+            {
+                foreach(var item in Directory.EnumerateFiles(folder,"*",
+                    SearchOption.AllDirectories))
+                    File.SetAttributes(item,FileAttributes.Normal);
+                Directory.Delete(folder,true);
+            }
+            catch(IOException){}
+            catch(UnauthorizedAccessException){}
         }
     }
     private static void TestApplicationSaveEvents()
