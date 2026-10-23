@@ -8,7 +8,7 @@ $info=Get-Content "$root/DeskSpaceInformationV36.cs" -Raw
 $ui=Get-Content 'r36/UiSmoke/Program.cs' -Raw
 foreach($token in @('internal const int Visible=5',
     'ParentSweep=360.0/7.0','HiddenLeft','HiddenRight',
-    'Count,center','private static Button Counter',
+    'int HiddenLeft,int HiddenRight,double Center,double Half,double Step','private static Button Counter',
     'internal sealed class Wheel','remainder+=delta',
     'internal static void Animate(Canvas canvas',
     'DrawHiddenCounters(Canvas canvas,View view',
