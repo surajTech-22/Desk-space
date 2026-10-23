@@ -210,9 +210,17 @@ internal sealed partial class DeskSpaceExcelV16
 
         var editButtons=new WrapPanel();
         editButtons.Children.Add(RequiresExcel(
-            "Capture selected Excel cells",()=>Run(Capture),true));
+            "Capture / add fields",()=>Run(Capture),true));
         editButtons.Children.Add(ButtonV42("Save collection & data",
             ()=>Run(SaveEditorV42),true));
+        editButtons.Children.Add(ButtonV42("New mapping",()=>{
+            editingTemplateV42=null;editingIdV42=Guid.Empty;
+            editingDraftV42=true;hasUnsavedChangesV42=false;
+            mappingRowsV42.Clear();mappingGridV42!.ItemsSource=null;
+            mappingNameV42?.Clear();mappingGroupV42?.Clear();
+            if(status!=null)status.Text=
+                "New mapping. Capture selected Excel cells to create it.";
+        }));
         editButtons.Children.Add(ButtonV42("Delete selected data",
             ()=>Run(DeleteMappingV42)));
         editorHead.Children.Add(editButtons);
@@ -576,6 +584,62 @@ internal sealed partial class DeskSpaceExcelV16
     }
     private void ShowCapturedV42(DeskSpaceExcelTemplateV16 candidate)
     {
+        if(editingTemplateV42!=null && editingIdV42!=Guid.Empty &&
+           !editingDraftV42)
+        {
+            if(hasUnsavedChangesV42)
+                throw new InvalidOperationException(
+                    "Save the current mapping edits before adding captured fields.");
+            var existing=CloneV42(editingTemplateV42);
+            if(!existing.CoordinatesVerified || !candidate.CoordinatesVerified ||
+               !string.Equals(existing.SourceWorkbook,candidate.SourceWorkbook,
+                    StringComparison.OrdinalIgnoreCase) ||
+               !string.Equals(existing.SourceSheet,candidate.SourceSheet,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Capture additional fields from the SAME verified workbook "+
+                    "and worksheet, or choose New mapping.");
+            int rowBase=Math.Min(existing.SourceRow,candidate.SourceRow);
+            int colBase=Math.Min(existing.SourceColumn,candidate.SourceColumn);
+            int shiftR=existing.SourceRow-rowBase;
+            int shiftC=existing.SourceColumn-colBase;
+            foreach(var c in existing.Cells)
+            {c.RowOffset+=shiftR;c.ColumnOffset+=shiftC;}
+            foreach(var a in existing.Anchors)
+            {a.RowOffset+=shiftR;a.ColumnOffset+=shiftC;}
+            foreach(var c in candidate.Cells)
+            {
+                var clone=JsonSerializer.Deserialize<DeskSpaceExcelCellV16>(
+                    JsonSerializer.Serialize(c))
+                    ??throw new InvalidOperationException("Invalid captured cell");
+                clone.RowOffset+=candidate.SourceRow-rowBase;
+                clone.ColumnOffset+=candidate.SourceColumn-colBase;
+                if(!existing.Cells.Any(x=>x.RowOffset==clone.RowOffset &&
+                                         x.ColumnOffset==clone.ColumnOffset))
+                    existing.Cells.Add(clone);
+            }
+            foreach(var a in candidate.Anchors)
+            {
+                int row=a.RowOffset+candidate.SourceRow-rowBase;
+                int col=a.ColumnOffset+candidate.SourceColumn-colBase;
+                if(!existing.Anchors.Any(x=>x.RowOffset==row&&x.ColumnOffset==col))
+                    existing.Anchors.Add(new DeskSpaceExcelAnchorV16{
+                        RowOffset=row,ColumnOffset=col,Label=a.Label
+                    });
+            }
+            existing.RowCount=Math.Max(existing.RowCount+shiftR,
+                candidate.SourceRow+candidate.RowCount-rowBase);
+            existing.ColumnCount=Math.Max(existing.ColumnCount+shiftC,
+                candidate.SourceColumn+candidate.ColumnCount-colBase);
+            existing.SourceRow=rowBase;existing.SourceColumn=colBase;
+            editingTemplateV42=existing;
+            hasUnsavedChangesV42=true;
+            RenderMappingRowsV42(existing);
+            editorInfoV42!.Text="Added fields to saved mapping "+
+                editingIdV42+". Save will UPDATE this ID, not create another.";
+            latest=null;
+            return;
+        }
         editingTemplateV42=candidate;
         editingIdV42=Guid.Empty;editingDraftV42=true;
         hasUnsavedChangesV42=true;
@@ -796,9 +860,32 @@ internal sealed partial class DeskSpaceExcelV16
             // Reload before updating so a second DeskSpace window cannot
             // overwrite mappings saved elsewhere since this view opened.
             var disk=DeskSpaceExcelStoreV16.Load();
-            var existing=disk.FindIndex(x=>x.Id==edited.Id);
-            if(existing>=0)disk[existing]=edited;
-            else disk.Add(edited);
+            if(!editingDraftV42)
+            {
+                if(editingIdV42==Guid.Empty)
+                    throw new InvalidOperationException(
+                        "Selected mapping has no saved ID. Reload the entry.");
+                edited.Id=editingIdV42;
+                var index=disk.FindIndex(x=>x.Id==editingIdV42);
+                if(index<0)throw new InvalidOperationException(
+                    "The original mapping ID no longer exists. "+
+                    "Refresh instead of creating a duplicate.");
+                disk[index]=edited;
+            }
+            else
+            {
+                if(disk.Any(x=>x.Id==edited.Id))
+                    throw new InvalidOperationException(
+                        "New mapping ID already belongs to another saved entry.");
+                if(disk.Any(x=>x.Name.Equals(edited.Name,
+                    StringComparison.OrdinalIgnoreCase) &&
+                    x.GroupPath.Equals(edited.GroupPath,
+                    StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException(
+                        "This collection and data name already exists. "+
+                        "Select its saved mapping to update it.");
+                disk.Add(edited);
+            }
             DeskSpaceExcelStoreV16.Save(disk);
             saved.Clear();saved.AddRange(disk);
             pendingSelection=null;
