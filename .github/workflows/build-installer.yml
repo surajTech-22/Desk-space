@@ -1090,6 +1090,11 @@ jobs:
         run: |
           ./r67/test-r67.ps1
 
+      - name: R68 true inline divider numbers without background boxes
+        shell: pwsh
+        run: |
+          ./r68/test-r68.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

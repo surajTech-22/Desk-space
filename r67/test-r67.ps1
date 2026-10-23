@@ -17,21 +17,26 @@ foreach($token in @(
   'FontSize=12.5,FontWeight=FontWeights.Bold',
   'Background=Brushes.Transparent,',
   'Template=NumberOnlyTemplate(color),',
-  'Background=wedge.Fill??Brushes.Transparent',
-  'Canvas.SetLeft(embedded,midpoint.X-width/2);',
-  'Canvas.SetTop(embedded,midpoint.Y-height/2);',
-  'CornerRadius=new CornerRadius(0)')){
+  'SplitDividerStroke(canvas,wedges[0],true,false);',
+  'wedge.Stroke=null;',
+  'canvas.Children.Add(border);',
+  'Canvas.SetLeft(button,midpoint.X-width/2);',
+  'Canvas.SetTop(button,midpoint.Y-height/2);')){
   if(!$src.Contains($token)){throw "R67 missing blended numeral treatment: $token"}
 }
-if($src.Contains('new Thickness(1.5)') -or
+if($src.Contains('new Border{') -or
+   $src.Contains('Background=wedge.Fill') -or
+   $src.Contains('new Thickness(1.5)') -or
    $src.Contains('new CornerRadius(5)')){
    throw 'R67 must not reintroduce an outlined number badge'
 }
 foreach($token in @(
-  'Counter divider mask must blend exactly with its wedge fill',
+  'Hidden counters must have NO separate background box',
   'Counter must be a clear numeral without a rectangular button plate',
+  'Divider stroke was not split around the numeral',
+  'Actual line gap must have two endpoints beside the numeral',
   'Embedded divider numeral lacks 4.5:1 contrast',
-  'subdonut-blended-divider-counts')){
+  'subdonut-inline-divider-counts')){
   if(!$smoke.Contains($token)){throw "R67 WPF visual assertion missing: $token"}
 }
 if(!$guide.Contains('adaptive WCAG-style contrast')){

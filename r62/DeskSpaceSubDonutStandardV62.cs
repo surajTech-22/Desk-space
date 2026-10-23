@@ -81,6 +81,17 @@ internal static class DeskSpaceSubDonutStandardV62
             .ToArray();
         int count=Math.Min(view.Count,wedges.Length);
         if(count==0)return;
+        // Break the actual existing divider stroke rather than hiding it
+        // beneath a rectangle. Keep the original wedge fill and hit region.
+        if(count==1 && view.HiddenLeft>0 && view.HiddenRight>0)
+            SplitDividerStroke(canvas,wedges[0],true,true);
+        else
+        {
+            if(view.HiddenLeft>0)
+                SplitDividerStroke(canvas,wedges[0],true,false);
+            if(view.HiddenRight>0)
+                SplitDividerStroke(canvas,wedges[count-1],false,true);
+        }
         if(view.HiddenLeft>0)
             AddDividerCount(canvas,wedges[0],view.HiddenLeft,true,
                 ()=>move(-1));
@@ -116,6 +127,79 @@ internal static class DeskSpaceSubDonutStandardV62
         return new Point((outer.X+inner.X)/2,(outer.Y+inner.Y)/2);
     }
 
+
+    // The wedge outline is a single closed shape, so its radial stroke
+    // cannot be hidden locally without also painting a rectangle over the
+    // sector. Preserve the fill path for mouse input, and replace ONLY the
+    // outline with equivalent open strokes. A real 17-DIP gap in the end
+    // divider accepts the numeral without any patch/background behind it.
+    private static void SplitDividerStroke(Canvas canvas,
+        System.Windows.Shapes.Path wedge,bool leading,bool trailing)
+    {
+        if(wedge.Stroke==null || wedge.StrokeThickness<=0 ||
+           wedge.Data is not PathGeometry shape || shape.Figures.Count==0)
+            return;
+        var figure=shape.Figures[0];
+        if(figure.Segments.Count<3 ||
+           figure.Segments[0] is not ArcSegment outerArc ||
+           figure.Segments[1] is not LineSegment radialLine ||
+           figure.Segments[2] is not ArcSegment innerArc)
+            throw new ArgumentException("Unexpected sub-donut divider geometry");
+
+        var outline=new PathGeometry();
+        void AddLine(Point a,Point b)
+        {
+            var segment=new PathFigure{
+                StartPoint=a,IsClosed=false,IsFilled=false};
+            segment.Segments.Add(new LineSegment(b,true));
+            outline.Figures.Add(segment);
+        }
+        void AddArc(Point start,ArcSegment arc)
+        {
+            var segment=new PathFigure{
+                StartPoint=start,IsClosed=false,IsFilled=false};
+            segment.Segments.Add((ArcSegment)arc.CloneCurrentValue());
+            outline.Figures.Add(segment);
+        }
+        void AddRadial(Point outer,Point inner,bool split)
+        {
+            if(!split){AddLine(outer,inner);return;}
+            double dx=inner.X-outer.X,dy=inner.Y-outer.Y;
+            double len=Math.Sqrt(dx*dx+dy*dy);
+            if(len<1){AddLine(outer,inner);return;}
+            // The gap is along the divider, not a rectangular patch crossing
+            // the sectors. It has the minimum height for Segoe UI digits.
+            double half=Math.Min(8.5,len/4);
+            double ux=dx/len,uy=dy/len;
+            var middle=new Point((outer.X+inner.X)/2,
+                                 (outer.Y+inner.Y)/2);
+            AddLine(outer,new Point(middle.X-ux*half,middle.Y-uy*half));
+            AddLine(new Point(middle.X+ux*half,middle.Y+uy*half),inner);
+        }
+        AddArc(figure.StartPoint,outerArc);
+        AddArc(radialLine.Point,innerArc);
+        AddRadial(figure.StartPoint,innerArc.Point,leading);
+        AddRadial(outerArc.Point,radialLine.Point,trailing);
+        outline.Transform=shape.Transform?.CloneCurrentValue()
+            ??Transform.Identity;
+        var border=new System.Windows.Shapes.Path{
+            Data=outline,
+            Fill=null,
+            Stroke=wedge.Stroke,
+            StrokeThickness=wedge.StrokeThickness,
+            StrokeLineJoin=wedge.StrokeLineJoin,
+            StrokeStartLineCap=wedge.StrokeStartLineCap,
+            StrokeEndLineCap=wedge.StrokeEndLineCap,
+            StrokeDashArray=wedge.StrokeDashArray,
+            IsHitTestVisible=false
+        };
+        // Only the original sector's outline changes. Do not add a label
+        // background or an overlay rectangle, including at nested levels.
+        wedge.Stroke=null;
+        Canvas.SetZIndex(border,39);
+        canvas.Children.Add(border);
+    }
+
     // WCAG-style luminance keeps the numeral high contrast without a stark
     // badge. For gradients, choose the ink with the stronger *minimum*
     // contrast across the available stops; plain pastel wedges use dark ink.
@@ -149,9 +233,9 @@ internal static class DeskSpaceSubDonutStandardV62
         return darkMinimum>=whiteMinimum?dark:white;
     }
 
-    // A chrome-free button retains accessibility/keyboard activation but
-    // removes WPF's default rectangular hover/focus plate. Only the small
-    // text gap masks the divider; the wedge stroke continues above/below.
+    // A text-only button preserves keyboard and click-to-scroll support.
+    // The actual divider stroke has a glyph-height gap, so NO backdrop
+    // rectangle, patch or painted badge is required under the number.
     private static ControlTemplate NumberOnlyTemplate(Color ink)
     {
         var glyph=new FrameworkElementFactory(typeof(TextBlock));
@@ -177,7 +261,7 @@ internal static class DeskSpaceSubDonutStandardV62
     {
         Point midpoint=DividerMidpoint(wedge.Data,leading);
         string count=hidden.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        // Larger bold digits with a smaller surrounding mask than R66.
+        // Numeral is the only overlaid visual: no mask and no background.
         // Nothing extends beyond the existing radial end divider.
         double width=Math.Max(15,4+count.Length*9),height=17;
         Color color=CounterInk(wedge.Fill);
@@ -197,18 +281,11 @@ internal static class DeskSpaceSubDonutStandardV62
             ToolTip=(leading?"Hidden before: ":"Hidden after: ")+hidden+
                 " · scroll or select to reveal"
         };
-        var embedded=new Border{
-            Child=button,
-            Background=wedge.Fill??Brushes.Transparent,
-            BorderThickness=new Thickness(0),
-            CornerRadius=new CornerRadius(0),
-            SnapsToDevicePixels=true
-        };
-        Canvas.SetLeft(embedded,midpoint.X-width/2);
-        Canvas.SetTop(embedded,midpoint.Y-height/2);
-        Canvas.SetZIndex(embedded,40);
+        Canvas.SetLeft(button,midpoint.X-width/2);
+        Canvas.SetTop(button,midpoint.Y-height/2);
+        Canvas.SetZIndex(button,40);
         button.Click+=(_,_)=>move();
-        canvas.Children.Add(embedded);
+        canvas.Children.Add(button);
     }
 
     internal static void Animate(Canvas canvas,int direction,

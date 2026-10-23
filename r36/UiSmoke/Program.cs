@@ -641,8 +641,13 @@ internal static class Program
         int shifted=0;
         indicators.Invoke(null,new object[]{board,middle,350.0,
             (Action<int>)(d=>shifted=d)});
-        var edges=board.Children.OfType<Border>().ToArray();
-        var buttons=edges.Select(x=>x.Child).OfType<Button>().ToArray();
+        var buttons=board.Children.OfType<Button>().ToArray();
+        var outlines=board.Children.OfType<System.Windows.Shapes.Path>()
+            .Where(p=>!p.IsHitTestVisible).ToArray();
+        Assert(!board.Children.OfType<Border>().Any(),
+            "Hidden counters must have NO separate background box");
+        Assert(outlines.Length==2,
+            "Both end dividers must have genuine segmented outline strokes");
         Assert(buttons.Length==2 && (string)buttons[0].Content=="4" &&
             (string)buttons[1].Content=="3",
             "Hidden counts must be numerals embedded in radial end lines");
@@ -651,21 +656,31 @@ internal static class Program
             var wedge=(System.Windows.Shapes.Path)board.Children[side==0?0:4];
             var point=(Point)midpoint.Invoke(null,new object[]{wedge.Data,
                 side==0})!;
-            double x=Canvas.GetLeft(edges[side])+buttons[side].Width/2;
-            double y=Canvas.GetTop(edges[side])+buttons[side].Height/2;
+            double x=Canvas.GetLeft(buttons[side])+buttons[side].Width/2;
+            double y=Canvas.GetTop(buttons[side])+buttons[side].Height/2;
             Assert(Math.Abs(x-point.X)<.05 && Math.Abs(y-point.Y)<.05,
                 "Hidden count not centered on actual vertical/radial end line");
-            Assert(buttons[side].BorderThickness.Left==0 &&
-                edges[side].BorderThickness.Left==0,
-                "Hidden count must not have a detached badge outline");
-            Assert(ReferenceEquals(edges[side].Background,wedge.Fill),
-                "Counter divider mask must blend exactly with its wedge fill");
-            Assert(buttons[side].Background==Brushes.Transparent &&
+            Assert(wedge.Stroke==null &&
+                buttons[side].BorderThickness.Left==0 &&
+                buttons[side].Background==Brushes.Transparent &&
                 buttons[side].Template!=null &&
                 buttons[side].FontWeight==FontWeights.Bold &&
-                buttons[side].FontSize>=12.0 &&
-                edges[side].CornerRadius.TopLeft==0,
+                buttons[side].FontSize>=12.0,
                 "Counter must be a clear numeral without a rectangular button plate");
+            var gap=(PathGeometry)outlines[side].Data;
+            Assert(gap.Figures.Count==5 &&
+                gap.Figures.All(f=>!f.IsClosed && !f.IsFilled),
+                "Divider stroke was not split around the numeral");
+            var radialEnds=gap.Figures
+                .Where(f=>f.Segments.Count==1 &&
+                    f.Segments[0] is LineSegment)
+                .SelectMany(f=>new[]{
+                    f.StartPoint,((LineSegment)f.Segments[0]).Point})
+                .ToArray();
+            int nearest=radialEnds.Count(p=>
+                Math.Abs((p-point).Length-8.5)<.1);
+            Assert(nearest==2,
+                "Actual line gap must have two endpoints beside the numeral");
         }
         // Dark numerals on pastel, light numerals on selected dark wedges.
         // All must have at least 4.5:1 contrast, independent of wedge hue.
@@ -685,7 +700,7 @@ internal static class Program
             Assert(score>=4.5,
                 "Embedded divider numeral lacks 4.5:1 contrast for light/dark wedges");
         }
-        Render(board,700,700,"subdonut-blended-divider-counts");
+        Render(board,700,700,"subdonut-inline-divider-counts");
         // A clipped Popup arc stores translated sector geometry; the same
         // standard must honor its transform at any submenu depth.
         var translated=(Geometry)sector.Invoke(null,new object[]{2,40.0,62.0})!;

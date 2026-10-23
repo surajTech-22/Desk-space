@@ -14,8 +14,8 @@ foreach($token in @(
     'outer=transform.Transform(outer);',
     'inner=transform.Transform(inner);',
     'new Point((outer.X+inner.X)/2,(outer.Y+inner.Y)/2)',
-    'Canvas.SetLeft(embedded,midpoint.X-width/2);',
-    'Canvas.SetTop(embedded,midpoint.Y-height/2);',
+    'Canvas.SetLeft(button,midpoint.X-width/2);',
+    'Canvas.SetTop(button,midpoint.Y-height/2);',
     'Content=count,',
     'button.Click+=(_,_)=>move();'
 )){
