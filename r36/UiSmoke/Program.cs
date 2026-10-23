@@ -687,9 +687,23 @@ internal static class Program
                     f.StartPoint,((LineSegment)f.Segments[0]).Point})
                 .ToArray();
             int nearest=radialEnds.Count(p=>
-                Math.Abs((p-point).Length-16.5)<.1);
+                Math.Abs((p-point).Length-14.9)<.1);
             Assert(nearest==2,
                 "Actual line gap must have two endpoints beside the numeral");
+            // R71: the two divider endpoints must TOUCH the outside of
+            // the two small dots rather than stop short or cross their centers.
+            var delta=(RotateTransform)buttons[side].RenderTransform;
+            var top=delta.Transform(new Point(0,-13));
+            var bottom=delta.Transform(new Point(0,13));
+            var centers=new[]{
+                new Point(point.X+top.X,point.Y+top.Y),
+                new Point(point.X+bottom.X,point.Y+bottom.Y)};
+            var outlineEnds=radialEnds.Where(p=>
+                Math.Abs((p-point).Length-14.9)<.1).ToArray();
+            Assert(outlineEnds.Length==2 &&
+                centers.All(dotCenter=>outlineEnds.Any(end=>
+                    Math.Abs((end-dotCenter).Length-1.9)<.1)),
+                "R71 divider must end at the top dot and restart at bottom dot");
         }
         // Dark numerals on pastel, light numerals on selected dark wedges.
         // All must have at least 4.5:1 contrast, independent of wedge hue.
@@ -765,6 +779,7 @@ internal static class Program
             "R70 end count must follow +New divider orientation");
         Render(whiteScene,700,700,"subdonut-purple-new-white-background");
         Render(whiteScene,700,700,"subdonut-purple-oriented-count-dots");
+        Render(whiteScene,700,700,"subdonut-dot-joined-divider");
         var preview=new RenderTargetBitmap(700,700,96,96,
             PixelFormats.Pbgra32);
         preview.Render(whiteScene);

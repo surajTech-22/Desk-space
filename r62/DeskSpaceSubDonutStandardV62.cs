@@ -17,6 +17,10 @@ internal static class DeskSpaceSubDonutStandardV62
     internal const int Visible=5;
     internal const double ParentSweep=360.0/7.0;
     internal const int DurationMs=155;
+    // Source of truth for hidden-count dots AND the wedge divider gap.
+    internal const double HiddenCountDotOffset=13.0;
+    internal const double HiddenCountDotDiameter=3.8;
+    internal const double HiddenCountGapHalf=HiddenCountDotOffset+HiddenCountDotDiameter/2.0;
 
     internal readonly record struct View(int Total,int Start,int Count,
         int HiddenLeft,int HiddenRight,double Center,double Half,double Step)
@@ -157,8 +161,8 @@ internal static class DeskSpaceSubDonutStandardV62
     // The wedge outline is a single closed shape, so its radial stroke
     // cannot be hidden locally without also painting a rectangle over the
     // sector. Preserve the fill path for mouse input, and replace ONLY the
-    // outline with equivalent open strokes. A real 33-DIP gap in the end
-    // divider accepts the numeral without any patch/background behind it.
+    // outline with equivalent open strokes. The gap ends at the DOTS,
+    // rather than leaving blank intervals between the divider and dots.
     private static void SplitDividerStroke(Canvas canvas,
         System.Windows.Shapes.Path wedge,bool leading,bool trailing)
     {
@@ -195,7 +199,7 @@ internal static class DeskSpaceSubDonutStandardV62
             if(len<1){AddLine(outer,inner);return;}
             // The gap is along the divider. A numeral and TWO small dots
             // are arranged along it, never in a separate floating badge.
-            double half=Math.Min(16.5,len*.36);
+            double half=Math.Min(HiddenCountGapHalf,len*.36);
             double ux=dx/len,uy=dy/len;
             var middle=new Point((outer.X+inner.X)/2,
                                  (outer.Y+inner.Y)/2);
@@ -299,12 +303,12 @@ internal static class DeskSpaceSubDonutStandardV62
         // Dots belong ONLY to hidden-count controls, one before and one
         // after the numeral ALONG the local radial axis. The entire grid
         // rotates together with the divider; no other menu numbers change.
-        foreach(double offset in new[]{-13.0,13.0})
+        foreach(double offset in new[]{-HiddenCountDotOffset,HiddenCountDotOffset})
         {
             var dot=new FrameworkElementFactory(
                 typeof(System.Windows.Shapes.Ellipse));
-            dot.SetValue(FrameworkElement.WidthProperty,3.8);
-            dot.SetValue(FrameworkElement.HeightProperty,3.8);
+            dot.SetValue(FrameworkElement.WidthProperty,HiddenCountDotDiameter);
+            dot.SetValue(FrameworkElement.HeightProperty,HiddenCountDotDiameter);
             dot.SetValue(System.Windows.Shapes.Shape.FillProperty,
                 new SolidColorBrush(ink));
             dot.SetValue(System.Windows.Shapes.Shape.StrokeProperty,

@@ -1105,6 +1105,11 @@ jobs:
         run: |
           ./r70/test-r70.ps1
 
+      - name: R71 divider physically joins hidden-count dots
+        shell: pwsh
+        run: |
+          ./r71/test-r71.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

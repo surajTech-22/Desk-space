@@ -9,10 +9,10 @@ foreach($required in @(
     'while(angle< -90)angle+=180;',
     'RenderTransform=new RotateTransform(',
     'DividerAngle(wedge.Data,leading)',
-    'new[]{-13.0,13.0}',
+    'new[]{-HiddenCountDotOffset,HiddenCountDotOffset}',
     'typeof(System.Windows.Shapes.Ellipse)',
     'new TranslateTransform(0,offset)',
-    'double half=Math.Min(16.5,len*.36);',
+    'double half=Math.Min(HiddenCountGapHalf,len*.36);',
     'Background=Brushes.Transparent'
 )){
     if(!$src.Contains($required)){throw "R70 orientation/dot feature missing: $required"}
