@@ -81,11 +81,41 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
             "DeskSpace","RecentFileFolders.txt");
         try{if(File.Exists(extras))candidates.AddRange(File.ReadAllLines(extras));}
         catch(IOException){}catch(UnauthorizedAccessException){}
-        return candidates.Where(p=>!string.IsNullOrWhiteSpace(p)
-            && Directory.Exists(p) && !IsSystemArea(p))
+        return candidates.Where(IsAllowedWatchFolder)
             .Select(Path.GetFullPath)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(p=>p.Length).ToArray();
+    }
+
+    // Only user-approved work folders may be added. Application install,
+    // cache, virtual-environment and hidden directories cannot be opted in.
+    internal static bool IsAllowedWatchFolder(string folder)
+    {
+        try
+        {
+            if(string.IsNullOrWhiteSpace(folder)||!Directory.Exists(folder))return false;
+            var path=Path.GetFullPath(folder);
+            if(IsSystemArea(path))return false;
+            var parts=path.Split(new[]{Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar},StringSplitOptions.RemoveEmptyEntries);
+            if(parts.Any(p=>InternalFolders.Contains(p)||
+                p.StartsWith(".",StringComparison.Ordinal)))return false;
+            var dir=path;
+            while(!string.IsNullOrWhiteSpace(dir))
+            {
+                var attributes=File.GetAttributes(dir);
+                if((attributes&(FileAttributes.Hidden|FileAttributes.System|
+                    FileAttributes.ReparsePoint))!=0)return false;
+                var parent=Path.GetDirectoryName(dir.TrimEnd(
+                    Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
+                if(string.IsNullOrWhiteSpace(parent)||parent==dir)break;
+                dir=parent;
+            }
+            return true;
+        }
+        catch(IOException){return false;}
+        catch(UnauthorizedAccessException){return false;}
+        catch(ArgumentException){return false;}
     }
 
     public int WatchCount=>watchers.Count;
