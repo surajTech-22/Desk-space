@@ -12,11 +12,11 @@ foreach($t in @('var wedges=canvas.Children.OfType<System.Windows.Shapes.Path>()
     'AddDividerCount(canvas,wedges[0],view.HiddenLeft,true',
     'AddDividerCount(canvas,wedges[count-1],view.HiddenRight,false',
     'Point midpoint=DividerMidpoint(wedge.Data,leading);',
-    'Canvas.SetLeft(embedded,midpoint.X-width/2);',
-    'Canvas.SetTop(embedded,midpoint.Y-height/2);',
+    'Canvas.SetLeft(button,midpoint.X-width/2);',
+    'Canvas.SetTop(button,midpoint.Y-height/2);',
     'Content=count,',
     'BorderThickness=new Thickness(0)',
-    'Background=wedge.Fill??Brushes.Transparent',
+    'SplitDividerStroke(canvas,wedges[0],true,false);',
     'button.Click+=(_,_)=>move();')){
  if(!$shared.Contains($t)){throw "R66 vertical divider numeral missing: $t"}
 }
