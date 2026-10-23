@@ -16,7 +16,6 @@ foreach($token in @(
     'app.SendKeys(',
     'GetForegroundWindow()!=excelHwnd',
     'cell.Formula=',
-    'Text(cell.NumberFormat)','x.Cell.NumberFormat=x.Format',
     'DeskSpaceExcelActionsV46.PreviewText(source,DateTime.Now)')){
     if(!$bridge.Contains($token)){throw "R46 Excel bridge missing $token"}
 }
@@ -31,10 +30,14 @@ if(!$engine.Contains('Current date on paste (Ctrl+;)')){
 if(!$wheel.Contains('DeskSpaceExcelActionsV46.PreviewText(value,DateTime.Now)')){
     throw 'R46 wheel does not show current dynamic values'
 }
+if($bridge.Contains('x.Cell.NumberFormat=x.Format') -or
+   $bridge.Contains('cell.NumberFormat=change.Source.NumberFormat')){
+    throw 'R52 Excel destination format is owned by the target workbook'
+}
 if($bridge.Contains('ValueAtPaste(cell,DateTime.Now)')){
     throw 'R51 native Excel date shortcut must not be precomputed by DeskSpace'
 }
 if(!$engine.Contains('NativeSendKeys(string kind)')){
     throw 'R51 missing Excel-native keyboard dispatch'
 }
-Write-Host 'R51 PASS: Excel receives actual formula or shortcut, no precomputed replacement values, backup and rollback retained.'
+Write-Host 'R52 PASS: Excel receives native formulas/shortcuts and leaves existing number formats untouched; backup and rollback retained.'
