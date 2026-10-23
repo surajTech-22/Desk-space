@@ -337,17 +337,17 @@ internal static class Program
             "Sub-donut exceeded adjacent half-sector allowance");
         var advance=type.GetMethod("Advance",BindingFlags.Static|
             BindingFlags.NonPublic)!;
-        Assert((int)advance.Invoke(null,new object[]{middle,1})!==5,
+        Assert((int)advance.Invoke(null,new object[]{middle,1})!=5,
             "Sub-donut should move one item per wheel step");
         var wheelType=type.GetNestedType("Wheel",BindingFlags.NonPublic)!;
         var wheel=Activator.CreateInstance(wheelType,true)!;
         var step=wheelType.GetMethod("Step",BindingFlags.Instance|
             BindingFlags.NonPublic)!;
-        Assert((int)step.Invoke(wheel,new object[]{60})!==0,
+        Assert((int)step.Invoke(wheel,new object[]{60})!=0,
             "Fine-scroll first 60 delta must accumulate");
-        Assert((int)step.Invoke(wheel,new object[]{60})!==-1,
+        Assert((int)step.Invoke(wheel,new object[]{60})!=-1,
             "Fine-scroll next 60 delta must produce one item");
-        Assert((int)step.Invoke(wheel,new object[]{-120})!==1,
+        Assert((int)step.Invoke(wheel,new object[]{-120})!=1,
             "Reverse mouse wheel must shift one item backward");
         var board=new Canvas{Width=240,Height=100};
         var indicators=type.GetMethod("DrawHiddenCounters",
