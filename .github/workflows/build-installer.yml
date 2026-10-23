@@ -1026,6 +1026,12 @@ jobs:
           ./r54/apply-r54.ps1
           ./r54/test-r54.ps1
 
+      - name: R55 application-saved files and unified Applications donut
+        shell: pwsh
+        run: |
+          ./r55/apply-r55.ps1
+          ./r55/test-r55.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
