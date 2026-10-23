@@ -384,13 +384,9 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
         // Event overflow and app-created replacement files can be missed.
         // Reconcile recent outputs in common save folders periodically;
         // never recursively crawl the entire C: volume from this service.
-        var home=Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var likely=new[]{
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            Path.Combine(home,"Downloads"),Path.Combine(home,"OneDrive")
-        }.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        bool first=true;
+        // Reconcile the same approved roots being watched, including opted-in
+        // custom Save As folders, without visiting whole disks or caches.
+        var likely=roots.ToArray();
         while(!token.IsCancellationRequested)
         {
             try
