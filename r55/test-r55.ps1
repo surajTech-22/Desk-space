@@ -37,7 +37,7 @@ foreach($token in @('"Applications", "Tasks", "Excel Functions"',
 }
 if($widget.Contains('"Clipboard", "Files", "Tasks"')){
     throw 'R55 redundant Files sector remains'}
-foreach($token in @('private readonly Popup arc','SubInner=273',
+foreach($token in @('private readonly Popup arc','SubInner=244',
     'IsArcOpen','TryCapturedDragAtScreen','Path.GetFileNameWithoutExtension(p)',
     'Process.Start(new ProcessStartInfo(item.Path)','openSearch',
     'openFileDialog','ShowDialog(owner)')){
