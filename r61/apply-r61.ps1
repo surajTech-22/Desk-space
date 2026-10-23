@@ -32,8 +32,11 @@ One @'
         if(appPinMode)DeskSpaceSearchIndexV13.WarmStart();
         var root = new DockPanel {LastChildFill=true};
 '@
-One 'ToolTip="Search files, apps, Windows Settings and notes" };' @'
-ToolTip=appPinMode?"Search installed applications to pin":"Search files, apps, Windows Settings and notes" };
+One 'Grid.SetColumn(field,1);top.Children.Add(field);' @'
+        field.ToolTip=appPinMode
+            ?"Search installed applications to pin"
+            :"Search files, apps, Windows Settings and notes";
+        Grid.SetColumn(field,1);top.Children.Add(field);
 '@
 One '        var below=new StackPanel {Visibility=Visibility.Collapsed,Margin=new Thickness(7,0,7,8)};' @'
         if(appPinMode)top.ToolTip="Applications · type to find and pin an installed app";
