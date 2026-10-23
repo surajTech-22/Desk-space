@@ -8,7 +8,7 @@ foreach($token in @(
   'whole.Children.Add(new EllipseGeometry(topDot,radius,radius));',
   'whole.Children.Add(digits);',
   'whole.Children.Add(new EllipseGeometry(lowerDot,radius,radius));',
-  'DrawInlineCountInk(canvas,wedge.Data,leading,count);',
+  'DrawInlineCountInk(canvas,wedge.Data,wedge.Fill,leading,count);',
   'Opacity=0,',
   'FormattedText(count,',
   'Canvas.SetZIndex(button,41);'
