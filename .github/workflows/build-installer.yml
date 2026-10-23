@@ -1044,6 +1044,12 @@ jobs:
           ./r58/apply-r58.ps1
           ./r58/test-r58.ps1
 
+      - name: R58 exclude cache hidden and temporary files
+        shell: pwsh
+        run: |
+          ./r58/apply-r58.ps1
+          ./r58/test-r58.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
