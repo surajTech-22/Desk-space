@@ -34,6 +34,7 @@ internal static class Program
             TestRecentFileStartupRecovery();
             TestFileClassification();
             TestStandardSubDonutScroll();
+            TestDonutHomeAndApplicationIcons();
             TestMiddleButtonSubDonutScroll();
             TestWeatherClockContrast();
             TestWheelOverVisibleInformationItem();
@@ -540,6 +541,52 @@ internal static class Program
         }
         finally{((IDisposable)control).Dispose();}
     }
+    private static void TestDonutHomeAndApplicationIcons()
+    {
+        var hostType=Product.GetType("DeskSpace.DeskSpaceDonutHomeV65",true)!;
+        var state=Activator.CreateInstance(hostType,true)!;
+        var capture=hostType.GetMethod("Capture",BindingFlags.Instance|
+            BindingFlags.NonPublic)!;
+        var restore=hostType.GetMethod("Restore",BindingFlags.Instance|
+            BindingFlags.NonPublic)!;
+        var window=new Window{Left=137,Top=182,Width=420,Height=420};
+        capture.Invoke(state,new object[]{window});
+        window.Left=260;window.Top=340;
+        Assert((bool)restore.Invoke(state,new object[]{window})!,
+            "Donut lost its pre-expansion home");
+        Assert(Math.Abs(window.Left-137)<.01 &&
+            Math.Abs(window.Top-182)<.01,
+            "Donut stayed in temporary screen-edge position");
+        // Capturing the next manual location must not reuse an older origin.
+        window.Left=310;window.Top=225;
+        capture.Invoke(state,new object[]{window});
+        window.Left=440;window.Top=280;
+        restore.Invoke(state,new object[]{window});
+        Assert(Math.Abs(window.Left-310)<.01 &&
+            Math.Abs(window.Top-225)<.01,
+            "Donut restoration overwrote new user placement");
+        Assert(!(bool)restore.Invoke(state,new object[]{window})!,
+            "A finished expansion must not restore again");
+        var icons=Product.GetType("DeskSpace.DeskSpaceApplicationIconsV65",true)!;
+        var get=icons.GetMethod("Get",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        string candidate=System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "notepad.exe");
+        if(!System.IO.File.Exists(candidate))
+            candidate=System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                "explorer.exe");
+        Assert(System.IO.File.Exists(candidate),
+            "Windows test machine lacks a standard executable to inspect");
+        var icon=get.Invoke(null,new object[]{candidate}) as ImageSource;
+        Assert(icon!=null,"Application logo was not extracted from Windows file");
+        Assert(ReferenceEquals(icon,get.Invoke(null,new object[]{candidate})),
+            "App logo extraction is not cached for repeat rendering");
+        window.Close();
+        Console.WriteLine("R65 WPF PASS: donut returns to original location "+
+            "and application logos are real, cached shell icons.");
+    }
     private static void TestStandardSubDonutScroll()
     {
         var type=Product.GetType("DeskSpace.DeskSpaceSubDonutStandardV62",true)!;
@@ -575,16 +622,31 @@ internal static class Program
             "Fine-scroll next 60 delta must produce one item");
         Assert((int)step.Invoke(wheel,new object[]{-120})==1,
             "Reverse mouse wheel must shift one item backward");
-        var board=new Canvas{Width=240,Height=100};
+        var board=new Canvas{Width=390,Height=125};
+        // Integrated count tabs must be anchored to actual visible wedges;
+        // an empty canvas used to produce detached badges.
+        for(int i=0;i<5;i++)
+            board.Children.Add(new System.Windows.Shapes.Path{
+                Data=new RectangleGeometry(new Rect(45+i*56,20,50,70)),
+                Fill=Brushes.SlateBlue,Stroke=Brushes.White});
         var indicators=type.GetMethod("DrawHiddenCounters",
             BindingFlags.Static|BindingFlags.NonPublic)!;
         int shifted=0;
         indicators.Invoke(null,new object[]{board,middle,50.0,
             (Action<int>)(d=>shifted=d)});
-        var buttons=board.Children.OfType<Button>().ToArray();
+        var edges=board.Children.OfType<Border>().ToArray();
+        var buttons=edges.Select(x=>x.Child).OfType<Button>().ToArray();
         Assert(buttons.Length==2 && (string)buttons[0].Content=="‹ 4" &&
             (string)buttons[1].Content=="3 ›",
-            "Hidden counters missing on left or right of standard arc");
+            "Hidden counts must attach inside both end sectors");
+        double firstLeft=Canvas.GetLeft(edges[0]);
+        double lastLeft=Canvas.GetLeft(edges[1]);
+        Assert(firstLeft>=45 && firstLeft<=95 &&
+            lastLeft>=269 && lastLeft+buttons[1].Width<=319,
+            "Hidden numbers detached from the first or last wedge");
+        Assert(ReferenceEquals(buttons[0].Background,
+            ((System.Windows.Shapes.Path)board.Children[0]).Fill),
+            "Hidden tab must reuse its wedge's original fill");
         buttons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent,buttons[0]));
         Assert(shifted==-1,"Clicking hidden-left counter failed to scroll");
         var animate=type.GetMethod("Animate",BindingFlags.Static|
