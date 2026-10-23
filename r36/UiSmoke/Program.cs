@@ -34,6 +34,7 @@ internal static class Program
             TestFileClassification();
             TestStandardSubDonutScroll();
             TestMiddleButtonSubDonutScroll();
+            TestInformationSelectionPreviewGate();
             TestApplicationsArcAndPinSearch();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
@@ -314,6 +315,54 @@ internal static class Program
         Assert((string)label.Invoke(null,new object[]{"Ctrl+;"})==
             "action_static_date","Excel Ctrl+; mapping not recognised");
         Console.WriteLine("R51 Excel-native keyboard and formula dispatch PASS.");
+    }
+    private static void TestInformationSelectionPreviewGate()
+    {
+        var window=new Window{Width=420,Height=420,Left=140,Top=140,
+            WindowStyle=WindowStyle.None,ShowInTaskbar=false,Opacity=.2};
+        var info=Make("DeskSpace.DeskSpaceInformationV36",window,
+            (Action)(()=>{}),(Action)(()=>{}));
+        try
+        {
+            window.Show();
+            var nested=Product.GetType("DeskSpace.DeskSpaceInformationV36",true)!
+                .GetNestedType("Collection",BindingFlags.NonPublic)!;
+            var demo=Activator.CreateInstance(nested,true)!;
+            var id=Guid.NewGuid();
+            nested.GetProperty("Id")!.SetValue(demo,id);
+            nested.GetProperty("Name")!.SetValue(demo,"Info preview is explicit");
+            var list=(System.Collections.IList)Activator.CreateInstance(
+                typeof(List<>).MakeGenericType(nested))!;
+            list.Add(demo);
+            Set(info,"all",list);
+            Call(info,"RenderArc");
+            var arc=Private<System.Windows.Controls.Primitives.Popup>(info,"arc");
+            var shelf=Private<System.Windows.Controls.Primitives.Popup>(info,"shelf");
+            arc.IsOpen=true;
+            Call(info,"HoverChild",0,id);
+            Assert(!shelf.IsOpen,
+                "Unselected Information hover opened a shelf below the circle");
+            // Even a stable hover is not an explicit choice.
+            var frame=new DispatcherFrame();
+            var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(720)};
+            timer.Tick+=(_,_)=>{timer.Stop();frame.Continue=false;};
+            timer.Start();Dispatcher.PushFrame(frame);
+            Assert(!shelf.IsOpen,
+                "Information hover dwell committed a preview without selection");
+            Call(info,"ActivateChild",0,id);
+            Assert(shelf.IsOpen,
+                "Explicitly selecting Information did not open its preview");
+            Call(info,"Show");
+            Assert(!shelf.IsOpen,
+                "Returning to Information did not dismiss the prior preview");
+            Console.WriteLine("R63 WPF PASS: hover/dwell do not open Information "+
+                "shelf, selection does, and re-entering clears preview.");
+        }
+        finally
+        {
+            ((IDisposable)info).Dispose();
+            window.Close();
+        }
     }
     private static void TestMiddleButtonSubDonutScroll()
     {
