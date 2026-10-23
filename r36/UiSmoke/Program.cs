@@ -755,9 +755,10 @@ internal static class Program
             var bottomDot=(EllipseGeometry)group.Children[2];
             Assert(Math.Abs((topDot.Center-bottomDot.Center).Length-26)<.1,
                 "R72 dots must be one shared line, not floating labels");
-            Assert(((SolidColorBrush)part.Fill).Color.R<60 &&
+            var countInk=((SolidColorBrush)part.Fill).Color;
+            Assert((countInk.R<60 || countInk.R>190) &&
                 part.Stroke==null && part.IsHitTestVisible==false,
-                "R72 all parts of the number-line must share visible dark ink");
+                "R77 hidden-count ink must be high contrast for light and dark wedges");
         }
         for(int side=0;side<2;side++)
         {
