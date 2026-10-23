@@ -1011,6 +1011,7 @@ jobs:
         run: |
           ./r49/apply-r49.ps1
           ./r49/test-r49.ps1
+          ./r50/test-r50.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
