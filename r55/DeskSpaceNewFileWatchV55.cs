@@ -390,12 +390,17 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
             Path.Combine(home,"Downloads"),Path.Combine(home,"OneDrive")
         }.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        bool first=true;
         while(!token.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(40),token);
-                var since=DateTime.UtcNow-TimeSpan.FromMinutes(3);
+                // Catch app-saved files that completed just before DeskSpace
+                // opened; never require opening Search or waiting 40 seconds.
+                await Task.Delay(first?TimeSpan.FromSeconds(2):
+                    TimeSpan.FromSeconds(45),token);
+                var since=DateTime.UtcNow-TimeSpan.FromMinutes(first?4:3);
+                first=false;
                 foreach(var dir in likely)
                 {
                     int count=0;
