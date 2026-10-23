@@ -1085,6 +1085,11 @@ jobs:
         run: |
           ./r66/test-r66.ps1
 
+      - name: R67 blended, bold, readable hidden numbers on end divider
+        shell: pwsh
+        run: |
+          ./r67/test-r67.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
