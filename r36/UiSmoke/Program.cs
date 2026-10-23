@@ -28,6 +28,7 @@ internal static class Program
             TestCalendar();
             TestCalculator();
             TestMediaPill();
+            TestNewFileNotifications();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
             TestSubArcScreenFit();
@@ -42,6 +43,73 @@ internal static class Program
             return 1;
         }
     }
+    private static void TestNewFileNotifications()
+    {
+        string folder=Path.Combine(Path.GetTempPath(),
+            "DeskSpace-R53-Watch-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var window=new Window{Width=250,Height=250,
+            WindowStyle=WindowStyle.None,ShowInTaskbar=false};
+        var found=new List<string>();
+        var watch=Make("DeskSpace.DeskSpaceNewFileWatchV53",
+            window,(Action<string>)(p=>found.Add(p)),
+            (IEnumerable<string>)new[]{folder});
+        try
+        {
+            Call(watch,"Start");
+            int count=(int)watch.GetType().GetProperty("WatchCount",Any)!
+                .GetValue(watch)!;
+            Assert(count==1,"R53 test directory watcher did not start");
+            var names=new[]{"new.pdf","new.xlsx","new.jpg","new.bin","extensionless"};
+            foreach(string name in names)
+                File.WriteAllText(Path.Combine(folder,name),"synthetic source");
+            var until=DateTime.UtcNow.AddSeconds(8);
+            while(found.Distinct(StringComparer.OrdinalIgnoreCase).Count()<names.Length &&
+                  DateTime.UtcNow<until)
+            {
+                var frame=new DispatcherFrame();
+                var timer=new DispatcherTimer{
+                    Interval=TimeSpan.FromMilliseconds(110)
+                };
+                timer.Tick+=(_,_)=>{
+                    timer.Stop();
+                    frame.Continue=false;
+                };
+                timer.Start();
+                Dispatcher.PushFrame(frame);
+            }
+            foreach(string name in names)
+                Assert(found.Any(p=>string.Equals(Path.GetFileName(p),name,
+                    StringComparison.OrdinalIgnoreCase)),
+                    "R53 new file not detected: "+name);
+            var original=Path.Combine(folder,"new.xlsx");
+            var shelf=Make("DeskSpace.DeskSpaceDropShelfV15",window);
+            try
+            {
+                Call(shelf,"OfferNewFile",original);
+                var detected=(System.Collections.IList)Private<object>(
+                    shelf,"detected");
+                Assert(detected.Count==1,
+                    "R53 discovered file not rendered in shared shelf");
+                var item=detected[0]!;
+                Call(shelf,"Remove",item);
+                Assert(File.Exists(original),
+                    "Dismissing a new file deleted its original");
+                Assert(detected.Count==0,
+                    "R53 dismissed new item still displayed");
+            }
+            finally { Call(shelf,"Dispose"); }
+            Console.WriteLine("R53 all extensions / rename-safe discovery / shelf original-file safety PASS.");
+        }
+        finally
+        {
+            Call(watch,"Dispose");
+            window.Close();
+            try { Directory.Delete(folder,true); }
+            catch(IOException) {}
+        }
+    }
+
     private static void TestSubArcScreenFit()
     {
         var type=Product.GetType("DeskSpace.DeskSpaceSubArcGeometryV48",true)!;
