@@ -1062,6 +1062,12 @@ jobs:
           ./r62/apply-r62.ps1
           ./r62/test-r62.ps1
 
+      - name: R63 explicit Information preview and standard middle-button autoscroll
+        shell: pwsh
+        run: |
+          ./r63/apply-r63.ps1
+          ./r63/test-r63.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
