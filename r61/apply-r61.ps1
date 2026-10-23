@@ -142,7 +142,7 @@ One @'
             }
         };
 '@
-One '        disposed=true;debounce?.Stop();pending?.Cancel();pending?.Dispose();' @'
+One '        disposed=true;debounce?.Stop();indexRefresh?.Stop();pending?.Cancel();pending?.Dispose();' @'
         disposed=true;appRefresh?.Stop();
         debounce?.Stop();pending?.Cancel();pending?.Dispose();
 '@
