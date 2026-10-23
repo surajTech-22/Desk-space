@@ -47,7 +47,6 @@ One @'
         CloseTransientPreview();
 '@
 One @'
-        if(editorActive)return;
         // Hover highlights collection names only. A preview appears solely
         // when the collection is explicitly activated. This prevents any
         // unselected collection shelf from surviving beneath the circle.
