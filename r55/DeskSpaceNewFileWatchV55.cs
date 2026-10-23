@@ -21,9 +21,15 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
     private readonly ConcurrentDictionary<string,long> recent=new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string,byte> inFlight=new(StringComparer.OrdinalIgnoreCase);
     private readonly IReadOnlyList<string> roots;
+    private readonly bool explicitRoots;
     private readonly CancellationTokenSource shutdown=new();
     private int stopped;
     private bool started;
+
+    // Retain the exact three-argument constructor used by older UI tests.
+    public DeskSpaceNewFileWatchV53(Window owner,Action<string> onNewFile,
+        IEnumerable<string>? watchRoots)
+        : this(owner,onNewFile,watchRoots,null){}
 
     public DeskSpaceNewFileWatchV53(Window owner,Action<string> onNewFile,
         IEnumerable<string>? watchRoots=null, Action<string>? onRemoved=null)
@@ -31,6 +37,7 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
         this.owner=owner;
         this.onNewFile=onNewFile;
         this.onRemoved=onRemoved;
+        explicitRoots=watchRoots!=null;
         roots=(watchRoots??DefaultRoots())
             .Where(p=>!string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
             .Select(Path.GetFullPath)
@@ -144,11 +151,11 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
             name.EndsWith(".partial",StringComparison.OrdinalIgnoreCase)||
             name.EndsWith(".download",StringComparison.OrdinalIgnoreCase));
     }
-    private static bool Eligible(string path)
+    private bool Eligible(string path)
     {
         try
         {
-            if(!IsUserDocumentPath(path)||!File.Exists(path))return false;
+            if((!explicitRoots&&!IsUserDocumentPath(path))||!File.Exists(path))return false;
             var flags=File.GetAttributes(path);
             return (flags&(FileAttributes.System|FileAttributes.Directory|
                 FileAttributes.ReparsePoint))==0;
@@ -179,7 +186,7 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
 
     private void Queue(string path)
     {
-        if(Volatile.Read(ref stopped)!=0 || !IsUserDocumentPath(path))return;
+        if(Volatile.Read(ref stopped)!=0 || (!explicitRoots&&!IsUserDocumentPath(path)))return;
         if(!inFlight.TryAdd(path,0))return; // coalesce bursty Office writes
         _=Task.Run(async()=>{
             try
