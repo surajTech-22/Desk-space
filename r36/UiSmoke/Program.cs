@@ -696,6 +696,13 @@ internal static class Program
                 active.Items.Cast<object>()
                     .OfType<ReminderItem>().All(x=>!x.Done),
                 "R79 main Workspace must hide completed reminders");
+            // Assert actual filter behaviour, even when no real reminders
+            // happen to exist on the isolated Windows test machine.
+            var activeView=(System.ComponentModel.ICollectionView)
+                active.ItemsSource;
+            Assert(activeView.Filter!(new ReminderItem{Done=false}) &&
+                !activeView.Filter(new ReminderItem{Done=true}),
+                "R79 completed reminder filter does not actually filter");
             var tab=tabs!.Items.OfType<TabItem>()
                 .First(t=>(t.Tag as string)=="Reminders");
             var panel=(FrameworkElement)tab.Content;
@@ -705,7 +712,12 @@ internal static class Program
             foreach(var key in new[]{"Test sound","Browse WAV",
                 "Perform action","Browse target","Add reminder","Mark done"})
                 ButtonWith(panel,key);
-            Render(panel,980,580,"r79-actual-main-workspace-reminders");
+            // Capture the exact MAIN Workspace root and its selected tab,
+            // rather than isolating transparent TabItem content against
+            // black. This verifies the window background/navigation too.
+            tabs.SelectedItem=tab;
+            Render((FrameworkElement)main.Content,1000,740,
+                "r79-actual-main-workspace-reminders");
             Console.WriteLine("R79 PASS: actual V36 widget and main Workspace show sound/actions, HH:mm:ss, active-only reminders.");
         }
         finally{main.Close();}
