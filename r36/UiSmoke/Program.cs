@@ -926,8 +926,8 @@ internal static class Program
             if(navyOutline && !lastGeometry!.FillContains(
                 new Point(x+.5,y+.5))) darkInkOutside++;
         }
-        Assert(darkInkOutside>=4,
-            "R69 hidden digit disappears into white outside purple end wedge");
+        Assert(darkInkOutside<=2,
+            "R77 inlaid numeral must not bleed onto white outside purple end wedge");
         twoButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,twoButton));
         Assert(whiteSceneShift==1,"R69 clear numeral must still click-to-scroll");
         Console.WriteLine("R69 WPF PASS: full purple end-line count readable against white background without a badge.");
