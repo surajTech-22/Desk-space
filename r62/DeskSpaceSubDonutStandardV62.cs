@@ -66,9 +66,10 @@ internal static class DeskSpaceSubDonutStandardV62
     internal static int Advance(View view,int delta)=>
         Math.Clamp(view.Start+delta,0,Math.Max(0,view.Total-view.Count));
 
-    // One universal visual rule: counts are extensions of the LEFT/RIGHT
-    // VISIBLE WEDGES, not disconnected badges at the top of the screen.
-    // The same renderer is used by Information, Apps and every Excel depth.
+    // Universal hidden-count design: the numeral interrupts the VERTICAL
+    // radial divider at the end of the visible arc. Never add an exterior
+    // badge, a mini wedge or a top-of-canvas label. This uses the actual WPF
+    // sector geometry, so it works at any submenu angle, radius and depth.
     internal static void DrawHiddenCounters(Canvas canvas,View view,
         double verticalCentre,Action<int> move)
     {
@@ -76,50 +77,87 @@ internal static class DeskSpaceSubDonutStandardV62
         var wedges=canvas.Children.OfType<System.Windows.Shapes.Path>()
             .Where(p=>p.Data!=null&&!p.Data.Bounds.IsEmpty)
             .ToArray();
-        if(wedges.Length==0)return;
-        int actual=Math.Min(view.Count,wedges.Length);
-        if(actual==0)return;
+        int count=Math.Min(view.Count,wedges.Length);
+        if(count==0)return;
         if(view.HiddenLeft>0)
-            AddEdgeTab(canvas,wedges[0],view.HiddenLeft,true,()=>move(-1));
+            AddDividerCount(canvas,wedges[0],view.HiddenLeft,true,
+                ()=>move(-1));
         if(view.HiddenRight>0)
-            AddEdgeTab(canvas,wedges[actual-1],view.HiddenRight,false,()=>move(1));
+            AddDividerCount(canvas,wedges[count-1],view.HiddenRight,false,
+                ()=>move(1));
     }
-    private static void AddEdgeTab(Canvas canvas,System.Windows.Shapes.Path wedge,
-        int amount,bool leading,Action advance)
+
+    // Start side: first arc's OUTER start to the second arc's INNER end.
+    // End side: first arc's OUTER end to the straight segment's INNER end.
+    // Do not use the geometry bounding rectangle: its corners aren't on the
+    // wedge divider, which caused the previous detached counters.
+    internal static Point DividerMidpoint(Geometry shape,bool leading)
     {
-        // Wedge geometry is in the submenu Canvas coordinate system.
-        // Anchor INSIDE its visible sector at the extreme edge, preserving
-        // the same border and background as the sector being continued.
-        Rect area=wedge.Data.Bounds;
-        const double width=33,height=23;
-        double x=leading?area.Left+2:area.Right-width-2;
-        double y=area.Top+(area.Height-height)/2;
-        x=Math.Clamp(x,0,Math.Max(0,canvas.Width-width));
-        y=Math.Clamp(y,0,Math.Max(0,canvas.Height-height));
-        var tab=new Button{
-            Content=leading?"‹ "+amount:amount+" ›",
-            Width=width,Height=height,FontSize=10.5,
-            FontWeight=FontWeights.SemiBold,
+        if(shape is not PathGeometry pg || pg.Figures.Count==0)
+            throw new ArgumentException("Sub-donut wedge must use arc geometry",
+                nameof(shape));
+        var figure=pg.Figures[0];
+        if(figure.Segments.Count<3 ||
+            figure.Segments[0] is not ArcSegment outerArc ||
+            figure.Segments[1] is not LineSegment radialLine ||
+            figure.Segments[2] is not ArcSegment innerArc)
+            throw new ArgumentException("Unexpected sub-donut arc segments",
+                nameof(shape));
+        Point outer=leading?figure.StartPoint:outerArc.Point;
+        Point inner=leading?innerArc.Point:radialLine.Point;
+        var transform=shape.Transform;
+        if(transform!=null)
+        {
+            outer=transform.Transform(outer);
+            inner=transform.Transform(inner);
+        }
+        return new Point((outer.X+inner.X)/2,(outer.Y+inner.Y)/2);
+    }
+
+    private static void AddDividerCount(Canvas canvas,
+        System.Windows.Shapes.Path wedge,int hidden,bool leading,Action move)
+    {
+        Point midpoint=DividerMidpoint(wedge.Data,leading);
+        // Exactly on the end divider, halfway along its radial height.
+        // Matching wedge fill masks ONLY the central few pixels of the
+        // stroke. The existing white line remains visible above/below.
+        string count=hidden.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        double width=Math.Max(17,9+count.Length*8),height=19;
+        Brush ink=Brushes.White;
+        if(wedge.Fill is SolidColorBrush paint)
+        {
+            double brightness=.2126*paint.Color.R+
+                .7152*paint.Color.G+.0722*paint.Color.B;
+            if(brightness>=135)
+                ink=new SolidColorBrush(Color.FromRgb(26,37,72));
+        }
+        var button=new Button{
+            Content=count,
+            Width=width,Height=height,
+            FontSize=11,FontWeight=FontWeights.SemiBold,
+            HorizontalContentAlignment=HorizontalAlignment.Center,
+            VerticalContentAlignment=VerticalAlignment.Center,
             Padding=new Thickness(0),
-            Background=wedge.Fill,
-            Foreground=Brushes.White,
-            BorderBrush=wedge.Stroke??Brushes.White,
-            BorderThickness=new Thickness(1.5),
-            Cursor=System.Windows.Input.Cursors.Hand,
-            ToolTip=(leading?"Hidden before: ":"Hidden after: ")+amount+
-                " · wheel to reveal"
-        };
-        var ring=new Border{
-            CornerRadius=new CornerRadius(5),
+            Background=wedge.Fill??Brushes.Transparent,
+            Foreground=ink,
             BorderThickness=new Thickness(0),
-            Child=tab
+            FocusVisualStyle=null,
+            Cursor=System.Windows.Input.Cursors.Hand,
+            ToolTip=(leading?"Hidden before: ":"Hidden after: ")+hidden+
+                " · scroll or select to reveal"
         };
-        Canvas.SetLeft(ring,x);
-        Canvas.SetTop(ring,y);
-        Canvas.SetZIndex(ring,40);
-        ring.ClipToBounds=true;
-        tab.Click+=(_,_)=>advance();
-        canvas.Children.Add(ring);
+        var embedded=new Border{
+            Child=button,
+            Background=wedge.Fill??Brushes.Transparent,
+            BorderThickness=new Thickness(0),
+            CornerRadius=new CornerRadius(1),
+            SnapsToDevicePixels=true
+        };
+        Canvas.SetLeft(embedded,midpoint.X-width/2);
+        Canvas.SetTop(embedded,midpoint.Y-height/2);
+        Canvas.SetZIndex(embedded,40);
+        button.Click+=(_,_)=>move();
+        canvas.Children.Add(embedded);
     }
 
     internal static void Animate(Canvas canvas,int direction,
