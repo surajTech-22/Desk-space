@@ -41,6 +41,7 @@ foreach($t in @('middleScroll=new DeskSpaceMiddleScrollV63.Controller',
  if(!$apps.Contains($t)){throw "R63 Applications scroll missing: $t"}
 }
 foreach($t in @('TestMiddleButtonSubDonutScroll()',
+    'TestInformationSelectionPreviewGate()',
     'R63 WPF PASS: middle-click scroll activation')){
  if(!$smoke.Contains($t)){throw "R63 Windows smoke missing: $t"}
 }
