@@ -1138,10 +1138,11 @@ jobs:
           ./r78/apply-r78.ps1
           ./r78/test-r78.ps1
 
-      - name: R79 inspect real main reminder and widget lifecycle (diagnostic only)
+      - name: R79 correct actual widget V36 and main Workspace reminder editors
         shell: pwsh
         run: |
-          ./r79/probe-r79.ps1
+          ./r79/apply-r79.ps1
+          ./r79/test-r79.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh

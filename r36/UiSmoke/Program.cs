@@ -36,6 +36,7 @@ internal static class Program
             TestDueShelfV74();
             TestReminderV76();
             TestReminderV78();
+            TestRealReminderEditorsV79();
             TestStandardSubDonutScroll();
             TestDonutHomeAndApplicationIcons();
             TestMiddleButtonSubDonutScroll();
@@ -642,6 +643,72 @@ internal static class Program
         Render(form,420,525,"reminders-v78-controls");
         Call(editor,"Dispose");
         Console.WriteLine("R78 WPF PASS: real reminder editor shows tune/actions and seconds input.");
+    }
+
+    private static void TestRealReminderEditorsV79()
+    {
+        // R78 tested V11, which is not opened by today's widget.
+        // The actual WidgetHost.OpenInWidget uses DeskSpaceInlineV36.
+        var widgetEditor=Make("DeskSpace.DeskSpaceInlineV36",
+            "Reminders","Circle",(Action)(()=>{}),false);
+        var widgetForm=(FrameworkElement)Call(widgetEditor,"Create")!;
+        widgetForm.Measure(new Size(380,525));
+        widgetForm.Arrange(new Rect(0,0,380,525));
+        widgetForm.UpdateLayout();
+        var widgetChildren=Walk(widgetForm).ToArray();
+        var labels=widgetChildren.OfType<TextBlock>()
+            .Select(x=>x.Text).ToArray();
+        Assert(labels.Contains("Sound / Tune") &&
+            labels.Contains("Perform action when due (optional)"),
+            "R79 actual widget reminder V36 still uses old editor");
+        foreach(var key in new[]{"Test sound","Browse WAV","Perform action",
+            "Browse target","Complete","+ Add"})
+            ButtonWith(widgetForm,key);
+        Assert(widgetChildren.OfType<TextBox>()
+            .Any(x=>x.Text=="09:00:00"),
+            "R79 actual widget reminder time is still HH:mm");
+        var list=widgetChildren.OfType<ListBox>().First();
+        Assert(list.Items.Cast<object>().OfType<ReminderItem>()
+            .All(x=>!x.Done),
+            "R79 actual widget completed reminders still visible");
+        Render(widgetForm,380,525,"r79-actual-widget-reminders");
+        Call(widgetEditor,"Dispose");
+
+        // The main Workspace has a *different* XAML Reminder tab, not the
+        // widget inline module. Verify those real XAML buttons and clock.
+        var main=(Window)Make("DeskSpace.MainWindow");
+        try
+        {
+            var sound=main.FindName("ReminderSoundChoice") as ComboBox;
+            var action=main.FindName("ReminderActionChoice") as ComboBox;
+            var clock=main.FindName("ReminderTime") as TextBox;
+            var active=main.FindName("RemindersList") as ListBox;
+            var tabs=main.FindName("MainTabs") as TabControl;
+            Assert(sound!=null && action!=null && clock!=null &&
+                active!=null && tabs!=null,
+                "R79 main Workspace still has legacy Reminder form");
+            Assert(clock!.Text=="09:00:00" &&
+                sound!.Items.Count==6 && action!.Items.Count==3,
+                "R79 main Workspace time/sound/action controls are missing");
+            Assert(active!.ItemsSource is
+                    System.ComponentModel.ICollectionView collection &&
+                collection.Filter!=null &&
+                active.Items.Cast<object>()
+                    .OfType<ReminderItem>().All(x=>!x.Done),
+                "R79 main Workspace must hide completed reminders");
+            var tab=tabs!.Items.OfType<TabItem>()
+                .First(t=>(t.Tag as string)=="Reminders");
+            var panel=(FrameworkElement)tab.Content;
+            panel.Measure(new Size(980,580));
+            panel.Arrange(new Rect(0,0,980,580));
+            panel.UpdateLayout();
+            foreach(var key in new[]{"Test sound","Browse WAV",
+                "Perform action","Browse target","Add reminder","Mark done"})
+                ButtonWith(panel,key);
+            Render(panel,980,580,"r79-actual-main-workspace-reminders");
+            Console.WriteLine("R79 PASS: actual V36 widget and main Workspace show sound/actions, HH:mm:ss, active-only reminders.");
+        }
+        finally{main.Close();}
     }
 
     private static void TestReminderV76()
