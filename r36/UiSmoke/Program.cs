@@ -622,33 +622,57 @@ internal static class Program
             "Fine-scroll next 60 delta must produce one item");
         Assert((int)step.Invoke(wheel,new object[]{-120})==1,
             "Reverse mouse wheel must shift one item backward");
-        var board=new Canvas{Width=390,Height=125};
-        // Integrated count tabs must be anchored to actual visible wedges;
-        // an empty canvas used to produce detached badges.
+        var board=new Canvas{Width=700,Height=700};
+        var sectorType=Product.GetType("DeskSpace.DeskSpaceSubArcGeometryV48",true)!;
+        var sector=sectorType.GetMethod("Sector",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
         for(int i=0;i<5;i++)
+        {
+            Geometry wedge=(Geometry)sector.Invoke(null,new object[]{
+                0,-140.0+i*20,-120.0+i*20})!;
             board.Children.Add(new System.Windows.Shapes.Path{
-                Data=new RectangleGeometry(new Rect(45+i*56,20,50,70)),
-                Fill=Brushes.SlateBlue,Stroke=Brushes.White});
+                Data=wedge,Fill=Brushes.SlateBlue,Stroke=Brushes.White,
+                StrokeThickness=2});
+        }
         var indicators=type.GetMethod("DrawHiddenCounters",
             BindingFlags.Static|BindingFlags.NonPublic)!;
+        var midpoint=type.GetMethod("DividerMidpoint",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
         int shifted=0;
-        indicators.Invoke(null,new object[]{board,middle,50.0,
+        indicators.Invoke(null,new object[]{board,middle,350.0,
             (Action<int>)(d=>shifted=d)});
         var edges=board.Children.OfType<Border>().ToArray();
         var buttons=edges.Select(x=>x.Child).OfType<Button>().ToArray();
-        Assert(buttons.Length==2 && (string)buttons[0].Content=="‹ 4" &&
-            (string)buttons[1].Content=="3 ›",
-            "Hidden counts must attach inside both end sectors");
-        double firstLeft=Canvas.GetLeft(edges[0]);
-        double lastLeft=Canvas.GetLeft(edges[1]);
-        Assert(firstLeft>=45 && firstLeft<=95 &&
-            lastLeft>=269 && lastLeft+buttons[1].Width<=319,
-            "Hidden numbers detached from the first or last wedge");
-        Assert(ReferenceEquals(buttons[0].Background,
-            ((System.Windows.Shapes.Path)board.Children[0]).Fill),
-            "Hidden tab must reuse its wedge's original fill");
+        Assert(buttons.Length==2 && (string)buttons[0].Content=="4" &&
+            (string)buttons[1].Content=="3",
+            "Hidden counts must be numerals embedded in radial end lines");
+        for(int side=0;side<2;side++)
+        {
+            var wedge=(System.Windows.Shapes.Path)board.Children[side==0?0:4];
+            var point=(Point)midpoint.Invoke(null,new object[]{wedge.Data,
+                side==0})!;
+            double x=Canvas.GetLeft(edges[side])+buttons[side].Width/2;
+            double y=Canvas.GetTop(edges[side])+buttons[side].Height/2;
+            Assert(Math.Abs(x-point.X)<.05 && Math.Abs(y-point.Y)<.05,
+                "Hidden count not centered on actual vertical/radial end line");
+            Assert(buttons[side].BorderThickness.Left==0 &&
+                edges[side].BorderThickness.Left==0,
+                "Hidden count must not have a detached badge outline");
+            Assert(ReferenceEquals(buttons[side].Background,wedge.Fill),
+                "Counter must match end wedge fill and interrupt divider line");
+        }
+        // A clipped Popup arc stores translated sector geometry; the same
+        // standard must honor its transform at any submenu depth.
+        var translated=(Geometry)sector.Invoke(null,new object[]{2,40.0,62.0})!;
+        var plain=(Point)midpoint.Invoke(null,new object[]{translated,false})!;
+        translated.Transform=new TranslateTransform(-145,55);
+        var moved=(Point)midpoint.Invoke(null,new object[]{translated,false})!;
+        Assert(Math.Abs(moved.X-plain.X+145)<.01 &&
+            Math.Abs(moved.Y-plain.Y-55)<.01,
+            "Divider counter ignores clipped nested-Popup geometry transform");
         buttons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent,buttons[0]));
-        Assert(shifted==-1,"Clicking hidden-left counter failed to scroll");
+        Assert(shifted==-1,
+            "Clicking the embedded left-line numeral failed to scroll");
         var animate=type.GetMethod("Animate",BindingFlags.Static|
             BindingFlags.NonPublic)!;
         animate.Invoke(null,new object[]{board,1,-90.0});
