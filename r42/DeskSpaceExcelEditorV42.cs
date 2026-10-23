@@ -845,7 +845,15 @@ internal sealed partial class DeskSpaceExcelV16
                     // These are symbolic commands, not saved date/time values.
                     // Their actual value is computed at APPLY time in Excel.
                     cell.Role="Value";
-                    cell.ValueKind=requestedAction;
+                    bool reuseCapturedR1C1=
+                        (cell.ValueKind=="formula" ||
+                         cell.ValueKind==DeskSpaceExcelActionsV46.CapturedFormula) &&
+                        string.Equals(row.Value.Trim(),row.Formula,
+                            StringComparison.Ordinal);
+                    cell.ValueKind=
+                        requestedAction==DeskSpaceExcelActionsV46.CustomFormula &&
+                        reuseCapturedR1C1
+                            ?DeskSpaceExcelActionsV46.CapturedFormula:requestedAction;
                     if(requestedAction==DeskSpaceExcelActionsV46.CustomFormula)
                     {
                         if(!row.Value.TrimStart().StartsWith("=",StringComparison.Ordinal))
