@@ -138,8 +138,25 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                     new SolidColorBrush(Color.FromRgb(37,51,79))};
             Canvas.SetLeft(label,DeskSpaceSubArcGeometryV48.CX+p.X-
                 bounds.Left+margin-textWidth/2);
-            Canvas.SetTop(label,DeskSpaceSubArcGeometryV48.CY+p.Y-
-                bounds.Top+margin-13);
+            // Display the actual Windows app or shortcut icon alongside
+            // its readable label; never launch the app to discover artwork.
+            double labelY=DeskSpaceSubArcGeometryV48.CY+p.Y-
+                bounds.Top+margin-13;
+            if(item.Kind=="launch")
+            {
+                var iconSource=DeskSpaceApplicationIconsV65.Get(item.Path);
+                if(iconSource!=null)
+                {
+                    var appIcon=new Image{Source=iconSource,Width=19,Height=19,
+                        Stretch=Stretch.Uniform,IsHitTestVisible=false};
+                    Canvas.SetLeft(appIcon,DeskSpaceSubArcGeometryV48.CX+p.X-
+                        bounds.Left+margin-9.5);
+                    Canvas.SetTop(appIcon,labelY-14);
+                    canvas.Children.Add(appIcon);
+                    labelY+=8;
+                }
+            }
+            Canvas.SetTop(label,labelY);
             canvas.Children.Add(label);
         }
         if(group=="pinned")
