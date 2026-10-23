@@ -34,6 +34,7 @@ internal static class Program
             TestFileClassification();
             TestStandardSubDonutScroll();
             TestMiddleButtonSubDonutScroll();
+            TestWeatherClockContrast();
             TestInformationSelectionPreviewGate();
             TestApplicationsArcAndPinSearch();
             TestConnectedChildDonut();
@@ -330,7 +331,7 @@ internal static class Program
             var demo=Activator.CreateInstance(nested,true)!;
             var id=Guid.NewGuid();
             nested.GetProperty("Id")!.SetValue(demo,id);
-            nested.GetProperty("Name")!.SetValue(demo,"Info preview is explicit");
+            nested.GetProperty("Name")!.SetValue(demo,"Temporary hover preview");
             var list=(System.Collections.IList)Activator.CreateInstance(
                 typeof(List<>).MakeGenericType(nested))!;
             list.Add(demo);
@@ -340,29 +341,77 @@ internal static class Program
             var shelf=Private<System.Windows.Controls.Primitives.Popup>(info,"shelf");
             arc.IsOpen=true;
             Call(info,"HoverChild",0,id);
-            Assert(!shelf.IsOpen,
-                "Unselected Information hover opened a shelf below the circle");
-            // Even a stable hover is not an explicit choice.
+            Assert(shelf.IsOpen,
+                "R64 hovering Information should immediately display a preview");
             var frame=new DispatcherFrame();
             var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(720)};
             timer.Tick+=(_,_)=>{timer.Stop();frame.Continue=false;};
             timer.Start();Dispatcher.PushFrame(frame);
+            Assert(shelf.IsOpen && arc.IsOpen,
+                "R64 hover preview must remain while hovered, never auto-commit");
+            Call(info,"EndArcHover");
             Assert(!shelf.IsOpen,
-                "Information hover dwell committed a preview without selection");
+                "R64 temporary hover preview persisted after pointer left");
+            Call(info,"HoverChild",0,id);
+            Assert(shelf.IsOpen,"R64 hover preview failed to reopen");
             Call(info,"ActivateChild",0,id);
             Assert(shelf.IsOpen,
-                "Explicitly selecting Information did not open its preview");
+                "Explicit selection should keep Information preview open");
+            Call(info,"HideArc");
+            Assert(shelf.IsOpen,
+                "Explicitly selected Information shelf should survive arc closing");
             Call(info,"Show");
             Assert(!shelf.IsOpen,
-                "Returning to Information did not dismiss the prior preview");
-            Console.WriteLine("R63 WPF PASS: hover/dwell do not open Information "+
-                "shelf, selection does, and re-entering clears preview.");
+                "Returning to Information did not dismiss prior preview");
+            Console.WriteLine("R64 WPF PASS: immediate Information hover preview, "+
+                "no dwell commit, leave cleanup, explicit selection persistence.");
         }
         finally
         {
             ((IDisposable)info).Dispose();
             window.Close();
         }
+    }
+    private static void TestWeatherClockContrast()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceWeatherContrastV64",true)!;
+        var color=type.GetMethod("ClockColor",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        var ratio=type.GetMethod("ContrastRatio",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        var apply=type.GetMethod("Apply",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        var bright=new WeatherReading("Location-based weather",25,2,true,DateTime.UtcNow);
+        var cloudy=new WeatherReading("Another city",25,3,true,DateTime.UtcNow);
+        var night=new WeatherReading("Night location",18,1,false,DateTime.UtcNow);
+        Color Bright()=>(Color)color.Invoke(null,new object[]{bright,true})!;
+        Color Night()=>(Color)color.Invoke(null,new object[]{night,true})!;
+        Assert(Bright().R<70 && Bright().G<70,
+            "Daytime pale sky should use dark clock text");
+        Assert((Color)color.Invoke(null,new object[]{cloudy,true})!=Bright(),
+            "Overcast weather uses the dark scene, not daytime-pale ink");
+        Assert(Night().R==255,"Night weather should use white clock text");
+        double Contrast(Color foreground,Color background)=>
+            (double)ratio.Invoke(null,new object[]{foreground,background})!;
+        Assert(Contrast(Bright(),Color.FromRgb(100,176,234))>=4.5 &&
+            Contrast(Bright(),Color.FromRgb(211,236,250))>=4.5,
+            "Daytime clock contrast below 4.5:1 over sky gradient");
+        Assert(Contrast(Night(),Color.FromRgb(59,70,121))>=4.5,
+            "Nighttime clock contrast below 4.5:1");
+        var widget=new TextBlock{Text="03:15 PM"};
+        widget.Inlines.Clear();
+        var run=new System.Windows.Documents.Run("03:15 PM"){
+            Foreground=Brushes.White};
+        widget.Inlines.Add(run);
+        apply.Invoke(null,new object[]{widget,bright,true});
+        Assert(((SolidColorBrush)run.Foreground).Color==Bright() &&
+            ((SolidColorBrush)widget.Foreground).Color==Bright(),
+            "Clock contrast did not override local text runs");
+        apply.Invoke(null,new object[]{widget,night,true});
+        Assert(((SolidColorBrush)run.Foreground).Color==Night(),
+            "Clock did not refresh foreground on weather/day transition");
+        Console.WriteLine("R64 WPF PASS: bright/day, dark/overcast and night clock "+
+            "contrast including explicit Run foreground overrides.");
     }
     private static void TestMiddleButtonSubDonutScroll()
     {
