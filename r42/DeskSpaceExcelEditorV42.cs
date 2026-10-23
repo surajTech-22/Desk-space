@@ -20,6 +20,7 @@ internal sealed partial class DeskSpaceExcelV16
     {
         internal DeskSpaceExcelCellV16? Cell;
         internal string OriginalRaw="";
+        internal string OriginalShown="";
         internal string OriginalLabel="";
         internal int HeaderRow=-1,HeaderCol=-1;
         public bool Include {get;set;}=true;
@@ -31,6 +32,7 @@ internal sealed partial class DeskSpaceExcelV16
         public string CellType {get;set;}="";
         public bool IsFormula=>CellType=="formula";
         public string Formula {get;set;}="";
+        public string ExcelFormat {get;set;}="";
     }
 
     private TextBox? librarySearchV42,mappingNameV42,mappingGroupV42;
@@ -257,6 +259,7 @@ internal sealed partial class DeskSpaceExcelV16
         AddColumnV42("Header cell","ReferenceCell",93);
         AddColumnV42("Data value","Value",210);
         AddColumnV42("Value cell","ValueCell",90);
+        AddColumnV42("Excel format","ExcelFormat",160);
         mappingGridV42.Columns.Add(new DataGridComboBoxColumn{
             Header="Cell action / shortcut",
             ItemsSource=DeskSpaceExcelActionsV46.EditorKinds,
@@ -657,6 +660,17 @@ internal sealed partial class DeskSpaceExcelV16
             " cells. Check each header and value, then Save mapping changes.";
         latest=null;
     }
+    // Actual Excel dates are numeric serials. Format only their
+    // DISPLAY; never convert an unchanged date to text or a new serial.
+    private static bool DateFormattedV50(string code)
+    {
+        if(string.IsNullOrWhiteSpace(code))return false;
+        // Ignore quoted text and escaped literal characters in formats.
+        var bare=System.Text.RegularExpressions.Regex.Replace(code,
+            "\\"[^\\"]*\\"|\\\\.", "");
+        return System.Text.RegularExpressions.Regex.IsMatch(bare,
+            @"(?i)(d+|y+|h+|s+|m+[/\\-]d+|d+[/\\-]m+)");
+    }
     private void RenderMappingRowsV42(DeskSpaceExcelTemplateV16 entry)
     {
         mappingRowsV42.Clear();
@@ -689,16 +703,24 @@ internal sealed partial class DeskSpaceExcelV16
                     string.Equals(c.CellAddress,cell.HeaderCellAddress,StringComparison.OrdinalIgnoreCase));
                 if(specific!=null){header=specific.RawValue;refRow=specific.RowOffset;refCol=specific.ColumnOffset;}
             }
+            var shown=DeskSpaceExcelActionsV46.IsAction(cell.ValueKind)
+                ? DeskSpaceExcelActionsV46.PreviewText(cell,DateTime.Now)
+                : cell.ValueKind=="formula"?cell.FormulaR1C1
+                : cell.ValueKind=="number" &&
+                    DateFormattedV50(cell.NumberFormat) &&
+                    !string.IsNullOrWhiteSpace(cell.Display) &&
+                    !cell.Display.Contains("###",StringComparison.Ordinal)
+                    ?cell.Display:cell.RawValue;
             mappingRowsV42.Add(new MappingRowV42{
-                Cell=cell,OriginalRaw=cell.RawValue,OriginalLabel=header,
+                Cell=cell,OriginalRaw=cell.RawValue,
+                OriginalShown=shown,ExcelFormat=cell.NumberFormat,
+                OriginalLabel=header,
                 HeaderRow=refRow,HeaderCol=refCol,
                 Header=header,ReferenceCell=refAddress,
                 ValueCell=cell.CellAddress.Length>0?cell.CellAddress:
                     entry.CoordinatesVerified?CellReference(
                         entry.SourceRow+cell.RowOffset,entry.SourceColumn+cell.ColumnOffset):"Unverified",
-                Value=DeskSpaceExcelActionsV46.IsAction(cell.ValueKind)
-                    ?DeskSpaceExcelActionsV46.PreviewText(cell,DateTime.Now)
-                    :cell.ValueKind=="formula"?cell.Display:cell.RawValue,
+                Value=shown,
                 Kind=DeskSpaceExcelActionsV46.Label(cell),
                 CellType=cell.ValueKind,Formula=cell.FormulaR1C1,
                 Include=true
@@ -714,7 +736,8 @@ internal sealed partial class DeskSpaceExcelV16
                 HeaderRow=header.RowOffset,HeaderCol=header.ColumnOffset,
                 Header=header.RawValue,OriginalLabel=header.RawValue,
                 ReferenceCell=header.CellAddress,ValueCell="",
-                Value="",Kind="Reference",CellType=header.ValueKind
+                Value="",Kind="Reference",CellType=header.ValueKind,
+                ExcelFormat=header.NumberFormat
             });
         }
         mappingGridV42!.ItemsSource=null;
@@ -761,6 +784,14 @@ internal sealed partial class DeskSpaceExcelV16
                 if(!row.Include){cell.Role="Ignore";continue;}
                 cell.Role=row.Kind=="Reference"?"Reference":
                     row.Kind=="Formula"?"Formula":"Value";
+                // Keep Excel's original custom format unless explicitly
+                // changed in the editor. Excel applies this to the target.
+                if(row.ExcelFormat.Length>0)
+                {
+                    if(row.ExcelFormat.Length>160)
+                        throw new InvalidOperationException("Excel format exceeds 160 characters");
+                    cell.NumberFormat=row.ExcelFormat;
+                }
                 if(row.Kind=="Reference")
                 {
                     cell.RawValue=row.Header;
@@ -798,14 +829,28 @@ internal sealed partial class DeskSpaceExcelV16
                     cell.RawValue="";
                     cell.Display=DeskSpaceExcelActionsV46.PreviewText(
                         cell,DateTime.Now);
-                    cell.NumberFormat=DeskSpaceExcelActionsV46.NumberFormat(
-                        requestedAction);
+                    if(string.IsNullOrWhiteSpace(row.ExcelFormat))
+                        cell.NumberFormat=DeskSpaceExcelActionsV46.NumberFormat(
+                            requestedAction);
                 }
                 else if(!DeskSpaceExcelActionsV46.IsAction(cell.ValueKind) &&
-                    cell.ValueKind!="formula" && row.Value!=row.OriginalRaw)
+                    cell.ValueKind!="formula" && row.Value!=row.OriginalShown
                 {
-                    cell.RawValue=row.Value;
-                    cell.Display=row.Value;
+                    if(cell.ValueKind=="number" &&
+                        DateFormattedV50(cell.NumberFormat) &&
+                        DateTime.TryParse(row.Value,
+                            System.Globalization.CultureInfo.CurrentCulture,
+                            System.Globalization.DateTimeStyles.None,out var date))
+                    {
+                        cell.RawValue=date.ToOADate().ToString(
+                            System.Globalization.CultureInfo.InvariantCulture);
+                        cell.Display=row.Value;
+                    }
+                    else
+                    {
+                        cell.RawValue=row.Value;
+                        cell.Display=row.Value;
+                    }
                     if(cell.ValueKind=="blank")
                     {
                         cell.ValueKind=double.TryParse(row.Value,
@@ -814,6 +859,7 @@ internal sealed partial class DeskSpaceExcelV16
                             ? "number":"text";
                     }
                     else if(cell.ValueKind=="number" &&
+                        !DateFormattedV50(cell.NumberFormat) &&
                         !double.TryParse(row.Value,
                             System.Globalization.NumberStyles.Any,
                             System.Globalization.CultureInfo.InvariantCulture,out _))
