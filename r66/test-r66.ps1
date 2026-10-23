@@ -30,7 +30,7 @@ foreach($token in @(
     'Hidden counts must be numerals embedded in radial end lines',
     'Hidden count not centered on actual vertical/radial end line',
     'Divider counter ignores clipped nested-Popup geometry transform',
-    'Hidden count must not have a detached badge outline',
+    'Hidden counters must have NO separate background box',
     'Clicking the embedded left-line numeral failed to scroll')){
  if(!$ui.Contains($token)){throw "R66 missing WPF behavior assertion: $token"}
 }
