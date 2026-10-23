@@ -19,7 +19,7 @@ foreach($token in @(
  'R72: hidden-count number must be actual divider ink, not an overlay',
  'R72 line-dots-number-dots-line must be ONE drawn geometry',
  'R72 dots must be one shared line, not floating labels',
- 'R72 all parts of the number-line must share visible dark ink',
+ 'R77 hidden-count ink must be high contrast for light and dark wedges',
  'R72: purple end count must be drawn with its divider, not in button overlay',
  'subdonut-actual-inline-count-ink'
 )){
