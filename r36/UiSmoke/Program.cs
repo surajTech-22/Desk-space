@@ -30,6 +30,7 @@ internal static class Program
             TestMediaPill();
             TestNewFileNotifications();
             TestApplicationSaveEvents();
+            TestRecentFileStartupRecovery();
             TestFileClassification();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
@@ -91,6 +92,46 @@ internal static class Program
             }
             catch(IOException){}
             catch(UnauthorizedAccessException){}
+        }
+    }
+    private static void TestRecentFileStartupRecovery()
+    {
+        // File existed before the widget was started. The fast initial
+        // reconciliation must still recover it, including unusual types.
+        string folder=Path.Combine(Path.GetTempPath(),
+            "DeskSpace-R59-Recovery-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string target=Path.Combine(folder,"program-saved.custom");
+        File.WriteAllText(target,"finished before launch");
+        var window=new Window{Width=240,Height=240,
+            WindowStyle=WindowStyle.None,ShowInTaskbar=false};
+        var found=new List<string>();
+        var watch=Make("DeskSpace.DeskSpaceNewFileWatchV53",
+            window,(Action<string>)(p=>found.Add(p)),
+            (IEnumerable<string>)new[]{folder});
+        try
+        {
+            Call(watch,"Start");
+            var deadline=DateTime.UtcNow.AddSeconds(9);
+            while(!found.Any(p=>string.Equals(p,target,
+                    StringComparison.OrdinalIgnoreCase)) &&
+                  DateTime.UtcNow<deadline)
+            {
+                var frame=new DispatcherFrame();
+                var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(110)};
+                timer.Tick+=(_,_)=>{timer.Stop();frame.Continue=false;};
+                timer.Start();Dispatcher.PushFrame(frame);
+            }
+            Assert(found.Any(p=>string.Equals(p,target,
+                StringComparison.OrdinalIgnoreCase)),
+                "R59 app-saved file not recovered when Desktop widget launched afterwards");
+            Console.WriteLine("R59 PASS: already-saved file recovered promptly at widget startup.");
+        }
+        finally
+        {
+            ((IDisposable)watch).Dispose();
+            try{Directory.Delete(folder,true);}catch(IOException){}
+            window.Close();
         }
     }
     private static void TestApplicationSaveEvents()
