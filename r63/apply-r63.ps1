@@ -54,7 +54,10 @@ One @'
         if(shelf.IsOpen && !editorActive)CloseShelf();
         try
 '@
-One '        newHoverTimer.Stop();\n        pointerTimer.Stop();' @'
+One @'
+        newHoverTimer.Stop();
+        pointerTimer.Stop();
+'@ @'
         newHoverTimer.Stop();
         middleScroll.Stop();
         pointerTimer.Stop();
@@ -93,7 +96,10 @@ One '    private readonly DispatcherTimer pointerTimer,edgeTimer,successTimer,dr
     private readonly DispatcherTimer pointerTimer,edgeTimer,successTimer,drillTimer;
     private readonly DeskSpaceMiddleScrollV63.Controller middleScroll;
 '@
-One '        internal readonly Popup Popup;\n        internal readonly Canvas Surface;' @'
+One @'
+        internal readonly Popup Popup;
+        internal readonly Canvas Surface;
+'@ @'
         internal readonly Popup Popup;
         internal readonly Canvas Surface;
         internal DeskSpaceMiddleScrollV63.Controller? MiddleScroll;
@@ -105,13 +111,19 @@ One '        canvas.MouseWheel+=OnWheel;' @'
             ()=>arc.IsOpen&&!pasting,
             dir=>Page(dir));
 '@
-One '            ring.Popup.IsOpen=false;\n            ring.Surface.Children.Clear();' @'
+One @'
+            ring.Popup.IsOpen=false;
+            ring.Surface.Children.Clear();
+'@ @'
             ring.MiddleScroll?.Dispose();
             ring.MiddleScroll=null;
             ring.Popup.IsOpen=false;
             ring.Surface.Children.Clear();
 '@
-One '        RenderRing(ring);\n        ring.Surface.MouseMove+=' @'
+One @'
+        RenderRing(ring);
+        ring.Surface.MouseMove+=
+'@ @'
         RenderRing(ring);
         ring.MiddleScroll=new DeskSpaceMiddleScrollV63.Controller(
             ring.Surface,
@@ -124,7 +136,10 @@ One '        pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();successTimer
         pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();successTimer.Stop();excelTimer.Stop();
         middleScroll.Dispose();
 '@
-One '    public void HideArc()\n    {' @'
+One @'
+    public void HideArc()
+    {
+'@ @'
     public void HideArc()
     {
         middleScroll.Stop();
