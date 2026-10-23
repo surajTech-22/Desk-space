@@ -35,7 +35,9 @@ if(DeskSpaceExcelActionsV46.IsFormulaAction(change.Source.ValueKind))
                 {
                     // The formula itself goes to Excel, not its calculated
                     // result. Formula accepts native A1 references.
-                    cell.Formula=DeskSpaceExcelActionsV46.Formula(change.Source);
+                    if(change.Source.ValueKind==DeskSpaceExcelActionsV46.CapturedFormula)
+                        cell.FormulaR1C1=DeskSpaceExcelActionsV46.Formula(change.Source);
+                    else cell.Formula=DeskSpaceExcelActionsV46.Formula(change.Source);
                 }
                 else if(DeskSpaceExcelActionsV46.IsNativeShortcut(change.Source.ValueKind))
                 {
@@ -58,8 +60,9 @@ if(DeskSpaceExcelActionsV46.IsFormulaAction(change.Source.ValueKind))
                         change.Source.ValueKind),true);
                 }
                 else cell.Value2=TypedValue(change.Source);
-                if(DeskSpaceExcelActionsV46.IsAction(change.Source.ValueKind) &&
-                   !string.IsNullOrWhiteSpace(change.Source.NumberFormat))
+                if(!string.IsNullOrWhiteSpace(change.Source.NumberFormat) &&
+                   (DeskSpaceExcelActionsV46.IsAction(change.Source.ValueKind) ||
+                    change.Source.ValueKind=="number"))
                     cell.NumberFormat=change.Source.NumberFormat;
 '@
 Replace-Once 'else x.Cell.Value2=x.Old;' @'
