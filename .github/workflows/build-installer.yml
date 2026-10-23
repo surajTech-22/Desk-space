@@ -1150,6 +1150,12 @@ jobs:
           ./r80/apply-r80.ps1
           ./r80/test-r80.ps1
 
+      - name: R81 automatic reminder target search, action titles and sound persistence
+        shell: pwsh
+        run: |
+          ./r81/apply-r81.ps1
+          ./r81/test-r81.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

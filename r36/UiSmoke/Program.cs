@@ -38,6 +38,7 @@ internal static class Program
             TestReminderV78();
             TestRealReminderEditorsV79();
             TestReminderV80();
+            TestReminderV81();
             TestStandardSubDonutScroll();
             TestDonutHomeAndApplicationIcons();
             TestMiddleButtonSubDonutScroll();
@@ -663,7 +664,7 @@ internal static class Program
             labels.Contains("Perform action when due (optional)"),
             "R79 actual widget reminder V36 still uses old editor");
         foreach(var key in new[]{"Test sound","Browse WAV","Perform action",
-            "Search in DeskSpace","Browse file","Browse app","Complete","+ Add"})
+            "Browse file","Browse app","Save changes","Complete","+ Add"})
             ButtonWith(widgetForm,key);
         Assert(widgetChildren.OfType<TextBox>()
             .Any(x=>x.Text=="09:00:00"),
@@ -711,8 +712,8 @@ internal static class Program
             panel.Arrange(new Rect(0,0,980,580));
             panel.UpdateLayout();
             foreach(var key in new[]{"Test sound","Browse WAV",
-                "Perform action","Search in DeskSpace","Browse file",
-                "Browse app","Add reminder","Mark done"})
+                "Perform action","Browse file",
+                "Browse app","Save changes","Add reminder","Mark done"})
                 ButtonWith(panel,key);
             // Capture the exact MAIN Workspace root and its selected tab,
             // rather than isolating transparent TabItem content against
@@ -792,17 +793,16 @@ internal static class Program
         var mode=Walk(view).OfType<ComboBox>().First(x=>
             x.Items.Cast<object>().Any(v=>v?.ToString()=="Open URL"));
         mode.SelectedItem="Open file";
-        var search=ButtonWith(view,"Search in DeskSpace");
-        Assert(search.Visibility==Visibility.Visible,
-            "R80 widget search must be visible when Open file is selected");
-        search.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert(Walk(view).OfType<StackPanel>()
-            .Any(p=>(p.Tag as string)=="DeskSpaceReminderEmbeddedSearch"),
-            "R80 widget must show embedded search inside reminder panel");
+            .Any(p=>(p.Tag as string)=="DeskSpaceReminderAutomaticSearch"),
+            "R81 widget search bar should appear automatically");
+        Assert(!Walk(view).OfType<Button>()
+            .Any(b=>(b.Content as string)=="Search in DeskSpace"),
+            "R81 widget must remove extra Search in DeskSpace button");
         Render(view,380,525,"r80-widget-search-in-reminder");
         mode.SelectedItem="Open URL";
         Assert(Walk(view).OfType<TextBlock>().Any(t=>
-            t.Text.Contains("Windows default browser")),
+            t.Text.Contains("default browser")),
             "R80 widget must expose pasted URL instructions");
         Call(widget,"Dispose");
 
@@ -823,12 +823,13 @@ internal static class Program
             tabRoot.Arrange(new Rect(0,0,960,630));
             tabRoot.UpdateLayout();
             var root=(FrameworkElement)main.Content;
-            ButtonWith(tabRoot,"Search in DeskSpace")
-                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert(panel.Children.Count==1 &&
                 Walk(panel).OfType<StackPanel>().Any(p=>
-                    (p.Tag as string)=="DeskSpaceReminderEmbeddedSearch"),
-                "R80 main Workspace must embed existing search results");
+                    (p.Tag as string)=="DeskSpaceReminderAutomaticSearch"),
+                "R81 main Workspace must immediately show embedded search");
+            Assert(!Walk(tabRoot).OfType<Button>()
+                .Any(b=>(b.Content as string)=="Search in DeskSpace"),
+                "R81 main Workspace must remove the extra search button");
             Render(root,1000,740,"r80-main-search-in-reminder");
             choice.SelectedIndex=3;
             Assert(((TextBox)main.FindName("ReminderActionPath")!).Visibility==
@@ -839,6 +840,122 @@ internal static class Program
         }
         finally{main.Close();}
         Console.WriteLine("R80 PASS: real V36/Main UI, embedded universal search, URL validation and 12-second preopen policy.");
+    }
+
+    private static void TestReminderV81()
+    {
+        var helper=Product.GetType("DeskSpace.DeskSpaceReminderPresentationV81",true)!;
+        var title=helper.GetMethod("ResolveTitle",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        string Label(string typed,string action,string value,string? name=null)
+            =>(string)title.Invoke(null,new object?[]{typed,action,value,name})!;
+        Assert(Label("","Open application",@"C:\Apps\Chrome.exe","Chrome")
+            =="Open application · Chrome",
+            "R81 action reminders must allow no name and show app name");
+        Assert(Label("","Open file",@"C:\Reports\Balance.xlsx")
+            =="Open file · Balance.xlsx",
+            "R81 file reminders must show file name, not path");
+        Assert(Label("","Open URL","https://example.org/hello")
+            =="Open URL · example.org",
+            "R81 URL reminders must show website host, not the URL");
+        Assert(Label("Take medicine","None","")=="Take medicine" &&
+            Label("","None","")=="",
+            "R81 regular reminders must still use manual names");
+        var picker=Product.GetType("DeskSpace.DeskSpaceReminderPickerV81",true)!;
+        var create=picker.GetMethod("Create",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var display=picker.GetMethod("DisplayName",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var hit=new SearchHit{
+            Name="Google Chrome.lnk",Category="Applications",
+            OpenTarget=@"C:\Programs\Google Chrome.lnk"};
+        Assert((string)display.Invoke(null,new object[]{hit,"Open application"})!
+            =="Google Chrome",
+            "R81 application result must show real name, not its location");
+        var searchElement=(FrameworkElement)create.Invoke(null,new object[]{
+            "Open application",(Action<string,string>)((_,_)=>{})
+        })!;
+        var body=(StackPanel)searchElement;
+        Assert(body.Tag as string=="DeskSpaceReminderAutomaticSearch" &&
+            body.Children.OfType<TextBox>().Count()==1,
+            "R81 automatic search textbox missing");
+        var popup=body.Children.OfType<System.Windows.Controls.Primitives.Popup>()
+            .Single();
+        Assert(popup.Placement==System.Windows.Controls.Primitives.PlacementMode.Bottom &&
+            popup.PlacementTarget==body.Children.OfType<TextBox>().Single() &&
+            popup.Child is Border,
+            "R81 result dropdown must be its own surface outside panel");
+        var w=Make("DeskSpace.DeskSpaceInlineV36",
+            "Reminders","Circle",(Action)(()=>{}),false);
+        var widget=(FrameworkElement)Call(w,"Create")!;
+        widget.Measure(new Size(380,525));
+        widget.Arrange(new Rect(0,0,380,525));widget.UpdateLayout();
+        var actionChoice=Walk(widget).OfType<ComboBox>().First(cb=>
+            cb.Items.Cast<object>().Any(it=>it?.ToString()=="Open application"));
+        actionChoice.SelectedItem="Open application";
+        Assert(Walk(widget).OfType<StackPanel>().Any(p=>
+            (p.Tag as string)=="DeskSpaceReminderAutomaticSearch") &&
+            !Walk(widget).OfType<Button>().Any(b=>
+                (b.Content as string)=="Search in DeskSpace"),
+            "R81 widget must show automatic search with no extra click");
+        Assert(Walk(widget).OfType<TextBox>().Any(t=>
+            t.Visibility==Visibility.Collapsed),
+            "R81 action target path should not be displayed as a location");
+        Render(widget,380,525,"r81-auto-search-icons-panel");
+        actionChoice.SelectedItem="Open URL";
+        Assert(Walk(widget).OfType<TextBox>().Any(t=>
+            t.Visibility==Visibility.Visible),
+            "R81 URL paste field must remain visible");
+        Call(w,"Dispose");
+        var workspace=(Window)Make("DeskSpace.MainWindow");
+        try
+        {
+            var modes=(ComboBox)workspace.FindName("ReminderActionChoice")!;
+            modes.SelectedIndex=1;
+            var tab=(TabControl)workspace.FindName("MainTabs")!;
+            var reminders=tab.Items.OfType<TabItem>().First(x=>
+                (x.Tag as string)=="Reminders");
+            tab.SelectedItem=reminders;
+            var container=(StackPanel)workspace.FindName("ReminderEmbeddedSearch")!;
+            Assert(container.Children.Count==1 &&
+                (container.Children[0] as StackPanel)?.Tag as string==
+                    "DeskSpaceReminderAutomaticSearch",
+                "R81 actual main Reminder page must display search immediately");
+            Assert(((TextBox)workspace.FindName("ReminderTitle")!).Visibility==
+                Visibility.Collapsed,
+                "R81 action mode must not request a manual reminder name");
+            modes.SelectedIndex=3;
+            Assert(((TextBox)workspace.FindName("ReminderActionPath")!).Visibility==
+                Visibility.Visible,"R81 URL entry must allow pasted link");
+            Render((FrameworkElement)workspace.Content,1000,740,
+                "r81-main-action-picker");
+        }
+        finally{workspace.Close();}
+        var preferences=Product.GetType("DeskSpace.DeskSpaceReminderPreferencesV81",true)!;
+        var load=preferences.GetMethod("Load",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var save=preferences.GetMethod("Save",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var previous=load.Invoke(null,null)!;
+        var name=(string)previous.GetType().GetField("Item1")!.GetValue(previous)!;
+        var file=(string)previous.GetType().GetField("Item2")!.GetValue(previous)!;
+        try
+        {
+            object?[] args={"Hand",@"C:\Sounds\test.wav",""};
+            Assert((bool)save.Invoke(null,args)!,
+                "R81 sound settings must persist on disk");
+            var retrieved=load.Invoke(null,null)!;
+            Assert((string)retrieved.GetType().GetField("Item1")!
+                    .GetValue(retrieved)== "Hand" &&
+                (string)retrieved.GetType().GetField("Item2")!
+                    .GetValue(retrieved)== @"C:\Sounds\test.wav",
+                "R81 sound choice and custom path must survive reload");
+        }
+        finally
+        {
+            object?[] args={name,file,""};
+            save.Invoke(null,args);
+        }
     }
 
     private static void TestReminderV76()
