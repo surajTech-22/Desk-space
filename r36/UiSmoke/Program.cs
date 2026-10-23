@@ -76,19 +76,21 @@ internal static class Program
         var actions=Product.GetType("DeskSpace.DeskSpaceExcelActionsV46",true)!;
         var cell=Make("DeskSpace.DeskSpaceExcelCellV16");
         cell.GetType().GetProperty("ValueKind")!.SetValue(cell,"action_static_date");
-        var method=actions.GetMethod("ValueAtPaste",
+        var keyMethod=actions.GetMethod("NativeSendKeys",
             BindingFlags.Static|BindingFlags.NonPublic)!;
-        double first=Convert.ToDouble(method.Invoke(null,new object[]{
-            cell,new DateTime(2026,10,22,13,45,0)})!);
-        double second=Convert.ToDouble(method.Invoke(null,new object[]{
-            cell,new DateTime(2026,10,23,7,30,0)})!);
-        Assert(second-first==1.0,
-            "Saved Excel date action does not evaluate when pasted");
+        var keyboard=(string)keyMethod.Invoke(null,new object[]{
+            "action_static_date"})!;
+        Assert(keyboard.StartsWith("^;"),
+            "Ctrl+; should execute in Excel, not be computed by DeskSpace");
+        var timeKeys=(string)keyMethod.Invoke(null,new object[]{
+            "action_static_time"})!;
+        Assert(timeKeys.StartsWith("^+;"),
+            "Ctrl+Shift+; must execute as Excel's native keyboard action");
         var label=actions.GetMethod("FromShortcut",
             BindingFlags.Static|BindingFlags.NonPublic)!;
         Assert((string)label.Invoke(null,new object[]{"Ctrl+;"})==
             "action_static_date","Excel Ctrl+; mapping not recognised");
-        Console.WriteLine("R46 Excel paste-time date and keyboard mapping PASS.");
+        Console.WriteLine("R51 Excel-native keyboard and formula dispatch PASS.");
     }
     private static void TestConnectedChildDonut()
     {

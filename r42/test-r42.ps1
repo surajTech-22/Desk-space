@@ -19,10 +19,10 @@ foreach($check in @(
  'Data value','Value cell','ReferenceCell','Save collection & data',
  'Collection name (groups related data together)',
  'Data name (saved Excel mapping)',
- 'Capture selected Excel cells','Refresh saved mappings','LoadEditorV42(',
+ 'Capture / add fields','Refresh saved mappings','LoadEditorV42(',
  'SaveEditorV42()','DeskSpaceExcelStoreV16.Load()',
  'DeskSpaceExcelStoreV16.Save(disk)','ShowCapturedV42(',
- 'existing>=0)disk[existing]=edited',
+ 'disk[index]=edited;',
  'SourceWorkbook','CoordinatesVerified','GroupPath','mappingGroupV42'))
 {if(!$editor.Contains($check)){throw "R42 saved mapping editor missing: $check"}}
 foreach($check in @(

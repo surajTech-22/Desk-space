@@ -10,9 +10,12 @@ foreach($token in @('clock.Date.ToOADate()','clock.TimeOfDay.TotalDays',
     'Now=>"=NOW()"','FromShortcut(string input)')){
     if(!$engine.Contains($token)){throw "R46 action engine missing $token"}
 }
-foreach($token in @('ValueAtPaste(cell,DateTime.Now)',
+foreach($token in @(
     'DeskSpaceExcelActionsV46.Formula(change.Source)',
-    'DeskSpaceExcelActionsV46.NumberFormat(',
+    'DeskSpaceExcelActionsV46.NativeSendKeys(',
+    'app.SendKeys(',
+    'GetForegroundWindow()!=excelHwnd',
+    'cell.Formula=',
     'Text(cell.NumberFormat)','x.Cell.NumberFormat=x.Format',
     'DeskSpaceExcelActionsV46.PreviewText(source,DateTime.Now)')){
     if(!$bridge.Contains($token)){throw "R46 Excel bridge missing $token"}
@@ -28,4 +31,10 @@ if(!$engine.Contains('Current date on paste (Ctrl+;)')){
 if(!$wheel.Contains('DeskSpaceExcelActionsV46.PreviewText(value,DateTime.Now)')){
     throw 'R46 wheel does not show current dynamic values'
 }
-Write-Host 'R46 PASS: user-chosen date/time and keyboard shortcut actions resolve at paste time under existing backup+rollback guards.'
+if($bridge.Contains('ValueAtPaste(cell,DateTime.Now)')){
+    throw 'R51 native Excel date shortcut must not be precomputed by DeskSpace'
+}
+if(!$engine.Contains('NativeSendKeys(string kind)')){
+    throw 'R51 missing Excel-native keyboard dispatch'
+}
+Write-Host 'R51 PASS: Excel receives actual formula or shortcut, no precomputed replacement values, backup and rollback retained.'
