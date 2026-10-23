@@ -1095,6 +1095,11 @@ jobs:
         run: |
           ./r68/test-r68.ps1
 
+      - name: R69 complete glyph visibility across white end-divider background
+        shell: pwsh
+        run: |
+          ./r69/test-r69.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

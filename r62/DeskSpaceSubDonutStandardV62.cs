@@ -233,27 +233,44 @@ internal static class DeskSpaceSubDonutStandardV62
         return darkMinimum>=whiteMinimum?dark:white;
     }
 
-    // A text-only button preserves keyboard and click-to-scroll support.
-    // The actual divider stroke has a glyph-height gap, so NO backdrop
-    // rectangle, patch or painted badge is required under the number.
+    // An actual ink outline (not a plate or badge) keeps the numeral visible
+    // on BOTH sides of the sector edge. A shadow blur was not enough when
+    // the glyph straddled dark-purple fill and the white desktop background.
+    // The background remains entirely transparent, including hover.
     private static ControlTemplate NumberOnlyTemplate(Color ink)
     {
-        var glyph=new FrameworkElementFactory(typeof(TextBlock));
+        Color rim=ink.R>190?Color.FromRgb(22,31,52):Colors.White;
+        var root=new FrameworkElementFactory(typeof(Grid));
+        root.SetValue(Panel.BackgroundProperty,Brushes.Transparent);
         var parent=new RelativeSource(RelativeSourceMode.TemplatedParent);
-        glyph.SetBinding(TextBlock.TextProperty,
-            new Binding("Content"){RelativeSource=parent});
-        glyph.SetBinding(TextBlock.ForegroundProperty,
-            new Binding("Foreground"){RelativeSource=parent});
-        glyph.SetValue(TextBlock.FontFamilyProperty,
-            new FontFamily("Segoe UI"));
-        glyph.SetValue(TextBlock.FontWeightProperty,FontWeights.Bold);
-        glyph.SetValue(TextBlock.FontSizeProperty,12.5);
-        glyph.SetValue(TextBlock.TextAlignmentProperty,TextAlignment.Center);
-        glyph.SetValue(TextBlock.TextTrimmingProperty,TextTrimming.None);
-        glyph.SetValue(UIElement.EffectProperty,new DropShadowEffect{
-            Color=ink.R>190?Color.FromRgb(11,19,45):Colors.White,
-            ShadowDepth=0,BlurRadius=1.3,Opacity=.25});
-        return new ControlTemplate(typeof(Button)){VisualTree=glyph};
+        void AddInk(Color color,double offsetX,double offsetY)
+        {
+            var glyph=new FrameworkElementFactory(typeof(TextBlock));
+            glyph.SetBinding(TextBlock.TextProperty,
+                new Binding("Content"){RelativeSource=parent});
+            glyph.SetValue(TextBlock.ForegroundProperty,new SolidColorBrush(color));
+            glyph.SetValue(TextBlock.FontFamilyProperty,new FontFamily("Segoe UI"));
+            glyph.SetValue(TextBlock.FontWeightProperty,FontWeights.Bold);
+            glyph.SetValue(TextBlock.FontSizeProperty,13.5);
+            glyph.SetValue(TextBlock.TextAlignmentProperty,TextAlignment.Center);
+            glyph.SetValue(FrameworkElement.HorizontalAlignmentProperty,
+                HorizontalAlignment.Center);
+            glyph.SetValue(FrameworkElement.VerticalAlignmentProperty,
+                VerticalAlignment.Center);
+            glyph.SetValue(TextBlock.TextTrimmingProperty,TextTrimming.None);
+            glyph.SetValue(UIElement.RenderTransformProperty,
+                new TranslateTransform(offsetX,offsetY));
+            root.AppendChild(glyph);
+        }
+        // Eight 1-DIP glyph silhouettes create a clean high-contrast edge,
+        // WITHOUT a rectangle or background fill anywhere around the text.
+        foreach(var point in new[]{
+            new Point(-1,-1),new Point(0,-1),new Point(1,-1),
+            new Point(-1,0),new Point(1,0),
+            new Point(-1,1),new Point(0,1),new Point(1,1)})
+            AddInk(rim,point.X,point.Y);
+        AddInk(ink,0,0);
+        return new ControlTemplate(typeof(Button)){VisualTree=root};
     }
 
     private static void AddDividerCount(Canvas canvas,
@@ -263,12 +280,12 @@ internal static class DeskSpaceSubDonutStandardV62
         string count=hidden.ToString(System.Globalization.CultureInfo.InvariantCulture);
         // Numeral is the only overlaid visual: no mask and no background.
         // Nothing extends beyond the existing radial end divider.
-        double width=Math.Max(15,4+count.Length*9),height=17;
+        double width=Math.Max(19,6+count.Length*10),height=19;
         Color color=CounterInk(wedge.Fill);
         var button=new Button{
             Content=count,
             Width=width,Height=height,
-            FontSize=12.5,FontWeight=FontWeights.Bold,
+            FontSize=13.5,FontWeight=FontWeights.Bold,
             HorizontalContentAlignment=HorizontalAlignment.Center,
             VerticalContentAlignment=VerticalAlignment.Center,
             Padding=new Thickness(0),

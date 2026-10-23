@@ -701,6 +701,62 @@ internal static class Program
                 "Embedded divider numeral lacks 4.5:1 contrast for light/dark wedges");
         }
         Render(board,700,700,"subdonut-inline-divider-counts");
+        // R69: reproduce the user's real failure: a purple +New end wedge
+        // on WHITE rather than the transparent/black synthetic screenshot.
+        // The full numeral must remain legible where it straddles the edge.
+        var whiteScene=new Canvas{Width=700,Height=700,
+            Background=Brushes.White};
+        Geometry? lastGeometry=null;
+        for(int i=0;i<5;i++)
+        {
+            Geometry wedge=(Geometry)sector.Invoke(null,new object[]{
+                0,-140.0+i*20,-120.0+i*20})!;
+            if(i==4)lastGeometry=wedge;
+            whiteScene.Children.Add(new System.Windows.Shapes.Path{
+                Data=wedge,
+                Fill=i==4
+                    ? new SolidColorBrush(Color.FromRgb(98,80,182))
+                    : new SolidColorBrush(Color.FromRgb(220,229,252)),
+                Stroke=Brushes.White,StrokeThickness=2});
+        }
+        var twoHidden=View(7,0,-90);
+        int moved=0;
+        indicators.Invoke(null,new object[]{whiteScene,twoHidden,350.0,
+            (Action<int>)(d=>moved=d)});
+        var twoButton=whiteScene.Children.OfType<Button>().Single();
+        Assert((string)twoButton.Content=="2" && 
+            !whiteScene.Children.OfType<Border>().Any(),
+            "R69 purple end-line numeral has a separate badge or wrong count");
+        var textPoint=(Point)midpoint.Invoke(null,new object[]{
+            lastGeometry!,false})!;
+        Assert(Math.Abs(Canvas.GetLeft(twoButton)+twoButton.Width/2-
+            textPoint.X)<.05 &&
+            Math.Abs(Canvas.GetTop(twoButton)+twoButton.Height/2-
+            textPoint.Y)<.05,
+            "R69 number moved off its actual divider midpoint");
+        Render(whiteScene,700,700,"subdonut-purple-new-white-background");
+        var preview=new RenderTargetBitmap(700,700,96,96,
+            PixelFormats.Pbgra32);
+        preview.Render(whiteScene);
+        var raster=new byte[700*700*4];
+        preview.CopyPixels(raster,700*4,0);
+        int darkInkOutside=0;
+        for(int y=(int)textPoint.Y-10;y<=(int)textPoint.Y+10;y++)
+        for(int x=(int)textPoint.X-12;x<=(int)textPoint.X+12;x++)
+        {
+            if(x<0||y<0||x>=700||y>=700)continue;
+            int k=(y*700+x)*4;
+            bool navyOutline=raster[k]<95 && raster[k+1]<90 &&
+                raster[k+2]<85 && raster[k+3]>180;
+            if(navyOutline && !lastGeometry!.FillContains(
+                new Point(x+.5,y+.5))) darkInkOutside++;
+        }
+        Assert(darkInkOutside>=4,
+            "R69 hidden digit disappears into white outside purple end wedge");
+        twoButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,twoButton));
+        Assert(moved==1,"R69 clear numeral must still click-to-scroll");
+        Console.WriteLine("R69 WPF PASS: full purple end-line count readable against white background without a badge.");
+
         // A clipped Popup arc stores translated sector geometry; the same
         // standard must honor its transform at any submenu depth.
         var translated=(Geometry)sector.Invoke(null,new object[]{2,40.0,62.0})!;
