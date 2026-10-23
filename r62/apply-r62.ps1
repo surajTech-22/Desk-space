@@ -95,9 +95,12 @@ Swap '        internal ChildRing(int depth,string group,double angle,Window owne
 Swap '            Depth=depth;Group=group;Angle=angle;' @'
             Depth=depth;Group=group;Angle=angle;ParentSweep=parentSweep;
 '@
-Swap '                    ExpandRing(1,"",RootAngle(slot));' @'
-                    ExpandRing(1,"",RootAngle(slot),rootStep);
-'@
+$oldRoot='                    ExpandRing(1,"",RootAngle(slot));'
+$newRoot='                    ExpandRing(1,"",RootAngle(slot),rootStep);'
+if(([regex]::Matches($s,[regex]::Escape($oldRoot))).Count -ne 2){
+    throw 'R62 expected both delayed and direct Excel information expansion sites'
+}
+$s=$s.Replace($oldRoot,$newRoot)
 Swap '                    ExpandRing(depth+1,item.Group,RingAngle(ring,slot));' @'
                     ExpandRing(depth+1,item.Group,RingAngle(ring,slot),ring.StepAngle);
 '@
