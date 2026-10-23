@@ -51,7 +51,18 @@ internal static class DeskSpaceExcelActionsV46
         return "";
     }
     internal static bool IsStaticDateTime(string k)=>k is Date or Time or DateTimeKind;
+    internal static bool IsNativeShortcut(string k)=>IsStaticDateTime(k);
+    internal static string NativeSendKeys(string kind)=>kind switch
+    {
+        Date=>"^;{ENTER}",
+        Time=>"^+;{ENTER}",
+        DateTimeKind=>"^; ^+;{ENTER}",
+        _=>throw new InvalidOperationException(
+            "Not a supported cell-local Excel keyboard shortcut.")
+    };
     internal static bool IsFormulaAction(string k)=>k is Today or Now or CustomFormula;
+    // Diagnostic compatibility only: never use this to write a shortcut.
+    // Live paste dispatches to Excel's own keyboard engine below.
     internal static object ValueAtPaste(DeskSpaceExcelCellV16 c,DateTime clock)=>
         c.ValueKind switch
         {
@@ -74,10 +85,11 @@ internal static class DeskSpaceExcelActionsV46
     };
     internal static string PreviewText(DeskSpaceExcelCellV16 c,DateTime clock)=>c.ValueKind switch
     {
-        Date=>clock.ToString("dd-MMM-yyyy",CultureInfo.InvariantCulture),
-        Time=>clock.ToString("HH:mm:ss",CultureInfo.InvariantCulture),
-        DateTimeKind=>clock.ToString("dd-MMM-yyyy HH:mm:ss",CultureInfo.InvariantCulture),
-        Today=>"=TODAY() [recalculates]",Now=>"=NOW() [recalculates]",
+        Date=>"Ctrl+; → Excel inserts the current date on paste",
+        Time=>"Ctrl+Shift+; → Excel inserts the current time on paste",
+        DateTimeKind=>"Excel inserts the current date and time on paste",
+        Today=>"=TODAY() (Excel formula; recalculates)",
+        Now=>"=NOW() (Excel formula; recalculates)",
         CustomFormula=>c.FormulaR1C1,_=>c.Display
     };
     // Excel Windows reference. Only safe, cell-local value shortcuts above
