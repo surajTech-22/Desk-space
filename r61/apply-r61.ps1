@@ -86,7 +86,13 @@ One @'
                 if(!appPinMode && hit.Category!="Notes")
                     chips.Children.Add(Chip("⧉","Copy path",hit,"path"));
 '@
-One '                if(File.Exists(hit.OpenTarget))' '                if(!appPinMode && File.Exists(hit.OpenTarget))'
+One @'
+                if(File.Exists(hit.OpenTarget))
+                    chips.Children.Add(Chip("▤","Copy file",hit,"file"));
+'@ @'
+                if(!appPinMode && File.Exists(hit.OpenTarget))
+                    chips.Children.Add(Chip("▤","Copy file",hit,"file"));
+'@
 One @'
                 if(hit.Category=="Files"||hit.Category=="Applications")
 '@ @'
