@@ -2,7 +2,7 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
 $m=[IO.File]::ReadAllText("$root/Models.cs")
-$host=[IO.File]::ReadAllText("$root/WidgetHost.cs")
+$hostCode=[IO.File]::ReadAllText("$root/WidgetHost.cs")
 $editor=[IO.File]::ReadAllText("$root/DeskSpaceInlineV11.cs")
 $shelf=[IO.File]::ReadAllText("$root/DeskSpaceDueShelfV74.cs")
 foreach($p in @('AlertSound { get; set; }','AlertSoundFile { get; set; }',
@@ -11,10 +11,10 @@ foreach($p in @('AlertSound { get; set; }','AlertSoundFile { get; set; }',
 }
 foreach($p in @('"Information", "Notes", "Reminders", "Clipboard", "Applications", "Excel Functions"',
  'selected==11','highlightedSector==11','outer?6:6')){
- if(!$host.Contains($p)){throw "R76 single ring layout missing $p"}
+ if(!$hostCode.Contains($p)){throw "R76 single ring layout missing $p"}
 }
-if($host.Contains('"Applications", "Tasks", "Excel Functions"') -or
-   $host.Contains('selected==12')){throw 'R76 duplicate Tasks or outdated Excel index'}
+if($hostCode.Contains('"Applications", "Tasks", "Excel Functions"') -or
+   $hostCode.Contains('selected==12')){throw 'R76 duplicate Tasks or outdated Excel index'}
 foreach($p in @('Browse WAV','Open application','Open file',
  'DeskSpaceDueShelfV74.IsAllowedAction','DeskSpaceDueShelfV74.PlaySound',
  'AlertSoundFile=soundPath.Text.Trim()', 'AlertTarget=actionPath')){
