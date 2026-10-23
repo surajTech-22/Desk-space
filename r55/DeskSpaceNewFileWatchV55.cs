@@ -117,11 +117,41 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
         return candidate.Equals(root,StringComparison.OrdinalIgnoreCase)
             || candidate.StartsWith(normalized,StringComparison.OrdinalIgnoreCase);
     }
-    private static bool IsUserDocumentPath(string path)
+    // Classification policy applies equally to Created, Changed, Renamed,
+    // reconciliation and Search. No extension allowlist: real user files
+    // of ANY type can appear, but generated/hidden content stays invisible.
+    private static readonly HashSet<string> InternalFolders=new(
+        StringComparer.OrdinalIgnoreCase){
+        ".git",".svn",".hg",".vs",".vscode",".idea","__pycache__",
+        ".pytest_cache",".mypy_cache",".ruff_cache",".gradle",".nuget",
+        "node_modules","bower_components",".next",".angular",".cache",
+        "cache","caches","code cache","gpucache","gpu cache",
+        "shadercache","shader cache","dawncache","grshadercache",
+        "temp","tmp","temporary files","temporary internet files",
+        "inetcache","webcache","thumbnails","thumbcache",
+        "service worker","serviceworker","crashdumps","crashpad",
+        "logs","log","telemetry","windowsapps","appdata",
+        "programdata","$recycle.bin","system volume information",
+        "windows","program files","program files (x86)",
+        "$windows.~bt","$windows.~ws","$winreagent"
+    };
+    private static readonly HashSet<string> GeneratedNames=new(
+        StringComparer.OrdinalIgnoreCase){
+        "thumbs.db","ehthumbs.db","desktop.ini",".ds_store",
+        "iconcache.db","ntuser.dat","ntuser.dat.log1",
+        "ntuser.dat.log2","pagefile.sys","swapfile.sys",
+        "hiberfil.sys","dumpstack.log.tmp"
+    };
+    private static readonly HashSet<string> TemporaryExtensions=new(
+        StringComparer.OrdinalIgnoreCase){
+        ".tmp",".temp",".part",".partial",".crdownload",".download",
+        ".swp",".swo",".lock",".lck",".bak",".old",".dmp",".etl",
+        ".cache",".pyc",".pyo",".class",".obj",".pch",".ilk",
+        ".pdb",".idb",".tlog",".lastbuildstate"
+    };
+    private static bool IsSystemArea(string path)
     {
-        if(string.IsNullOrWhiteSpace(path))return false;
-        var p=path.Replace(Path.AltDirectorySeparatorChar,Path.DirectorySeparatorChar);
-        foreach(var forbidden in new[]{
+        foreach(var root in new[]{
             Environment.GetFolderPath(Environment.SpecialFolder.Windows),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
@@ -129,36 +159,81 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         })
-            if(!string.IsNullOrWhiteSpace(forbidden) && IsInside(p,forbidden))
+            if(!string.IsNullOrWhiteSpace(root) && IsInside(path,root))
+                return true;
+        return false;
+    }
+    internal static bool IsOrdinaryUserFile(string path,bool allowTestRoot=false)
+    {
+        try
+        {
+            if(string.IsNullOrWhiteSpace(path) || !File.Exists(path))return false;
+            var full=Path.GetFullPath(path);
+            if(!allowTestRoot && IsSystemArea(full))return false;
+            var name=Path.GetFileName(full);
+            if(name.Length==0 || name.StartsWith(".",StringComparison.Ordinal)
+                || name.StartsWith("~",StringComparison.Ordinal)
+                || name.StartsWith("$",StringComparison.Ordinal)
+                || name.EndsWith("~",StringComparison.Ordinal)
+                || name.EndsWith(".autosave",StringComparison.OrdinalIgnoreCase)
+                || GeneratedNames.Contains(name)
+                || TemporaryExtensions.Contains(Path.GetExtension(name)))
                 return false;
-        // Don't surface application caches, Git internals, recycle bins,
-        // OS metadata or Office temporary save artefacts.
-        var separators=new[]{Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar};
-        var parts=p.Split(separators,StringSplitOptions.RemoveEmptyEntries);
-        if(parts.Any(x=>x.Equals(".git",StringComparison.OrdinalIgnoreCase)||
-            x.Equals("$RECYCLE.BIN",StringComparison.OrdinalIgnoreCase)||
-            x.Equals("System Volume Information",StringComparison.OrdinalIgnoreCase)||
-            x.Equals("node_modules",StringComparison.OrdinalIgnoreCase)||
-            x.Equals("WindowsApps",StringComparison.OrdinalIgnoreCase)))
-            return false;
-        var name=Path.GetFileName(p);
-        return !(name.StartsWith("~$",StringComparison.Ordinal)||
-            name.StartsWith("~",StringComparison.Ordinal)||
-            name.EndsWith(".tmp",StringComparison.OrdinalIgnoreCase)||
-            name.EndsWith(".temp",StringComparison.OrdinalIgnoreCase)||
-            name.EndsWith(".crdownload",StringComparison.OrdinalIgnoreCase)||
-            name.EndsWith(".part",StringComparison.OrdinalIgnoreCase)||
-            name.EndsWith(".partial",StringComparison.OrdinalIgnoreCase)||
-            name.EndsWith(".download",StringComparison.OrdinalIgnoreCase));
+            var flags=File.GetAttributes(full);
+            if((flags & (FileAttributes.Hidden|FileAttributes.System|
+                FileAttributes.Directory|FileAttributes.ReparsePoint|
+                FileAttributes.Temporary))!=0)return false;
+            // Reject hidden folders, application caches and generated-output
+            // trees even when a normal-looking PDF/XLSX is stored inside.
+            var parent=Path.GetDirectoryName(full);
+            int depth=0;
+            while(!string.IsNullOrWhiteSpace(parent) && depth++<80)
+            {
+                var folder=Path.GetFileName(parent.TrimEnd(
+                    Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
+                if(InternalFolders.Contains(folder)||
+                    folder.StartsWith(".",StringComparison.Ordinal))
+                    return false;
+                if(!allowTestRoot)
+                {
+                    var attrs=File.GetAttributes(parent);
+                    if((attrs&(FileAttributes.Hidden|FileAttributes.System|
+                        FileAttributes.ReparsePoint))!=0)
+                        return false;
+                }
+                var next=Path.GetDirectoryName(parent.TrimEnd(
+                    Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
+                if(string.IsNullOrWhiteSpace(next)||next==parent)break;
+                parent=next;
+            }
+            return true;
+        }
+        catch(IOException){return false;}
+        catch(UnauthorizedAccessException){return false;}
+        catch(ArgumentException){return false;}
+    }
+    private static bool IsUserDocumentPath(string path)
+    {
+        if(string.IsNullOrWhiteSpace(path))return false;
+        if(IsSystemArea(path))return false;
+        // Fast path before filesystem attribute reads, saving significant
+        // work for high-volume temporary writes across whole drives.
+        var parts=path.Split(new[]{Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar},StringSplitOptions.RemoveEmptyEntries);
+        if(parts.Any(p=>InternalFolders.Contains(p)||
+            p.StartsWith(".",StringComparison.Ordinal)))return false;
+        var name=Path.GetFileName(path);
+        return !GeneratedNames.Contains(name) &&
+            !TemporaryExtensions.Contains(Path.GetExtension(name)) &&
+            !name.StartsWith("~",StringComparison.Ordinal) &&
+            !name.StartsWith("$",StringComparison.Ordinal) &&
+            !name.StartsWith(".",StringComparison.Ordinal);
     }
     private bool Eligible(string path)
     {
         try
         {
-            if((!explicitRoots&&!IsUserDocumentPath(path))||!File.Exists(path))return false;
-            var flags=File.GetAttributes(path);
-            return (flags&(FileAttributes.System|FileAttributes.Directory|
-                FileAttributes.ReparsePoint))==0;
+            return IsOrdinaryUserFile(path,explicitRoots);
         }
         catch(IOException){return false;}
         catch(UnauthorizedAccessException){return false;}
