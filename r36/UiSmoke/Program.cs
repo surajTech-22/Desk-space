@@ -658,9 +658,34 @@ internal static class Program
             Assert(buttons[side].BorderThickness.Left==0 &&
                 edges[side].BorderThickness.Left==0,
                 "Hidden count must not have a detached badge outline");
-            Assert(ReferenceEquals(buttons[side].Background,wedge.Fill),
-                "Counter must match end wedge fill and interrupt divider line");
+            Assert(ReferenceEquals(edges[side].Background,wedge.Fill),
+                "Counter divider mask must blend exactly with its wedge fill");
+            Assert(buttons[side].Background==Brushes.Transparent &&
+                buttons[side].Template!=null &&
+                buttons[side].FontWeight==FontWeights.Bold &&
+                buttons[side].FontSize>=12.0 &&
+                edges[side].CornerRadius.TopLeft==0,
+                "Counter must be a clear numeral without a rectangular button plate");
         }
+        // Dark numerals on pastel, light numerals on selected dark wedges.
+        // All must have at least 4.5:1 contrast, independent of wedge hue.
+        var inkMethod=type.GetMethod("CounterInk",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var ratioType=Product.GetType("DeskSpace.DeskSpaceWeatherContrastV64",true)!;
+        var ratio=ratioType.GetMethod("ContrastRatio",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        foreach(var bg in new[]{
+            Color.FromRgb(222,229,247),
+            Color.FromRgb(151,135,222),
+            Color.FromRgb(32,45,78)})
+        {
+            var ink=(Color)inkMethod.Invoke(null,
+                new object[]{new SolidColorBrush(bg)})!;
+            double score=(double)ratio.Invoke(null,new object[]{ink,bg})!;
+            Assert(score>=4.5,
+                "Embedded divider numeral lacks 4.5:1 contrast for light/dark wedges");
+        }
+        Render(board,700,700,"subdonut-blended-divider-counts");
         // A clipped Popup arc stores translated sector geometry; the same
         // standard must honor its transform at any submenu depth.
         var translated=(Geometry)sector.Invoke(null,new object[]{2,40.0,62.0})!;
