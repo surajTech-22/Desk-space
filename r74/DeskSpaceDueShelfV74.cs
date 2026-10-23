@@ -36,7 +36,7 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
             ResizeMode=ResizeMode.NoResize,ShowInTaskbar=false,
             ShowActivated=false,Topmost=true,Focusable=false
         };
-        shelf.Owner=owner;
+        // Owner cannot be assigned until the WPF circle has first shown.
         owner.LocationChanged+=Moved;
         owner.SizeChanged+=Sized;
         owner.IsVisibleChanged+=VisibilityChanged;
@@ -56,6 +56,7 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
     internal void Start()
     {
         if(disposed)return;
+        if(owner.IsVisible && shelf.Owner==null)shelf.Owner=owner;
         timer.Start();
         CheckSystemClock(force:true);
     }
