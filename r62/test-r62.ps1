@@ -8,7 +8,7 @@ $info=Get-Content "$root/DeskSpaceInformationV36.cs" -Raw
 $ui=Get-Content 'r36/UiSmoke/Program.cs' -Raw
 foreach($token in @('internal const int Visible=5',
     'ParentSweep=360.0/7.0','HiddenLeft','HiddenRight',
-    'int HiddenLeft,int HiddenRight,double Center,double Half,double Step','private static Button Counter',
+    'int HiddenLeft,int HiddenRight,double Center,double Half,double Step','private static void AddEdgeTab',
     'internal sealed class Wheel','remainder+=delta',
     'internal static void Animate(Canvas canvas',
     'DrawHiddenCounters(Canvas canvas,View view',
@@ -37,7 +37,7 @@ foreach($token in @('PerPage=DeskSpaceSubDonutStandardV62.Visible',
   if(!$excel.Contains($token)){throw "R62 nested Excel standard missing $token"}
 }
 foreach($token in @('TestStandardSubDonutScroll()',
-    'Hidden counters missing on left or right',
+    'Hidden counts must attach inside both end sectors',
     'R62 WPF PASS: five visible',
     'mouse wheel/touchpad stepping and smooth animation.')){
   if(!$ui.Contains($token)){throw "R62 UI regression missing $token"}
