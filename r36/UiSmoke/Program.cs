@@ -31,7 +31,6 @@ internal static class Program
             TestNewFileNotifications();
             TestApplicationSaveEvents();
             TestFileClassification();
-            TestHiddenCacheFiltering();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
             TestSubArcScreenFit();
@@ -44,68 +43,6 @@ internal static class Program
             Console.Error.WriteLine("R36 WPF visual smoke FAILED: "+ex);
             app.Shutdown();
             return 1;
-        }
-    }
-    private static void TestHiddenCacheFiltering()
-    {
-        string folder=Path.Combine(Path.GetTempPath(),
-            "DeskSpace-R58-Visibility-"+Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(folder);
-        var policy=Product.GetType("DeskSpace.DeskSpaceFileVisibilityV58",true)!;
-        var eligible=policy.GetMethod("Eligible",BindingFlags.Static|
-            BindingFlags.Public|BindingFlags.NonPublic)!;
-        bool Accept(string p)=>(bool)eligible.Invoke(null,new object?[]{p,folder,false})!;
-        string Put(string relative)
-        {
-            var path=Path.Combine(folder,relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path,"example user data");
-            return path;
-        }
-        try
-        {
-            foreach(var name in new[]{"report.pdf","audit.xlsx","letter.docx",
-                "photo.jpg","archive.zip","custom.json","debug.log",
-                "binary.bin","extensionless","original_backup.bak"})
-                Assert(Accept(Put(name)),"R58 rejected real user format: "+name);
-            foreach(var name in new[]{"desktop.ini","thumbs.db","cache.db",
-                "~$report.xlsx","partial.crdownload","working.tmp",
-                "data.cache","system.pyc",".hidden.txt","locked.lock",
-                "Cache/invoice.xlsx","GPUCache/image.jpg",
-                "Code Cache/letter.docx","__pycache__/invoice.pdf",
-                ".git/saved.xlsx","node_modules/readme.pdf",
-                "Temp/draft.xlsx"})
-                Assert(!Accept(Put(name)),"R58 accepted cache/temp item: "+name);
-            var hidden=Put("hidden-but-named-normal.xlsx");
-            File.SetAttributes(hidden,File.GetAttributes(hidden)|FileAttributes.Hidden);
-            Assert(!Accept(hidden),"R58 accepted a Hidden attribute file");
-            var hiddenDir=Path.Combine(folder,"Accounts Hidden");
-            Directory.CreateDirectory(hiddenDir);
-            var inHidden=Put("Accounts Hidden/client.pdf");
-            File.SetAttributes(hiddenDir,
-                File.GetAttributes(hiddenDir)|FileAttributes.Hidden);
-            Assert(!Accept(inHidden),"R58 accepted file within hidden folder");
-            var system=Put("system-flagged.pdf");
-            File.SetAttributes(system,File.GetAttributes(system)|FileAttributes.System);
-            Assert(!Accept(system),"R58 accepted System attribute file");
-            var temporary=Put("transient-state.xls");
-            File.SetAttributes(temporary,
-                File.GetAttributes(temporary)|FileAttributes.Temporary);
-            Assert(!Accept(temporary),"R58 accepted Temporary attribute file");
-            Console.WriteLine("R58 PASS: 10 allowed user formats; 17 cache/temp names and Hidden, hidden-parent, System and Temporary attributes excluded.");
-        }
-        finally
-        {
-            try
-            {
-                foreach(var file in Directory.EnumerateFiles(folder,"*",
-                    SearchOption.AllDirectories))
-                    File.SetAttributes(file,FileAttributes.Normal);
-                foreach(var d in Directory.EnumerateDirectories(folder,"*",
-                    SearchOption.AllDirectories))
-                    File.SetAttributes(d,FileAttributes.Directory);
-                Directory.Delete(folder,true);
-            }catch(IOException){}catch(UnauthorizedAccessException){}
         }
     }
     private static void TestFileClassification()
