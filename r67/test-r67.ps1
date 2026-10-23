@@ -14,7 +14,7 @@ foreach($token in @(
   'Color rim=ink.R>190?Color.FromRgb(22,31,52):Colors.White;',
   'new Point(-1,-1),new Point(0,-1),new Point(1,-1)',
   'root.AppendChild(glyph);',
-  'double width=Math.Max(19,6+count.Length*10),height=19;',
+  'double width=Math.Max(21,8+count.Length*10),height=39;',
   'FontSize=13.5,FontWeight=FontWeights.Bold',
   'Background=Brushes.Transparent,',
   'Template=NumberOnlyTemplate(color),',

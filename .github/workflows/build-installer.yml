@@ -1100,6 +1100,11 @@ jobs:
         run: |
           ./r69/test-r69.ps1
 
+      - name: R70 hidden-count-only orientation and radial dot regression
+        shell: pwsh
+        run: |
+          ./r70/test-r70.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

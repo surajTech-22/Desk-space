@@ -10,7 +10,7 @@ foreach($token in @(
   'AddInk(rim,point.X,point.Y);',
   'AddInk(ink,0,0);',
   'root.SetValue(Panel.BackgroundProperty,Brushes.Transparent);',
-  'double width=Math.Max(19,6+count.Length*10),height=19;',
+  'double width=Math.Max(21,8+count.Length*10),height=39;',
   'Canvas.SetLeft(button,midpoint.X-width/2);',
   'Canvas.SetTop(button,midpoint.Y-height/2);'
 )){

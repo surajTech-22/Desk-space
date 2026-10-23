@@ -128,10 +128,36 @@ internal static class DeskSpaceSubDonutStandardV62
     }
 
 
+    // Radial divider direction in the on-screen (possibly clipped) canvas.
+    // Normalize to an upright half-turn: the COUNT follows the divider,
+    // without becoming upside-down as the menu rotates around the circle.
+    internal static double DividerAngle(Geometry shape,bool leading)
+    {
+        if(shape is not PathGeometry pg || pg.Figures.Count==0 ||
+           pg.Figures[0].Segments.Count<3 ||
+           pg.Figures[0].Segments[0] is not ArcSegment outerArc ||
+           pg.Figures[0].Segments[1] is not LineSegment radialLine ||
+           pg.Figures[0].Segments[2] is not ArcSegment innerArc)
+            throw new ArgumentException("Unexpected hidden-count divider geometry",
+                nameof(shape));
+        Point outer=leading?pg.Figures[0].StartPoint:outerArc.Point;
+        Point inner=leading?innerArc.Point:radialLine.Point;
+        if(shape.Transform is Transform transform)
+        {
+            outer=transform.Transform(outer);
+            inner=transform.Transform(inner);
+        }
+        double angle=Math.Atan2(inner.Y-outer.Y,inner.X-outer.X)
+            *180.0/Math.PI-90.0;
+        while(angle>90)angle-=180;
+        while(angle< -90)angle+=180;
+        return angle;
+    }
+
     // The wedge outline is a single closed shape, so its radial stroke
     // cannot be hidden locally without also painting a rectangle over the
     // sector. Preserve the fill path for mouse input, and replace ONLY the
-    // outline with equivalent open strokes. A real 17-DIP gap in the end
+    // outline with equivalent open strokes. A real 33-DIP gap in the end
     // divider accepts the numeral without any patch/background behind it.
     private static void SplitDividerStroke(Canvas canvas,
         System.Windows.Shapes.Path wedge,bool leading,bool trailing)
@@ -167,9 +193,9 @@ internal static class DeskSpaceSubDonutStandardV62
             double dx=inner.X-outer.X,dy=inner.Y-outer.Y;
             double len=Math.Sqrt(dx*dx+dy*dy);
             if(len<1){AddLine(outer,inner);return;}
-            // The gap is along the divider, not a rectangular patch crossing
-            // the sectors. It has the minimum height for Segoe UI digits.
-            double half=Math.Min(8.5,len/4);
+            // The gap is along the divider. A numeral and TWO small dots
+            // are arranged along it, never in a separate floating badge.
+            double half=Math.Min(16.5,len*.36);
             double ux=dx/len,uy=dy/len;
             var middle=new Point((outer.X+inner.X)/2,
                                  (outer.Y+inner.Y)/2);
@@ -270,6 +296,28 @@ internal static class DeskSpaceSubDonutStandardV62
             new Point(-1,1),new Point(0,1),new Point(1,1)})
             AddInk(rim,point.X,point.Y);
         AddInk(ink,0,0);
+        // Dots belong ONLY to hidden-count controls, one before and one
+        // after the numeral ALONG the local radial axis. The entire grid
+        // rotates together with the divider; no other menu numbers change.
+        foreach(double offset in new[]{-13.0,13.0})
+        {
+            var dot=new FrameworkElementFactory(
+                typeof(System.Windows.Shapes.Ellipse));
+            dot.SetValue(FrameworkElement.WidthProperty,3.8);
+            dot.SetValue(FrameworkElement.HeightProperty,3.8);
+            dot.SetValue(System.Windows.Shapes.Shape.FillProperty,
+                new SolidColorBrush(ink));
+            dot.SetValue(System.Windows.Shapes.Shape.StrokeProperty,
+                new SolidColorBrush(rim));
+            dot.SetValue(System.Windows.Shapes.Shape.StrokeThicknessProperty,1.0);
+            dot.SetValue(FrameworkElement.HorizontalAlignmentProperty,
+                HorizontalAlignment.Center);
+            dot.SetValue(FrameworkElement.VerticalAlignmentProperty,
+                VerticalAlignment.Center);
+            dot.SetValue(UIElement.RenderTransformProperty,
+                new TranslateTransform(0,offset));
+            root.AppendChild(dot);
+        }
         return new ControlTemplate(typeof(Button)){VisualTree=root};
     }
 
@@ -280,7 +328,7 @@ internal static class DeskSpaceSubDonutStandardV62
         string count=hidden.ToString(System.Globalization.CultureInfo.InvariantCulture);
         // Numeral is the only overlaid visual: no mask and no background.
         // Nothing extends beyond the existing radial end divider.
-        double width=Math.Max(19,6+count.Length*10),height=19;
+        double width=Math.Max(21,8+count.Length*10),height=39;
         Color color=CounterInk(wedge.Fill);
         var button=new Button{
             Content=count,
@@ -294,6 +342,9 @@ internal static class DeskSpaceSubDonutStandardV62
             BorderThickness=new Thickness(0),
             FocusVisualStyle=null,
             Template=NumberOnlyTemplate(color),
+            RenderTransformOrigin=new Point(.5,.5),
+            RenderTransform=new RotateTransform(
+                DividerAngle(wedge.Data,leading)),
             Cursor=System.Windows.Input.Cursors.Hand,
             ToolTip=(leading?"Hidden before: ":"Hidden after: ")+hidden+
                 " · scroll or select to reveal"

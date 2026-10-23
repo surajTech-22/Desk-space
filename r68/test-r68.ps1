@@ -6,7 +6,7 @@ foreach($token in @(
   'private static void SplitDividerStroke(Canvas canvas,',
   'AddRadial(figure.StartPoint,innerArc.Point,leading);',
   'AddRadial(outerArc.Point,radialLine.Point,trailing);',
-  'double half=Math.Min(8.5,len/4);',
+  'double half=Math.Min(16.5,len*.36);',
   'wedge.Stroke=null;',
   'canvas.Children.Add(border);',
   'canvas.Children.Add(button);',

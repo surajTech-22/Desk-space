@@ -638,6 +638,8 @@ internal static class Program
             BindingFlags.Static|BindingFlags.NonPublic)!;
         var midpoint=type.GetMethod("DividerMidpoint",
             BindingFlags.Static|BindingFlags.NonPublic)!;
+        var dividerAngle=type.GetMethod("DividerAngle",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
         int shifted=0;
         indicators.Invoke(null,new object[]{board,middle,350.0,
             (Action<int>)(d=>shifted=d)});
@@ -660,6 +662,13 @@ internal static class Program
             double y=Canvas.GetTop(buttons[side])+buttons[side].Height/2;
             Assert(Math.Abs(x-point.X)<.05 && Math.Abs(y-point.Y)<.05,
                 "Hidden count not centered on actual vertical/radial end line");
+            double rotated=(buttons[side].RenderTransform as RotateTransform)?
+                .Angle??double.NaN;
+            double expected=(double)dividerAngle.Invoke(null,new object[]{
+                wedge.Data,side==0})!;
+            Assert(Math.Abs(rotated-expected)<.001 &&
+                buttons[side].RenderTransformOrigin==new Point(.5,.5),
+                "R70 hidden count does not rotate with its actual divider");
             Assert(wedge.Stroke==null &&
                 buttons[side].BorderThickness.Left==0 &&
                 buttons[side].Background==Brushes.Transparent &&
@@ -678,7 +687,7 @@ internal static class Program
                     f.StartPoint,((LineSegment)f.Segments[0]).Point})
                 .ToArray();
             int nearest=radialEnds.Count(p=>
-                Math.Abs((p-point).Length-8.5)<.1);
+                Math.Abs((p-point).Length-16.5)<.1);
             Assert(nearest==2,
                 "Actual line gap must have two endpoints beside the numeral");
         }
@@ -701,6 +710,23 @@ internal static class Program
                 "Embedded divider numeral lacks 4.5:1 contrast for light/dark wedges");
         }
         Render(board,700,700,"subdonut-inline-divider-counts");
+        Render(board,700,700,"subdonut-oriented-hidden-counts");
+        foreach(var hiddenButton in buttons)
+        {
+            hiddenButton.ApplyTemplate();
+            var dots=Walk(hiddenButton)
+                .OfType<System.Windows.Shapes.Ellipse>().ToArray();
+            Assert(dots.Length==2,
+                "R70 hidden count must have exactly one dot above and below");
+            var translations=dots.Select(dot=>dot.RenderTransform)
+                .OfType<TranslateTransform>()
+                .OrderBy(tr=>tr.Y).ToArray();
+            Assert(translations.Length==2 &&
+                Math.Abs(translations[0].Y+13)<.1 &&
+                Math.Abs(translations[1].Y-13)<.1 &&
+                translations.All(x=>Math.Abs(x.X)<.01),
+                "R70 hidden-count dots must follow the divider, not the page");
+        }
         // R69: reproduce the user's real failure: a purple +New end wedge
         // on WHITE rather than the transparent/black synthetic screenshot.
         // The full numeral must remain legible where it straddles the edge.
@@ -734,7 +760,11 @@ internal static class Program
             Math.Abs(Canvas.GetTop(twoButton)+twoButton.Height/2-
             textPoint.Y)<.05,
             "R69 number moved off its actual divider midpoint");
+        Assert(Math.Abs(((RotateTransform)twoButton.RenderTransform).Angle-
+            (double)dividerAngle.Invoke(null,new object[]{lastGeometry!,false})!)<.01,
+            "R70 end count must follow +New divider orientation");
         Render(whiteScene,700,700,"subdonut-purple-new-white-background");
+        Render(whiteScene,700,700,"subdonut-purple-oriented-count-dots");
         var preview=new RenderTargetBitmap(700,700,96,96,
             PixelFormats.Pbgra32);
         preview.Render(whiteScene);
