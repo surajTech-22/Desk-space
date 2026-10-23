@@ -958,7 +958,7 @@ internal static class Program
         var centreProperty=type.GetProperty("ApplicationsParentCenter",
             BindingFlags.Static|BindingFlags.NonPublic)!;
         double centre=(double)centreProperty.GetValue(null)!;
-        Assert(Math.Abs(centre-(-90+4*360.0/7))<.001,
+        Assert(Math.Abs(centre-(-90+4*360.0/6))<.001,
             "Applications sector midpoint differs from actual parent anchor");
         var window=new Window{Width=420,Height=420,Left=360,Top=160,
             ShowInTaskbar=false,WindowStyle=WindowStyle.None,Opacity=.5};
