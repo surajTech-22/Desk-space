@@ -40,8 +40,7 @@ if($widget.Contains('"Clipboard", "Files", "Tasks"')){
 foreach($token in @('private readonly Popup arc','SubInner=244',
     'IsArcOpen','TryCapturedDragAtScreen','Path.GetFileNameWithoutExtension(p)',
     'Process.Start(new ProcessStartInfo(item.Path)','openSearch',
-    'openFileDialog','ShowDialog(owner)')){
-    if($token -eq 'openFileDialog'){continue}
+    'ShowApplicationPinSearch()','PinFoundApp(string path)')){
     if(!$app.Contains($token)){throw "R55 application wheel missing $token"}
 }
 Write-Host 'R55 source PASS: saved files from other applications and drives, all extensions, index sync, pinned-app child donut, original-file preservation.'
