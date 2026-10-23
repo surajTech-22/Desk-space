@@ -22,8 +22,8 @@ if($src.Contains('new Border{') -or
 }
 foreach($token in @(
   'subdonut-purple-new-white-background',
-  'R69 hidden digit disappears into white outside purple end wedge',
-  'darkInkOutside>=4',
+  'R77 inlaid numeral must not bleed onto white outside purple end wedge',
+  'darkInkOutside<=2',
   'R69 number moved off its actual divider midpoint',
   'R69 clear numeral must still click-to-scroll',
   'R69 WPF PASS: full purple end-line count readable against white background without a badge.'
