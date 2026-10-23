@@ -1121,6 +1121,11 @@ jobs:
           ./r74/apply-r74.ps1
           ./r74/test-r74.ps1
 
+      - name: R75 inspect precise ring and reminder data model
+        shell: pwsh
+        run: |
+          ./r75/inspect-r75.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
