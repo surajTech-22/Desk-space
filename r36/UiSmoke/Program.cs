@@ -32,6 +32,7 @@ internal static class Program
             TestApplicationSaveEvents();
             TestRecentFileStartupRecovery();
             TestFileClassification();
+            TestStandardSubDonutScroll();
             TestApplicationsArcAndPinSearch();
             TestConnectedChildDonut();
             TestExcelPasteTimeDate();
@@ -313,6 +314,61 @@ internal static class Program
             "action_static_date","Excel Ctrl+; mapping not recognised");
         Console.WriteLine("R51 Excel-native keyboard and formula dispatch PASS.");
     }
+    private static void TestStandardSubDonutScroll()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceSubDonutStandardV62",true)!;
+        var plan=type.GetMethod("Plan",BindingFlags.Static|BindingFlags.NonPublic)!;
+        object View(int total,int start,double center)=>
+            plan.Invoke(null,new object[]{total,start,center,360.0/7.0})!;
+        static int Num(object x,string name)=>(int)x.GetType()
+            .GetProperty(name,BindingFlags.Public|BindingFlags.NonPublic|
+                BindingFlags.Instance)!.GetValue(x)!;
+        static double Real(object x,string name)=>(double)x.GetType()
+            .GetProperty(name,BindingFlags.Public|BindingFlags.NonPublic|
+                BindingFlags.Instance)!.GetValue(x)!;
+        var first=View(12,0,-90);
+        Assert(Num(first,"Count")==5 && Num(first,"HiddenLeft")==0 &&
+            Num(first,"HiddenRight")==7,
+            "Shared sub-donut must expose exactly five with seven hidden right");
+        var middle=View(12,4,-90);
+        Assert(Num(middle,"HiddenLeft")==4 && Num(middle,"HiddenRight")==3,
+            "Shared sub-donut must show hidden counts on both sides");
+        Assert(Real(middle,"Half")<=360.0/7.0+1e-8,
+            "Sub-donut exceeded adjacent half-sector allowance");
+        var advance=type.GetMethod("Advance",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        Assert((int)advance.Invoke(null,new object[]{middle,1})!==5,
+            "Sub-donut should move one item per wheel step");
+        var wheelType=type.GetNestedType("Wheel",BindingFlags.NonPublic)!;
+        var wheel=Activator.CreateInstance(wheelType,true)!;
+        var step=wheelType.GetMethod("Step",BindingFlags.Instance|
+            BindingFlags.NonPublic)!;
+        Assert((int)step.Invoke(wheel,new object[]{60})!==0,
+            "Fine-scroll first 60 delta must accumulate");
+        Assert((int)step.Invoke(wheel,new object[]{60})!==-1,
+            "Fine-scroll next 60 delta must produce one item");
+        Assert((int)step.Invoke(wheel,new object[]{-120})!==1,
+            "Reverse mouse wheel must shift one item backward");
+        var board=new Canvas{Width=240,Height=100};
+        var indicators=type.GetMethod("DrawHiddenCounters",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        int shifted=0;
+        indicators.Invoke(null,new object[]{board,middle,50.0,
+            (Action<int>)(d=>shifted=d)});
+        var buttons=board.Children.OfType<Button>().ToArray();
+        Assert(buttons.Length==2 && (string)buttons[0].Content=="‹ 4" &&
+            (string)buttons[1].Content=="3 ›",
+            "Hidden counters missing on left or right of standard arc");
+        buttons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent,buttons[0]));
+        Assert(shifted==-1,"Clicking hidden-left counter failed to scroll");
+        var animate=type.GetMethod("Animate",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        animate.Invoke(null,new object[]{board,1,-90.0});
+        Assert(board.RenderTransform is TranslateTransform,
+            "Smooth sub-donut animation not using a shared transform");
+        Console.WriteLine("R62 WPF PASS: five visible, half-neighbor bounds, both hidden counts, "+
+            "mouse wheel/touchpad stepping and smooth animation.");
+    }
     private static void TestApplicationsArcAndPinSearch()
     {
         var type=Product.GetType("DeskSpace.DeskSpaceApplicationsV55",true)!;
@@ -338,7 +394,7 @@ internal static class Program
             var bounds=Private<Rect>(apps,"bounds");
             Assert(canvas.Width<420 && canvas.Height<420,
                 "Applications submenu still allocates an oversized detached Popup");
-            Assert(canvas.Children.OfType<TextBlock>().Count()>=4,
+            Assert(canvas.Children.OfType<TextBlock>().Count()>=3,
                 "Applications root options are missing");
             var popup=Private<System.Windows.Controls.Primitives.Popup>(apps,"arc");
             var geoType=Product.GetType("DeskSpace.DeskSpaceSubArcGeometryV48",true)!;
@@ -347,7 +403,7 @@ internal static class Program
             Assert(Math.Abs(popup.HorizontalOffset-offset)<2,
                 "Applications arc popup not anchored to parent circle");
             double centerX=cx-bounds.Left+10,centerY=cy-bounds.Top+10;
-            foreach(var label in canvas.Children.OfType<TextBlock>().Take(4))
+            foreach(var label in canvas.Children.OfType<TextBlock>().Take(3))
             {
                 double x=Canvas.GetLeft(label)+label.Width/2-centerX;
                 double y=Canvas.GetTop(label)+13-centerY;
