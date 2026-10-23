@@ -411,7 +411,7 @@ internal static class Program
             var local=new Point(244+233.5*Math.Cos(angle),
                 306+233.5*Math.Sin(angle));
             var absolute=canvas.PointToScreen(local);
-            System.Windows.Forms.Control.MousePosition=new System.Drawing.Point(
+            System.Windows.Forms.Cursor.Position=new System.Drawing.Point(
                 (int)Math.Round(absolute.X),(int)Math.Round(absolute.Y));
             frame=new DispatcherFrame();
             timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(110)};
@@ -437,7 +437,7 @@ internal static class Program
         }
         finally
         {
-            System.Windows.Forms.Control.MousePosition=original;
+            System.Windows.Forms.Cursor.Position=original;
             ((IDisposable)info).Dispose();
             window.Close();
         }
