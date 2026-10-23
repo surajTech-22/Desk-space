@@ -1014,6 +1014,12 @@ jobs:
           ./r50/test-r50.ps1
           ./r52/test-r52.ps1
 
+      - name: R53 live new-file shelf, all file extensions, Windows file monitor
+        shell: pwsh
+        run: |
+          ./r53/apply-r53.ps1
+          ./r53/test-r53.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
