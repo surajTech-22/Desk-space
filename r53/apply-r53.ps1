@@ -22,6 +22,17 @@ One '    private readonly List<Held> held=new();' @'
     private readonly List<Held> detected=new();
     private DeskSpaceNewFileWatchV53? newFiles;
 '@
+One @'
+            MinWidth=180,MaxWidth=310,
+            Child=list,AllowDrop=true
+'@ @'
+            MinWidth=180,MaxWidth=310,
+            Child=new ScrollViewer{
+                Content=list,MaxHeight=295,
+                VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled
+            },AllowDrop=true
+'@
 One '    public void Enable(){if(!disposed)Render();}' @'
     public void Enable()
     {
