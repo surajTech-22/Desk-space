@@ -26,6 +26,8 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
     private readonly HashSet<Guid> accepted=new();
     private readonly Dictionary<Guid,DateTime> shownAt=new();
     private static readonly TimeSpan VisibleFor=TimeSpan.FromSeconds(20);
+    // Keep custom sound player alive during asynchronous WAV playback.
+    private static SoundPlayer? activeCustomSound;
     private long lastScan;
     private bool disposed;
 
@@ -153,9 +155,10 @@ internal sealed class DeskSpaceDueShelfV74 : IDisposable
                        Path.GetExtension(reminder.AlertSoundFile)
                            .Equals(".wav",StringComparison.OrdinalIgnoreCase))
                     {
-                        using var player=new SoundPlayer(reminder.AlertSoundFile);
-                        player.Load();
-                        player.Play();
+                        activeCustomSound?.Stop();
+                        activeCustomSound=new SoundPlayer(reminder.AlertSoundFile);
+                        activeCustomSound.Load();
+                        activeCustomSound.Play();
                     }
                     break;
                 default:SystemSounds.Exclamation.Play();break;
