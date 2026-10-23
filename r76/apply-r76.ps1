@@ -60,6 +60,20 @@ if($begin -lt 0 -or $end -le $begin){throw 'R76 missing reminder form block'}
 $replacement=[IO.File]::ReadAllText('r76/ReminderEditorV76.fragment.txt')
 $s=$s.Substring(0,$begin)+$replacement+$s.Substring($end)
 SaveText $p $s
+# Re-anchor all outer child wheels after removing the duplicate Tasks wedge.
+# Information stays in slot 0; Applications and Excel move to slots 4/5
+# of six wedges. Do not let saved pins/mappings drift away from their parent.
+$p="$root/DeskSpaceApplicationsV55.cs"
+$s=[IO.File]::ReadAllText($p)
+$s=One $s 'DeskSpaceDonutGeometryV43.OuterSectorCenter(4)-360.0/14.0' `
+ 'DeskSpaceDonutGeometryV43.OuterSectorCenter(4,6)-360.0/12.0' 'Apps root anchor'
+SaveText $p $s
+$p="$root/DeskSpaceExcelWheelV42.cs"
+$s=[IO.File]::ReadAllText($p)
+$s=One $s 'DeskSpaceDonutGeometryV43.OuterSectorCenter(6)-360.0/14.0' `
+ 'DeskSpaceDonutGeometryV43.OuterSectorCenter(5,6)-360.0/12.0' 'Excel root anchor'
+SaveText $p $s
+
 # R42 created a legacy 13-sector WPF smoke AFTER source checkout. The
 # approved merge removes only the duplicate Tasks wedge: test twelve.
 $p='r36/UiSmoke/Program.cs'
