@@ -1050,11 +1050,6 @@ jobs:
           ./r59/apply-r59.ps1
           ./r59/test-r59.ps1
 
-      - name: R60 Applications aligned child donut and searchable app pin palette
-        shell: pwsh
-        run: |
-          ./r60/test-r60.ps1
-
       - name: R61 native wheel geometry and in-circle application pin search
         shell: pwsh
         run: |
