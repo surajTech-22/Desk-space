@@ -1044,6 +1044,12 @@ jobs:
           ./r58/apply-r58.ps1
           ./r58/test-r58.ps1
 
+      - name: R59 focused application file discovery and attached donut layout
+        shell: pwsh
+        run: |
+          ./r59/apply-r59.ps1
+          ./r59/test-r59.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
