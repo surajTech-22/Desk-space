@@ -1020,6 +1020,12 @@ jobs:
           ./r53/apply-r53.ps1
           ./r53/test-r53.ps1
 
+      - name: R54 persistent new-file shelf and startup Search cache
+        shell: pwsh
+        run: |
+          ./r54/apply-r54.ps1
+          ./r54/test-r54.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
