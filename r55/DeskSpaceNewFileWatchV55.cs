@@ -23,6 +23,8 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
     private readonly IReadOnlyList<string> roots;
     private readonly bool explicitRoots;
     private readonly CancellationTokenSource shutdown=new();
+    private readonly ConcurrentDictionary<string,(long Size,long Stamp)> seenVersions=
+        new(StringComparer.OrdinalIgnoreCase);
     private int stopped;
     private bool started;
 
@@ -51,27 +53,36 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
         var candidates=new List<string>{
             Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            Path.Combine(home,"Downloads"),
             Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
             Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
             Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
-            Path.Combine(home,"OneDrive"),
+            Path.Combine(home,"Downloads"),Path.Combine(home,"OneDrive"),
             Path.Combine(home,"OneDrive - Personal")
         };
-        // App Save As can target C:\Projects, D:\Accounts, etc., not just
-        // Downloads. Fixed and removable drives are event-watched without
-        // enumerating their contents; no network shares or system cache scan.
+        // App Save As is supported under common user-work folders on other
+        // volumes. Never watch an entire C:/D: drive and then try to filter
+        // a torrent of app-internal events by extension.
+        string[] names={"Work","Projects","Documents","Desktop","Downloads",
+            "Accounts","Accounting","Audit","Audits","Clients","Invoices",
+            "Reports","Exports","GST","Tax","Office","My Documents"};
         foreach(var drive in DriveInfo.GetDrives())
         {
             try
             {
-                if(drive.IsReady && drive.DriveType is DriveType.Fixed or DriveType.Removable)
-                    candidates.Add(drive.RootDirectory.FullName);
+                if(!drive.IsReady || drive.DriveType is not
+                    (DriveType.Fixed or DriveType.Removable))continue;
+                foreach(var name in names)
+                    candidates.Add(Path.Combine(drive.RootDirectory.FullName,name));
             }
-            catch(IOException){}
-            catch(UnauthorizedAccessException){}
+            catch(IOException){}catch(UnauthorizedAccessException){}
         }
-        return candidates.Where(Directory.Exists)
+        var extras=Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData),
+            "DeskSpace","RecentFileFolders.txt");
+        try{if(File.Exists(extras))candidates.AddRange(File.ReadAllLines(extras));}
+        catch(IOException){}catch(UnauthorizedAccessException){}
+        return candidates.Where(p=>!string.IsNullOrWhiteSpace(p)
+            && Directory.Exists(p) && !IsSystemArea(p))
             .Select(Path.GetFullPath)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(p=>p.Length).ToArray();
@@ -130,7 +141,9 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
         "temp","tmp","temporary files","temporary internet files",
         "inetcache","webcache","thumbnails","thumbcache",
         "service worker","serviceworker","crashdumps","crashpad",
-        "logs","log","telemetry","windowsapps","appdata",
+        "logs","log","telemetry","bin","obj",".venv","venv",
+        "packages","dist","build","runtimes","plugins","extensions",
+        "windowsapps","appdata",
         "programdata","$recycle.bin","system volume information",
         "windows","program files","program files (x86)",
         "$windows.~bt","$windows.~ws","$winreagent"
@@ -145,7 +158,7 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
     private static readonly HashSet<string> TemporaryExtensions=new(
         StringComparer.OrdinalIgnoreCase){
         ".tmp",".temp",".part",".partial",".crdownload",".download",
-        ".swp",".swo",".lock",".lck",".bak",".old",".dmp",".etl",
+        ".swp",".swo",".lock",".lck",".dmp",".etl",
         ".cache",".pyc",".pyo",".class",".obj",".pch",".ilk",
         ".pdb",".idb",".tlog",".lastbuildstate"
     };
@@ -259,6 +272,7 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
     {
         if(Volatile.Read(ref stopped)!=0)return;
         recent.TryRemove(path,out _);
+        seenVersions.TryRemove(path,out _);
         if(onRemoved==null)return;
         try{
             if(!owner.Dispatcher.HasShutdownStarted)
@@ -315,8 +329,11 @@ internal sealed class DeskSpaceNewFileWatchV53 : IDisposable
     private void Report(string path)
     {
         if(Volatile.Read(ref stopped)!=0||!Eligible(path))return;
+        var info=new FileInfo(path);
+        var version=(info.Length,info.LastWriteTimeUtc.Ticks);
+        if(seenVersions.TryGetValue(path,out var old) && old==version)return;
+        seenVersions[path]=version;
         long now=Environment.TickCount64;
-        if(recent.TryGetValue(path,out long last) && now-last<9000)return;
         recent[path]=now;
         if(recent.Count>4096)
             foreach(var item in recent.Where(k=>now-k.Value>120000).Take(2048))
