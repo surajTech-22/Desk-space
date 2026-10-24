@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace DeskSpace;
@@ -83,7 +84,8 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
         current=path;
         try
         {
-            var content=DeskSpaceFilePreviewV85.Create(path);
+            var content=Directory.Exists(path)?
+                CreateFolderPreview(path):DeskSpaceFilePreviewV85.Create(path);
             content.MouseEnter+=(_,_)=>hoverClose.Stop();
             content.MouseLeave+=(_,_)=>ScheduleClose();
             preview.Child=content;
@@ -140,6 +142,41 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
                 pendingRow=null;
                 pendingMode=null;
             }
+        };
+    }
+
+    private static FrameworkElement CreateFolderPreview(string path)
+    {
+        var content=new StackPanel{Margin=new Thickness(12)};
+        content.Children.Add(new TextBlock{
+            Text="Folder preview · "+Path.GetFileName(path),
+            FontSize=13,FontWeight=FontWeights.SemiBold,
+            Foreground=Brushes.White,TextWrapping=TextWrapping.Wrap,
+            MaxWidth=270
+        });
+        content.Children.Add(new TextBlock{
+            Text="You can open this folder or reveal its location. "+
+                "Its contents are not scanned in the background.",
+            MaxWidth=270,Margin=new Thickness(0,7,0,8),
+            TextWrapping=TextWrapping.Wrap,
+            Foreground=Brushes.LightSteelBlue
+        });
+        var open=new Button{Content="Open folder",
+            HorizontalAlignment=HorizontalAlignment.Right,
+            Padding=new Thickness(8,5,8,5)};
+        open.Click+=(_,_)=>{
+            try{Process.Start(new ProcessStartInfo(path){UseShellExecute=true});}
+            catch(Exception ex) when(ex is IOException or
+                System.ComponentModel.Win32Exception or
+                InvalidOperationException)
+            {MessageBox.Show(ex.Message,"DeskSpace preview");}
+        };
+        content.Children.Add(open);
+        return new Border{
+            Child=content,Background=new SolidColorBrush(Color.FromRgb(24,32,52)),
+            BorderBrush=Brushes.SlateBlue,
+            BorderThickness=new Thickness(1),
+            CornerRadius=new CornerRadius(12)
         };
     }
 
