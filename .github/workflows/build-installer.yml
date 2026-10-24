@@ -1213,6 +1213,10 @@ jobs:
           ./r93/apply-r93.ps1
           ./r93/test-r93.ps1
 
+      - name: R95 intelligent side selection and hover intent
+        shell: pwsh
+        run: ./r95/test-r95.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

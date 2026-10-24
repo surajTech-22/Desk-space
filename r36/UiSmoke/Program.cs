@@ -230,10 +230,18 @@ internal static class Program
         var windowPopup=iconCard.Tag as System.Windows.Controls.Primitives.Popup;
         Assert(windowPopup!=null &&
             windowPopup.Placement==
-                System.Windows.Controls.Primitives.PlacementMode.Bottom &&
-            ReferenceEquals(windowPopup.PlacementTarget,iconCard) &&
-            windowPopup.VerticalOffset>=3,
-            "R94 window selector must open BELOW or ABOVE the complete app grid, not over neighbouring app icons");
+                System.Windows.Controls.Primitives.PlacementMode.Right &&
+            ReferenceEquals(windowPopup.PlacementTarget,iconCard),
+            "R95 window selector must be beside the entire app grid, not below it or over other app buttons");
+        var placement=Product.GetType("DeskSpace.DeskSpaceStableHoverV93",true)!.
+            GetMethod("PreferRight",BindingFlags.Static|BindingFlags.NonPublic)!;
+        bool Side(double left,double right,double fraction,double width)=>
+            (bool)placement.Invoke(null,new object[]{left,right,fraction,width})!;
+        Assert(!Side(500,300,0.2,280) &&
+               Side(500,300,0.8,280) &&
+               Side(500,100,0.9,280) == false &&
+               Side(100,500,0.1,280),
+            "R95 flyout must select nearest side when possible and avoid unavailable screen edges");
         Assert(windowPopup.PopupAnimation==
             System.Windows.Controls.Primitives.PopupAnimation.None,
             "R94 window selector must not overlay other icons during a fade animation");
