@@ -151,8 +151,13 @@ Patch $p 'unsubscribe visibility on dispose' @'
 # recovery when the deck has been hidden using its close control.
 $p="$root/DeskSpaceModuleV10.cs"
 Patch $p 'circle settings toggle' @'
-        body.Children.Add(Label("Additional settings are available on demand.",12));
+    private void BuildSettings(StackPanel body)
+    {
+        body.Margin=new Thickness(9,4,9,4);
 '@ @'
+    private void BuildSettings(StackPanel body)
+    {
+        body.Margin=new Thickness(9,4,9,4);
         var deckVisible=new CheckBox{
             Content="Deck Visibility · show below the circle",
             IsChecked=DeskSpaceDeckVisibilityV89.Visible,
@@ -174,7 +179,6 @@ Patch $p 'circle settings toggle' @'
         };
         body.Children.Add(deckVisible);
         body.Children.Add(Label("Hide or restore the compact deck without clearing files.",12));
-        body.Children.Add(Label("Additional settings are available on demand.",12));
 '@
 # Also expose a context menu recovery route directly on the circle.
 $p="$root/WidgetHost.cs"
