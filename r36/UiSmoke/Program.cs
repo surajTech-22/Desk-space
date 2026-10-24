@@ -40,6 +40,7 @@ internal static class Program
             TestRunningAppsHoverV92();
             TestStableRunningAppsFlyoutV93();
             TestRunningWindowCloseV96();
+            TestLiveRunningWindowRemovalV97();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -279,6 +280,39 @@ internal static class Program
         Assert(close.IsEnabled,
             "R96 failed close request must leave the control usable");
         Console.WriteLine("R96 PASS: small independent per-window close button and safe normal-close validation.");
+    }
+
+    private static void TestLiveRunningWindowRemovalV97()
+    {
+        var apps=Product.GetType("DeskSpace.DeskSpaceRunningAppsV88",true)!;
+        var entry=apps.GetNestedType("Entry",BindingFlags.NonPublic)!;
+        object Candidate(string title,int hwnd)=>
+            Activator.CreateInstance(entry,new object[]{
+                "Chrome","",new IntPtr(hwnd),title})!;
+        var all=Array.CreateInstance(entry,3);
+        all.SetValue(Candidate("First Chrome window",101),0);
+        all.SetValue(Candidate("Second Chrome window",102),1);
+        all.SetValue(Candidate("Third Chrome window",103),2);
+        var hover=Product.GetType("DeskSpace.DeskSpaceStableHoverV93",true)!;
+        var remaining=hover.GetMethod("RemainingWindows",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var active=(System.Collections.IEnumerable)remaining.Invoke(null,
+            new object[]{all,(Func<IntPtr,bool>)(hwnd=>hwnd!=new IntPtr(102))})!;
+        var open=active.Cast<object>().ToArray();
+        Assert(open.Length==2,"R97 must remove closed HWND immediately without closing the hover UI");
+        Assert((IntPtr)entry.GetProperty("Handle")!.GetValue(open[0])!==new IntPtr(102) &&
+               (IntPtr)entry.GetProperty("Handle")!.GetValue(open[1])!==new IntPtr(102),
+            "R97 the closed window must not remain selectable");
+        Assert(hover.GetProperty("IsHoverActive",BindingFlags.Static|
+                BindingFlags.NonPublic)!=null,
+            "R97 refresh must detect an open hover popup to avoid tearing it down");
+        var make=hover.GetMethod("MakeCloseButton",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var button=(Button)make.Invoke(null,new object[]{all.GetValue(0)!})!;
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(button.IsEnabled,
+            "R97 an unsuccessful normal-close request must leave retry available");
+        Console.WriteLine("R97 PASS: closed window filtered immediately, sibling windows remain, hover refresh can stay open.");
     }
 
     private static void TestCompactShelfGroupsV88()

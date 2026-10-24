@@ -1221,6 +1221,12 @@ jobs:
         shell: pwsh
         run: ./r96/test-r96.ps1
 
+      - name: R97 live-running window close refresh without ending hover
+        shell: pwsh
+        run: |
+          ./r97/apply-r97.ps1
+          ./r97/test-r97.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
