@@ -98,8 +98,9 @@ $new=@'
         }
 '@.Replace([string][char]13+[char]10,[string][char]10)
 $s=$s.Substring(0,$start)+$new+$s.Substring($end)
-Swap '(held.Count+detected.Count+runningApps.Count)>0;}' @'
-        (held.Count+detected.Count+runningApps.Count)>0 || deckMinimized;}
+Swap '(bool)e.NewValue&&(held.Count+detected.Count+runningApps.Count)>0;}' @'
+        (bool)e.NewValue&&
+        ((held.Count+detected.Count+runningApps.Count)>0 || deckMinimized);}
 '@ 'keep minimised deck when widget reappears'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R91: merged dark on-header minimise/close buttons and no-panel minimised state; true Win32 top-level window enumeration.'
