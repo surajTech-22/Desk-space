@@ -226,7 +226,7 @@ internal static class Program
             "R93 opening app menus must not add expanding contents to header");
         Assert(popup.Child is Border && popup.StaysOpen,
             "R93 flyout must remain available while moving mouse to app icons");
-        Assert(!Walk(panel).OfType<StackPanel>().Any(),
+        Assert(!Walk(heading).OfType<StackPanel>().Any(),
             "R93 no resizing nested choice panels in the main deck");
         var empty=new StackPanel();
         var typed=Array.CreateInstance(entry,0);
