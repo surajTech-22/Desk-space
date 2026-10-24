@@ -4,7 +4,7 @@ $app='DeskSpace_Windows_R1/DeskSpace'
 $updater=[IO.File]::ReadAllText("$app/DeskSpacePublicUpdaterV44.cs")
 $supervisor=[IO.File]::ReadAllText("$app/DeskSpaceUpdateSupervisor.ps1")
 $iss=[IO.File]::ReadAllText('installer/DeskSpace.iss')
-foreach($token in @('PruneUpdateCache(installed)',
+foreach($token in @('PruneUpdateCache(Version.Parse(DeskSpaceUpdater.CurrentVersion))',
  '^v\d+\.\d+\.\d+$','TimeSpan.FromMinutes(15)',
  'TimeSpan.FromHours(24)','FileAttributes.ReparsePoint',
  'GetFileName(file)','Directory.Delete(folder,true)',
