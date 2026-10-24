@@ -37,6 +37,7 @@ internal static class Program
             TestAutomationAndProductivityV85();
             TestCompactShelfGroupsV88();
             TestDeckControlsAndRunningAppsV91();
+            TestRunningAppsHoverV92();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -151,6 +152,45 @@ internal static class Program
         };
         Render(stage,294,132,"r91-blended-deck-controls");
         Console.WriteLine("R91 PASS: 3 visible grouped app icons counted correctly, minimise/close separate and blended.");
+    }
+
+    private static void TestRunningAppsHoverV92()
+    {
+        var apps=Product.GetType("DeskSpace.DeskSpaceRunningAppsV88",true)!;
+        var entry=apps.GetNestedType("Entry",BindingFlags.NonPublic)!;
+        object Create(string name,string title,int hwnd)=>
+            Activator.CreateInstance(entry,new object[]{
+                name,"",new IntPtr(hwnd),title})!;
+        var windows=Array.CreateInstance(entry,4);
+        windows.SetValue(Create("Chrome","ChatGPT - Chrome",101),0);
+        windows.SetValue(Create("Chrome","GitHub - Chrome",102),1);
+        windows.SetValue(Create("Explorer","Downloads",103),2);
+        windows.SetValue(Create("Settings","Windows Settings",104),3);
+        var group=apps.GetMethod("GroupVisible",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var visible=(System.Collections.IEnumerable)group.Invoke(
+            null,new object[]{windows})!;
+        var grouped=visible.Cast<object>().ToArray();
+        Assert(grouped.Length==3,
+            "R92 one icon per app, even when Chrome has two windows");
+        var choose=apps.GetMethod("WindowsFor",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var chrome=(System.Collections.IEnumerable)choose.Invoke(null,
+            new object[]{grouped[0],windows})!;
+        Assert(chrome.Cast<object>().Count()==2,
+            "R92 hovering Chrome must expose both independent windows");
+        var panel=new StackPanel();
+        var add=apps.GetMethod("AddHoverGroup",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        add.Invoke(null,new object[]{panel,visible,windows});
+        Assert(panel.Children.Count==1 &&
+            Walk(panel).OfType<TextBlock>().Any(t=>
+                t.Text.Contains("Running Apps · 3")),
+            "R92 hover-only Running Apps compact heading missing");
+        Assert(!Walk(panel).OfType<Button>().Any(b=>
+            b.Content is string text && text.StartsWith("▸")),
+            "R92 Running Apps must not be a click-to-expand button");
+        Console.WriteLine("R92 PASS: grouped three app icons; Chrome keeps two hover-selectable windows; collapsed header is hover-only.");
     }
 
     private static void TestCompactShelfGroupsV88()

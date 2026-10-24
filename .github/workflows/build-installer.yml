@@ -1201,6 +1201,12 @@ jobs:
           ./r91/apply-r91.ps1
           ./r91/test-r91.ps1
 
+      - name: R92 hover Running Apps and non-app deck wake rules
+        shell: pwsh
+        run: |
+          ./r92/apply-r92.ps1
+          ./r92/test-r92.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
