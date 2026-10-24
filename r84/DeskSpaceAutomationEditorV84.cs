@@ -52,7 +52,7 @@ internal sealed class DeskSpaceAutomationEditorV84
     };
     private static Button Button(string title,Action clicked)
     {
-        var button=new Button{Content=title,Padding=new Thickness(8,5),
+        var button=new Button{Content=title,Padding=new Thickness(8,5,8,5),
             Margin=new Thickness(3),MinHeight=27};
         button.Click+=(_,_)=>clicked();
         return button;

@@ -78,7 +78,7 @@ internal static class DeskSpaceFilePreviewV85
             panel.Children.Add(new TextBlock{Text="Cannot preview: "+ex.Message,
                 Foreground=Brushes.LightSteelBlue,TextWrapping=TextWrapping.Wrap});
         }
-        var open=new Button{Content="Open file",Padding=new Thickness(8,5),
+        var open=new Button{Content="Open file",Padding=new Thickness(8,5,8,5),
             HorizontalAlignment=HorizontalAlignment.Right,
             Margin=new Thickness(0,7,0,0)};
         open.Click+=(_,_)=>{
