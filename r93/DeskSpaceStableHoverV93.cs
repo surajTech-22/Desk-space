@@ -169,6 +169,8 @@ internal static class DeskSpaceStableHoverV93
             KeepOpen();
             windowPopup.IsOpen=false;
             windowItems.Children.Clear();
+            pendingWindows=pendingWindows.Where(x=>
+                DeskSpaceRunningAppsV88.IsActiveWindow(x.Handle)).ToArray();
             if(pendingWindows.Length<=1)return;
             windowPopup.Placement= pendingRight ?
                 PlacementMode.Right:PlacementMode.Left;
@@ -192,6 +194,7 @@ internal static class DeskSpaceStableHoverV93
             {
                 var selected=window;
                 var row=new DockPanel{LastChildFill=true,
+                    Tag=selected.Handle,
                     Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
                     Margin=new Thickness(2,1,2,1)};
                 var close=MakeCloseButton(selected);
@@ -250,7 +253,8 @@ internal static class DeskSpaceStableHoverV93
                     appBadges.Remove(app.Name);
                 }
                 else if(appBadges.TryGetValue(app.Name,out var badge))
-                    badge.Text=matches.Count+" windows";
+                    badge.Text=matches.Count>1?
+                        matches.Count+" windows":"";
             }
             foreach(var row in windowItems.Children.OfType<DockPanel>().
                 Where(x=>x.Tag is IntPtr hwnd &&
