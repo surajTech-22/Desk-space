@@ -1195,6 +1195,12 @@ jobs:
         shell: pwsh
         run: ./r90/test-r90.ps1
 
+      - name: R91 blended deck header, minimise and real window enumeration
+        shell: pwsh
+        run: |
+          ./r91/apply-r91.ps1
+          ./r91/test-r91.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

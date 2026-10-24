@@ -41,111 +41,180 @@ internal static class DeskSpaceShelfGroupsV88
     }
 }
 
-// A running app means a user-visible top-level Windows app, NOT every
-// background service or process. Each executable is shown only once.
+// Enumerate actual taskbar-like top-level windows instead of
+// Process.MainWindowHandle. The latter misses Explorer/packaged apps and
+// returns too few results when several visible windows share a process.
 internal static class DeskSpaceRunningAppsV88
 {
     internal sealed record Entry(string Name,string Path,IntPtr Handle,string WindowTitle);
-    private const int Restore=9;
-    [DllImport("user32.dll")]
-    [return:MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindow(IntPtr handle);
-    [DllImport("user32.dll")]
-    [return:MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowVisible(IntPtr handle);
-    [DllImport("user32.dll")]
-    [return:MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsIconic(IntPtr handle);
-    [DllImport("user32.dll")]
-    [return:MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetWindowRect(IntPtr handle,out WindowRect rectangle);
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmGetWindowAttribute(IntPtr window,int attribute,
-        out int value,int size);
+    private const int Restore=9, GwlExStyle=-20, GwOwner=4;
+    private const long WsExToolWindow=0x80, WsExAppWindow=0x40000;
+    private const int DwmCloaked=14;
+    private delegate bool WindowEnumerator(IntPtr window,IntPtr context);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct WindowRect
     {
         internal int Left,Top,Right,Bottom;
     }
-    private const int DwmCloaked=14;
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(WindowEnumerator callback,IntPtr context);
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr window,out WindowRect rect);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetWindowTextLength(IntPtr window);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr window,
+        System.Text.StringBuilder output,int length);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr window,
+        System.Text.StringBuilder output,int length);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr window,uint command);
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window,out uint processId);
+    [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr window,int index);
+    [DllImport("user32.dll",EntryPoint="GetWindowLongW")]
+    private static extern int GetWindowLong32(IntPtr window,int index);
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr window,int attribute,
+        out int value,int size);
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindowAsync(IntPtr window,int command);
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr window);
 
-    // A background app process can retain its MainWindowHandle even after its
-    // window closes. Exclude non-visible and DWM-cloaked windows.
-    internal static bool IsActiveWindow(IntPtr handle)
+    private static long WindowStyle(IntPtr window)=>
+        IntPtr.Size==8?GetWindowLongPtr64(window,GwlExStyle).ToInt64():
+            (uint)GetWindowLong32(window,GwlExStyle);
+
+    // A minimised application is still running. A cloaked or tool-only
+    // window is not a user-visible application and should not be listed.
+    internal static bool IsActiveWindow(IntPtr window)
     {
-        if(handle==IntPtr.Zero || !IsWindow(handle) ||
-            !IsWindowVisible(handle))return false;
+        if(window==IntPtr.Zero || !IsWindow(window) ||
+           !IsWindowVisible(window))return false;
         try
         {
-            if(DwmGetWindowAttribute(handle,DwmCloaked,out int cloak,sizeof(int))==0 &&
-                cloak!=0)return false;
+            if(DwmGetWindowAttribute(window,DwmCloaked,
+                out int cloak,sizeof(int))==0 && cloak!=0)return false;
         }
         catch(DllNotFoundException){}
         catch(EntryPointNotFoundException){}
-        if(!IsIconic(handle) && GetWindowRect(handle,out var rect) &&
-            (rect.Right-rect.Left<32 || rect.Bottom-rect.Top<32))return false;
+        var style=WindowStyle(window);
+        if((style&WsExToolWindow)!=0 && (style&WsExAppWindow)==0)return false;
+        if(GetWindow(window,GwOwner)!=IntPtr.Zero &&
+           (style&WsExAppWindow)==0)return false;
+        if(!IsIconic(window) && GetWindowRect(window,out var rect) &&
+           (rect.Right-rect.Left<32 || rect.Bottom-rect.Top<32))return false;
         return true;
     }
-    [DllImport("user32.dll")]
-    [return:MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ShowWindowAsync(IntPtr handle,int command);
-    [DllImport("user32.dll")]
-    [return:MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetForegroundWindow(IntPtr handle);
+
+    private static string WindowText(IntPtr window)
+    {
+        int n=GetWindowTextLength(window);
+        if(n<=0)return "";
+        var buffer=new System.Text.StringBuilder(Math.Min(n+1,513));
+        return GetWindowText(window,buffer,buffer.Capacity)>0?
+            buffer.ToString().Trim():"";
+    }
+    private static string WindowClass(IntPtr window)
+    {
+        var buffer=new System.Text.StringBuilder(128);
+        return GetClassName(window,buffer,buffer.Capacity)>0?
+            buffer.ToString():"";
+    }
+
+    // Apply the same normalisation to both displayed icons and count.
+    // Each distinct app is displayed once, even if it has many windows.
+    internal static IReadOnlyList<Entry> GroupVisible(IEnumerable<Entry> windows)=>
+        windows.Where(x=>!string.IsNullOrWhiteSpace(x.Name)).
+            GroupBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).
+            Select(g=>g.First()).
+            OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).
+            Take(24).ToArray();
 
     internal static IReadOnlyList<Entry> Snapshot()
     {
-        var found=new Dictionary<string,Entry>(StringComparer.OrdinalIgnoreCase);
-        Process[] processes;
-        try{processes=Process.GetProcesses();}
-        catch(InvalidOperationException){return Array.Empty<Entry>();}
-        catch(Win32Exception){return Array.Empty<Entry>();}
-        foreach(var process in processes)
+        var windows=new List<Entry>();
+        try
         {
-            using(process)
-            {
+            EnumWindows((window,_)=>{
+                if(!IsActiveWindow(window))return true;
+                string title=WindowText(window);
+                if(title.Length==0)return true;
+                string windowClass=WindowClass(window);
+                if(windowClass is "Progman" or "WorkerW" or
+                   "Shell_TrayWnd" or "Windows.UI.Core.CoreWindow")return true;
+                GetWindowThreadProcessId(window,out uint pid);
+                if(pid==0 || pid==(uint)Environment.ProcessId)return true;
                 try
                 {
-                    if(process.Id==Environment.ProcessId || process.HasExited)continue;
-                    process.Refresh();
-                    IntPtr window=process.MainWindowHandle;
-                    if(!IsActiveWindow(window))continue;
-                    string title=process.MainWindowTitle;
-                    if(string.IsNullOrWhiteSpace(title))continue;
+                    using var process=Process.GetProcessById((int)pid);
+                    if(process.HasExited)return true;
                     string name=process.ProcessName;
-                    if(name is "ApplicationFrameHost" or "ShellExperienceHost" or
-                        "SearchHost" or "TextInputHost" or "RuntimeBroker")continue;
-                    if(found.ContainsKey(name))continue;
+                    if(name.Equals("DeskSpace",StringComparison.OrdinalIgnoreCase) ||
+                       name is "ShellExperienceHost" or "SearchHost" or
+                           "TextInputHost" or "RuntimeBroker")return true;
+                    // Windows Settings and other packaged apps may be wrapped
+                    // in an ApplicationFrameHost top-level HWND. Include them
+                    // using their actual visible title, not that generic host.
+                    bool packaged=name.Equals("ApplicationFrameHost",
+                        StringComparison.OrdinalIgnoreCase);
+                    if(packaged && windowClass!="ApplicationFrameWindow")return true;
                     string path="";
                     try{path=process.MainModule?.FileName??"";}
                     catch(Win32Exception){}
                     catch(InvalidOperationException){}
+                    catch(UnauthorizedAccessException){}
                     string label=name;
-                    if(!string.IsNullOrWhiteSpace(path))
+                    if(packaged)label=title;
+                    else if(name.Equals("explorer",StringComparison.OrdinalIgnoreCase))
+                        label="File Explorer";
+                    else if(name.Equals("SystemSettings",StringComparison.OrdinalIgnoreCase))
+                        label="Settings";
+                    else if(!string.IsNullOrWhiteSpace(path))
                     {
                         try
                         {
-                            var description=FileVersionInfo.GetVersionInfo(path).FileDescription;
-                            if(!string.IsNullOrWhiteSpace(description) &&
-                                description.Length<=44)label=description.Trim();
+                            string desc=FileVersionInfo.GetVersionInfo(path).
+                                FileDescription??"";
+                            if(!string.IsNullOrWhiteSpace(desc) && desc.Length<=44)
+                                label=desc.Trim();
                         }
                         catch(Win32Exception){}
                         catch(IOException){}
                     }
-                    found[name]=new Entry(label,path,window,title);
+                    if(label.Length>44)label=label[..44];
+                    windows.Add(new Entry(label,path,window,title));
                 }
                 catch(Win32Exception){}
+                catch(ArgumentException){}
                 catch(InvalidOperationException){}
                 catch(UnauthorizedAccessException){}
-            }
+                return true;
+            },IntPtr.Zero);
         }
-        return found.Values.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase)
-            .Take(20).ToArray();
+        catch(Win32Exception){}
+        return GroupVisible(windows);
     }
 
     internal static void Focus(Entry entry)
     {
-        // The user clicked an app. Never start a second instance.
         if(!IsActiveWindow(entry.Handle))return;
         ShowWindowAsync(entry.Handle,Restore);
         SetForegroundWindow(entry.Handle);
@@ -169,8 +238,7 @@ internal static class DeskSpaceRunningAppsV88
             inner.Children.Add(new TextBlock{
                 Text=app.Name,FontSize=10,Foreground=Brushes.White,
                 TextTrimming=TextTrimming.CharacterEllipsis,
-                TextAlignment=TextAlignment.Center,
-                ToolTip=app.Name
+                TextAlignment=TextAlignment.Center,ToolTip=app.Name
             });
             var button=new Button{
                 Content=inner,Width=72,MinHeight=48,

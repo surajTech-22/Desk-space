@@ -9,8 +9,9 @@ foreach($term in @('Running Apps','Held Files','Recent Files',
  '(item.AutoDetected?recentGroup:heldGroup).Children.Add(row)',
  'DeskSpaceRunningAppsV88.Fill'))
 {if(!$s.Contains($term)){throw "R88 missing live shelf integration: $term"}}
-foreach($term in @('Process.GetProcesses()','MainWindowHandle',
+foreach($term in @('EnumWindows(','GetWindowThreadProcessId',
  'DeskSpaceApplicationIconsV65.Get','SetForegroundWindow','IsWindow',
+ 'GroupVisible(windows)',
  'if(count<=0)return content'))
 {if(!$g.Contains($term)){throw "R88 missing group/app behavior: $term"}}
 if(!$s.Contains('DeskSpaceFilePreviewV85.Attach'))

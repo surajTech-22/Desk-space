@@ -36,6 +36,7 @@ internal static class Program
             TestReminderSchedulerV83();
             TestAutomationAndProductivityV85();
             TestCompactShelfGroupsV88();
+            TestDeckControlsAndRunningAppsV91();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -85,6 +86,52 @@ internal static class Program
             path.Contains("deck-visibility",StringComparison.OrdinalIgnoreCase),
             "R89 deck setting could overwrite user's Workspace data");
         Console.WriteLine("R89 PASS: no-HWND apps excluded, deck visibility persisted separately from workspace data.");
+    }
+
+    private static void TestDeckControlsAndRunningAppsV91()
+    {
+        var apps=Product.GetType("DeskSpace.DeskSpaceRunningAppsV88",true)!;
+        var entry=apps.GetNestedType("Entry",BindingFlags.NonPublic)!;
+        object Candidate(string name,int hwnd)=>
+            Activator.CreateInstance(entry,new object[]{
+                name,"",new IntPtr(hwnd),name+" window"})!;
+        var array=Array.CreateInstance(entry,4);
+        array.SetValue(Candidate("Chrome",101),0);
+        array.SetValue(Candidate("File Explorer",102),1);
+        array.SetValue(Candidate("Settings",103),2);
+        array.SetValue(Candidate("Chrome",104),3);
+        var group=apps.GetMethod("GroupVisible",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var values=((System.Collections.IEnumerable)group.Invoke(
+            null,new object[]{array})!).Cast<object>().ToArray();
+        Assert(values.Length==3,
+            "R91 running apps must count 3 distinct visible apps despite multiple Chrome windows");
+        var shelf=Product.GetType("DeskSpace.DeskSpaceDropShelfV15",true)!;
+        var make=shelf.GetMethod("DeckHeaderButton",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        int clicks=0;
+        var close=(Button)make.Invoke(null,new object[]{
+            "×","Hide deck",(Action)(()=>clicks++)})!;
+        var minimize=(Button)make.Invoke(null,new object[]{
+            "−","Minimise deck",(Action)(()=>clicks++)})!;
+        Assert(close.Template!=null &&
+            close.BorderThickness==new Thickness(0) &&
+            close.Background==Brushes.Transparent &&
+            minimize.Template!=null,
+            "R91 header buttons should be seamlessly blended without system button chrome");
+        minimize.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(clicks==2,
+            "R91 close and minimise are independent clickable actions");
+        var header=new DockPanel{Width=224,Height=29};
+        DockPanel.SetDock(close,Dock.Right);
+        DockPanel.SetDock(minimize,Dock.Right);
+        header.Children.Add(close);
+        header.Children.Add(minimize);
+        header.Children.Add(new TextBlock{Text="Deck · 3 apps",
+            Foreground=Brushes.White});
+        Render(header,224,29,"r91-blended-deck-controls");
+        Console.WriteLine("R91 PASS: 3 visible grouped app icons counted correctly, minimise/close separate and blended.");
     }
 
     private static void TestCompactShelfGroupsV88()
