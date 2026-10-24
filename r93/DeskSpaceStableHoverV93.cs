@@ -27,6 +27,8 @@ internal static class DeskSpaceStableHoverV93
             Text="▸  Running Apps · "+apps.Count,FontSize=11,
             Foreground=Brushes.White,FontWeight=FontWeights.SemiBold
         };
+        // No running apps means no category header; other shelf groups stay.
+        if(apps.Count==0)return heading;
         var iconRow=new WrapPanel{Margin=new Thickness(3)};
         var iconCard=new Border{
             Background=new SolidColorBrush(Color.FromRgb(32,44,71)),
