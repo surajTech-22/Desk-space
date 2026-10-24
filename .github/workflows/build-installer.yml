@@ -1168,6 +1168,17 @@ jobs:
           ./r83/apply-r83.ps1
           ./r83/test-r83.ps1
 
+      - name: R84 ordered automation, conditional actions and reusable templates
+        shell: pwsh
+        run: |
+          ./r84/apply-r84.ps1
+
+      - name: R85 workspace profiles, unified shortcut, previews and smart clipboard
+        shell: pwsh
+        run: |
+          ./r85/apply-r85.ps1
+          ./r85/test-r85.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

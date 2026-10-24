@@ -34,6 +34,7 @@ internal static class Program
             TestRecentFileStartupRecovery();
             TestStartupAndRecentPlacementV82();
             TestReminderSchedulerV83();
+            TestAutomationAndProductivityV85();
             TestFileClassification();
             TestDueShelfV74();
             TestReminderV76();
@@ -241,6 +242,99 @@ internal static class Program
         }
         finally{main.Close();}
         Console.WriteLine("R83 PASS: missed recovery, recurrence, snooze action deduplication, serialized schedule, animated shelf and live editors.");
+    }
+
+    private static void TestAutomationAndProductivityV85()
+    {
+        var engine=Product.GetType("DeskSpace.DeskSpaceAutomationV84",true)!;
+        var valid=engine.GetMethod("ValidCondition",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        bool Condition(string mode,string target)=>(bool)valid.Invoke(
+            null,new object[]{mode,target})!;
+        Assert(Condition("None","") && Condition("Network available","") &&
+            Condition("File exists",@"C:\Users\test\report.xlsx") &&
+            Condition("Application running","EXCEL.exe") &&
+            !Condition("Application running","EXCEL.exe /c DEL") &&
+            !Condition("Launch command","powershell -enc test"),
+            "R84 conditions must be typed, constrained, and safe");
+        var steps=new List<DeskSpaceActionStep>{
+            new(){Action="Open URL",Target="https://example.com/report"},
+            new(){Action="Open file",Target=@"C:\missing\notfound.pdf"}
+        };
+        var reminder=new ReminderItem{Title="Complex",
+            AlertAction="None",AutomationSteps=steps,
+            TriggerCondition="File exists",
+            TriggerTarget=@"C:\Users\test\report.xlsx"};
+        var json=System.Text.Json.JsonSerializer.Serialize(reminder);
+        var restored=System.Text.Json.JsonSerializer.Deserialize<ReminderItem>(json)!;
+        Assert(restored.AutomationSteps.Count==2 &&
+            restored.TriggerCondition=="File exists",
+            "R84 automation steps and trigger must persist in legacy workspace JSON");
+        var copied=(System.Collections.IEnumerable)engine.GetMethod("CopySteps",
+            BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,
+                new object[]{steps})!;
+        Assert(copied.Cast<object>().Count()==2,
+            "R84 ordered extra actions lost during safe copy");
+        var editor=Make("DeskSpace.DeskSpaceAutomationEditorV84",
+            (Func<(string Action,string Target)>)(()=>("None","")),
+            (Action<string,string>)((_,_)=>{}));
+        var view=(FrameworkElement)Call(editor,"Create")!;
+        view.Measure(new Size(420,640));view.Arrange(new Rect(0,0,420,640));
+        view.UpdateLayout();
+        Assert(Walk(view).OfType<Button>().Any(b=>
+                (b.Content as string)=="+ Add action step") &&
+            Walk(view).OfType<Button>().Any(b=>
+                (b.Content as string)=="Save template") &&
+            Walk(view).OfType<Button>().Any(b=>
+                (b.Content as string)=="Load"),
+            "R84 multi-step/templated UI missing controls");
+        var combo=Walk(view).OfType<ComboBox>().ToArray();
+        Assert(combo.Any(c=>c.Items.Cast<object>().Any(x=>
+                    x?.ToString()=="Open URL")) &&
+            combo.Any(c=>c.Items.Cast<object>().Any(x=>
+                    x?.ToString()=="File exists")),
+            "R84 action/condition choices are missing");
+        Render(view,425,620,"r84-workflow-editor");
+        var file=Path.Combine(Path.GetTempPath(),
+            "DeskSpace-V85-preview-"+Guid.NewGuid().ToString("N")+".txt");
+        File.WriteAllText(file,"Preview literal\nNo file execution");
+        try
+        {
+            var previewType=Product.GetType("DeskSpace.DeskSpaceFilePreviewV85",true)!;
+            var make=previewType.GetMethod("Create",BindingFlags.Static|
+                BindingFlags.NonPublic)!;
+            var preview=(FrameworkElement)make.Invoke(null,new object[]{file})!;
+            Assert(Walk(preview).OfType<TextBox>().Any(t=>
+                    t.Text.Contains("No file execution")),
+                "R85 recent-file preview did not read a safe bounded excerpt");
+            Render(preview,350,280,"r85-recent-file-preview");
+            Assert(File.ReadAllText(file)=="Preview literal\nNo file execution",
+                "R85 preview modified the user's source file");
+        }
+        finally{File.Delete(file);}
+        var actions=Product.GetType("DeskSpace.DeskSpaceClipboardQuickActionsV85",
+            true)!;
+        var detect=actions.GetMethod("Detect",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        string Detect(string t)=>(string)detect.Invoke(null,new object[]{t})!;
+        Assert(Detect("https://example.com")=="URL" &&
+            Detect("A normal copied sentence")=="Text",
+            "R85 clipboard URL/text smart classification failed");
+        var profiles=Product.GetType("DeskSpace.DeskSpaceWorkspaceProfilesV85",true)!;
+        var profileType=Product.GetType("DeskSpace.DeskSpaceProfileV85",true)!;
+        var profile=Activator.CreateInstance(profileType)!;
+        profileType.GetProperty("Name")!.SetValue(profile,"Accounting");
+        profileType.GetProperty("CenterMode")!.SetValue(profile,"Clock");
+        var serialized=System.Text.Json.JsonSerializer.Serialize(profile,profileType);
+        Assert(serialized.Contains("Accounting")&&serialized.Contains("Clock") &&
+            !serialized.Contains("workspace.json"),
+            "R85 named profile must store presentation, not private workspace data");
+        var widget=Product.GetType("DeskSpace.DeskSpaceCommandShortcutV85",true)!;
+        Assert(widget.GetMethod("Dispose")!=null &&
+            widget.GetConstructor(Any,null,
+                new[]{typeof(Window),typeof(Action)},null)!=null,
+            "R85 command palette must be a removable keyboard shortcut");
+        Console.WriteLine("R84/85 PASS: automation inputs, persistence, editor, safe preview, clipboard classification, profile schema and search shortcut.");
     }
 
     private static void TestRecentFileStartupRecovery()
