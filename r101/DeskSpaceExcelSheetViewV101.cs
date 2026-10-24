@@ -1,0 +1,333 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+
+namespace DeskSpace;
+
+// A value-free, read-only snapshot of Excel's actual selected-cell styling.
+// Numeric/text input data is intentionally NEVER copied into this model.
+internal sealed class DeskSpaceExcelSheetVisualV101
+{
+    public int Rows {get;set;}
+    public int Columns {get;set;}
+    public List<double> RowHeights {get;set;}=new();
+    public List<double> ColumnWidths {get;set;}=new();
+    public List<DeskSpaceExcelStyledCellV101> Cells {get;set;}=new();
+}
+internal sealed class DeskSpaceExcelStyledCellV101
+{
+    public int Row {get;set;}
+    public int Column {get;set;}
+    public int MergeRows {get;set;}=1;
+    public int MergeColumns {get;set;}=1;
+    public string FormulaA1 {get;set;}="";
+    public string FormulaR1C1 {get;set;}="";
+    public string NumberFormat {get;set;}="";
+    public string FontName {get;set;}="Calibri";
+    public double FontSize {get;set;}=11;
+    public bool Bold {get;set;}
+    public bool Italic {get;set;}
+    public bool WrapText {get;set;}
+    public int HorizontalAlignment {get;set;}
+    public int VerticalAlignment {get;set;}
+    public int FillBgr {get;set;}=0xFFFFFF;
+    public int FontBgr {get;set;}=0x000000;
+    public bool BorderTop {get;set;}
+    public bool BorderBottom {get;set;}
+    public bool BorderLeft {get;set;}
+    public bool BorderRight {get;set;}
+    public string Address {get;set;}="";
+}
+
+// Excel COM lives on the dedicated STA capture worker. Never run on WPF UI.
+internal static class DeskSpaceExcelVisualCaptureV101
+{
+    private static string Text(object? item)=>
+        Convert.ToString(item,CultureInfo.InvariantCulture)??"";
+    private static bool Flag(Func<object?> read)
+    {
+        try {return Convert.ToBoolean(read(),CultureInfo.InvariantCulture);}
+        catch(COMException){return false;}
+        catch(InvalidCastException){return false;}
+        catch(FormatException){return false;}
+    }
+    private static int Number(Func<object?> read,int fallback=0)
+    {
+        try {return Convert.ToInt32(read(),CultureInfo.InvariantCulture);}
+        catch(COMException){return fallback;}
+        catch(InvalidCastException){return fallback;}
+        catch(FormatException){return fallback;}
+        catch(OverflowException){return fallback;}
+    }
+    private static double Measure(Func<object?> read,double fallback)
+    {
+        try{return Convert.ToDouble(read(),CultureInfo.InvariantCulture);}
+        catch(COMException){return fallback;}
+        catch(InvalidCastException){return fallback;}
+        catch(FormatException){return fallback;}
+        catch(OverflowException){return fallback;}
+    }
+    private static string Format(Func<object?> read,string fallback="")
+    {
+        try{return Text(read());}
+        catch(COMException){return fallback;}
+        catch(InvalidCastException){return fallback;}
+    }
+    private static bool VisibleBorder(dynamic cell,int edge)
+    {
+        try
+        {
+            dynamic border=cell.Borders[edge];
+            return Convert.ToInt32((object)border.LineStyle,
+                CultureInfo.InvariantCulture)!=-4142; // xlLineStyleNone
+        }
+        catch(COMException){return false;}
+        catch(InvalidCastException){return false;}
+    }
+    internal static DeskSpaceExcelSheetVisualV101 Capture(dynamic range)
+    {
+        int rows=(int)range.Rows.Count,columns=(int)range.Columns.Count;
+        if(rows<1 || columns<1 || rows*(long)columns>1800)
+            throw new InvalidOperationException(
+                "Select 1–1800 Excel cells to inspect the sheet layout.");
+        int startRow=(int)range.Row,startCol=(int)range.Column;
+        var view=new DeskSpaceExcelSheetVisualV101{Rows=rows,Columns=columns};
+        for(int r=1;r<=rows;r++)
+            view.RowHeights.Add(Math.Clamp(
+                Measure(()=> (object?)range.Rows[r].RowHeight,15)*1.333,18,95));
+        for(int c=1;c<=columns;c++)
+            view.ColumnWidths.Add(Math.Clamp(
+                Measure(()=> (object?)range.Columns[c].ColumnWidth,10)*7.3+8,54,245));
+        var covered=new HashSet<(int,int)>();
+        for(int r=1;r<=rows;r++)
+        for(int c=1;c<=columns;c++)
+        {
+            if(covered.Contains((r,c)))continue;
+            dynamic cell=range.Cells[r,c];
+            var style=new DeskSpaceExcelStyledCellV101{
+                Row=r-1,Column=c-1,
+                Address=Format(()=> (object?)cell.Address),
+                NumberFormat=Format(()=> (object?)cell.NumberFormat,"General"),
+                FontName=Format(()=> (object?)cell.Font.Name,"Calibri"),
+                FontSize=Math.Clamp(Measure(()=> (object?)cell.Font.Size,11),7,24),
+                Bold=Flag(()=> (object?)cell.Font.Bold),
+                Italic=Flag(()=> (object?)cell.Font.Italic),
+                WrapText=Flag(()=> (object?)cell.WrapText),
+                HorizontalAlignment=Number(()=> (object?)cell.HorizontalAlignment),
+                VerticalAlignment=Number(()=> (object?)cell.VerticalAlignment),
+                FillBgr=Number(()=> (object?)cell.Interior.Color,0xFFFFFF),
+                FontBgr=Number(()=> (object?)cell.Font.Color,0),
+                BorderLeft=VisibleBorder(cell,7),   // xlEdgeLeft
+                BorderTop=VisibleBorder(cell,8),    // xlEdgeTop
+                BorderBottom=VisibleBorder(cell,9), // xlEdgeBottom
+                BorderRight=VisibleBorder(cell,10)  // xlEdgeRight
+            };
+            if(Flag(()=> (object?)cell.HasFormula))
+            {
+                style.FormulaA1=Format(()=> (object?)cell.Formula);
+                style.FormulaR1C1=Format(()=> (object?)cell.FormulaR1C1);
+            }
+            if(Flag(()=> (object?)cell.MergeCells))
+            {
+                try
+                {
+                    dynamic area=cell.MergeArea;
+                    int top=(int)area.Row-startRow+1,left=(int)area.Column-startCol+1;
+                    int height=(int)area.Rows.Count,width=(int)area.Columns.Count;
+                    if(top==r && left==c && height<=rows-r+1 && width<=columns-c+1)
+                    {
+                        style.MergeRows=height;style.MergeColumns=width;
+                        for(int rr=r;rr<r+height;rr++)
+                            for(int cc=c;cc<c+width;cc++)
+                                if(rr!=r || cc!=c)covered.Add((rr,cc));
+                    }
+                    // If a merge extends beyond the selected area, represent
+                    // only the selected part, do not invent its other cells.
+                }
+                catch(COMException){}
+            }
+            view.Cells.Add(style);
+        }
+        return view;
+    }
+}
+
+// Rebuild only the DISPLAY of an Excel range. Never render stored RawValue or
+// Display from mappings; show formulas, types and actual styling/geometry.
+internal static class DeskSpaceExcelSheetViewV101
+{
+    internal static Color ExcelColor(int bgr)
+    {
+        int value=bgr&0xFFFFFF;
+        return Color.FromRgb((byte)(value&255),(byte)((value>>8)&255),
+            (byte)((value>>16)&255));
+    }
+    internal static string ColumnLabel(int column)
+    {
+        string label="";
+        while(column>0){column--;label=(char)('A'+column%26)+label;column/=26;}
+        return label;
+    }
+
+    internal static FrameworkElement Create(DeskSpaceExcelTemplateV16 entry)
+    {
+        var visual=entry.SheetVisualV101;
+        if(visual==null)
+        {
+            // Older mappings have no style snapshot. Show transparent legacy
+            // representation, NEVER pretend unrecorded formatting was read.
+            visual=new DeskSpaceExcelSheetVisualV101{
+                Rows=Math.Min(Math.Max(entry.RowCount,1),80),
+                Columns=Math.Min(Math.Max(entry.ColumnCount,1),25)
+            };
+            foreach(var c in entry.Cells.Where(c=>c.RowOffset>=0 && c.ColumnOffset>=0))
+                if(c.RowOffset<visual.Rows && c.ColumnOffset<visual.Columns)
+                    visual.Cells.Add(new DeskSpaceExcelStyledCellV101{
+                        Row=c.RowOffset,Column=c.ColumnOffset,
+                        FormulaR1C1=c.ValueKind=="formula"?c.FormulaR1C1:"",
+                        NumberFormat=c.NumberFormat
+                    });
+        }
+        int rows=Math.Clamp(visual.Rows,1,1800);
+        int cols=Math.Clamp(visual.Columns,1,1800);
+        var layout=new StackPanel{Background=Brushes.White};
+        var head=new TextBlock{
+            Text=entry.SourceSheet+"  ·  "+entry.SourceAddress+
+                "  ·  captured sheet structure (data hidden)",
+            Foreground=new SolidColorBrush(Color.FromRgb(43,64,94)),
+            FontWeight=FontWeights.SemiBold,FontSize=12,
+            Margin=new Thickness(10,9,4,6)
+        };
+        layout.Children.Add(head);
+        var detail=new TextBlock{
+            Text=entry.SheetVisualV101==null?
+                "Older mapping: cell styles were not captured. Capture again to inspect them.":
+                "Select a cell to inspect its exact formatting and formula.",
+            Foreground=new SolidColorBrush(Color.FromRgb(72,84,112)),
+            FontSize=11,TextWrapping=TextWrapping.Wrap,
+            Margin=new Thickness(10,4,6,8)
+        };
+        var grid=new Grid{Background=Brushes.White};
+        grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(42)});
+        for(int c=0;c<cols;c++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition{
+                Width=new GridLength(c<visual.ColumnWidths.Count?
+                    Math.Clamp(visual.ColumnWidths[c],54,245):100)});
+        grid.RowDefinitions.Add(new RowDefinition{Height=new GridLength(27)});
+        for(int r=0;r<rows;r++)
+            grid.RowDefinitions.Add(new RowDefinition{
+                Height=new GridLength(r<visual.RowHeights.Count?
+                    Math.Clamp(visual.RowHeights[r],18,95):26)});
+        for(int c=0;c<cols;c++)
+        {
+            var label=Header(ColumnLabel(entry.SourceColumn+c));
+            Grid.SetColumn(label,c+1);Grid.SetRow(label,0);
+            grid.Children.Add(label);
+        }
+        for(int r=0;r<rows;r++)
+        {
+            var label=Header((entry.SourceRow+r).ToString(CultureInfo.InvariantCulture));
+            Grid.SetColumn(label,0);Grid.SetRow(label,r+1);
+            grid.Children.Add(label);
+        }
+        var index=visual.Cells.Where(c=>c.Row<rows && c.Column<cols &&
+            c.Row>=0 && c.Column>=0).
+            GroupBy(c=>(c.Row,c.Column)).ToDictionary(g=>g.Key,g=>g.First());
+        var occupied=new HashSet<(int,int)>();
+        for(int r=0;r<rows;r++)
+        for(int c=0;c<cols;c++)
+        {
+            if(occupied.Contains((r,c)))continue;
+            index.TryGetValue((r,c),out var item);
+            int rowSpan=Math.Min(item?.MergeRows??1,rows-r);
+            int colSpan=Math.Min(item?.MergeColumns??1,cols-c);
+            var isFormula=item!=null &&
+                (!string.IsNullOrEmpty(item.FormulaR1C1) ||
+                 !string.IsNullOrEmpty(item.FormulaA1));
+            var border=new Border{
+                Background=new SolidColorBrush(
+                    ExcelColor(item?.FillBgr??0xFFFFFF)),
+                BorderBrush=new SolidColorBrush(Color.FromRgb(205,214,226)),
+                BorderThickness=new Thickness(
+                    item?.BorderLeft==true?1.5:0.45,
+                    item?.BorderTop==true?1.5:0.45,
+                    item?.BorderRight==true?1.5:0.45,
+                    item?.BorderBottom==true?1.5:0.45),
+                ToolTip=(item?.Address??"")+
+                    (isFormula?" · "+item!.FormulaA1:" · "+
+                    (item?.NumberFormat??"General")+
+                    " · current data intentionally hidden")
+            };
+            var text=new TextBlock{
+                Text=isFormula?
+                    "ƒx "+(item!.FormulaA1.Length>0?
+                        item.FormulaA1:item.FormulaR1C1):
+                    "",
+                TextTrimming=TextTrimming.CharacterEllipsis,
+                Foreground=new SolidColorBrush(
+                    ExcelColor(item?.FontBgr??0)),
+                FontWeight=item?.Bold==true?
+                    FontWeights.Bold:FontWeights.Normal,
+                FontStyle=item?.Italic==true?
+                    FontStyles.Italic:FontStyles.Normal,
+                FontSize=Math.Clamp(item?.FontSize??11,8,18),
+                VerticalAlignment=VerticalAlignment.Center,
+                HorizontalAlignment=item?.HorizontalAlignment switch
+                {
+                    -4108=>HorizontalAlignment.Center, // xlHAlignCenter
+                    -4152=>HorizontalAlignment.Right,  // xlHAlignRight
+                    _=>HorizontalAlignment.Left
+                },
+                Margin=new Thickness(4,1,4,1),
+                TextWrapping=item?.WrapText==true?
+                    TextWrapping.Wrap:TextWrapping.NoWrap
+            };
+            border.Child=text;
+            int localRow=r,localCol=c;
+            border.MouseLeftButtonDown+=(_,_)=>{
+                var address=item?.Address??(
+                    ColumnLabel(entry.SourceColumn+localCol)+
+                    (entry.SourceRow+localRow).ToString(CultureInfo.InvariantCulture));
+                detail.Text=address+" · "+(item?.NumberFormat??"General")+
+                    (item==null?" · No captured style":
+                     " · "+item.FontName+" "+item.FontSize.ToString("0.#",
+                        CultureInfo.InvariantCulture)+" pt"+
+                     (item.Bold?" · Bold":"")+
+                     (item.Italic?" · Italic":"")+
+                     (item.MergeColumns>1 || item.MergeRows>1?
+                        " · Merged "+item.MergeRows+"×"+item.MergeColumns:""))+
+                    (isFormula?"  |  "+(item!.FormulaA1.Length>0?
+                        item.FormulaA1:item.FormulaR1C1):"  |  Data hidden");
+            };
+            Grid.SetColumn(border,c+1);Grid.SetRow(border,r+1);
+            if(rowSpan>1)Grid.SetRowSpan(border,rowSpan);
+            if(colSpan>1)Grid.SetColumnSpan(border,colSpan);
+            grid.Children.Add(border);
+            for(int rr=r;rr<r+rowSpan;rr++)
+                for(int cc=c;cc<c+colSpan;cc++)
+                    if(rr!=r || cc!=c)occupied.Add((rr,cc));
+        }
+        layout.Children.Add(grid);
+        layout.Children.Add(detail);
+        return new ScrollViewer{
+            HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
+            Content=layout
+        };
+    }
+    private static Border Header(string content)=>new(){
+        Child=new TextBlock{
+            Text=content,TextAlignment=TextAlignment.Center,
+            VerticalAlignment=VerticalAlignment.Center,FontSize=10,
+            Foreground=new SolidColorBrush(Color.FromRgb(58,72,96))
+        },
+        Background=new SolidColorBrush(Color.FromRgb(235,241,248)),
+        BorderBrush=new SolidColorBrush(Color.FromRgb(205,214,226)),
+        BorderThickness=new Thickness(0.5)
+    };
+}
