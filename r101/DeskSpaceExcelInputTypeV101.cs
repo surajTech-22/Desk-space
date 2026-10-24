@@ -160,7 +160,7 @@ internal static class DeskSpaceExcelInputTypeV101
                     "DMY"=>true,"MDY"=>false,_=>first>12
                 };
                 int day=dayFirst?first:second,month=dayFirst?second:first;
-                if(day>=1&&month>=1&&month<=12 &&
+                if(year>=1&&year<=9999&&day>=1&&month>=1&&month<=12 &&
                    day<=DateTime.DaysInMonth(year,month))
                     return new("Converted",expected,new DateTime(year,month,day),
                         "Short date converted to a real Excel date; captured long/short display format remains.");
