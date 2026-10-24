@@ -39,6 +39,7 @@ internal static class Program
             TestDeckControlsAndRunningAppsV91();
             TestRunningAppsHoverV92();
             TestStableRunningAppsFlyoutV93();
+            TestRunningWindowCloseV96();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -253,6 +254,31 @@ internal static class Program
         Assert(empty.Children.Count==0,
             "R93 Running Apps group must disappear when no apps remain");
         Console.WriteLine("R93 PASS: fixed-size hover header, detached anchored flyout, no layout expansion, empty category omitted.");
+    }
+
+    private static void TestRunningWindowCloseV96()
+    {
+        var apps=Product.GetType("DeskSpace.DeskSpaceRunningAppsV88",true)!;
+        var entry=apps.GetNestedType("Entry",BindingFlags.NonPublic)!;
+        var sample=Activator.CreateInstance(entry,new object[]{
+            "Chrome","",IntPtr.Zero,"Saved work - Chrome"})!;
+        var req=apps.GetMethod("RequestClose",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        Assert(!(bool)req.Invoke(null,new object[]{sample})!,
+            "R96 must reject a stale or invalid HWND rather than close another app");
+        var hover=Product.GetType("DeskSpace.DeskSpaceStableHoverV93",true)!;
+        var maker=hover.GetMethod("MakeCloseButton",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var close=(Button)maker.Invoke(null,new object[]{sample})!;
+        Assert(close.Content?.ToString()=="×" &&
+               close.Width<=22 && close.BorderThickness==new Thickness(0),
+            "R96 close icon should be a small blended control");
+        Assert(close.ToolTip?.ToString()?.Contains("unsaved work")==true,
+            "R96 close action must allow normal unsaved-work prompts");
+        close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(close.IsEnabled,
+            "R96 failed close request must leave the control usable");
+        Console.WriteLine("R96 PASS: small independent per-window close button and safe normal-close validation.");
     }
 
     private static void TestCompactShelfGroupsV88()

@@ -26,6 +26,33 @@ internal static class DeskSpaceStableHoverV93
         return roomRight>=roomLeft;
     }
 
+    // Shared per-window close control. Separate from the switch button, so
+    // clicking X never activates or minimises a window.
+    internal static Button MakeCloseButton(DeskSpaceRunningAppsV88.Entry window)
+    {
+        var button=new Button{
+            Content="×",
+            Width=22,MinWidth=22,Height=23,MinHeight=23,
+            FontSize=14,FontWeight=FontWeights.Medium,
+            Foreground=Brushes.LightSteelBlue,
+            Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
+            BorderThickness=new Thickness(0),
+            Padding=new Thickness(0),
+            VerticalAlignment=VerticalAlignment.Center,
+            Margin=new Thickness(1,1,2,1),
+            ToolTip="Close this window normally (unsaved work may prompt)"
+        };
+        button.Click+=(_,e)=>{
+            e.Handled=true;
+            if(DeskSpaceRunningAppsV88.RequestClose(window))
+            {
+                button.IsEnabled=false;
+                button.ToolTip="Close requested; the application may ask to save";
+            }
+        };
+        return button;
+    }
+
     internal static Border Add(StackPanel root,
         IReadOnlyList<DeskSpaceRunningAppsV88.Entry> apps,
         IReadOnlyList<DeskSpaceRunningAppsV88.Entry> windows)
@@ -128,21 +155,27 @@ internal static class DeskSpaceStableHoverV93
             foreach(var window in pendingWindows)
             {
                 var selected=window;
+                var row=new DockPanel{LastChildFill=true,
+                    Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
+                    Margin=new Thickness(2,1,2,1)};
+                var close=MakeCloseButton(selected);
+                DockPanel.SetDock(close,Dock.Right);
+                row.Children.Add(close);
                 var choice=new Button{
                     Content=selected.WindowTitle,FontSize=11,
                     Foreground=Brushes.White,
-                    Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
+                    Background=Brushes.Transparent,
                     BorderThickness=new Thickness(0),
                     HorizontalContentAlignment=HorizontalAlignment.Left,
                     Padding=new Thickness(7,5,7,5),
-                    Margin=new Thickness(2,1,2,1),MaxWidth=258,
-                    ToolTip=selected.WindowTitle
+                    MaxWidth=229,ToolTip=selected.WindowTitle
                 };
                 choice.Click+=(_,_)=>{
                     Hide();
                     DeskSpaceRunningAppsV88.Focus(selected);
                 };
-                windowItems.Children.Add(choice);
+                row.Children.Add(choice);
+                windowItems.Children.Add(row);
             }
             windowPopup.IsOpen=true;
         }
@@ -240,7 +273,23 @@ internal static class DeskSpaceStableHoverV93
                 Hide();
                 DeskSpaceRunningAppsV88.Focus(choices[0]);
             };
-            iconRow.Children.Add(appButton);
+            if(choices.Length==1)
+            {
+                // A one-window app can be closed directly from its icon.
+                // Multi-window apps expose separate X controls per window.
+                var tile=new Grid{Width=78};
+                tile.Children.Add(appButton);
+                var close=MakeCloseButton(choices[0]);
+                close.Width=17;close.MinWidth=17;
+                close.Height=17;close.MinHeight=17;
+                close.FontSize=12;
+                close.HorizontalAlignment=HorizontalAlignment.Right;
+                close.VerticalAlignment=VerticalAlignment.Top;
+                close.Margin=new Thickness(0,0,3,0);
+                tile.Children.Add(close);
+                iconRow.Children.Add(tile);
+            }
+            else iconRow.Children.Add(appButton);
         }
         // Separate Popup HWNDs must close when the old deck is hidden
         // or its contents are regenerated.

@@ -48,6 +48,7 @@ internal static class DeskSpaceRunningAppsV88
 {
     internal sealed record Entry(string Name,string Path,IntPtr Handle,string WindowTitle);
     private const int Restore=9, Minimise=6, GwlExStyle=-20, GwOwner=4;
+    private const uint WmClose=0x0010;
     private const long WsExToolWindow=0x80, WsExAppWindow=0x40000;
     private const int DwmCloaked=14;
     private delegate bool WindowEnumerator(IntPtr window,IntPtr context);
@@ -99,6 +100,10 @@ internal static class DeskSpaceRunningAppsV88
     private static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll",SetLastError=true)]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(IntPtr window,uint message,
+        IntPtr wParam,IntPtr lParam);
     private static IntPtr lastSelectedWindow=IntPtr.Zero;
 
     private static long WindowStyle(IntPtr window)=>
@@ -222,6 +227,17 @@ internal static class DeskSpaceRunningAppsV88
         }
         catch(Win32Exception){}
         return windows.GroupBy(x=>x.Handle).Select(g=>g.First()).ToArray();
+    }
+
+    // Request only a normal window close: apps can prompt for unsaved work.
+    // Never terminate the process, and never close a reused HWND whose title
+    // no longer matches the originally enumerated window.
+    internal static bool RequestClose(Entry entry)
+    {
+        if(!IsActiveWindow(entry.Handle) ||
+           !string.Equals(WindowText(entry.Handle),entry.WindowTitle,
+               StringComparison.Ordinal))return false;
+        return PostMessage(entry.Handle,WmClose,IntPtr.Zero,IntPtr.Zero);
     }
 
     internal static void Focus(Entry entry)

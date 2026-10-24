@@ -1217,6 +1217,10 @@ jobs:
         shell: pwsh
         run: ./r95/test-r95.ps1
 
+      - name: R96 normal-close button for running app windows
+        shell: pwsh
+        run: ./r96/test-r96.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
