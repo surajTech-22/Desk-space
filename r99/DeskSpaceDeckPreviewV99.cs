@@ -18,7 +18,7 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
     private readonly Popup preview;
     private readonly FrameworkElement deck;
     private readonly DispatcherTimer hoverOpen=new(){
-        Interval=TimeSpan.FromMilliseconds(340)
+        Interval=TimeSpan.FromMilliseconds(650)
     };
     private readonly DispatcherTimer hoverClose=new(){
         Interval=TimeSpan.FromMilliseconds(500)
@@ -28,6 +28,11 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
     private Border? pendingRow;
     private string pendingPath="";
     private Func<bool>? pendingMode;
+    private Point pendingPosition;
+    private bool manualPreview;
+    internal static bool Stationary(Point previous,Point current,double tolerance=2)=>
+        Math.Abs(previous.X-current.X)<=tolerance &&
+        Math.Abs(previous.Y-current.Y)<=tolerance;
     internal bool IsOpen=>preview.IsOpen;
     internal string CurrentPath=>current;
     internal DeskSpaceDeckPreviewV99(FrameworkElement deck)
@@ -42,7 +47,8 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
             hoverOpen.Stop();
             var row=pendingRow;
             if(row!=null && row.IsLoaded && row.IsMouseOver &&
-               pendingMode?.Invoke()==true)
+               pendingMode?.Invoke()==true &&
+               Stationary(pendingPosition,Mouse.GetPosition(row)))
                 Show(pendingPath,row);
         };
         hoverClose.Tick+=(_,_)=>{
@@ -60,6 +66,7 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
         hoverOpen.Stop();
         pendingRow=null;
         pendingMode=null;
+        manualPreview=false;
         hoverClose.Stop();
         preview.IsOpen=false;
         preview.Child=null;
@@ -72,7 +79,8 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
             Close();
     }
 
-    internal void Show(string path,FrameworkElement source)
+    internal void Show(string path,FrameworkElement source,
+        bool explicitClick=false)
     {
         if(disposed)return;
         if(!File.Exists(path)&&!Directory.Exists(path)){Close();return;}
@@ -82,6 +90,7 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
             StringComparison.OrdinalIgnoreCase))return;
         Close();
         current=path;
+        manualPreview=explicitClick;
         try
         {
             var content=Directory.Exists(path)?
@@ -120,7 +129,7 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
             if(preview.IsOpen && string.Equals(current,path,
                 StringComparison.OrdinalIgnoreCase))
                 Close();
-            else Show(path,row);
+            else Show(path,row,true);
         };
         row.MouseEnter+=(_,_)=>{
             hoverClose.Stop();
@@ -129,10 +138,27 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
             pendingRow=row;
             pendingPath=path;
             pendingMode=hoverEnabled;
+            pendingPosition=Mouse.GetPosition(row);
+            hoverOpen.Start();
+        };
+        row.MouseMove+=(_,e)=>{
+            var at=e.GetPosition(row);
+            if(Stationary(pendingPosition,at))return;
+            hoverOpen.Stop();
+            // Automatically shown previews vanish on movement. Explicit
+            // eye-button previews stay interactive until dismissed.
+            if(preview.IsOpen && !manualPreview)Close();
+            if(preview.IsOpen && manualPreview)return;
+            if(!hoverEnabled())return;
+            pendingRow=row;
+            pendingPath=path;
+            pendingMode=hoverEnabled;
+            pendingPosition=at;
             hoverOpen.Start();
         };
         row.MouseLeave+=(_,_)=>{
             hoverOpen.Stop();
+            if(preview.IsOpen && !manualPreview)Close();
             if(preview.IsOpen)ScheduleClose();
         };
         row.Unloaded+=(_,_)=>{
