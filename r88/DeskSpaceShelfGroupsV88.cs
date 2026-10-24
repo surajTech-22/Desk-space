@@ -47,7 +47,7 @@ internal static class DeskSpaceShelfGroupsV88
 internal static class DeskSpaceRunningAppsV88
 {
     internal sealed record Entry(string Name,string Path,IntPtr Handle,string WindowTitle);
-    private const int Restore=9, GwlExStyle=-20, GwOwner=4;
+    private const int Restore=9, Minimise=6, GwlExStyle=-20, GwOwner=4;
     private const long WsExToolWindow=0x80, WsExAppWindow=0x40000;
     private const int DwmCloaked=14;
     private delegate bool WindowEnumerator(IntPtr window,IntPtr context);
@@ -97,6 +97,9 @@ internal static class DeskSpaceRunningAppsV88
     [DllImport("user32.dll")]
     [return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    private static IntPtr lastSelectedWindow=IntPtr.Zero;
 
     private static long WindowStyle(IntPtr window)=>
         IntPtr.Size==8?GetWindowLongPtr64(window,GwlExStyle).ToInt64():
@@ -149,6 +152,14 @@ internal static class DeskSpaceRunningAppsV88
             Take(24).ToArray();
 
     internal static IReadOnlyList<Entry> Snapshot()
+    {
+        var windows=SnapshotWindows();
+        return GroupVisible(windows);
+    }
+
+    // Retain every individual HWND so hovering a grouped app exposes all
+    // of its windows; the old Snapshot still provides the distinct app count.
+    internal static IReadOnlyList<Entry> SnapshotWindows()
     {
         var windows=new List<Entry>();
         try
@@ -210,14 +221,27 @@ internal static class DeskSpaceRunningAppsV88
             },IntPtr.Zero);
         }
         catch(Win32Exception){}
-        return GroupVisible(windows);
+        return windows.GroupBy(x=>x.Handle).Select(g=>g.First()).ToArray();
     }
 
     internal static void Focus(Entry entry)
     {
         if(!IsActiveWindow(entry.Handle))return;
+        // Like a taskbar button: select to activate, select the same active
+        // window again to minimise it. The last selection also covers cases
+        // where the no-activate floating deck temporarily owns foreground.
+        IntPtr foreground=GetForegroundWindow();
+        bool alreadySelected=lastSelectedWindow==entry.Handle;
+        bool active=foreground==entry.Handle;
+        if(!IsIconic(entry.Handle) && (active || alreadySelected))
+        {
+            ShowWindowAsync(entry.Handle,Minimise);
+            lastSelectedWindow=IntPtr.Zero;
+            return;
+        }
         ShowWindowAsync(entry.Handle,Restore);
         SetForegroundWindow(entry.Handle);
+        lastSelectedWindow=entry.Handle;
     }
 
     internal static void Fill(StackPanel target,IReadOnlyList<Entry> apps)
@@ -253,4 +277,124 @@ internal static class DeskSpaceRunningAppsV88
         }
         target.Children.Add(grid);
     }
+    // Hover-only running applications. Neither the category nor the app
+    // list uses click-to-expand. Only an individual window is selectable.
+    // Both flyout levels live inside the original deck, with no extra
+    // floating top-level windows, keeping mouse travel stable.
+    internal static void AddHoverGroup(StackPanel root,
+        IReadOnlyList<Entry> apps,IReadOnlyList<Entry> windows)
+    {
+        if(apps.Count==0)return;
+        var wrapper=new Border{
+            Background=Brushes.Transparent,
+            Margin=new Thickness(1,2,1,2)
+        };
+        var stack=new StackPanel();
+        wrapper.Child=stack;
+        var heading=new Border{
+            Background=new SolidColorBrush(Color.FromArgb(185,38,53,83)),
+            Padding=new Thickness(7,5,6,5),
+            CornerRadius=new CornerRadius(4),
+            Cursor=System.Windows.Input.Cursors.Hand
+        };
+        heading.Child=new TextBlock{
+            Text="▸  Running Apps · "+apps.Count,
+            FontSize=11,Foreground=Brushes.White,
+            FontWeight=FontWeights.SemiBold
+        };
+        stack.Children.Add(heading);
+        var detail=new StackPanel{Visibility=Visibility.Collapsed};
+        stack.Children.Add(detail);
+        var grid=new WrapPanel{Margin=new Thickness(1,2,1,3)};
+        detail.Children.Add(grid);
+        var windowChoices=new StackPanel{Visibility=Visibility.Collapsed,
+            Margin=new Thickness(2,0,2,3)};
+        detail.Children.Add(windowChoices);
+        foreach(var app in apps)
+        {
+            var appWindows=windows.Where(x=>x.Name.Equals(app.Name,
+                StringComparison.OrdinalIgnoreCase)).
+                GroupBy(x=>x.Handle).Select(x=>x.First()).ToArray();
+            if(appWindows.Length==0)appWindows=new[]{app};
+            var inner=new StackPanel{Width=66};
+            var icon=DeskSpaceApplicationIconsV65.Get(app.Path);
+            if(icon!=null)inner.Children.Add(new Image{
+                Source=icon,Width=22,Height=22,
+                HorizontalAlignment=HorizontalAlignment.Center,
+                Margin=new Thickness(0,0,0,2)
+            });
+            else inner.Children.Add(new TextBlock{
+                Text="▣",FontSize=18,Foreground=Brushes.LightSteelBlue,
+                TextAlignment=TextAlignment.Center
+            });
+            inner.Children.Add(new TextBlock{
+                Text=app.Name,FontSize=10,Foreground=Brushes.White,
+                TextTrimming=TextTrimming.CharacterEllipsis,
+                TextAlignment=TextAlignment.Center,ToolTip=app.Name
+            });
+            if(appWindows.Length>1)inner.Children.Add(new TextBlock{
+                Text=appWindows.Length+" windows ▾",FontSize=9,
+                Foreground=Brushes.LightSteelBlue,
+                TextAlignment=TextAlignment.Center
+            });
+            var button=new Button{
+                Content=inner,Width=72,MinHeight=48,
+                Padding=new Thickness(2),Margin=new Thickness(1),
+                Background=new SolidColorBrush(Color.FromArgb(116,44,60,93)),
+                BorderThickness=new Thickness(0),
+                ToolTip=appWindows.Length>1?
+                    "Hover to choose one of "+appWindows.Length+" windows":
+                    "Select or minimise "+app.Name
+            };
+            var matches=appWindows;
+            button.MouseEnter+=(_,_)=>{
+                windowChoices.Children.Clear();
+                windowChoices.Visibility=matches.Length>1?
+                    Visibility.Visible:Visibility.Collapsed;
+                if(matches.Length<=1)return;
+                var title=new TextBlock{
+                    Text=app.Name+" · "+matches.Length+" windows",
+                    FontSize=10,Foreground=Brushes.LightSteelBlue,
+                    Margin=new Thickness(4,2,4,2)
+                };
+                windowChoices.Children.Add(title);
+                foreach(var window in matches)
+                {
+                    var item=window;
+                    var choice=new Button{
+                        Content=item.WindowTitle,FontSize=11,
+                        Foreground=Brushes.White,
+                        Background=new SolidColorBrush(
+                            Color.FromArgb(130,44,60,93)),
+                        BorderThickness=new Thickness(0),
+                        Padding=new Thickness(7,5,7,5),
+                        HorizontalContentAlignment=HorizontalAlignment.Left,
+                        Margin=new Thickness(2,1,2,1),
+                        MaxWidth=250,ToolTip=item.WindowTitle
+                    };
+                    choice.Click+=(_,_)=>Focus(item);
+                    windowChoices.Children.Add(choice);
+                }
+            };
+            button.Click+=(_,_)=>{
+                if(matches.Length==1)Focus(matches[0]);
+                // Multiple windows are chosen in the hover list, never by
+                // arbitrarily picking the first HWND.
+            };
+            grid.Children.Add(button);
+        }
+        wrapper.MouseEnter+=(_,_)=>{
+            detail.Visibility=Visibility.Visible;
+            if(heading.Child is TextBlock text)
+                text.Text="▾  Running Apps · "+apps.Count;
+        };
+        wrapper.MouseLeave+=(_,_)=>{
+            detail.Visibility=Visibility.Collapsed;
+            windowChoices.Visibility=Visibility.Collapsed;
+            if(heading.Child is TextBlock text)
+                text.Text="▸  Running Apps · "+apps.Count;
+        };
+        root.Children.Add(wrapper);
+    }
+
 }
