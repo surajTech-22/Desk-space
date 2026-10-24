@@ -24,14 +24,24 @@ try {
         Wait-Process -Id $OldPid -Timeout 90 -ErrorAction Stop
     }
     if (!(Test-Path -LiteralPath $Installer -PathType Leaf)) { throw 'Verified installer is missing.' }
+    if (!(Test-Path -LiteralPath $TargetExe -PathType Leaf)) {
+        throw 'Existing DeskSpace executable not found; refusing to create a second installation.'
+    }
+    $existingInstallDir = Split-Path -Parent $TargetExe
+    Report ('Updating installed DeskSpace in existing directory: ' + $existingInstallDir)
     $setupLog = Join-Path (Split-Path -Parent $Installer) 'inno-setup.log'
     Report 'Supervisor launching silent installer.'
-    $arguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /LOG="' + $setupLog + '"'
+    # Force the ORIGINAL installation folder; Inno Setup retains its AppId
+    # and upgrades installed files rather than choosing another directory.
+    $arguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /DIR="' + $existingInstallDir + '" /LOG="' + $setupLog + '"'
     $setup = Start-Process -FilePath $Installer -ArgumentList $arguments -Wait -PassThru -ErrorAction Stop
     if ($setup.ExitCode -ne 0) {
         throw ('Installer exited with code ' + $setup.ExitCode + '. Check ' + $setupLog)
     }
-    Report 'Installer completed successfully.'
+    if (!(Test-Path -LiteralPath $TargetExe -PathType Leaf)) {
+        throw 'The installer reported success but did not restore the original DeskSpace executable.'
+    }
+    Report 'Installer completed successfully in the original DeskSpace directory.'
     Start-Sleep -Seconds 3
     # Inno Setup's silent [Run] step normally relaunches --widget-host.
     # Only start a host here if the setup process did not already launch one.

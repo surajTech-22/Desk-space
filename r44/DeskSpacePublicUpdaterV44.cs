@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -42,6 +43,60 @@ internal static class DeskSpacePublicUpdaterV44
         }
         catch(IOException){} catch(UnauthorizedAccessException){}
     }
+    // Updates install over the existing app. Only version-named STAGING
+    // folders are disposable. User data, TemporaryShelf, profiles and the
+    // installed app never participate in this cleanup.
+    private static void PruneUpdateCache(Version installed)
+    {
+        var parent=Path.Combine(Local,"Updates");
+        if(!Directory.Exists(parent))return;
+        try
+        {
+            foreach(var folder in Directory.EnumerateDirectories(parent))
+            {
+                try
+                {
+                    var name=Path.GetFileName(folder);
+                    if(!Regex.IsMatch(name,@"^v\d+\.\d+\.\d+$") ||
+                       !Version.TryParse(name.Substring(1),out var version))continue;
+                    var info=new DirectoryInfo(folder);
+                    if((info.Attributes&FileAttributes.ReparsePoint)!=0)continue;
+                    var age=DateTime.UtcNow-info.LastWriteTimeUtc;
+                    // Leave the currently downloading or installing release alone.
+                    if(version<=installed)
+                    {
+                        if(age<TimeSpan.FromMinutes(15))continue;
+                    }
+                    else if(age<TimeSpan.FromHours(24))continue;
+                    // Never purge arbitrary user-added items or links.
+                    if(Directory.EnumerateDirectories(folder).Any())continue;
+                    bool recognized=true;
+                    foreach(var file in Directory.EnumerateFiles(folder))
+                    {
+                        var leaf=Path.GetFileName(file);
+                        if((File.GetAttributes(file)&FileAttributes.ReparsePoint)!=0 ||
+                           (leaf!="DeskSpace_Setup.exe" &&
+                            leaf!="DeskSpace_Setup.sha256.txt" &&
+                            leaf!="CompleteDeskSpaceUpdate.ps1" &&
+                            leaf!="inno-setup.log"))
+                        {
+                            recognized=false;
+                            break;
+                        }
+                    }
+                    if(!recognized)continue;
+                    Directory.Delete(folder,true);
+                    Log("Removed obsolete installer cache "+name);
+                }
+                catch(IOException){}
+                catch(UnauthorizedAccessException){}
+                catch(System.Security.SecurityException){}
+            }
+        }
+        catch(IOException){}
+        catch(UnauthorizedAccessException){}
+    }
+
     public static void StartAutomaticChecks(Window owner)
     {
         if(started)return;
@@ -165,6 +220,9 @@ internal static class DeskSpacePublicUpdaterV44
         bool supervisorLaunched=false;
         try
         {
+            // Also run when offline: finished installs should not leave their
+            // old ~60 MB setup packages behind indefinitely.
+            PruneUpdateCache(Version.Parse(DeskSpaceUpdater.CurrentVersion));
             using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(6));
             using var answer=await Http.GetAsync(Api,timeout.Token);
             answer.EnsureSuccessStatusCode();
