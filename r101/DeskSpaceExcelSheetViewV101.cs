@@ -28,6 +28,8 @@ internal sealed class DeskSpaceExcelStyledCellV101
     public string FormulaA1 {get;set;}="";
     public string FormulaR1C1 {get;set;}="";
     public string NumberFormat {get;set;}="";
+    public string StoredType {get;set;}="Unknown";
+    public string ExpectedType {get;set;}="Unknown";
     public string FontName {get;set;}="Calibri";
     public double FontSize {get;set;}=11;
     public bool Bold {get;set;}
@@ -127,11 +129,18 @@ internal static class DeskSpaceExcelVisualCaptureV101
                 BorderBottom=VisibleBorder(cell,9), // xlEdgeBottom
                 BorderRight=VisibleBorder(cell,10)  // xlEdgeRight
             };
-            if(Flag(()=> (object?)cell.HasFormula))
+            bool formula=Flag(()=> (object?)cell.HasFormula);
+            if(formula)
             {
                 style.FormulaA1=Format(()=> (object?)cell.Formula);
                 style.FormulaR1C1=Format(()=> (object?)cell.FormulaR1C1);
             }
+            object? raw;
+            try{raw=(object?)cell.Value2;}
+            catch(COMException){raw=null;}
+            style.StoredType=DeskSpaceExcelInputTypeV101.Stored(raw,formula);
+            style.ExpectedType=DeskSpaceExcelInputTypeV101.Expected(
+                style.NumberFormat,style.StoredType,formula);
             if(Flag(()=> (object?)cell.MergeCells))
             {
                 try
@@ -261,6 +270,8 @@ internal static class DeskSpaceExcelSheetViewV101
                 ToolTip=(item?.Address??"")+
                     (isFormula?" · "+item!.FormulaA1:" · "+
                     (item?.NumberFormat??"General")+
+                    " · stored: "+(item?.StoredType??"Unknown")+
+                    " · expected: "+(item?.ExpectedType??"Unknown")+
                     " · current data intentionally hidden")
             };
             var text=new TextBlock{
@@ -302,7 +313,12 @@ internal static class DeskSpaceExcelSheetViewV101
                      (item.MergeColumns>1 || item.MergeRows>1?
                         " · Merged "+item.MergeRows+"×"+item.MergeColumns:""))+
                     (isFormula?"  |  "+(item!.FormulaA1.Length>0?
-                        item.FormulaA1:item.FormulaR1C1):"  |  Data hidden");
+                        item.FormulaA1:item.FormulaR1C1):"  |  Data hidden")+
+                    "  |  Stored: "+(item?.StoredType??"Unknown")+
+                    "  |  Expected: "+(item?.ExpectedType??"Unknown")+
+                    (item?.StoredType=="Text" &&
+                     item?.ExpectedType is "Number" or "Date" or "DateTime"?
+                        "  |  Type mismatch: conversion requires validation":"");
             };
             Grid.SetColumn(border,c+1);Grid.SetRow(border,r+1);
             if(rowSpan>1)Grid.SetRowSpan(border,rowSpan);
