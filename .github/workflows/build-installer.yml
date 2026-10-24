@@ -1227,6 +1227,10 @@ jobs:
           ./r97/apply-r97.ps1
           ./r97/test-r97.ps1
 
+      - name: R98 keep hover flyout open after closing a window
+        shell: pwsh
+        run: ./r98/test-r98.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

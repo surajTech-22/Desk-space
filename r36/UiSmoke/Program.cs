@@ -41,6 +41,7 @@ internal static class Program
             TestStableRunningAppsFlyoutV93();
             TestRunningWindowCloseV96();
             TestLiveRunningWindowRemovalV97();
+            TestHoverCloseRetentionV98();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -313,6 +314,22 @@ internal static class Program
         Assert(button.IsEnabled,
             "R97 an unsuccessful normal-close request must leave retry available");
         Console.WriteLine("R97 PASS: closed window filtered immediately, sibling windows remain, hover refresh can stay open.");
+    }
+
+    private static void TestHoverCloseRetentionV98()
+    {
+        var hover=Product.GetType("DeskSpace.DeskSpaceStableHoverV93",true)!;
+        var keep=hover.GetMethod("ShouldRetainAfterClose",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        bool Retain(int x,int y,int nextX,int nextY)=>
+            (bool)keep.Invoke(null,new object[]{x,y,nextX,nextY})!;
+        Assert(Retain(300,200,300,200),
+            "R98 removing a window below a motionless mouse must not close the flyout");
+        Assert(Retain(300,200,312,212),
+            "R98 a small pointer jitter must not dismiss the hover panel");
+        Assert(!Retain(300,200,330,200),
+            "R98 actual mouse movement outside may dismiss the panel");
+        Console.WriteLine("R98 PASS: close-button changes preserve flyout under stationary pointer; intentional mouse movement is respected.");
     }
 
     private static void TestCompactShelfGroupsV88()
