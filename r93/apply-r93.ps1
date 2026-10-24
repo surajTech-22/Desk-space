@@ -6,7 +6,7 @@ $p="$r/DeskSpaceShelfGroupsV88.cs"
 $s=[IO.File]::ReadAllText($p)
 $s=$s.Replace([string][char]13+[char]10,[string][char]10)
 $start=$s.IndexOf('    internal static void AddHoverGroup(StackPanel root,',[StringComparison]::Ordinal)
-$end=$s.LastIndexOf([string][char]10+'}',[StringComparison]::Ordinal)
+$end=$s.LastIndexOf(([string][char]10 + '}'),[StringComparison]::Ordinal)
 if($start -lt 0 -or $end -le $start){
  throw 'R93 stable-hover integration anchor not found'
 }
