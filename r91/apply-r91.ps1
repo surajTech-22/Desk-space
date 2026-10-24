@@ -8,7 +8,7 @@ function Swap([string]$old,[string]$new,[string]$label)
  $old=$old.Replace([string][char]13+[char]10,[string][char]10)
  $new=$new.Replace([string][char]13+[char]10,[string][char]10)
  $count=([regex]::Matches($script:s,[regex]::Escape($old))).Count
- if($count -ne 1){throw "R91 $label: expected one anchor, found $count"}
+ if($count -ne 1){throw "R91 ${label}: expected one anchor, found $count"}
  $script:s=$script:s.Replace($old,$new)
 }
 Swap '    private bool appsExpanded=false,heldExpanded=true,recentExpanded=true;' @'
