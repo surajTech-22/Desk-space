@@ -28,6 +28,8 @@ function Needs([string]$file,[string[]]$tokens){
 Needs Model @('public List<DeskSpaceActionStep> AutomationSteps',
  'TriggerCondition','TriggerTarget')
 Needs Engine @('ValidCondition(','ConditionReady(','internal static Task Run(',
+ 'source.Count>8','source.Any(x=>x==null)',
+ 'Windows did not launch the target','item.Additional==null',
  'DeskSpaceWorkflowTemplatesV84','UseShellExecute=true',
  'File.Move(temp,Filename,true)')
 Needs Editor @('DeskSpaceReminderPickerV81.Create(',
@@ -53,4 +55,4 @@ Needs Host @('DeskSpaceWorkspaceProfilesV85.AddMenu(',
 Needs Shelf @('DeskSpaceFilePreviewV85.Attach(')
 Needs Tests @('TestAutomationAndProductivityV85();',
  'r84-workflow-editor','r85-recent-file-preview')
-Write-Host 'R84+R85 PREBUILD PASS: safeguarded multi-actions, conditional scheduling, templates, profiles, preview, clipboard, hotkey, both editors.'
+Write-Host 'R86 HARDENING PASS: oversized persisted workflows rejected, failed starts reported, invalid templates blocked. R84+R85 PREBUILD PASS: safeguarded multi-actions, conditional scheduling, templates, profiles, preview, clipboard, hotkey, both editors.'

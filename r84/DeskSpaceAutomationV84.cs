@@ -81,8 +81,13 @@ internal static class DeskSpaceAutomationV84
         problem="";
         if(!ValidCondition(item.TriggerCondition??"None",item.TriggerTarget??""))
         {problem="Invalid trigger condition";return false;}
-        var steps=CopySteps(item.AutomationSteps);
-        if(steps.Count>8 || steps.Any(x=>!IsValid(x)))
+        // Validate the original persisted list before the eight-step editor cap.
+        // Never silently drop a ninth action (or a null entry) from a workflow.
+        var source=item.AutomationSteps;
+        if(source!=null && (source.Count>8 || source.Any(x=>x==null)))
+        {problem="A workflow may contain at most 8 valid additional actions";return false;}
+        var steps=CopySteps(source);
+        if(steps.Any(x=>!IsValid(x)))
         {problem="An additional step has an invalid target";return false;}
         if(!DeskSpaceDueShelfV74.IsAllowedAction(item.AlertAction,item.AlertTarget))
         {problem="The primary action is invalid";return false;}
@@ -119,8 +124,9 @@ internal static class DeskSpaceAutomationV84
                             DeskSpaceReminderBrowserV80.LaunchAtDue(snapshot);
                         else Process.Start(new ProcessStartInfo(url){UseShellExecute=true});
                     }
-                    else Process.Start(new ProcessStartInfo(step.Target){
-                        UseShellExecute=true});
+                    else if(Process.Start(new ProcessStartInfo(step.Target){
+                        UseShellExecute=true})==null)
+                        throw new InvalidOperationException("Windows did not launch the target");
                     DeskSpaceReminderActionHistoryV83.Record(snapshot,"Launched",
                         $"Step {i+1}/{batch.Count} {step.Action} · "+
                         (step.Action=="Open URL"?
@@ -175,7 +181,7 @@ internal static class DeskSpaceWorkflowTemplatesV84
             throw new ArgumentException("Template name must be 1 to 64 characters");
         if(!DeskSpaceAutomationV84.ValidCondition(item.Condition,item.ConditionTarget) ||
            !DeskSpaceDueShelfV74.IsAllowedAction(item.Action,item.Target) ||
-           item.Additional.Count>8 ||
+           item.Additional==null || item.Additional.Count>8 ||
            item.Additional.Any(x=>!DeskSpaceAutomationV84.IsValid(x)))
             throw new ArgumentException("Invalid template");
         lock(Lock)
