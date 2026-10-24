@@ -300,8 +300,8 @@ internal static class Program
             new object[]{all,(Func<IntPtr,bool>)(hwnd=>hwnd!=new IntPtr(102))})!;
         var open=active.Cast<object>().ToArray();
         Assert(open.Length==2,"R97 must remove closed HWND immediately without closing the hover UI");
-        Assert((IntPtr)entry.GetProperty("Handle")!.GetValue(open[0])!==new IntPtr(102) &&
-               (IntPtr)entry.GetProperty("Handle")!.GetValue(open[1])!==new IntPtr(102),
+        Assert((IntPtr)entry.GetProperty("Handle")!.GetValue(open[0])! != new IntPtr(102) &&
+               (IntPtr)entry.GetProperty("Handle")!.GetValue(open[1])! != new IntPtr(102),
             "R97 the closed window must not remain selectable");
         Assert(hover.GetProperty("IsHoverActive",BindingFlags.Static|
                 BindingFlags.NonPublic)!=null,
