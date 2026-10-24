@@ -123,14 +123,33 @@ internal static class Program
         close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert(clicks==2,
             "R91 close and minimise are independent clickable actions");
-        var header=new DockPanel{Width=224,Height=29};
+        // Render the REAL group controls in a compact deck-sized surface.
+        // A bare 29px header is too small for the WPF screenshot threshold.
+        var header=new DockPanel{Height=29};
         DockPanel.SetDock(close,Dock.Right);
         DockPanel.SetDock(minimize,Dock.Right);
         header.Children.Add(close);
         header.Children.Add(minimize);
         header.Children.Add(new TextBlock{Text="Deck · 3 apps",
-            Foreground=Brushes.White});
-        Render(header,224,29,"r91-blended-deck-controls");
+            Foreground=Brushes.White,VerticalAlignment=VerticalAlignment.Center});
+        var contents=new StackPanel();
+        contents.Children.Add(header);
+        var groups=Product.GetType("DeskSpace.DeskSpaceShelfGroupsV88",true)!;
+        var add=groups.GetMethod("Add",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var groupContent=(StackPanel)add.Invoke(null,new object[]{
+            contents,"Running Apps",3,true,(Action)(()=>{})})!;
+        var fill=apps.GetMethod("Fill",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        fill.Invoke(null,new object[]{groupContent,group.Invoke(
+            null,new object[]{array})!});
+        var stage=new Border{
+            Width=294,Height=132,
+            Padding=new Thickness(7),
+            Background=new SolidColorBrush(Color.FromRgb(20,28,52)),
+            Child=contents
+        };
+        Render(stage,294,132,"r91-blended-deck-controls");
         Console.WriteLine("R91 PASS: 3 visible grouped app icons counted correctly, minimise/close separate and blended.");
     }
 
