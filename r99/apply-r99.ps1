@@ -52,6 +52,28 @@ Swap @'
         list.Children.Clear();
 '@ 'persistent deck preview outside row redraws'
 Swap @'
+            dismissedNonAppSignature=NonAppSignature();
+            deckDismissed=true;
+            popup.IsOpen=false;
+'@ @'
+            dismissedNonAppSignature=NonAppSignature();
+            deckDismissed=true;
+            deckPreview?.Close();
+            popup.IsOpen=false;
+'@ 'explicit deck close also closes detached preview'
+Swap @'
+        if(!visible)
+        {
+            popup.IsOpen=false;
+            runningAppsTimer.Stop();
+'@ @'
+        if(!visible)
+        {
+            deckPreview?.Close();
+            popup.IsOpen=false;
+            runningAppsTimer.Stop();
+'@ 'manual deck visibility off closes preview'
+Swap @'
         if(!DeskSpaceDeckVisibilityV89.Visible)
         {
             popup.IsOpen=false;
@@ -124,7 +146,9 @@ Swap @'
                     Background=Brushes.Transparent,BorderThickness=new Thickness(0),
                     Padding=new Thickness(1),
                     ToolTip="Hold a copy of this recently saved file"};
-                holdCopy.Click+=(_,_)=>_=StageFilesAsync(new[]{item.StagedPath});
+                holdCopy.Click+=(sender,args)=>{
+                    _=StageFilesAsync(new[]{item.StagedPath});
+                };
                 DockPanel.SetDock(holdCopy,Dock.Right);
                 content.Children.Add(holdCopy);
             }
