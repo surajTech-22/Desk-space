@@ -36,6 +36,7 @@ internal static class Program
             TestReminderSchedulerV83();
             TestAutomationAndProductivityV85();
             TestCompactShelfGroupsV88();
+            TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
             TestReminderV76();
@@ -64,6 +65,28 @@ internal static class Program
             return 1;
         }
     }
+    private static void TestDeckVisibilityV89()
+    {
+        var apps=Product.GetType("DeskSpace.DeskSpaceRunningAppsV88",true)!;
+        var validator=apps.GetMethod("IsActiveWindow",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        Assert(!(bool)validator.Invoke(null,new object[]{IntPtr.Zero})!,
+            "R89 no-window application must not appear in Running Apps");
+        var vis=Product.GetType("DeskSpace.DeskSpaceDeckVisibilityV89",true)!;
+        Assert(vis.GetProperty("Visible",BindingFlags.Static|
+                BindingFlags.NonPublic)!=null &&
+            vis.GetMethod("TrySet",BindingFlags.Static|
+                BindingFlags.NonPublic)!=null,
+            "R89 missing saved deck visibility toggle");
+        var path=(string)vis.GetProperty("Filename",BindingFlags.Static|
+            BindingFlags.NonPublic)!.GetValue(null)!;
+        Assert(path.StartsWith(WorkspaceStore.Root,
+                StringComparison.OrdinalIgnoreCase) &&
+            path.Contains("deck-visibility",StringComparison.OrdinalIgnoreCase),
+            "R89 deck setting could overwrite user's Workspace data");
+        Console.WriteLine("R89 PASS: no-HWND apps excluded, deck visibility persisted separately from workspace data.");
+    }
+
     private static void TestCompactShelfGroupsV88()
     {
         var cls=Product.GetType("DeskSpace.DeskSpaceShelfGroupsV88",true)!;
