@@ -33,10 +33,15 @@ Modify $bridge @'
         // actual range. The visual deliberately stores NO old input values.
         entry.SheetVisualV101=DeskSpaceExcelVisualCaptureV101.Capture(range);
         if(entry.Cells.Count==0 &&
-           entry.SheetVisualV101.Cells.All(x=>x.StoredType=="Blank"))
+           !entry.SheetVisualV101.Cells.Any(x=>
+               x.NumberFormat!="General" || x.Bold || x.Italic ||
+               x.FillBgr!=0xFFFFFF || x.FontBgr!=0 ||
+               x.BorderTop || x.BorderBottom ||
+               x.BorderLeft || x.BorderRight ||
+               x.MergeRows>1 || x.MergeColumns>1))
             throw new InvalidOperationException(
-                "The selected range contains no values or formulas. "+
-                "Choose the intended template range, including its headings.");
+                "The selected range is completely empty and unformatted. "+
+                "Choose a formatted template range.");
         return entry;
 '@ 'capture data-free sheet visual inside current STA Excel worker'
 $editor="$root/DeskSpaceExcelEditorV42.cs"
@@ -68,6 +73,15 @@ Modify $editor @'
         right.Children.Add(tabs);
         var editorPanel=PanelV42(right);
 '@ 'replace default table with read-only sheet preview + mapping tab'
+Modify $editor @'
+            if(edited.Cells.Count==0)
+                throw new InvalidOperationException(
+                    "Capture an Excel selection to add data fields before saving.");
+'@ @'
+            if(edited.Cells.Count==0 && edited.SheetVisualV101==null)
+                throw new InvalidOperationException(
+                    "Capture Excel cells or their formatting before saving.");
+'@ 'allow value-free formatting-only capture'
 Modify $editor @'
         mappingGridV42.ItemsSource=mappingRowsV42.ToArray();
         if(editorInfoV42!=null)editorInfoV42.Text=
