@@ -227,10 +227,8 @@ internal static class DeskSpaceStableHoverV93
                     Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
                     Margin=new Thickness(2,1,2,1)};
                 var close=MakeCloseButton(selected);
-                close.Click+=(_,_)=>{
-                    appPreview.Close();
-                    PreserveHoverAfterClose();
-                };
+                close.Click+=(_,_)=>appPreview.Close();
+                close.Click+=(_,_)=>PreserveHoverAfterClose();
                 DockPanel.SetDock(close,Dock.Right);
                 row.Children.Add(close);
                 var choice=new Button{
@@ -441,10 +439,8 @@ internal static class DeskSpaceStableHoverV93
                 var tile=new Grid{Width=78};
                 tile.Children.Add(appButton);
                 var close=MakeCloseButton(choices[0]);
-                close.Click+=(_,_)=>{
-                    appPreview.Close();
-                    PreserveHoverAfterClose();
-                };
+                close.Click+=(_,_)=>appPreview.Close();
+                close.Click+=(_,_)=>PreserveHoverAfterClose();
                 close.Width=17;close.MinWidth=17;
                 close.Height=17;close.MinHeight=17;
                 close.FontSize=12;
