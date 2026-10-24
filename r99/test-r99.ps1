@@ -28,7 +28,7 @@ foreach($token in @('RecentDismissals.json','SHA256.HashData',
 foreach($token in @('PlacementTarget=deck','Placement=PlacementMode.Right',
  'hoverOpen.Tick+=','internal void Bind(',
  'DeskSpaceFilePreviewV85.Create(path)',
- 'internal void OpenContainingFolder(',
+ 'internal static void OpenContainingFolder(',
  'CloseIfMissing()','preview.Child=null;',
  'row.Unloaded+=','public void Dispose()')){
  if(!$preview.Contains($token)){throw "R99 detached preview missing behavior: $token"}
