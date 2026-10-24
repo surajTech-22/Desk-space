@@ -1249,6 +1249,12 @@ jobs:
           ./r101/apply-r101.ps1
           ./r101/test-r101.ps1
 
+      - name: R102 review and normalize new Excel inputs safely
+        shell: pwsh
+        run: |
+          ./r102/apply-r102.ps1
+          ./r102/test-r102.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

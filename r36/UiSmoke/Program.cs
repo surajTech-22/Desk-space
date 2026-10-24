@@ -45,6 +45,7 @@ internal static class Program
             TestRecentFilesAndDeckPreviewV99();
             TestStationaryAppAndFilePreviewsV100();
             TestExcelTypeAwareSheetV101();
+            TestSafeExcelNormalizationV102();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -479,6 +480,46 @@ internal static class Program
         Assert(output is ScrollViewer,
             "R101 preview must retain a real scrollable sheet-like grid");
         Console.WriteLine("R101 PASS: number/text/date/formula recognition, safe conversions and data-free styled sheet preview.");
+    }
+
+    private static void TestSafeExcelNormalizationV102()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceExcelNormalizeV102",true)!;
+        var planType=Product.GetType("DeskSpace.DeskSpaceExcelNormalizePlanV102",true)!;
+        Assert(type.GetMethod("Preview",BindingFlags.Static|
+                BindingFlags.NonPublic)!=null &&
+               type.GetMethod("Apply",BindingFlags.Static|
+                BindingFlags.NonPublic)!=null,
+            "R102 must provide a read-only preview and independent verified apply");
+        var plan=Activator.CreateInstance(planType)!;
+        var mapping=Guid.NewGuid();
+        planType.GetProperty("MappingId")!.SetValue(plan,mapping);
+        bool rejected=false;
+        try
+        {
+            type.GetMethod("Apply",BindingFlags.Static|
+                BindingFlags.NonPublic)!.
+                Invoke(null,new object[]{plan,Guid.NewGuid()});
+        }
+        catch(TargetInvocationException e)
+            when(e.InnerException is InvalidOperationException)
+        {rejected=true;}
+        Assert(rejected,
+            "R102 a changed/unverified saved mapping must not call Excel or write any cells");
+        var types=Product.GetType("DeskSpace.DeskSpaceExcelInputTypeV101",true)!;
+        var normalized=types.GetMethod("Normalize",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        string Status(string value,string expected,string format,string order)=>
+            (string)normalized.Invoke(null,
+                new object?[]{value,expected,format,order})!.
+                GetType().GetProperty("Status")!.GetValue(
+                    normalized.Invoke(null,new object?[]{value,expected,format,order}))!;
+        Assert(Status("1,23,456.50","Number","#,##0.00","Ask")=="Converted" &&
+               Status("001234","Number","0.00","Ask")=="NeedsReview" &&
+               Status("24-10-2026","Date","dddd, dd mmmm yyyy","Ask")=="Converted" &&
+               Status("05/06/2026","Date","dddd, dd mmmm yyyy","Ask")=="NeedsReview",
+            "R102 Indian grouped numbers, date conversion, IDs and ambiguous input must be protected");
+        Console.WriteLine("R102 PASS: explicit verified paste flow and safeguarded numeric/date input conversion.");
     }
 
     private static void TestCompactShelfGroupsV88()
