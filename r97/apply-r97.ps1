@@ -20,15 +20,24 @@ Swap @'
         DeskSpaceStableHoverV93.Add(root,apps,windows);
     }
 '@ @'
+    // Keep this original three-argument method for callers and smoke tests.
     internal static void AddHoverGroup(StackPanel root,
+        IReadOnlyList<Entry> apps,IReadOnlyList<Entry> windows)
+    {
+        DeskSpaceStableHoverV93.Add(root,apps,windows);
+    }
+
+    // The deck uses a distinct method, avoiding reflection overload
+    // ambiguity and preserving the original public method contract.
+    internal static void AddHoverGroupLive(StackPanel root,
         IReadOnlyList<Entry> apps,IReadOnlyList<Entry> windows,
-        Action<IReadOnlyList<Entry>,IReadOnlyList<Entry>>? onLiveChanged=null,
-        Action? onHoverClosed=null)
+        Action<IReadOnlyList<Entry>,IReadOnlyList<Entry>> onLiveChanged,
+        Action onHoverClosed)
     {
         DeskSpaceStableHoverV93.Add(root,apps,windows,
             onLiveChanged,onHoverClosed);
     }
-'@ 'live flyout callback forwarding'
+'@ 'backwards compatible flyout callback forwarding'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 
 $p="$root/DeskSpaceDropShelfV15.cs"
@@ -59,7 +68,7 @@ Swap @'
 Swap @'
         DeskSpaceRunningAppsV88.AddHoverGroup(list,runningApps,runningWindows);
 '@ @'
-        DeskSpaceRunningAppsV88.AddHoverGroup(list,runningApps,runningWindows,
+        DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
             (appsNow,windowsNow)=>{
                 if(disposed)return;
                 runningApps=appsNow;

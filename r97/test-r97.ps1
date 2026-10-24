@@ -25,14 +25,15 @@ foreach($t in @(
  'Interval=TimeSpan.FromSeconds(2)',
  'appRenderPending=true',
  'DeskSpaceStableHoverV93.IsHoverActive',
- 'DeskSpaceRunningAppsV88.AddHoverGroup(list,runningApps,runningWindows,',
+ 'DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,',
  'heading.Text=busy?"Copying…":',
  'if(appsNow.Count==0)Render()',
  'RefreshRunningApps();'
 )){
  if(!$shelf.Contains($t)){throw "R97 live shelf validation missing: $t"}
 }
-if(!$group.Contains('onLiveChanged,onHoverClosed')){
+if(!$group.Contains('AddHoverGroupLive(') -or
+   !$group.Contains('onLiveChanged,onHoverClosed')){
  throw 'R97 flyout-to-shelf callbacks not forwarded'
 }
 if($hover.Contains('Process.Kill(') -or $hover.Contains('Task.Delay(')){
