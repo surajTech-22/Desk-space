@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -14,6 +15,20 @@ namespace DeskSpace;
 // or reposition the deck, even when an app has dozens of windows.
 internal static class DeskSpaceStableHoverV93
 {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CursorPoint { public int X,Y; }
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out CursorPoint point);
+
+    // A removed row can disappear under a motionless mouse. That is NOT
+    // equivalent to the user leaving the flyout. Observe real pointer
+    // movement before dismissing a panel after a close request.
+    internal static bool ShouldRetainAfterClose(int originalX,int originalY,
+        int currentX,int currentY)=>
+        Math.Abs(currentX-originalX)<=12 &&
+        Math.Abs(currentY-originalY)<=12;
+
     private static Popup? activeIconPopup;
     internal static bool IsHoverActive=>activeIconPopup?.IsOpen==true;
 
@@ -153,6 +168,17 @@ internal static class DeskSpaceStableHoverV93
         var liveTimer=new DispatcherTimer{
             Interval=TimeSpan.FromMilliseconds(220)
         };
+        bool closeRequestedWhileHover=false;
+        CursorPoint? positionAtClose=null;
+        void PreserveHoverAfterClose()
+        {
+            // Keep both detached popup HWNDs alive even if an entry is
+            // removed under the pointer, invalidating WPF IsMouseOver.
+            closeRequestedWhileHover=true;
+            positionAtClose=GetCursorPos(out var point)?point:null;
+            closeDelay.Stop();
+            closeDelay.Start();
+        }
         void StopIntent(){hoverIntent.Stop();}
         // Both sides available: prefer the side of the hovered tile.
         // One side available: choose that side, never inside the grid.
@@ -198,6 +224,7 @@ internal static class DeskSpaceStableHoverV93
                     Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
                     Margin=new Thickness(2,1,2,1)};
                 var close=MakeCloseButton(selected);
+                close.Click+=(_,_)=>PreserveHoverAfterClose();
                 DockPanel.SetDock(close,Dock.Right);
                 row.Children.Add(close);
                 var choice=new Button{
@@ -221,6 +248,8 @@ internal static class DeskSpaceStableHoverV93
         hoverIntent.Tick+=(_,_)=>OpenPending();
         void Hide()
         {
+            closeRequestedWhileHover=false;
+            positionAtClose=null;
             bool wasOpen=iconPopup.IsOpen;
             liveTimer.Stop();
             hoverIntent.Stop();
@@ -278,6 +307,19 @@ internal static class DeskSpaceStableHoverV93
         bool Hovered()=>heading.IsMouseOver ||
             iconCard.IsMouseOver || windowCard.IsMouseOver;
         closeDelay.Tick+=(_,_)=>{
+            // WM_CLOSE may remove a row/tile directly beneath the mouse.
+            // Keep the menu visible until the pointer physically moves,
+            // not merely because the WPF hover hit target disappeared.
+            if(closeRequestedWhileHover)
+            {
+                if(positionAtClose.HasValue &&
+                   GetCursorPos(out var cursor) &&
+                   ShouldRetainAfterClose(positionAtClose.Value.X,
+                       positionAtClose.Value.Y,cursor.X,cursor.Y))
+                    return;
+                closeRequestedWhileHover=false;
+                positionAtClose=null;
+            }
             if(Hovered())closeDelay.Stop();
             else Hide();
         };
@@ -383,6 +425,7 @@ internal static class DeskSpaceStableHoverV93
                 var tile=new Grid{Width=78};
                 tile.Children.Add(appButton);
                 var close=MakeCloseButton(choices[0]);
+                close.Click+=(_,_)=>PreserveHoverAfterClose();
                 close.Width=17;close.MinWidth=17;
                 close.Height=17;close.MinHeight=17;
                 close.FontSize=12;
