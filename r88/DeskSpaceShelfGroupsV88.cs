@@ -52,6 +52,42 @@ internal static class DeskSpaceRunningAppsV88
     private static extern bool IsWindow(IntPtr handle);
     [DllImport("user32.dll")]
     [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr handle);
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr handle);
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr handle,out WindowRect rectangle);
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr window,int attribute,
+        out int value,int size);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowRect
+    {
+        internal int Left,Top,Right,Bottom;
+    }
+    private const int DwmCloaked=14;
+
+    // A background app process can retain its MainWindowHandle even after its
+    // window closes. Exclude non-visible and DWM-cloaked windows.
+    internal static bool IsActiveWindow(IntPtr handle)
+    {
+        if(handle==IntPtr.Zero || !IsWindow(handle) ||
+            !IsWindowVisible(handle))return false;
+        try
+        {
+            if(DwmGetWindowAttribute(handle,DwmCloaked,out int cloak,sizeof(int))==0 &&
+                cloak!=0)return false;
+        }
+        catch(DllNotFoundException){}
+        catch(EntryPointNotFoundException){}
+        if(!IsIconic(handle) && GetWindowRect(handle,out var rect) &&
+            (rect.Right-rect.Left<32 || rect.Bottom-rect.Top<32))return false;
+        return true;
+    }
+    [DllImport("user32.dll")]
+    [return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool ShowWindowAsync(IntPtr handle,int command);
     [DllImport("user32.dll")]
     [return:MarshalAs(UnmanagedType.Bool)]
@@ -71,8 +107,9 @@ internal static class DeskSpaceRunningAppsV88
                 try
                 {
                     if(process.Id==Environment.ProcessId || process.HasExited)continue;
+                    process.Refresh();
                     IntPtr window=process.MainWindowHandle;
-                    if(window==IntPtr.Zero || !IsWindow(window))continue;
+                    if(!IsActiveWindow(window))continue;
                     string title=process.MainWindowTitle;
                     if(string.IsNullOrWhiteSpace(title))continue;
                     string name=process.ProcessName;
@@ -109,7 +146,7 @@ internal static class DeskSpaceRunningAppsV88
     internal static void Focus(Entry entry)
     {
         // The user clicked an app. Never start a second instance.
-        if(!IsWindow(entry.Handle))return;
+        if(!IsActiveWindow(entry.Handle))return;
         ShowWindowAsync(entry.Handle,Restore);
         SetForegroundWindow(entry.Handle);
     }
