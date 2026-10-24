@@ -42,6 +42,7 @@ internal static class Program
             TestRunningWindowCloseV96();
             TestLiveRunningWindowRemovalV97();
             TestHoverCloseRetentionV98();
+            TestRecentFilesAndDeckPreviewV99();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -330,6 +331,53 @@ internal static class Program
         Assert(!Retain(300,200,330,200),
             "R98 actual mouse movement outside may dismiss the panel");
         Console.WriteLine("R98 PASS: close-button changes preserve flyout under stationary pointer; intentional mouse movement is respected.");
+    }
+
+    private static void TestRecentFilesAndDeckPreviewV99()
+    {
+        var temporary=Path.Combine(Path.GetTempPath(),
+            "DeskSpace_recent_test_"+Guid.NewGuid().ToString("N")+".txt");
+        File.WriteAllText(temporary,"DeskSpace newest saved document");
+        try
+        {
+            var recent=Product.GetType("DeskSpace.DeskSpaceRecentFileStateV99",true)!;
+            var fingerprint=recent.GetMethod("Fingerprint",
+                BindingFlags.Static|BindingFlags.NonPublic)!;
+            var dismissed=recent.GetMethod("IsDismissed",
+                BindingFlags.Static|BindingFlags.NonPublic)!;
+            var mark=recent.GetMethod("Dismiss",
+                BindingFlags.Static|BindingFlags.NonPublic)!;
+            var original=(string)fingerprint.Invoke(null,new object[]{temporary})!;
+            Assert(original.Length==64 && !(bool)dismissed.Invoke(
+                null,new object[]{temporary})!,
+                "R99 a newly saved file must be offered until explicitly dismissed");
+            mark.Invoke(null,new object[]{temporary});
+            Assert(File.Exists(temporary) &&
+                (bool)dismissed.Invoke(null,new object[]{temporary})!,
+                "R99 dismiss must remember one version without deleting the original");
+            File.AppendAllText(temporary,"\nNewest version");
+            File.SetLastWriteTimeUtc(temporary,DateTime.UtcNow.AddSeconds(30));
+            var newer=(string)fingerprint.Invoke(null,new object[]{temporary})!;
+            Assert(newer!=original && !(bool)dismissed.Invoke(
+                null,new object[]{temporary})!,
+                "R99 a later save must be visible again even after the older version was dismissed");
+            var preview=Product.GetType("DeskSpace.DeskSpaceDeckPreviewV99",true)!;
+            Assert(preview.GetMethod("Bind",BindingFlags.Instance|
+                    BindingFlags.NonPublic)!=null &&
+                preview.GetMethod("OpenContainingFolder",BindingFlags.Static|
+                    BindingFlags.NonPublic)!=null,
+                "R99 file preview and show-in-folder controls must be available");
+            var filePreview=Product.GetType("DeskSpace.DeskSpaceFilePreviewV85",true)!;
+            var create=filePreview.GetMethod("Create",BindingFlags.Static|
+                BindingFlags.NonPublic)!;
+            var visual=(FrameworkElement)create.Invoke(null,new object[]{temporary})!;
+            Render(visual,350,285,"r99-deck-file-preview");
+            Console.WriteLine("R99 PASS: recent version-aware dismissals preserve originals, later saves reappear, detached file preview renders.");
+        }
+        finally
+        {
+            try{File.Delete(temporary);}catch(IOException){}
+        }
     }
 
     private static void TestCompactShelfGroupsV88()

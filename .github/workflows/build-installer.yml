@@ -1231,6 +1231,12 @@ jobs:
         shell: pwsh
         run: ./r98/test-r98.ps1
 
+      - name: R99 recent-file reliability and anchored deck preview
+        shell: pwsh
+        run: |
+          ./r99/apply-r99.ps1
+          ./r99/test-r99.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
