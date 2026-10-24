@@ -1243,6 +1243,12 @@ jobs:
           ./r100/apply-r100.ps1
           ./r100/test-r100.ps1
 
+      - name: R101 Excel sheet rendering and type-aware capture
+        shell: pwsh
+        run: |
+          ./r101/apply-r101.ps1
+          ./r101/test-r101.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

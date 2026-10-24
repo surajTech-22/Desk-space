@@ -44,6 +44,7 @@ internal static class Program
             TestHoverCloseRetentionV98();
             TestRecentFilesAndDeckPreviewV99();
             TestStationaryAppAndFilePreviewsV100();
+            TestExcelTypeAwareSheetV101();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -414,6 +415,70 @@ internal static class Program
             BindingFlags.NonPublic)!=null,
             "R100 Running Apps individual icons and window rows must support deliberate hover preview");
         Console.WriteLine("R100 PASS: 650ms stationary preview guard, moving cancels; app titles fallback if capture unsupported.");
+    }
+
+    private static void TestExcelTypeAwareSheetV101()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceExcelInputTypeV101",true)!;
+        object Call(string method,params object?[] args)=>
+            type.GetMethod(method,BindingFlags.Static|BindingFlags.NonPublic)!.
+                Invoke(null,args)!;
+        Assert((string)Call("Stored","1250.50",false)=="Text",
+            "R101 text-stored numeric input must be detected as TEXT");
+        Assert((string)Call("Expected","0.00","Text",false)=="Number",
+            "R101 numeric Excel style must infer expected NUMBER independently from storage");
+        Assert((string)Call("Expected","dddd, dd mmmm yyyy","Number",false)=="Date",
+            "R101 long date formatting must infer expected DATE from serial-stored data");
+        string Result(object? input,string expected,string format="",string order="Ask")=>
+            (string)Call("Normalize",input,expected,format,order).GetType().
+                GetProperty("Status")!.GetValue(
+                    Call("Normalize",input,expected,format,order))!;
+        Assert(Result("1250.50","Number","#,##0.00")=="Converted" &&
+               Result("001234","Number","0.00")=="NeedsReview",
+            "R101 must safely convert numeric text without stripping meaningful leading zeros");
+        Assert(Result("24/10/2026","Date","dddd, dd mmmm yyyy")=="Converted" &&
+               Result("05/06/2026","Date","dddd, dd mmmm yyyy")=="NeedsReview" &&
+               Result("05/06/2026","Date","dddd, dd mmmm yyyy","DMY")=="Converted",
+            "R101 short date conversion must respect ambiguity and explicit date-order choices");
+        Assert(Result("=A1+B1","Formula")=="Blocked" &&
+               Result("12.5%","Percentage","0.00%")=="Converted" &&
+               Result("12.5","Percentage","0.00%")=="NeedsReview",
+            "R101 formulas must not be overwritten and percentages must be unambiguous");
+
+        var template=Product.GetType("DeskSpace.DeskSpaceExcelTemplateV16",true)!;
+        var sheet=Product.GetType("DeskSpace.DeskSpaceExcelSheetVisualV101",true)!;
+        var styled=Product.GetType("DeskSpace.DeskSpaceExcelStyledCellV101",true)!;
+        var model=Activator.CreateInstance(template)!;
+        template.GetProperty("SourceSheet")!.SetValue(model,"Sheet1");
+        template.GetProperty("SourceAddress")!.SetValue(model,"$E$7:$J$11");
+        template.GetProperty("SourceRow")!.SetValue(model,7);
+        template.GetProperty("SourceColumn")!.SetValue(model,5);
+        template.GetProperty("RowCount")!.SetValue(model,5);
+        template.GetProperty("ColumnCount")!.SetValue(model,6);
+        var snapshot=Activator.CreateInstance(sheet)!;
+        sheet.GetProperty("Rows")!.SetValue(snapshot,5);
+        sheet.GetProperty("Columns")!.SetValue(snapshot,6);
+        var cell=Activator.CreateInstance(styled)!;
+        styled.GetProperty("Row")!.SetValue(cell,1);
+        styled.GetProperty("Column")!.SetValue(cell,5);
+        styled.GetProperty("FormulaA1")!.SetValue(cell,"=SUM(F8:I8)");
+        styled.GetProperty("FormulaR1C1")!.SetValue(cell,"=SUM(RC[-4]:RC[-1])");
+        styled.GetProperty("ExpectedType")!.SetValue(cell,"Formula");
+        ((System.Collections.IList)sheet.GetProperty("Cells")!.GetValue(snapshot)!).Add(cell);
+        template.GetProperty("SheetVisualV101")!.SetValue(model,snapshot);
+        var original=Activator.CreateInstance(
+            Product.GetType("DeskSpace.DeskSpaceExcelCellV16",true)!)!;
+        original.GetType().GetProperty("RawValue")!.
+            SetValue(original,"SECRET_PREVIOUS_INVOICE_VALUE");
+        ((System.Collections.IList)template.GetProperty("Cells")!.GetValue(model)!).
+            Add(original);
+        var viewer=Product.GetType("DeskSpace.DeskSpaceExcelSheetViewV101",true)!.
+            GetMethod("Create",BindingFlags.Static|BindingFlags.NonPublic)!;
+        var output=(FrameworkElement)viewer.Invoke(null,new object[]{model})!;
+        Render(output,720,350,"r101-excel-data-free-sheet-and-formulas");
+        Assert(output is ScrollViewer,
+            "R101 preview must retain a real scrollable sheet-like grid");
+        Console.WriteLine("R101 PASS: number/text/date/formula recognition, safe conversions and data-free styled sheet preview.");
     }
 
     private static void TestCompactShelfGroupsV88()
