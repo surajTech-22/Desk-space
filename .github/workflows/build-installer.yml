@@ -1185,6 +1185,12 @@ jobs:
           ./r88/apply-r88.ps1
           ./r88/test-r88.ps1
 
+      - name: R89 live apps and Deck Visibility
+        shell: pwsh
+        run: |
+          ./r89/apply-r89.ps1
+          ./r89/test-r89.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
