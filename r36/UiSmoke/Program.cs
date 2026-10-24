@@ -226,6 +226,17 @@ internal static class Program
             "R93 opening app menus must not add expanding contents to header");
         Assert(popup.Child is Border && popup.StaysOpen,
             "R93 flyout must remain available while moving mouse to app icons");
+        var iconCard=(Border)popup.Child;
+        var windowPopup=iconCard.Tag as System.Windows.Controls.Primitives.Popup;
+        Assert(windowPopup!=null &&
+            windowPopup.Placement==
+                System.Windows.Controls.Primitives.PlacementMode.Bottom &&
+            ReferenceEquals(windowPopup.PlacementTarget,iconCard) &&
+            windowPopup.VerticalOffset>=3,
+            "R94 window selector must open BELOW or ABOVE the complete app grid, not over neighbouring app icons");
+        Assert(windowPopup.PopupAnimation==
+            System.Windows.Controls.Primitives.PopupAnimation.None,
+            "R94 window selector must not overlay other icons during a fade animation");
         Assert(!Walk(heading).OfType<StackPanel>().Any(),
             "R93 no resizing nested choice panels in the main deck");
         var empty=new StackPanel();

@@ -61,11 +61,18 @@ internal static class DeskSpaceStableHoverV93
                 Content=windowItems
             }
         };
+        // Anchor to the WHOLE app-icon flyout, never to a single icon.
+        // Right/left placement beside an individual icon can flip inward
+        // at screen edges and cover other applications. Bottom placement
+        // flips ABOVE the entire icon flyout if there is not enough room.
         var windowPopup=new Popup{
-            Placement=PlacementMode.Right,HorizontalOffset=0,
-            VerticalOffset=0,StaysOpen=true,AllowsTransparency=true,
-            PopupAnimation=PopupAnimation.Fade,Child=windowCard
+            PlacementTarget=iconCard,
+            Placement=PlacementMode.Bottom,
+            HorizontalOffset=0,VerticalOffset=3,
+            StaysOpen=true,AllowsTransparency=true,
+            PopupAnimation=PopupAnimation.None,Child=windowCard
         };
+        iconCard.Tag=windowPopup;
         var closeDelay=new DispatcherTimer{
             Interval=TimeSpan.FromMilliseconds(340)
         };
@@ -108,8 +115,7 @@ internal static class DeskSpaceStableHoverV93
             picture.Children.Add(new TextBlock{
                 Text=app.Name,FontSize=10,Foreground=Brushes.White,
                 TextAlignment=TextAlignment.Center,
-                TextTrimming=TextTrimming.CharacterEllipsis,
-                ToolTip=app.Name
+                TextTrimming=TextTrimming.CharacterEllipsis
             });
             if(matches.Length>1)picture.Children.Add(new TextBlock{
                 Text=matches.Length+" windows",FontSize=9,
@@ -121,9 +127,7 @@ internal static class DeskSpaceStableHoverV93
                 Margin=new Thickness(1),Padding=new Thickness(2),
                 Foreground=Brushes.White,
                 Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
-                BorderThickness=new Thickness(0),
-                ToolTip=matches.Length>1?
-                    "Hover to select a window":"Switch or minimise "+app.Name
+                BorderThickness=new Thickness(0)
             };
             var choices=matches;
             appButton.MouseEnter+=(_,_)=>{
@@ -131,7 +135,8 @@ internal static class DeskSpaceStableHoverV93
                 windowPopup.IsOpen=false;
                 windowItems.Children.Clear();
                 if(choices.Length<=1)return;
-                windowPopup.PlacementTarget=appButton;
+                // Choice list stays BELOW/ABOVE the entire icon grid.
+                // It can never cover a neighbouring app tile.
                 windowItems.Children.Add(new TextBlock{
                     Text=app.Name+" · "+choices.Length+" windows",
                     FontSize=11,Foreground=Brushes.LightSteelBlue,

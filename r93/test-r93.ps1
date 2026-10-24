@@ -8,7 +8,9 @@ if(!$s.Contains('DeskSpaceStableHoverV93.Add(root,apps,windows)')){
 }
 foreach($part in @(
  'new Popup{','Placement=PlacementMode.Right',
- 'PlacementTarget=heading','windowPopup.PlacementTarget=appButton',
+ 'PlacementTarget=heading','PlacementTarget=iconCard',
+ 'Placement=PlacementMode.Bottom','VerticalOffset=3',
+ 'iconCard.Tag=windowPopup','PopupAnimation=PopupAnimation.None',
  'MaxHeight=292','MaxHeight=230','heading.Tag=iconPopup',
  'heading.Unloaded+=','heading.IsVisibleChanged+=',
  'Interval=TimeSpan.FromMilliseconds(340)',
