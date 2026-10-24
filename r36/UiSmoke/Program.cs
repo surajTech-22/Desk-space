@@ -279,6 +279,10 @@ internal static class Program
             (Func<(string Action,string Target)>)(()=>("None","")),
             (Action<string,string>)((_,_)=>{}));
         var view=(FrameworkElement)Call(editor,"Create")!;
+        var advanced=Private<Expander>(editor,"advanced");
+        Assert(!advanced.IsExpanded && advanced.Content!=null,
+            "R87 advanced section must begin collapsed, without losing controls");
+        advanced.IsExpanded=true;
         view.Measure(new Size(420,640));view.Arrange(new Rect(0,0,420,640));
         view.UpdateLayout();
         Assert(Walk(view).OfType<Button>().Any(b=>
@@ -294,7 +298,23 @@ internal static class Program
             combo.Any(c=>c.Items.Cast<object>().Any(x=>
                     x?.ToString()=="File exists")),
             "R84 action/condition choices are missing");
+        Call(editor,"Load",restored);
+        Assert(advanced.IsExpanded && advanced.Header.ToString()!.Contains("2 steps"),
+            "R87 saved reminders with advanced settings should expand on edit");
+        advanced.IsExpanded=false;
+        Assert(((System.Collections.IEnumerable)editor.GetType().GetProperty(
+                    "Steps",Any)!.GetValue(editor)!).Cast<object>().Count()==2 &&
+               (string)editor.GetType().GetProperty(
+                    "ConditionMode",Any)!.GetValue(editor)!=="File exists",
+            "R87 collapsing the section discarded saved action steps or condition");
+        advanced.IsExpanded=true;
         Render(view,425,620,"r84-workflow-editor");
+        Call(editor,"Reset");
+        Assert(!advanced.IsExpanded &&
+            ((System.Collections.IEnumerable)editor.GetType().GetProperty(
+                "Steps",Any)!.GetValue(editor)!).Cast<object>().Count()==0,
+            "R87 new reminder must start with advanced options collapsed");
+        Console.WriteLine("R87 PASS: advanced expand/collapse, saved state, automatic expand on edit.");
         var file=Path.Combine(Path.GetTempPath(),
             "DeskSpace-V85-preview-"+Guid.NewGuid().ToString("N")+".txt");
         File.WriteAllText(file,"Preview literal\nNo file execution");

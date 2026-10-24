@@ -34,6 +34,9 @@ Needs Engine @('ValidCondition(','ConditionReady(','internal static Task Run(',
  'File.Move(temp,Filename,true)')
 Needs Editor @('DeskSpaceReminderPickerV81.Create(',
  'Save template','Test condition','+ Add action step','LoadTemplate()',
+ 'private readonly Expander advanced','advanced.Content=root',
+ 'advanced.IsExpanded=steps.Count>0 || ConditionMode!="None"',
+ 'conditionTarget.Clear();advanced.IsExpanded=false',
  'MessageBox.Show("Open this target now')
 Needs Due @('Where(DeskSpaceAutomationV84.ConditionReady)',
  'DeskSpaceAutomationV84.Run(reminder)','nextCheck=now.AddSeconds(10)')
@@ -54,5 +57,7 @@ Needs Host @('DeskSpaceWorkspaceProfilesV85.AddMenu(',
  'DeskSpaceCommandShortcutV85','OpenInWidget("Search")')
 Needs Shelf @('DeskSpaceFilePreviewV85.Attach(')
 Needs Tests @('TestAutomationAndProductivityV85();',
- 'r84-workflow-editor','r85-recent-file-preview')
-Write-Host 'R86 HARDENING PASS: oversized persisted workflows rejected, failed starts reported, invalid templates blocked. R84+R85 PREBUILD PASS: safeguarded multi-actions, conditional scheduling, templates, profiles, preview, clipboard, hotkey, both editors.'
+ 'r84-workflow-editor','r85-recent-file-preview',
+ 'R87 PASS: advanced expand/collapse',
+ 'advanced.IsExpanded=false','advanced.IsExpanded=true')
+Write-Host 'R87 ADVANCED DISCLOSURE PASS: shared collapsible editor, auto-open saved options, preserve steps/conditions. R86 HARDENING PASS: oversized persisted workflows rejected, failed starts reported, invalid templates blocked. R84+R85 PREBUILD PASS: safeguarded multi-actions, conditional scheduling, templates, profiles, preview, clipboard, hotkey, both editors.'

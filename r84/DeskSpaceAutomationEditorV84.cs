@@ -18,6 +18,13 @@ internal sealed class DeskSpaceAutomationEditorV84
     private readonly Action<string,string> assignPrimary;
     private readonly List<DeskSpaceActionStep> steps=new();
     private readonly StackPanel list=new();
+    // A single disclosure control is shared by the floating reminder panel
+    // and the main Workspace reminder editor. Collapsing never resets data.
+    private readonly Expander advanced=new(){
+        IsExpanded=false,FontSize=12,Foreground=Brushes.LightSteelBlue,
+        HorizontalContentAlignment=HorizontalAlignment.Stretch,
+        ToolTip="Expand to edit additional actions, conditions and templates"
+    };
     private readonly ComboBox action=new(){Width=143,Height=28,
         ItemsSource=DeskSpaceAutomationV84.Actions,SelectedIndex=0};
     private readonly TextBox target=new(){Width=245,Height=28,
@@ -46,6 +53,15 @@ internal sealed class DeskSpaceAutomationEditorV84
     internal List<DeskSpaceActionStep> Steps=>
         DeskSpaceAutomationV84.CopySteps(steps);
 
+    private void RefreshAdvancedHeader()
+    {
+        int count=steps.Count;
+        bool conditional=ConditionMode!="None";
+        advanced.Header=count==0 && !conditional?
+            "Advanced options (optional)":
+            "Advanced options · "+count+" step"+(count==1?"":"s")+
+                (conditional?" · condition":"");
+    }
     private static TextBlock Label(string title)=>new(){
         Text=title,FontSize=12,Foreground=Brushes.LightSteelBlue,
         Margin=new Thickness(2,6,2,3)
@@ -61,7 +77,7 @@ internal sealed class DeskSpaceAutomationEditorV84
     internal FrameworkElement Create()
     {
         var root=new StackPanel{Margin=new Thickness(2)};
-        root.Children.Add(Label("ADVANCED AUTOMATION · ordered extra steps"));
+        root.Children.Add(Label("Ordered extra steps"));
         var row=new WrapPanel();
         row.Children.Add(action);row.Children.Add(target);
         var browse=Button("Browse",()=>{
@@ -123,10 +139,11 @@ internal sealed class DeskSpaceAutomationEditorV84
         root.Children.Add(templateRow);
         root.Children.Add(notice);
         RefreshTargetPicker();RefreshCondition();RefreshTemplates();RenderSteps();
+        advanced.Content=root;
         return new Border{
             BorderThickness=new Thickness(0,1,0,0),
             BorderBrush=new SolidColorBrush(Color.FromRgb(100,109,139)),
-            Child=root,Margin=new Thickness(0,6,0,5)};
+            Child=advanced,Margin=new Thickness(0,6,0,5)};
     }
     private void RefreshTargetPicker()
     {
@@ -152,6 +169,7 @@ internal sealed class DeskSpaceAutomationEditorV84
         conditionTarget.ToolTip=mode=="File exists"?
             "Full path to a file that must exist":
             "Process name such as EXCEL or chrome";
+        RefreshAdvancedHeader();
     }
     private void RefreshTemplates()
     {
@@ -202,15 +220,19 @@ internal sealed class DeskSpaceAutomationEditorV84
         condition.SelectedItem=DeskSpaceAutomationV84.Conditions
             .Contains(item.TriggerCondition)?item.TriggerCondition:"None";
         conditionTarget.Text=item.TriggerTarget??"";
+        // Existing advanced settings should be visible when opening a saved item.
+        advanced.IsExpanded=steps.Count>0 || ConditionMode!="None";
         RenderSteps();
     }
     internal void Reset()
     {
         steps.Clear();condition.SelectedIndex=0;
-        conditionTarget.Clear();RenderSteps();notice.Text="";
+        conditionTarget.Clear();advanced.IsExpanded=false;
+        RenderSteps();notice.Text="";
     }
     private void RenderSteps()
     {
+        RefreshAdvancedHeader();
         list.Children.Clear();
         for(int i=0;i<steps.Count;i++)
         {
