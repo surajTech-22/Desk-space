@@ -2,7 +2,7 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $r='DeskSpace_Windows_R1/DeskSpace'
 $boot=[IO.File]::ReadAllText("$r/DeskSpaceStartupV82.cs")
-$host=[IO.File]::ReadAllText("$r/WidgetHost.cs")
+$widgetSource=[IO.File]::ReadAllText("$r/WidgetHost.cs")
 $watch=[IO.File]::ReadAllText("$r/DeskSpaceNewFileWatchV53.cs")
 $shelf=[IO.File]::ReadAllText("$r/DeskSpaceDropShelfV15.cs")
 $geometry=[IO.File]::ReadAllText("$r/DeskSpaceRecentPlacementV82.cs")
@@ -13,7 +13,7 @@ foreach($token in @('preferences.StartWithWindows=true;',
  'WindowsWidgetStartupR82.initialized')){
  if(!$boot.Contains($token)){throw "R82 logon startup missing $token"}
 }
-if(!$host.Contains('DeskSpaceStartupV82.EnableOnFirstLaunch(prefs)')){
+if(!$widgetSource.Contains('DeskSpaceStartupV82.EnableOnFirstLaunch(prefs)')){
  throw 'R82 widget launch does not set Windows startup'}
 foreach($token in @('TimeSpan.FromHours(24)',
  'TimeSpan.FromMilliseconds(250)','recovering?6000:3000',
