@@ -14,6 +14,17 @@ namespace DeskSpace;
 // or reposition the deck, even when an app has dozens of windows.
 internal static class DeskSpaceStableHoverV93
 {
+    private static Popup? activeIconPopup;
+    internal static bool IsHoverActive=>activeIconPopup?.IsOpen==true;
+
+    // Pure filter shared by the UI timer and Windows smoke tests.
+    // Do not remove windows merely because WM_CLOSE was requested:
+    // the app may be displaying an unsaved-work confirmation.
+    internal static IReadOnlyList<DeskSpaceRunningAppsV88.Entry> RemainingWindows(
+        IReadOnlyList<DeskSpaceRunningAppsV88.Entry> windows,
+        Func<IntPtr,bool> isAlive)=>
+        windows.Where(x=>isAlive(x.Handle)).ToArray();
+
     // Required space checks are deliberately pure, so the side selection
     // is tested without relying on an active desktop session.
     internal static bool PreferRight(double roomLeft,double roomRight,
@@ -47,7 +58,21 @@ internal static class DeskSpaceStableHoverV93
             if(DeskSpaceRunningAppsV88.RequestClose(window))
             {
                 button.IsEnabled=false;
-                button.ToolTip="Close requested; the application may ask to save";
+                button.ToolTip="Waiting for the application to close or ask to save";
+                // A user can cancel an unsaved-work dialog. Do not leave
+                // its close button permanently disabled in that case.
+                var retry=new DispatcherTimer{
+                    Interval=TimeSpan.FromSeconds(2)
+                };
+                retry.Tick+=(_,_)=>{
+                    retry.Stop();
+                    if(DeskSpaceRunningAppsV88.IsActiveWindow(window.Handle))
+                    {
+                        button.IsEnabled=true;
+                        button.ToolTip="Close this window normally (unsaved work may prompt)";
+                    }
+                };
+                retry.Start();
             }
         };
         return button;
@@ -55,7 +80,10 @@ internal static class DeskSpaceStableHoverV93
 
     internal static Border Add(StackPanel root,
         IReadOnlyList<DeskSpaceRunningAppsV88.Entry> apps,
-        IReadOnlyList<DeskSpaceRunningAppsV88.Entry> windows)
+        IReadOnlyList<DeskSpaceRunningAppsV88.Entry> windows,
+        Action<IReadOnlyList<DeskSpaceRunningAppsV88.Entry>,
+            IReadOnlyList<DeskSpaceRunningAppsV88.Entry>>? onLiveChanged=null,
+        Action? onHoverClosed=null)
     {
         var heading=new Border{
             Background=new SolidColorBrush(Color.FromRgb(39,53,83)),
@@ -69,6 +97,11 @@ internal static class DeskSpaceStableHoverV93
         // No running apps means no category header; other shelf groups stay.
         if(apps.Count==0)return heading;
         var iconRow=new WrapPanel{Margin=new Thickness(3)};
+        var appTiles=new Dictionary<string,FrameworkElement>(
+            StringComparer.OrdinalIgnoreCase);
+        var appBadges=new Dictionary<string,TextBlock>(
+            StringComparer.OrdinalIgnoreCase);
+        int liveCount=windows.Count;
         var iconCard=new Border{
             Background=new SolidColorBrush(Color.FromRgb(32,44,71)),
             BorderBrush=new SolidColorBrush(Color.FromRgb(71,85,121)),
@@ -116,6 +149,9 @@ internal static class DeskSpaceStableHoverV93
         };
         var closeDelay=new DispatcherTimer{
             Interval=TimeSpan.FromMilliseconds(340)
+        };
+        var liveTimer=new DispatcherTimer{
+            Interval=TimeSpan.FromMilliseconds(220)
         };
         void StopIntent(){hoverIntent.Stop();}
         // Both sides available: prefer the side of the hovered tile.
@@ -182,11 +218,59 @@ internal static class DeskSpaceStableHoverV93
         hoverIntent.Tick+=(_,_)=>OpenPending();
         void Hide()
         {
+            bool wasOpen=iconPopup.IsOpen;
+            liveTimer.Stop();
             hoverIntent.Stop();
             closeDelay.Stop();
             windowPopup.IsOpen=false;
             iconPopup.IsOpen=false;
+            if(ReferenceEquals(activeIconPopup,iconPopup))
+                activeIconPopup=null;
+            if(wasOpen)onHoverClosed?.Invoke();
         }
+
+        // Reconcile only real HWNDs: a posted WM_CLOSE is not proof that
+        // an application has closed. This is deliberately lightweight
+        // (no Process.GetProcesses, I/O, or main-deck rerender).
+        void Reconcile()
+        {
+            var live=RemainingWindows(windows,
+                DeskSpaceRunningAppsV88.IsActiveWindow);
+            if(live.Count==liveCount)return;
+            liveCount=live.Count;
+            var groups=DeskSpaceRunningAppsV88.GroupVisible(live);
+            foreach(var app in apps)
+            {
+                var matches=DeskSpaceRunningAppsV88.WindowsFor(app,live);
+                if(!appTiles.TryGetValue(app.Name,out var tile))continue;
+                if(matches.Count==0)
+                {
+                    iconRow.Children.Remove(tile);
+                    appTiles.Remove(app.Name);
+                    appBadges.Remove(app.Name);
+                }
+                else if(appBadges.TryGetValue(app.Name,out var badge))
+                    badge.Text=matches.Count+" windows";
+            }
+            foreach(var row in windowItems.Children.OfType<DockPanel>().
+                Where(x=>x.Tag is IntPtr hwnd &&
+                    !live.Any(w=>w.Handle==hwnd)).ToArray())
+                windowItems.Children.Remove(row);
+            var activeMatches=live.Where(x=>string.Equals(
+                x.Name,pendingName,StringComparison.OrdinalIgnoreCase)).
+                ToArray();
+            pendingWindows=activeMatches;
+            if(windowItems.Children.OfType<TextBlock>().FirstOrDefault()
+                is TextBlock counter)
+                counter.Text=pendingName+" · "+activeMatches.Length+" windows";
+            if(activeMatches.Length==0)windowPopup.IsOpen=false;
+            if(heading.Child is TextBlock label)
+                label.Text="▸  Running Apps · "+groups.Count;
+            // Update the deck count without destroying the hovered popup.
+            if(groups.Count==0)Hide();
+            onLiveChanged?.Invoke(groups,live);
+        }
+        liveTimer.Tick+=(_,_)=>Reconcile();
         bool Hovered()=>heading.IsMouseOver ||
             iconCard.IsMouseOver || windowCard.IsMouseOver;
         closeDelay.Tick+=(_,_)=>{
@@ -195,7 +279,13 @@ internal static class DeskSpaceStableHoverV93
         };
         void KeepOpen()=>closeDelay.Stop();
         void CloseLater(){closeDelay.Stop();closeDelay.Start();}
-        heading.MouseEnter+=(_,_)=>{KeepOpen();iconPopup.IsOpen=true;};
+        heading.MouseEnter+=(_,_)=>{
+            KeepOpen();
+            iconPopup.IsOpen=true;
+            activeIconPopup=iconPopup;
+            Reconcile();
+            if(iconPopup.IsOpen)liveTimer.Start();
+        };
         heading.MouseLeave+=(_,_)=>CloseLater();
         iconCard.MouseEnter+=(_,_)=>KeepOpen();
         iconCard.MouseLeave+=(_,_)=>{StopIntent();CloseLater();};
@@ -222,11 +312,16 @@ internal static class DeskSpaceStableHoverV93
                 TextAlignment=TextAlignment.Center,
                 TextTrimming=TextTrimming.CharacterEllipsis
             });
-            if(matches.Length>1)picture.Children.Add(new TextBlock{
-                Text=matches.Length+" windows",FontSize=9,
-                Foreground=Brushes.LightSteelBlue,
-                TextAlignment=TextAlignment.Center
-            });
+            if(matches.Length>1)
+            {
+                var badge=new TextBlock{
+                    Text=matches.Length+" windows",FontSize=9,
+                    Foreground=Brushes.LightSteelBlue,
+                    TextAlignment=TextAlignment.Center
+                };
+                picture.Children.Add(badge);
+                appBadges[app.Name]=badge;
+            }
             var appButton=new Button{
                 Content=picture,Width=76,MinHeight=49,
                 Margin=new Thickness(1),Padding=new Thickness(2),
@@ -238,13 +333,15 @@ internal static class DeskSpaceStableHoverV93
             appButton.MouseEnter+=(_,_)=>{
                 KeepOpen();
                 StopIntent();
-                if(choices.Length<=1)
+                var remaining=choices.Where(x=>
+                    DeskSpaceRunningAppsV88.IsActiveWindow(x.Handle)).ToArray();
+                if(remaining.Length<=1)
                 {
                     windowPopup.IsOpen=false;
                     return;
                 }
                 pendingIcon=appButton;
-                pendingWindows=choices;
+                pendingWindows=remaining;
                 pendingName=app.Name;
                 // Screen-aware placement considers the panel boundaries
                 // AND which side of the panel the app tile occupies.
@@ -269,9 +366,11 @@ internal static class DeskSpaceStableHoverV93
                 hoverIntent.Start();
             };
             appButton.Click+=(_,_)=>{
-                if(choices.Length!=1)return;
+                var remaining=choices.Where(x=>
+                    DeskSpaceRunningAppsV88.IsActiveWindow(x.Handle)).ToArray();
+                if(remaining.Length!=1)return;
                 Hide();
-                DeskSpaceRunningAppsV88.Focus(choices[0]);
+                DeskSpaceRunningAppsV88.Focus(remaining[0]);
             };
             if(choices.Length==1)
             {
@@ -288,8 +387,13 @@ internal static class DeskSpaceStableHoverV93
                 close.Margin=new Thickness(0,0,3,0);
                 tile.Children.Add(close);
                 iconRow.Children.Add(tile);
+                appTiles[app.Name]=tile;
             }
-            else iconRow.Children.Add(appButton);
+            else
+            {
+                iconRow.Children.Add(appButton);
+                appTiles[app.Name]=appButton;
+            }
         }
         // Separate Popup HWNDs must close when the old deck is hidden
         // or its contents are regenerated.
