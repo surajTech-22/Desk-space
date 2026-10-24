@@ -1,0 +1,120 @@
+      <TabItem Tag="Reminders" Header="◉  Reminders">
+        <DockPanel Margin="16">
+          <StackPanel DockPanel.Dock="Top" Margin="0,0,0,9">
+            <TextBlock Text="Reminders and tasks · scheduled with Windows local time"
+              FontWeight="SemiBold" FontSize="17" Margin="0,0,0,9"/>
+            <WrapPanel Margin="0,0,0,5">
+              <TextBox x:Name="ReminderTitle" Width="250" Height="31"
+                Margin="0,0,8,5" ToolTip="Reminder or task title"/>
+              <DatePicker x:Name="ReminderDate" Width="142"
+                Margin="0,0,8,5"/>
+              <TextBox x:Name="ReminderTime" Width="120" Height="31"
+                Text="09:00:00" Margin="0,0,8,5"
+                ToolTip="72345 = 07:23:45; 122345 = 12:23:45; optional AM/PM"
+                TextChanged="ReminderTime_TextChanged"
+                LostKeyboardFocus="ReminderTime_LostKeyboardFocus"/>
+            </WrapPanel>
+            <TextBlock x:Name="ReminderTimePreview"
+              Text="Time: 09:00:00 · 24-hour mode"
+              FontSize="12" Foreground="#57678C"
+              Margin="0,0,0,7"/>
+            <WrapPanel Margin="0,0,0,5" VerticalAlignment="Center">
+              <TextBlock Text="Sound / Tune" Width="108"
+                VerticalAlignment="Center" FontWeight="SemiBold"/>
+              <ComboBox x:Name="ReminderSoundChoice"
+                Width="153" Height="29" SelectedIndex="0"
+                Loaded="ReminderSoundChoice_Loaded"
+                Margin="0,0,8,3"
+                SelectionChanged="ReminderSoundChoice_SelectionChanged">
+                <ComboBoxItem Content="Exclamation"/>
+                <ComboBoxItem Content="Beep"/>
+                <ComboBoxItem Content="Asterisk"/>
+                <ComboBoxItem Content="Hand"/>
+                <ComboBoxItem Content="None"/>
+                <ComboBoxItem Content="Custom WAV"/>
+              </ComboBox>
+              <Button Content="Test sound" Click="ReminderTestSound_Click"
+                Padding="9,5" Margin="0,0,7,3"/>
+              <Button Content="Browse WAV" Click="ReminderBrowseWav_Click"
+                Padding="9,5" Margin="0,0,7,3"/>
+              <TextBox x:Name="ReminderSoundPath" Width="275"
+                TextChanged="ReminderSoundPath_TextChanged"
+                Visibility="Collapsed" Height="30"
+                ToolTip="Selected .wav sound file" Margin="0,0,7,3"/>
+            </WrapPanel>
+            <TextBlock x:Name="ReminderSoundSaveStatus"
+              FontSize="11" Foreground="#76558F" Text="" Margin="0,0,0,5"/>
+            <WrapPanel Margin="0,0,0,7">
+              <TextBlock Text="Perform action" Width="108"
+                VerticalAlignment="Center" FontWeight="SemiBold"/>
+              <ComboBox x:Name="ReminderActionChoice" SelectedIndex="0"
+                SelectionChanged="ReminderActionChoice_SelectionChanged"
+                Width="153" Height="29" Margin="0,0,8,3">
+                <ComboBoxItem Content="None"/>
+                <ComboBoxItem Content="Open application"/>
+                <ComboBoxItem Content="Open file"/>
+                <ComboBoxItem Content="Open URL"/>
+              </ComboBox>
+              <Button x:Name="ReminderBrowseFileButton" Content="Browse file" Click="ReminderBrowseFile_Click"
+                Padding="9,5" Margin="0,0,7,3"/>
+              <Button x:Name="ReminderBrowseAppButton" Content="Browse app" Click="ReminderBrowseTarget_Click"
+                Padding="9,5" Margin="0,0,7,3"/>
+              <TextBox x:Name="ReminderActionPath" Width="305"
+                TextChanged="ReminderActionPath_TextChanged"
+                Visibility="Collapsed" Height="30"
+                ToolTip="Application, file or pasted URL" Margin="0,0,7,3"/>
+            </WrapPanel>
+            <WrapPanel Margin="0,0,0,4">
+              <Image x:Name="ReminderActionIcon" Width="23" Height="23"
+                Stretch="Uniform" Visibility="Collapsed"
+                Margin="0,0,7,0"/>
+              <TextBlock x:Name="ReminderActionDisplay" FontSize="13"
+                Foreground="#342C57" TextWrapping="Wrap"
+                VerticalAlignment="Center"/>
+            </WrapPanel>
+            <TextBlock x:Name="ReminderUrlNote" Visibility="Collapsed"
+              Text="Paste a website URL. The Windows default browser opens it when due; an existing tab can prepare 12 seconds early."
+              TextWrapping="Wrap" FontSize="12" Foreground="#57678C" Margin="0,0,0,5"/>
+            <StackPanel x:Name="ReminderEmbeddedSearch" Visibility="Collapsed"
+              MaxWidth="450" HorizontalAlignment="Left" Margin="0,0,0,5"/>
+            <WrapPanel Margin="0,0,0,6">
+              <TextBlock Text="Repeat" VerticalAlignment="Center"
+                FontWeight="SemiBold" Width="72"/>
+              <ComboBox x:Name="ReminderRepeatChoice" Width="156" Height="29"
+                SelectedIndex="0" Margin="0,0,7,3"
+                SelectionChanged="ReminderRepeatChoice_SelectionChanged">
+                <ComboBoxItem Content="None"/>
+                <ComboBoxItem Content="Daily"/>
+                <ComboBoxItem Content="Weekdays"/>
+                <ComboBoxItem Content="Weekly"/>
+                <ComboBoxItem Content="Monthly"/>
+                <ComboBoxItem Content="Yearly"/>
+                <ComboBoxItem Content="Selected days"/>
+                <ComboBoxItem Content="Every N days"/>
+              </ComboBox>
+              <TextBox x:Name="ReminderRepeatDays" Width="153" Height="29"
+                Visibility="Collapsed" Margin="0,0,8,3"
+                Text="Mon,Wed,Fri" ToolTip="Comma separated days, e.g. Mon,Wed,Fri"/>
+              <TextBox x:Name="ReminderRepeatEvery" Width="77" Height="29"
+                Visibility="Collapsed" Text="1" Margin="0,0,8,3"
+                ToolTip="Repeat every N days"/>
+            </WrapPanel>
+            <WrapPanel Margin="0,0,0,5">
+              <Button Content="Add reminder" Click="AddReminder_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+              <Button Content="Save changes" Click="SaveReminderChanges_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+              <Button Content="History" Click="ReminderHistory_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+              <Button Content="Mark done" Click="DoneReminder_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+              <Button Content="Delete" Click="DeleteReminder_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+            </WrapPanel>
+            <TextBlock Text="Active reminders only; completed entries remain saved."
+              FontSize="12" Foreground="#64748B" Margin="0,0,0,6"/>
+          </StackPanel>
+          <ListBox x:Name="RemindersList" FontSize="15"
+            SelectionChanged="RemindersList_SelectionChanged"/>
+        </DockPanel>
+      </TabItem>

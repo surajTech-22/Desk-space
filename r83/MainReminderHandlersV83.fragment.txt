@@ -1,0 +1,330 @@
+    private string reminderSelectedPath="";
+    private string reminderSelectedName="";
+    private bool reminderSoundLoading=false;
+
+    private static string ReminderMode(System.Windows.Controls.ComboBox? choice)
+        => (choice?.SelectedItem as System.Windows.Controls.ComboBoxItem)?
+           .Content?.ToString()??"None";
+
+    private void ReminderTime_TextChanged(object sender,
+        System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if(ReminderTimePreview==null || ReminderTime==null)return;
+        ReminderTimePreview.Text=DeskSpaceReminderTimeV78.TryParse(
+            ReminderTime.Text,out _,out var display)
+            ?"Time: "+display
+            :"Enter HMMSS / HHMMSS; add AM or PM for 12-hour mode";
+    }
+    private void ReminderTime_LostKeyboardFocus(object sender,
+        System.Windows.Input.KeyboardFocusChangedEventArgs e)
+    {
+        if(DeskSpaceReminderTimeV78.TryParse(ReminderTime.Text,
+            out _,out var display))ReminderTime.Text=display;
+    }
+    private void ReminderSoundChoice_Loaded(object sender,RoutedEventArgs e)
+    {
+        if(ReminderSoundChoice==null||ReminderSoundPath==null)return;
+        reminderSoundLoading=true;
+        var defaults=DeskSpaceReminderPreferencesV81.Load();
+        foreach(System.Windows.Controls.ComboBoxItem option
+            in ReminderSoundChoice.Items)
+            if(option.Content?.ToString()==defaults.Name)
+            {
+                ReminderSoundChoice.SelectedItem=option;break;
+            }
+        ReminderSoundPath.Text=defaults.File;
+        reminderSoundLoading=false;
+        ReminderSoundChoice_SelectionChanged(
+            ReminderSoundChoice,new SelectionChangedEventArgs(
+                System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,
+                Array.Empty<object>(),Array.Empty<object>()));
+    }
+    private void SaveReminderSoundDefault()
+    {
+        if(reminderSoundLoading||ReminderSoundChoice==null||
+           ReminderSoundPath==null)return;
+        bool success=DeskSpaceReminderPreferencesV81.Save(
+            ReminderMode(ReminderSoundChoice),ReminderSoundPath.Text,
+            out var message);
+        if(ReminderSoundSaveStatus!=null)
+            ReminderSoundSaveStatus.Text=success?"":
+                "Could not save sound: "+message;
+    }
+    private void ReminderSoundPath_TextChanged(object sender,
+        System.Windows.Controls.TextChangedEventArgs e)
+        =>SaveReminderSoundDefault();
+    private void ReminderSoundChoice_SelectionChanged(object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if(ReminderSoundPath!=null)
+            ReminderSoundPath.Visibility=
+                ReminderMode(ReminderSoundChoice)=="Custom WAV"?
+                    Visibility.Visible:Visibility.Collapsed;
+        SaveReminderSoundDefault();
+    }
+
+    private void SetSelectedReminderTarget(string path,string displayName)
+    {
+        reminderSelectedPath=path;reminderSelectedName=displayName;
+        RefreshReminderActionLabel();
+    }
+    private void RefreshReminderActionLabel()
+    {
+        if(ReminderActionDisplay==null||ReminderActionChoice==null)return;
+        string mode=ReminderMode(ReminderActionChoice);
+        string target=mode=="Open URL"?
+            ReminderActionPath?.Text??"":reminderSelectedPath;
+        ReminderActionDisplay.Text=
+            DeskSpaceReminderPresentationV81.ActionLabel(
+                mode,target,reminderSelectedName);
+        if(ReminderActionIcon!=null)
+        {
+            var icon=mode is "Open application" or "Open file"?
+                DeskSpaceApplicationIconsV65.Get(reminderSelectedPath):null;
+            ReminderActionIcon.Source=icon;
+            ReminderActionIcon.Visibility=icon==null?
+                Visibility.Collapsed:Visibility.Visible;
+        }
+    }
+    private void ReminderActionPath_TextChanged(object sender,
+        System.Windows.Controls.TextChangedEventArgs e)
+        =>RefreshReminderActionLabel();
+
+    private void ReminderActionChoice_SelectionChanged(object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if(ReminderActionPath==null||ReminderActionChoice==null)return;
+        string mode=ReminderMode(ReminderActionChoice);
+        reminderSelectedPath="";reminderSelectedName="";
+        ReminderTitle.Visibility=
+            DeskSpaceReminderPresentationV81.NeedsTitle(mode)?
+                Visibility.Visible:Visibility.Collapsed;
+        ReminderActionPath.Visibility=mode=="Open URL"?
+            Visibility.Visible:Visibility.Collapsed;
+        ReminderActionPath.ToolTip="Paste the web address";
+        if(ReminderBrowseFileButton!=null)
+            ReminderBrowseFileButton.Visibility=mode=="Open file"?
+                Visibility.Visible:Visibility.Collapsed;
+        if(ReminderBrowseAppButton!=null)
+            ReminderBrowseAppButton.Visibility=mode=="Open application"?
+                Visibility.Visible:Visibility.Collapsed;
+        if(ReminderUrlNote!=null)
+            ReminderUrlNote.Visibility=mode=="Open URL"?
+                Visibility.Visible:Visibility.Collapsed;
+        if(ReminderEmbeddedSearch!=null)
+        {
+            ReminderEmbeddedSearch.Children.Clear();
+            ReminderEmbeddedSearch.Visibility=mode is "Open application" or "Open file"?
+                Visibility.Visible:Visibility.Collapsed;
+            if(mode is "Open application" or "Open file")
+                ReminderEmbeddedSearch.Children.Add(
+                    DeskSpaceReminderPickerV81.Create(mode,
+                        (path,name)=>SetSelectedReminderTarget(path,name)));
+        }
+        RefreshReminderActionLabel();
+    }
+    private void ReminderChooseAction_Click(object sender,RoutedEventArgs e)
+    {
+        ReminderActionChoice.IsDropDownOpen=true;
+    }
+    private void ReminderTestSound_Click(object sender,RoutedEventArgs e)
+    {
+        DeskSpaceDueShelfV74.PlaySound(new ReminderItem{
+            AlertSound=ReminderMode(ReminderSoundChoice),
+            AlertSoundFile=ReminderSoundPath.Text.Trim()
+        });
+    }
+    private void ReminderBrowseWav_Click(object sender,RoutedEventArgs e)
+    {
+        var dialog=new Microsoft.Win32.OpenFileDialog{
+            Filter="WAV audio (*.wav)|*.wav",CheckFileExists=true
+        };
+        if(dialog.ShowDialog()==true)
+        {
+            ReminderSoundPath.Text=dialog.FileName;
+            ReminderSoundChoice.SelectedIndex=5;
+        }
+    }
+    private void ReminderBrowseFile_Click(object sender,RoutedEventArgs e)
+    {
+        if(ReminderMode(ReminderActionChoice)!="Open file")return;
+        var d=new Microsoft.Win32.OpenFileDialog{
+            Filter="All files (*.*)|*.*",CheckFileExists=true};
+        if(d.ShowDialog()==true)
+            SetSelectedReminderTarget(d.FileName,
+                System.IO.Path.GetFileName(d.FileName));
+    }
+    private void ReminderBrowseTarget_Click(object sender,RoutedEventArgs e)
+    {
+        if(ReminderMode(ReminderActionChoice)!="Open application")return;
+        var d=new Microsoft.Win32.OpenFileDialog{
+            Filter="Applications (*.exe;*.lnk)|*.exe;*.lnk",
+            CheckFileExists=true};
+        if(d.ShowDialog()==true)
+            SetSelectedReminderTarget(d.FileName,
+                System.IO.Path.GetFileNameWithoutExtension(d.FileName));
+    }
+
+    private string RepeatChoiceName()=>
+        ReminderRepeatChoice?.SelectedItem is System.Windows.Controls.ComboBoxItem item?
+            item.Content?.ToString()??"None":"None";
+    private int RepeatIntervalDays()=>int.TryParse(ReminderRepeatEvery?.Text,
+        out var days)?Math.Clamp(days,1,365):1;
+
+    private void ReminderRepeatChoice_SelectionChanged(object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if(ReminderRepeatDays==null||ReminderRepeatEvery==null)return;
+        var rule=RepeatChoiceName();
+        ReminderRepeatDays.Visibility=rule=="Selected days"?
+            Visibility.Visible:Visibility.Collapsed;
+        ReminderRepeatEvery.Visibility=rule=="Every N days"?
+            Visibility.Visible:Visibility.Collapsed;
+    }
+    private void ReminderHistory_Click(object sender,RoutedEventArgs e)
+    {
+        var recent=DeskSpaceReminderActionHistoryV83.ReadRecent(25);
+        MessageBox.Show(recent.Count==0?"No actions have run yet":
+            string.Join(Environment.NewLine,
+                recent.Select(a=>a.At.ToString("g")+"  "+a.Title+
+                    "  "+a.Result)),
+            "DeskSpace reminder action history");
+    }
+
+    private void AddReminder_Click(object sender,RoutedEventArgs e)
+    {
+        string action=ReminderMode(ReminderActionChoice);
+        if(DeskSpaceReminderPresentationV81.NeedsTitle(action) &&
+           string.IsNullOrWhiteSpace(ReminderTitle.Text))return;
+        if(!DeskSpaceReminderTimeV78.TryParse(ReminderTime.Text,
+            out var scheduled,out var normalized))
+        {
+            MessageBox.Show("Time examples: 72345 = 07:23:45, "+
+                "122345 = 12:23:45. Optional AM/PM.");
+            return;
+        }
+        ReminderTime.Text=normalized;
+        string path=action=="Open URL"?
+            ReminderActionPath.Text.Trim():reminderSelectedPath;
+        if(action=="Open URL" &&
+           DeskSpaceReminderBrowserV80.TryUrl(path,out var cleaned))
+            path=cleaned;
+        if(!DeskSpaceDueShelfV74.IsAllowedAction(action,path))
+        {
+            MessageBox.Show("Choose an existing application/file or valid http(s) URL.");
+            return;
+        }
+        string sound=ReminderMode(ReminderSoundChoice);
+        string wav=ReminderSoundPath.Text.Trim();
+        if(sound=="Custom WAV" &&
+           (!System.IO.File.Exists(wav) ||
+            !System.IO.Path.GetExtension(wav)
+              .Equals(".wav",StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show("Choose an existing WAV file.");return;
+        }
+        data.Reminders.Add(new ReminderItem{
+            Title=DeskSpaceReminderPresentationV81.ResolveTitle(
+                ReminderTitle.Text,action,path,reminderSelectedName),
+            Due=(ReminderDate.SelectedDate??DateTime.Today).Date+scheduled,
+            AlertSound=sound,AlertSoundFile=wav,
+            AlertAction=action,AlertTarget=path,
+            RepeatPattern=RepeatChoiceName(),
+            RepeatDays=ReminderRepeatDays.Text.Trim(),
+            RepeatEveryDays=RepeatIntervalDays()
+        });
+        ReminderTitle.Clear();
+        RemindersList.Items.Refresh();
+        SafeSave();
+        RefreshDashboard();
+    }
+    private void RemindersList_SelectionChanged(object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if(RemindersList?.SelectedItem is not ReminderItem selected ||
+           ReminderActionChoice==null)return;
+        ReminderTitle.Text=selected.Title;
+        ReminderDate.SelectedDate=selected.Due.Date;
+        ReminderTime.Text=selected.Due.ToString("HH:mm:ss");
+        foreach(System.Windows.Controls.ComboBoxItem option
+            in ReminderRepeatChoice.Items)
+            if(option.Content?.ToString()==selected.RepeatPattern)
+            {ReminderRepeatChoice.SelectedItem=option;break;}
+        ReminderRepeatDays.Text=selected.RepeatDays??"";
+        ReminderRepeatEvery.Text=selected.RepeatEveryDays.ToString();
+        reminderSoundLoading=true;
+        foreach(System.Windows.Controls.ComboBoxItem item
+            in ReminderSoundChoice.Items)
+            if(item.Content?.ToString()==selected.AlertSound)
+            {
+                ReminderSoundChoice.SelectedItem=item;break;
+            }
+        ReminderSoundPath.Text=selected.AlertSoundFile??"";
+        reminderSoundLoading=false;
+        ReminderSoundChoice_SelectionChanged(
+            ReminderSoundChoice,new SelectionChangedEventArgs(
+                System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,
+                Array.Empty<object>(),Array.Empty<object>()));
+        foreach(System.Windows.Controls.ComboBoxItem item
+            in ReminderActionChoice.Items)
+            if(item.Content?.ToString()==selected.AlertAction)
+            {
+                ReminderActionChoice.SelectedItem=item;break;
+            }
+        if(selected.AlertAction=="Open URL")
+            ReminderActionPath.Text=selected.AlertTarget;
+        else
+            SetSelectedReminderTarget(selected.AlertTarget,
+                DeskSpaceReminderPresentationV81.TargetName(
+                    selected.AlertAction,selected.AlertTarget));
+    }
+
+    private void SaveReminderChanges_Click(object sender,RoutedEventArgs e)
+    {
+        if(RemindersList.SelectedItem is not ReminderItem selected)return;
+        string mode=ReminderMode(ReminderActionChoice);
+        string path=mode=="Open URL"?
+            ReminderActionPath.Text.Trim():reminderSelectedPath;
+        if(mode=="Open URL" &&
+           DeskSpaceReminderBrowserV80.TryUrl(path,out var normalized))
+            path=normalized;
+        if(!DeskSpaceDueShelfV74.IsAllowedAction(mode,path))return;
+        if(!DeskSpaceReminderTimeV78.TryParse(ReminderTime.Text,
+            out var clock,out _) )return;
+        selected.Title=DeskSpaceReminderPresentationV81.ResolveTitle(
+            ReminderTitle.Text,mode,path,reminderSelectedName);
+        var nextDue=(ReminderDate.SelectedDate??DateTime.Today).Date+clock;
+        if(selected.Due!=nextDue ||
+           selected.RepeatPattern!=RepeatChoiceName())
+        {
+            selected.LastAlert=null;
+            selected.SnoozedUntil=null;
+            selected.SnoozeOnly=false;
+        }
+        selected.Due=nextDue;
+        selected.RepeatPattern=RepeatChoiceName();
+        selected.RepeatDays=ReminderRepeatDays.Text.Trim();
+        selected.RepeatEveryDays=RepeatIntervalDays();
+        selected.AlertAction=mode;
+        selected.AlertTarget=path;
+        selected.AlertSound=ReminderMode(ReminderSoundChoice);
+        selected.AlertSoundFile=ReminderSoundPath.Text.Trim();
+        RemindersList.Items.Refresh();SafeSave();RefreshDashboard();
+    }
+
+    private void DoneReminder_Click(object sender,RoutedEventArgs e)
+    {
+        if(RemindersList.SelectedItem is not ReminderItem item)return;
+        item.Done=true;
+        RemindersList.Items.Refresh();
+        SafeSave();
+        RefreshDashboard();
+    }
+    private void DeleteReminder_Click(object sender,RoutedEventArgs e)
+    {
+        if(RemindersList.SelectedItem is not ReminderItem item)return;
+        data.Reminders.Remove(item);
+        RemindersList.Items.Refresh();
+        SafeSave();
+        RefreshDashboard();
+    }

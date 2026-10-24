@@ -1162,6 +1162,12 @@ jobs:
           ./r82/apply-r82.ps1
           ./r82/test-r82.ps1
 
+      - name: R83 Phase 1 reliability and Phase 2 reminder scheduling
+        shell: pwsh
+        run: |
+          ./r83/apply-r83.ps1
+          ./r83/test-r83.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

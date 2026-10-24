@@ -33,6 +33,7 @@ internal static class Program
             TestApplicationSaveEvents();
             TestRecentFileStartupRecovery();
             TestStartupAndRecentPlacementV82();
+            TestReminderSchedulerV83();
             TestFileClassification();
             TestDueShelfV74();
             TestReminderV76();
@@ -136,6 +137,110 @@ internal static class Program
                 StringComparison.OrdinalIgnoreCase),
             "R82 Windows startup marker not stored in app profile");
         Console.WriteLine("R82 PASS: logon startup migration location, recent shelf lower/upper screen-edge geometry, 8-hour startup recovery.");
+    }
+
+    private static void TestReminderSchedulerV83()
+    {
+        var schedule=Product.GetType("DeskSpace.DeskSpaceReminderScheduleV83",true)!;
+        var next=schedule.GetMethod("Next",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var due=schedule.GetMethod("Due",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var mark=schedule.GetMethod("MarkAlert",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var snooze=schedule.GetMethod("Snooze",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var now=new DateTime(2026,10,24,9,30,0);
+        DateTime Next(string rule,DateTime when,string days="",int every=1)=>
+            (DateTime)next.Invoke(null,new object[]{
+                new ReminderItem{Due=when,RepeatPattern=rule,
+                    RepeatDays=days,RepeatEveryDays=every},now})!;
+        Assert(Next("Daily",now.AddDays(-4))==now.AddDays(1),
+            "R83 Daily recurrence must skip missed dates");
+        Assert(Next("Weekdays",new DateTime(2026,10,23,9,30,0))==
+            new DateTime(2026,10,26,9,30,0),
+            "R83 weekday recurrence must skip weekends");
+        Assert(Next("Weekly",now.AddDays(-14))==now.AddDays(7),
+            "R83 weekly recurrence must advance past system downtime");
+        Assert(Next("Selected days",new DateTime(2026,10,23,9,30,0),
+            "Mon,Wed,Fri")==new DateTime(2026,10,26,9,30,0),
+            "R83 selected day recurrence not resolved");
+        Assert(Next("Every N days",now.AddDays(-5),"",3)==
+            now.AddDays(1),
+            "R83 custom day interval failed");
+        var one=new ReminderItem{Title="Annual report",
+            Due=now.AddMinutes(-1),AlertAction="Open file",
+            AlertTarget=@"C:\Work\report.xlsx"};
+        var recurring=new ReminderItem{
+            Title="Every day",Due=now.AddDays(-3),
+            RepeatPattern="Daily",AlertAction="None"};
+        var ws=new Workspace();
+        ws.Reminders.Add(one);ws.Reminders.Add(recurring);
+        var dueNow=(System.Collections.IEnumerable)due.Invoke(
+            null,new object[]{ws,now})!;
+        Assert(dueNow.Cast<object>().Count()==2,
+            "R83 resumed scheduler must recover missed items");
+        Assert((bool)mark.Invoke(null,new object[]{recurring,now})! &&
+            recurring.Due>now && recurring.LastAlert==null,
+            "R83 recurring alert must be rearmed at next valid occurrence");
+        Assert((bool)mark.Invoke(null,new object[]{one,now})! &&
+            one.LastAlert==now,
+            "R83 one-shot action must be marked before launching");
+        snooze.Invoke(null,new object[]{one,now,5});
+        Assert(one.SnoozedUntil==now.AddMinutes(5) &&
+            one.LastAlert==null && one.SnoozeOnly,
+            "R83 Snooze must persist the next reminder time");
+        Assert(!(bool)mark.Invoke(null,new object[]{
+            one,now.AddMinutes(5)})! &&
+            one.LastAlert==now.AddMinutes(5) &&
+            one.SnoozedUntil==null,
+            "R83 Snooze must not re-launch a file or URL");
+        var json=System.Text.Json.JsonSerializer.Serialize(ws);
+        var restored=System.Text.Json.JsonSerializer.Deserialize<Workspace>(json)!;
+        Assert(restored.Reminders.Any(r=>r.RepeatPattern=="Daily") &&
+            restored.Reminders.Any(r=>r.LastAlert.HasValue),
+            "R83 new fields must preserve legacy workspace persistence");
+        var shelf=Product.GetType("DeskSpace.DeskSpaceDueShelfV74",true)!;
+        var alertType=shelf.GetNestedType("DueAlert",BindingFlags.NonPublic)!;
+        var alert=Activator.CreateInstance(alertType,
+            new object[]{one.Id,one.Title,now.AddMinutes(-1)})!;
+        var list=Array.CreateInstance(alertType,1);list.SetValue(alert,0);
+        var builder=shelf.GetMethod("BuildAlert",BindingFlags.NonPublic|
+            BindingFlags.Static)!;
+        var ui=(FrameworkElement)builder.Invoke(null,new object[]{
+            list,now,(Action<Guid>)(_=>{}),(Action<Guid>)(_=>{}),
+            (Action<Guid,int>)((_,_)=>{})})!;
+        var snoozeButton=Walk(ui).OfType<Button>()
+            .FirstOrDefault(b=>(b.Content as string)=="Snooze");
+        Assert(snoozeButton!=null &&
+            snoozeButton.ContextMenu!.Items.OfType<MenuItem>().Count()==6,
+            "R83 snooze menu missing five presets and custom duration");
+        Assert(Walk(ui).OfType<Border>().Any(b=>
+            b.Background is LinearGradientBrush),
+            "R83 rainbow alert was lost");
+        Render(ui,310,160,"r83-rainbow-snooze-alert");
+        var reminderUI=Make("DeskSpace.DeskSpaceInlineV36",
+            "Reminders","Circle",(Action)(()=>{}),false);
+        var reminderPanel=(FrameworkElement)Call(reminderUI,"Create")!;
+        reminderPanel.Measure(new Size(385,565));
+        reminderPanel.Arrange(new Rect(0,0,385,565));
+        reminderPanel.UpdateLayout();
+        Assert(Walk(reminderPanel).OfType<ComboBox>().Any(x=>
+            x.Items.Cast<object>().Any(i=>i?.ToString()=="Selected days")) &&
+            Walk(reminderPanel).OfType<Button>().Any(x=>
+                (x.Content as string)=="History"),
+            "R83 actual widget recurrence/history options missing");
+        Render(reminderPanel,385,565,"r83-recurring-reminder-widget");
+        Call(reminderUI,"Dispose");
+        var main=(Window)Make("DeskSpace.MainWindow");
+        try
+        {
+            var repeat=main.FindName("ReminderRepeatChoice") as ComboBox;
+            Assert(repeat?.Items.Count==8,
+                "R83 main Workspace does not show all repeat options");
+        }
+        finally{main.Close();}
+        Console.WriteLine("R83 PASS: missed recovery, recurrence, snooze action deduplication, serialized schedule, animated shelf and live editors.");
     }
 
     private static void TestRecentFileStartupRecovery()
