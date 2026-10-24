@@ -1156,6 +1156,11 @@ jobs:
           ./r81/apply-r81.ps1
           ./r81/test-r81.ps1
 
+      - name: R82 inspect real startup, watcher, scheduler before modifications
+        shell: pwsh
+        run: |
+          ./r82/inspect-r82.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
