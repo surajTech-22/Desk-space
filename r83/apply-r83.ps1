@@ -85,7 +85,8 @@ $s=[regex]::Replace($s,$pattern,[System.Text.RegularExpressions.MatchEvaluator]{
 WriteSource $p $s
 
 $p="$r/MainWindow.xaml.cs";$s=ReadSource $p
-$a=$s.IndexOf('    private static string ReminderMode(')
+$a=$s.IndexOf('    private string reminderSelectedPath=""')
+if($a -lt 0){$a=$s.IndexOf('    private static string ReminderMode(')}
 $b=$s.IndexOf('    private void NewSnippet_Click(',$a)
 if($a -lt 0 -or $b -le $a){throw 'R83 main Workspace reminder handlers missing'}
 $s=$s.Substring(0,$a)+(ReadSource 'r83/MainReminderHandlersV83.fragment.txt')+$s.Substring($b)
