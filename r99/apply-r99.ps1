@@ -52,6 +52,34 @@ Swap @'
         list.Children.Clear();
 '@ 'persistent deck preview outside row redraws'
 Swap @'
+        if(!DeskSpaceDeckVisibilityV89.Visible)
+        {
+            popup.IsOpen=false;
+            return;
+        }
+'@ @'
+        if(!DeskSpaceDeckVisibilityV89.Visible)
+        {
+            deckPreview?.Close();
+            popup.IsOpen=false;
+            return;
+        }
+'@ 'hidden deck never leaves floating preview'
+Swap @'
+        if(deckMinimized)
+        {
+            popup.IsOpen=host.IsVisible;
+            return;
+        }
+'@ @'
+        if(deckMinimized)
+        {
+            deckPreview?.Close();
+            popup.IsOpen=host.IsVisible;
+            return;
+        }
+'@ 'minimising deck closes only file preview'
+Swap @'
         var minimise=DeckHeaderButton(deckMinimized?"▢":"−",
 '@ @'
         var previewMode=DeckHeaderButton(previewOnHover?"◉":"◎",
