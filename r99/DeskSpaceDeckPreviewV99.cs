@@ -24,6 +24,9 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
     };
     private bool disposed;
     private string current="";
+    private Border? pendingRow;
+    private string pendingPath="";
+    private Func<bool>? pendingMode;
     internal bool IsOpen=>preview.IsOpen;
     internal string CurrentPath=>current;
     internal DeskSpaceDeckPreviewV99(FrameworkElement deck)
@@ -33,6 +36,13 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
             PlacementTarget=deck,Placement=PlacementMode.Right,
             HorizontalOffset=5,StaysOpen=true,AllowsTransparency=true,
             PopupAnimation=PopupAnimation.Fade
+        };
+        hoverOpen.Tick+=(_,_)=>{
+            hoverOpen.Stop();
+            var row=pendingRow;
+            if(row!=null && row.IsLoaded && row.IsMouseOver &&
+               pendingMode?.Invoke()==true)
+                Show(pendingPath,row);
         };
         hoverClose.Tick+=(_,_)=>{
             if(preview.Child is FrameworkElement p && p.IsMouseOver)
@@ -47,6 +57,8 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
     internal void Close()
     {
         hoverOpen.Stop();
+        pendingRow=null;
+        pendingMode=null;
         hoverClose.Stop();
         preview.IsOpen=false;
         preview.Child=null;
@@ -112,20 +124,23 @@ internal sealed class DeskSpaceDeckPreviewV99 : IDisposable
             hoverClose.Stop();
             if(!hoverEnabled())return;
             hoverOpen.Stop();
-            hoverOpen.Tick+=OpenOnHover;
+            pendingRow=row;
+            pendingPath=path;
+            pendingMode=hoverEnabled;
             hoverOpen.Start();
-            void OpenOnHover(object? sender,EventArgs args)
-            {
-                hoverOpen.Tick-=OpenOnHover;
-                hoverOpen.Stop();
-                if(row.IsMouseOver && hoverEnabled() && row.IsLoaded)Show(path,row);
-            }
         };
         row.MouseLeave+=(_,_)=>{
             hoverOpen.Stop();
             if(preview.IsOpen)ScheduleClose();
         };
-        row.Unloaded+=(_,_)=>hoverOpen.Stop();
+        row.Unloaded+=(_,_)=>{
+            if(ReferenceEquals(pendingRow,row))
+            {
+                hoverOpen.Stop();
+                pendingRow=null;
+                pendingMode=null;
+            }
+        };
     }
 
     internal static void OpenContainingFolder(string path)
