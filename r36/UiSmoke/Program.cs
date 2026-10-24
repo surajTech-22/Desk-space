@@ -32,6 +32,7 @@ internal static class Program
             TestNewFileNotifications();
             TestApplicationSaveEvents();
             TestRecentFileStartupRecovery();
+            TestStartupAndRecentPlacementV82();
             TestFileClassification();
             TestDueShelfV74();
             TestReminderV76();
@@ -108,6 +109,35 @@ internal static class Program
             catch(UnauthorizedAccessException){}
         }
     }
+    private static void TestStartupAndRecentPlacementV82()
+    {
+        var placement=Product.GetType("DeskSpace.DeskSpaceRecentPlacementV82",true)!;
+        var choose=placement.GetMethod("Choose",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        Point Place(Rect circle,Rect work,Size shelf)=>(Point)choose.Invoke(
+            null,new object[]{circle,work,shelf})!;
+        var below=Place(new Rect(300,240,116,116),
+            new Rect(0,0,900,700),new Size(280,175));
+        Assert(Math.Abs(below.Y-123)<.1 &&
+            Math.Abs(below.X+82)<.1,
+            "R82 recent shelf must be centered directly below circle");
+        var edge=Place(new Rect(800,612,116,116),
+            new Rect(0,0,900,700),new Size(280,175));
+        Assert(edge.Y<0 && edge.X<0 &&
+            800+edge.X>=0 && 800+edge.X+280<=900 &&
+            612+edge.Y>=0,
+            "R82 recent popup clipped by right edge or taskbar");
+        var startup=Product.GetType("DeskSpace.DeskSpaceStartupV82",true)!;
+        var field=startup.GetField("Marker",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        var filename=(string)field.GetValue(null)!;
+        Assert(filename.Contains("WindowsWidgetStartupR82") &&
+            filename.StartsWith(WorkspaceStore.Root,
+                StringComparison.OrdinalIgnoreCase),
+            "R82 Windows startup marker not stored in app profile");
+        Console.WriteLine("R82 PASS: logon startup migration location, recent shelf lower/upper screen-edge geometry, 8-hour startup recovery.");
+    }
+
     private static void TestRecentFileStartupRecovery()
     {
         // File existed before the widget was started. The fast initial
@@ -117,6 +147,7 @@ internal static class Program
         Directory.CreateDirectory(folder);
         string target=Path.Combine(folder,"program-saved.custom");
         File.WriteAllText(target,"finished before launch");
+        File.SetLastWriteTimeUtc(target,DateTime.UtcNow.AddHours(-8));
         var window=new Window{Width=240,Height=240,
             WindowStyle=WindowStyle.None,ShowInTaskbar=false};
         var found=new List<string>();
