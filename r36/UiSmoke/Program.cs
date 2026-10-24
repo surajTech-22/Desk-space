@@ -43,6 +43,7 @@ internal static class Program
             TestLiveRunningWindowRemovalV97();
             TestHoverCloseRetentionV98();
             TestRecentFilesAndDeckPreviewV99();
+            TestStationaryAppAndFilePreviewsV100();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -378,6 +379,46 @@ internal static class Program
         {
             try{File.Delete(temporary);}catch(IOException){}
         }
+    }
+
+    private static void TestStationaryAppAndFilePreviewsV100()
+    {
+        var appPreview=Product.GetType("DeskSpace.DeskSpaceWindowPreviewV100",true)!;
+        var filePreview=Product.GetType("DeskSpace.DeskSpaceDeckPreviewV99",true)!;
+        var appIdle=appPreview.GetMethod("Stationary",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var fileIdle=filePreview.GetMethod("Stationary",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        bool Idle(MethodInfo method,Point a,Point b)=>
+            (bool)method.Invoke(null,new object[]{a,b,2d})!;
+        var point=new Point(50,50);
+        Assert(Idle(appIdle,point,point) &&
+               Idle(fileIdle,point,new Point(51,50)),
+            "R100 a stationary pointer must qualify for a file/app preview");
+        Assert(!Idle(appIdle,point,new Point(58,50)) &&
+               !Idle(fileIdle,point,new Point(51,61)),
+            "R100 cursor movement must cancel app and file previews");
+        var appEntry=Product.GetType("DeskSpace.DeskSpaceRunningAppsV88",true)!.
+            GetNestedType("Entry",BindingFlags.NonPublic)!;
+        var sample=Activator.CreateInstance(appEntry,new object[]{
+            "Chrome","",IntPtr.Zero,"GitHub - Chrome"})!;
+        var metadata=appPreview.GetMethod("CreateCard",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var view=(Border)metadata.Invoke(null,new object?[]{sample,null})!;
+        Assert(view.Child is StackPanel content &&
+               content.Children.OfType<TextBlock>().Any(t=>
+                   t.Text.Contains("GitHub - Chrome")) &&
+               view.IsHitTestVisible==false,
+            "R100 unsupported thumbnails must show honest title metadata without obstructing app selection");
+        var appInstance=Activator.CreateInstance(appPreview,true)!;
+        var bind=appPreview.GetMethod("Bind",BindingFlags.Instance|
+            BindingFlags.NonPublic)!;
+        var button=new Button{Content="Chrome"};
+        var panel=new Border{Child=button};
+        bind.Invoke(appInstance,new object[]{
+            button,panel,(Func<DeskSpaceRunningAppsV88.Entry?>)(()=>null)});
+        ((IDisposable)appInstance).Dispose();
+        Console.WriteLine("R100 PASS: 650ms stationary preview guard, moving cancels; app titles fallback if capture unsupported.");
     }
 
     private static void TestCompactShelfGroupsV88()

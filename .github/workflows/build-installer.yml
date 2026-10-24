@@ -1237,6 +1237,12 @@ jobs:
           ./r99/apply-r99.ps1
           ./r99/test-r99.ps1
 
+      - name: R100 stationary app/window and file deck previews
+        shell: pwsh
+        run: |
+          ./r100/apply-r100.ps1
+          ./r100/test-r100.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
