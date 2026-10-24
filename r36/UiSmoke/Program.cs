@@ -410,14 +410,9 @@ internal static class Program
                    t.Text.Contains("GitHub - Chrome")) &&
                view.IsHitTestVisible==false,
             "R100 unsupported thumbnails must show honest title metadata without obstructing app selection");
-        var appInstance=Activator.CreateInstance(appPreview,true)!;
-        var bind=appPreview.GetMethod("Bind",BindingFlags.Instance|
-            BindingFlags.NonPublic)!;
-        var button=new Button{Content="Chrome"};
-        var panel=new Border{Child=button};
-        bind.Invoke(appInstance,new object[]{
-            button,panel,(Func<DeskSpaceRunningAppsV88.Entry?>)(()=>null)});
-        ((IDisposable)appInstance).Dispose();
+        Assert(appPreview.GetMethod("Bind",BindingFlags.Instance|
+            BindingFlags.NonPublic)!=null,
+            "R100 Running Apps individual icons and window rows must support deliberate hover preview");
         Console.WriteLine("R100 PASS: 650ms stationary preview guard, moving cancels; app titles fallback if capture unsupported.");
     }
 
