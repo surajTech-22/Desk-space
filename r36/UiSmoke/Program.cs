@@ -35,6 +35,7 @@ internal static class Program
             TestStartupAndRecentPlacementV82();
             TestReminderSchedulerV83();
             TestAutomationAndProductivityV85();
+            TestCompactShelfGroupsV88();
             TestFileClassification();
             TestDueShelfV74();
             TestReminderV76();
@@ -63,6 +64,43 @@ internal static class Program
             return 1;
         }
     }
+    private static void TestCompactShelfGroupsV88()
+    {
+        var cls=Product.GetType("DeskSpace.DeskSpaceShelfGroupsV88",true)!;
+        var add=cls.GetMethod("Add",BindingFlags.Static|BindingFlags.NonPublic)!;
+        var panel=new StackPanel();
+        int toggles=0;
+        var collapsed=(StackPanel)add.Invoke(null,new object[]{
+            panel,"Running Apps",2,false,(Action)(()=>toggles++)
+        })!;
+        Assert(collapsed.Visibility==Visibility.Collapsed &&
+            panel.Children.Count==1,
+            "R88 collapsed running apps group must take just one compact header");
+        var button=Walk(panel).OfType<Button>().First();
+        Assert(button.Content?.ToString()?.Contains("Running Apps")==true,
+            "R88 running app group name not visible");
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(toggles==1,"R88 group heading must toggle when clicked");
+        var opened=(StackPanel)add.Invoke(null,new object[]{
+            panel,"Held Files",3,true,(Action)(()=>toggles++)
+        })!;
+        Assert(opened.Visibility==Visibility.Visible &&
+            panel.Children.Count==3,"R88 expanded file group content missing");
+        int previous=panel.Children.Count;
+        add.Invoke(null,new object[]{panel,"Recent Files",0,true,
+            (Action)(()=>toggles++)});
+        Assert(panel.Children.Count==previous,
+            "R88 empty groups should be invisible");
+        var apps=Product.GetType("DeskSpace.DeskSpaceRunningAppsV88",true)!;
+        Assert(apps.GetMethod("Snapshot",BindingFlags.Static|
+                BindingFlags.NonPublic)!=null &&
+            apps.GetMethod("Focus",BindingFlags.Static|
+                BindingFlags.NonPublic)!=null,
+            "R88 running application switcher is missing");
+        Render(panel,300,95,"r88-compact-groups");
+        Console.WriteLine("R88 PASS: compact collapsible headers, independent groups, hidden empty categories and running-app switcher.");
+    }
+
     private static void TestFileClassification()
     {
         string folder=Path.Combine(Path.GetTempPath(),

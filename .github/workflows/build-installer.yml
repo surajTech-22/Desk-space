@@ -1179,6 +1179,12 @@ jobs:
           ./r85/apply-r85.ps1
           ./r85/test-r85.ps1
 
+      - name: R88 compact below-circle running apps and grouped files
+        shell: pwsh
+        run: |
+          ./r88/apply-r88.ps1
+          ./r88/test-r88.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
