@@ -304,8 +304,9 @@ internal static class Program
         advanced.IsExpanded=false;
         Assert(((System.Collections.IEnumerable)editor.GetType().GetProperty(
                     "Steps",Any)!.GetValue(editor)!).Cast<object>().Count()==2 &&
-               (string)editor.GetType().GetProperty(
-                    "ConditionMode",Any)!.GetValue(editor)!=="File exists",
+               string.Equals(editor.GetType().GetProperty(
+                    "ConditionMode",Any)!.GetValue(editor) as string,
+                    "File exists",StringComparison.Ordinal),
             "R87 collapsing the section discarded saved action steps or condition");
         advanced.IsExpanded=true;
         Render(view,425,620,"r84-workflow-editor");
