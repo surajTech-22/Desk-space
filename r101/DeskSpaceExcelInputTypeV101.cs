@@ -37,7 +37,7 @@ internal static class DeskSpaceExcelInputTypeV101
         if(formula || stored=="Formula")return "Formula";
         string code=Simplify(format);
         if(code=="@")return "Text";
-        bool date=Regex.IsMatch(code,@"(?i)(y{2,4}|d{1,4}|m{3,4})");
+        bool date=Regex.IsMatch(code,@"(?i)(y{2,4}|d{1,4}|m{3,4}|m{1,2}[/\-]y{2,4})");
         bool time=Regex.IsMatch(code,@"(?i)(h{1,2}|s{1,2})");
         if(date&&time)return "DateTime";
         if(date)return "Date";
@@ -59,6 +59,7 @@ internal static class DeskSpaceExcelInputTypeV101
         // must not be confused with date/numeric format instructions.
         string code=Regex.Replace(fmt, "\"(?:[^\"]|\"\")*\"","");
         code=Regex.Replace(code,@"\\.","");
+        code=Regex.Replace(code,@"\[(h+|m+|s+)\]","$1",RegexOptions.IgnoreCase);
         code=Regex.Replace(code,@"\[[^\]]+\]",""); // [Red], [>=100], locales
         return code.Split(';')[0].Trim();
     }
