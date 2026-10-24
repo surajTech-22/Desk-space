@@ -159,6 +159,9 @@ internal static class DeskSpaceStableHoverV93
             PopupAnimation=PopupAnimation.None,Child=windowCard
         };
         iconCard.Tag=windowPopup;
+        // Separate noninteractive thumbnail flyout: no deck resize and no
+        // obstruction of app or window selections while the mouse is moving.
+        var appPreview=new DeskSpaceWindowPreviewV100();
         var hoverIntent=new DispatcherTimer{
             Interval=TimeSpan.FromMilliseconds(170)
         };
@@ -224,7 +227,10 @@ internal static class DeskSpaceStableHoverV93
                     Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
                     Margin=new Thickness(2,1,2,1)};
                 var close=MakeCloseButton(selected);
-                close.Click+=(_,_)=>PreserveHoverAfterClose();
+                close.Click+=(_,_)=>{
+                    appPreview.Close();
+                    PreserveHoverAfterClose();
+                };
                 DockPanel.SetDock(close,Dock.Right);
                 row.Children.Add(close);
                 var choice=new Button{
@@ -234,13 +240,14 @@ internal static class DeskSpaceStableHoverV93
                     BorderThickness=new Thickness(0),
                     HorizontalContentAlignment=HorizontalAlignment.Left,
                     Padding=new Thickness(7,5,7,5),
-                    MaxWidth=229,ToolTip=selected.WindowTitle
+                    MaxWidth=229
                 };
                 choice.Click+=(_,_)=>{
                     Hide();
                     DeskSpaceRunningAppsV88.Focus(selected);
                 };
                 row.Children.Add(choice);
+                appPreview.Bind(choice,windowCard,()=>selected);
                 windowItems.Children.Add(row);
             }
             windowPopup.IsOpen=true;
@@ -254,6 +261,7 @@ internal static class DeskSpaceStableHoverV93
             liveTimer.Stop();
             hoverIntent.Stop();
             closeDelay.Stop();
+            appPreview.Close();
             windowPopup.IsOpen=false;
             iconPopup.IsOpen=false;
             if(ReferenceEquals(activeIconPopup,iconPopup))
@@ -269,6 +277,7 @@ internal static class DeskSpaceStableHoverV93
             var live=RemainingWindows(windows,
                 DeskSpaceRunningAppsV88.IsActiveWindow);
             if(live.Count==liveCount)return;
+            appPreview.Close();
             liveCount=live.Count;
             var groups=DeskSpaceRunningAppsV88.GroupVisible(live);
             foreach(var app in apps)
@@ -376,6 +385,13 @@ internal static class DeskSpaceStableHoverV93
                 BorderThickness=new Thickness(0)
             };
             var choices=matches;
+            // Single-window apps have a direct thumbnail. For a grouped
+            // app, let the user choose the exact window first, then hover
+            // its individual row for an accurate preview.
+            appPreview.Bind(appButton,iconCard,()=>
+                choices.Length==1 &&
+                DeskSpaceRunningAppsV88.IsActiveWindow(choices[0].Handle)?
+                    choices[0]:null);
             appButton.MouseEnter+=(_,_)=>{
                 KeepOpen();
                 StopIntent();
@@ -425,7 +441,10 @@ internal static class DeskSpaceStableHoverV93
                 var tile=new Grid{Width=78};
                 tile.Children.Add(appButton);
                 var close=MakeCloseButton(choices[0]);
-                close.Click+=(_,_)=>PreserveHoverAfterClose();
+                close.Click+=(_,_)=>{
+                    appPreview.Close();
+                    PreserveHoverAfterClose();
+                };
                 close.Width=17;close.MinWidth=17;
                 close.Height=17;close.MinHeight=17;
                 close.FontSize=12;
@@ -444,7 +463,10 @@ internal static class DeskSpaceStableHoverV93
         }
         // Separate Popup HWNDs must close when the old deck is hidden
         // or its contents are regenerated.
-        heading.Unloaded+=(_,_)=>Hide();
+        heading.Unloaded+=(_,_)=>{
+            appPreview.Dispose();
+            Hide();
+        };
         heading.IsVisibleChanged+=(_,_)=>{
             if(!heading.IsVisible)Hide();
         };
