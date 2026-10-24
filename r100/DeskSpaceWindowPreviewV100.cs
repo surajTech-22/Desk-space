@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
-using System.Drawing;
+using DrawingBitmap=System.Drawing.Bitmap;
+using DrawingGraphics=System.Drawing.Graphics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -136,8 +137,8 @@ internal sealed class DeskSpaceWindowPreviewV100 : IDisposable
             if(!GetWindowRect(hwnd,out var rect))return null;
             int width=rect.Right-rect.Left,height=rect.Bottom-rect.Top;
             if(width<50||height<50||width>2500||height>1800)return null;
-            using var bitmap=new Bitmap(width,height);
-            using(var gfx=Graphics.FromImage(bitmap))
+            using var bitmap=new DrawingBitmap(width,height);
+            using(var gfx=DrawingGraphics.FromImage(bitmap))
             {
                 IntPtr hdc=gfx.GetHdc();
                 bool ok;
