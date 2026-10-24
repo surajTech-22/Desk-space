@@ -87,11 +87,14 @@ internal static class DeskSpaceStableHoverV93
         var hoverIntent=new DispatcherTimer{
             Interval=TimeSpan.FromMilliseconds(170)
         };
+        var closeDelay=new DispatcherTimer{
+            Interval=TimeSpan.FromMilliseconds(340)
+        };
         void StopIntent(){hoverIntent.Stop();}
         // Both sides available: prefer the side of the hovered tile.
         // One side available: choose that side, never inside the grid.
         bool pendingRight=true;
-        FrameworkElement? pendingIcon;
+        FrameworkElement? pendingIcon=null;
         DeskSpaceRunningAppsV88.Entry[] pendingWindows=Array.Empty<DeskSpaceRunningAppsV88.Entry>();
         string pendingName="";
         void OpenPending()
@@ -144,9 +147,6 @@ internal static class DeskSpaceStableHoverV93
             windowPopup.IsOpen=true;
         }
         hoverIntent.Tick+=(_,_)=>OpenPending();
-        var closeDelay=new DispatcherTimer{
-            Interval=TimeSpan.FromMilliseconds(340)
-        };
         void Hide()
         {
             hoverIntent.Stop();
