@@ -1279,18 +1279,17 @@ jobs:
           [IO.File]::WriteAllText('release/Update.sha256.txt',
             ($copied+'  Update.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))
 
-      - name: Upload real Windows installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: DeskSpace-Windows-Installer
-          path: |
-            release/DeskSpace_Setup.exe
-            release/DeskSpace_Setup.sha256.txt
-            release/Update.exe
-            release/Update.sha256.txt
-          retention-days: 3
-          if-no-files-found: error
-
+      # Do not duplicate hundreds of MB of installer binaries in a
+      # short-lived Actions artifact. The next verified step publishes
+      # exactly these binaries and hashes to the canonical GitHub Release.
+      - name: Verify release binaries before GitHub Release upload
+        shell: pwsh
+        run: |
+          foreach($name in @('DeskSpace_Setup.exe',
+              'DeskSpace_Setup.sha256.txt','Update.exe','Update.sha256.txt')){
+            if(!(Test-Path "release/$name")){throw "Missing release asset $name"}
+          }
+          Write-Host 'Both Windows executables and checksum files are ready for GitHub Releases.'
 
 
       - name: Publish R42 stable automatic release
