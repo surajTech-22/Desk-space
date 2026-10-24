@@ -1207,6 +1207,12 @@ jobs:
           ./r92/apply-r92.ps1
           ./r92/test-r92.ps1
 
+      - name: R93 anchored, fixed-size hover flyouts outside the deck
+        shell: pwsh
+        run: |
+          ./r93/apply-r93.ps1
+          ./r93/test-r93.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

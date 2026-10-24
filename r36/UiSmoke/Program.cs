@@ -38,6 +38,7 @@ internal static class Program
             TestCompactShelfGroupsV88();
             TestDeckControlsAndRunningAppsV91();
             TestRunningAppsHoverV92();
+            TestStableRunningAppsFlyoutV93();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -191,6 +192,48 @@ internal static class Program
             b.Content is string text && text.StartsWith("▸")),
             "R92 Running Apps must not be a click-to-expand button");
         Console.WriteLine("R92 PASS: grouped three app icons; Chrome keeps two hover-selectable windows; collapsed header is hover-only.");
+    }
+
+    private static void TestStableRunningAppsFlyoutV93()
+    {
+        var apps=Product.GetType("DeskSpace.DeskSpaceRunningAppsV88",true)!;
+        var entry=apps.GetNestedType("Entry",BindingFlags.NonPublic)!;
+        object Candidate(string name,string title,int hwnd)=>
+            Activator.CreateInstance(entry,new object[]{
+                name,"",new IntPtr(hwnd),title})!;
+        var windows=Array.CreateInstance(entry,4);
+        windows.SetValue(Candidate("Chrome","First window",101),0);
+        windows.SetValue(Candidate("Chrome","Second window",102),1);
+        windows.SetValue(Candidate("Explorer","Downloads",103),2);
+        windows.SetValue(Candidate("Settings","Settings",104),3);
+        var group=apps.GetMethod("GroupVisible",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        var unique=(System.Collections.IEnumerable)group.Invoke(
+            null,new object[]{windows})!;
+        var panel=new StackPanel();
+        var add=apps.GetMethod("AddHoverGroup",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        add.Invoke(null,new object[]{panel,unique,windows});
+        Assert(panel.Children.Count==1 && panel.Children[0] is Border,
+            "R93 Running Apps must remain a single stable-sized header");
+        var heading=(Border)panel.Children[0];
+        var popup=heading.Tag as System.Windows.Controls.Primitives.Popup;
+        Assert(popup!=null && popup.Placement==
+            System.Windows.Controls.Primitives.PlacementMode.Right &&
+            ReferenceEquals(popup.PlacementTarget,heading),
+            "R93 app choices must be screen-aware anchored Popups outside deck layout");
+        Assert(heading.Child is TextBlock,
+            "R93 opening app menus must not add expanding contents to header");
+        Assert(popup.Child is Border && popup.StaysOpen,
+            "R93 flyout must remain available while moving mouse to app icons");
+        Assert(!Walk(panel).OfType<StackPanel>().Any(),
+            "R93 no resizing nested choice panels in the main deck");
+        var empty=new StackPanel();
+        var typed=Array.CreateInstance(entry,0);
+        add.Invoke(null,new object[]{empty,typed,typed});
+        Assert(empty.Children.Count==0,
+            "R93 Running Apps group must disappear when no apps remain");
+        Console.WriteLine("R93 PASS: fixed-size hover header, detached anchored flyout, no layout expansion, empty category omitted.");
     }
 
     private static void TestCompactShelfGroupsV88()
