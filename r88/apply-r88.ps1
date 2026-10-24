@@ -98,9 +98,13 @@ Swap @'
 Swap '            list.Children.Add(row);' @'
             (item.AutoDetected?recentGroup:heldGroup).Children.Add(row);
 '@ 'route original file controls to group content'
-Swap '        recentRenderTimer.Stop();' @'
+Swap @'
+        recentRenderTimer.Stop();
+        newFiles?.Dispose();
+'@ @'
         recentRenderTimer.Stop();
         runningAppsTimer.Stop();
+        newFiles?.Dispose();
 '@ 'stop app snapshot timer'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R88: compact running applications, held files and recent files groups on the original below-circle shelf; Excel/reminder/clipboard functions unmodified.'
