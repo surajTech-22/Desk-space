@@ -281,6 +281,11 @@ internal static class DeskSpaceRunningAppsV88
     // list uses click-to-expand. Only an individual window is selectable.
     // Both flyout levels live inside the original deck, with no extra
     // floating top-level windows, keeping mouse travel stable.
+    internal static IReadOnlyList<Entry> WindowsFor(Entry app,IReadOnlyList<Entry> windows)=>
+        windows.Where(x=>x.Name.Equals(app.Name,
+            StringComparison.OrdinalIgnoreCase)).
+            GroupBy(x=>x.Handle).Select(x=>x.First()).ToArray();
+
     internal static void AddHoverGroup(StackPanel root,
         IReadOnlyList<Entry> apps,IReadOnlyList<Entry> windows)
     {
@@ -312,9 +317,7 @@ internal static class DeskSpaceRunningAppsV88
         detail.Children.Add(windowChoices);
         foreach(var app in apps)
         {
-            var appWindows=windows.Where(x=>x.Name.Equals(app.Name,
-                StringComparison.OrdinalIgnoreCase)).
-                GroupBy(x=>x.Handle).Select(x=>x.First()).ToArray();
+            var appWindows=WindowsFor(app,windows).ToArray();
             if(appWindows.Length==0)appWindows=new[]{app};
             var inner=new StackPanel{Width=66};
             var icon=DeskSpaceApplicationIconsV65.Get(app.Path);
