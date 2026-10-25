@@ -19,7 +19,7 @@ foreach($needle in @(
   'area.UnMerge()',
   'if(originallyEmpty)live.Range.ClearContents()',
   'SaveCopyAs(backup)',
-  'recorded Excel formula could not be reconstructed',
+  'Recorded Excel formula could not be reconstructed.',
   'x.ColumnNames.SequenceEqual(expectedTable.ColumnNames)',
   'Merged-cell geometry mismatch',
   'source.FormulaR1C1',
