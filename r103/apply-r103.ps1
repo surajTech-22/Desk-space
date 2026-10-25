@@ -9,7 +9,7 @@ function Swap([string]$file,[string]$before,[string]$after,[string]$tag)
  $before=$before.Replace([string][char]13+[char]10,[string][char]10)
  $after=$after.Replace([string][char]13+[char]10,[string][char]10)
  $n=([regex]::Matches($s,[regex]::Escape($before))).Count
- if($n -ne 1){throw "R103 $tag: expected one integration anchor, found $n"}
+ if($n -ne 1){throw "R103 ${tag}: expected one integration anchor, found $n"}
  [IO.File]::WriteAllText($file,$s.Replace($before,$after),[Text.UTF8Encoding]::new($false))
 }
 $ed="$r/DeskSpaceExcelEditorV42.cs"
