@@ -1255,6 +1255,12 @@ jobs:
           ./r102/apply-r102.ps1
           ./r102/test-r102.ps1
 
+      - name: R103 full-size Excel sheet and complete style preview
+        shell: pwsh
+        run: |
+          ./r103/apply-r103.ps1
+          ./r103/test-r103.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

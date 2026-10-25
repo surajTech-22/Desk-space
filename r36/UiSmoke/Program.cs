@@ -46,6 +46,7 @@ internal static class Program
             TestStationaryAppAndFilePreviewsV100();
             TestExcelTypeAwareSheetV101();
             TestSafeExcelNormalizationV102();
+            TestExpandedExcelStyleViewerV103();
             TestDeckVisibilityV89();
             TestFileClassification();
             TestDueShelfV74();
@@ -520,6 +521,72 @@ internal static class Program
                Status("05/06/2026","Date","dddd, dd mmmm yyyy","Ask")=="NeedsReview",
             "R102 Indian grouped numbers, date conversion, IDs and ambiguous input must be protected");
         Console.WriteLine("R102 PASS: explicit verified paste flow and safeguarded numeric/date input conversion.");
+    }
+
+    private static void TestExpandedExcelStyleViewerV103()
+    {
+        var view=Product.GetType("DeskSpace.DeskSpaceExcelSheetViewV101",true)!;
+        var snap=Product.GetType("DeskSpace.DeskSpaceExcelSheetVisualV101",true)!;
+        var cell=Product.GetType("DeskSpace.DeskSpaceExcelStyledCellV101",true)!;
+        var a=Activator.CreateInstance(snap)!;
+        var b=Activator.CreateInstance(snap)!;
+        snap.GetProperty("Rows")!.SetValue(a,2);
+        snap.GetProperty("Columns")!.SetValue(a,2);
+        snap.GetProperty("Rows")!.SetValue(b,2);
+        snap.GetProperty("Columns")!.SetValue(b,2);
+        var original=Activator.CreateInstance(cell)!;
+        cell.GetProperty("Row")!.SetValue(original,0);
+        cell.GetProperty("Column")!.SetValue(original,0);
+        cell.GetProperty("FontName")!.SetValue(original,"Algerian");
+        cell.GetProperty("FontSize")!.SetValue(original,36.0);
+        cell.GetProperty("Underline")!.SetValue(original,true);
+        cell.GetProperty("Bold")!.SetValue(original,true);
+        cell.GetProperty("StoredType")!.SetValue(original,"Text");
+        cell.GetProperty("ExpectedType")!.SetValue(original,"Text");
+        cell.GetProperty("BorderRight")!.SetValue(original,true);
+        cell.GetProperty("BorderRightColor")!.SetValue(original,255);
+        ((System.Collections.IList)snap.GetProperty("Cells")!.GetValue(a)!).
+            Add(original);
+        var more=Activator.CreateInstance(cell)!;
+        cell.GetProperty("Row")!.SetValue(more,1);
+        cell.GetProperty("Column")!.SetValue(more,1);
+        cell.GetProperty("StoredType")!.SetValue(more,"Number");
+        cell.GetProperty("ExpectedType")!.SetValue(more,"Number");
+        cell.GetProperty("NumberFormat")!.SetValue(more,"#,##0.00000");
+        ((System.Collections.IList)snap.GetProperty("Cells")!.GetValue(b)!).
+            Add(more);
+        var merged=view.GetMethod("MergeCapturedVisuals",BindingFlags.Static|
+            BindingFlags.NonPublic)!.
+            Invoke(null,new object[]{a,0,0,b,0,0,2,2})!;
+        var cells=((System.Collections.IEnumerable)snap.GetProperty("Cells")!.
+            GetValue(merged)!).Cast<object>().ToArray();
+        Assert(cells.Length==2,
+            "R103 appending selected Excel cells must preserve earlier styled cells and capture new ones");
+        var placeholder=view.GetMethod("Placeholder",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        Assert((string)placeholder.Invoke(null,new object[]{original})!=="Aa" &&
+               (string)placeholder.Invoke(null,new object[]{more})!=="1,234.56789",
+            "R103 real formatting must be shown using safe placeholder samples, not prior transaction data");
+        var kind=Product.GetType("DeskSpace.DeskSpaceExcelInputTypeV101",true)!;
+        var order=kind.GetMethod("DateOrderFromFormat",BindingFlags.Static|
+            BindingFlags.NonPublic)!;
+        Assert((string)order.Invoke(null,new object[]{"dddd, dd mmmm yyyy"})!=="DMY" &&
+               (string)order.Invoke(null,new object[]{"mm/dd/yyyy"})!=="MDY" &&
+               (string)order.Invoke(null,new object[]{"General"})!=="Ask",
+            "R103 date order should be inferred from captured Excel formatting, not a global dropdown");
+        var template=Product.GetType("DeskSpace.DeskSpaceExcelTemplateV16",true)!;
+        var document=Activator.CreateInstance(template)!;
+        template.GetProperty("SourceSheet")!.SetValue(document,"Sheet1");
+        template.GetProperty("SourceAddress")!.SetValue(document,"E7:J11");
+        template.GetProperty("SourceRow")!.SetValue(document,7);
+        template.GetProperty("SourceColumn")!.SetValue(document,5);
+        template.GetProperty("RowCount")!.SetValue(document,2);
+        template.GetProperty("ColumnCount")!.SetValue(document,2);
+        template.GetProperty("SheetVisualV101")!.SetValue(document,merged);
+        var rendered=(FrameworkElement)view.GetMethod("Create",BindingFlags.Static|
+            BindingFlags.NonPublic)!.Invoke(null,new object[]{document})!;
+        Render(rendered,800,460,"r103-excel-styles-full-size-preview");
+        Console.WriteLine("R103 PASS: exact font/underline/border sample, merged capture, longer sheet preview and date format inference.");
     }
 
     private static void TestCompactShelfGroupsV88()
