@@ -1361,6 +1361,11 @@ jobs:
         shell: pwsh
         run: dotnet run --configuration Release --project r107/tests/GateTests.csproj
 
+      - name: Compile R111 real-Excel acceptance harness without executing Office COM
+        shell: pwsh
+        run: |
+          dotnet build r111/LiveExcelAcceptance/LiveExcelAcceptance.csproj --configuration Release
+
       - name: Compile, test and package self-contained app
         shell: pwsh
         run: ./BUILD_DESKSPACE_SETUP.ps1
