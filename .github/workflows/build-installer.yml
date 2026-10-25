@@ -25,6 +25,7 @@ on:
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
       - fix/r116-blank-excel-autofill-anchor
+      - fix/r117-blank-format-save-and-deck-grid
 
 permissions:
   contents: write
@@ -1329,6 +1330,11 @@ jobs:
         run: |
           ./r116/apply-r116.ps1
           ./r116/test-r116.ps1
+      - name: R117 save empty formatting templates and fix deck grid
+        shell: pwsh
+        run: |
+          ./r117/apply-r117.ps1
+          ./r117/test-r117.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
