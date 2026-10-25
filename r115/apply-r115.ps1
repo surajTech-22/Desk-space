@@ -59,7 +59,7 @@ Change $ed @'
         var collectionColumn=new StackPanel{Margin=new Thickness(0,0,6,0)};
         var dataColumn=new StackPanel{Margin=new Thickness(6,0,0,0)};
         collectionColumn.Children.Add(new TextBlock{
-            Text="Collection name (groups related data together)",
+            Text="Collection name",
 '@ 'collection & data horizontal grid'
 Change $ed @'
         editorHead.Children.Add(mappingGroupV42);
@@ -68,7 +68,7 @@ Change $ed @'
 '@ @'
         collectionColumn.Children.Add(mappingGroupV42);
         dataColumn.Children.Add(new TextBlock{
-            Text="Data name (saved Excel mapping)",
+            Text="Data name",
 '@ 'collection field in left column'
 Change $ed @'
         editorHead.Children.Add(mappingNameV42);
