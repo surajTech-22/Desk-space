@@ -1464,20 +1464,38 @@ jobs:
           }
           [IO.File]::WriteAllLines("$root/MANIFEST.sha256.txt",$manifest)
           Write-Host "R111 portable files $($files.Count), all checksummed; no installer release."
+          # Upload ONE ZIP instead of thousands of tiny runtime files; the
+          # previous upload was hanging for several Windows runner attempts.
+          $archive='r111/DeskSpace_R111_Real_Excel_Portable_Test.zip'
+          if(Test-Path $archive){Remove-Item -LiteralPath $archive -Force}
+          Compress-Archive -LiteralPath $root -DestinationPath $archive -CompressionLevel Optimal
+          if(!(Test-Path $archive) -or (Get-Item $archive).Length -lt 5000000){
+            throw 'R111 portable ZIP missing/too small'
+          }
+          $hash=(Get-FileHash $archive -Algorithm SHA256).Hash
+          Set-Content -LiteralPath 'r111/DeskSpace_R111_Real_Excel_Portable_Test.sha256.txt' -Value ($hash+'  DeskSpace_R111_Real_Excel_Portable_Test.zip')
+          Write-Host ("R111 ZIP size "+(Get-Item $archive).Length+" SHA256 "+$hash)
+          
       - name: Attempt real Excel COM acceptance if Office is installed on the runner
         if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $office=[Type]::GetTypeFromProgID('Excel.Application')
+          $status='r111/R111_LIVE_EXCEL_STATUS.txt'
           if($null -eq $office){
-            Write-Host 'R111 NOT VERIFIED: desktop Microsoft Excel is absent on this runner.'
-            Write-Host 'R111 portable test artifact must run on an Excel-installed Windows PC.'
+            'NOT_VERIFIED: Desktop Microsoft Excel is absent from this Windows runner.' | Set-Content -LiteralPath $status
+            'Live Excel acceptance: NOT VERIFIED (desktop Excel unavailable)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+            Write-Warning 'R111 NOT VERIFIED: desktop Microsoft Excel is absent. Portable test must run on an Office-installed PC.'
           }else{
             $root='r111/portable-acceptance'
             & "$root/R111Test/LiveExcelAcceptance.exe" "$root/DeskSpaceTestApp/DeskSpace.dll"
-            if($LASTEXITCODE -ne 0){throw "Real Microsoft Excel acceptance failed ($LASTEXITCODE)."}
-            Write-Host 'R111 REAL Excel COM acceptance PASSED on Windows runner.'
+            if($LASTEXITCODE -ne 0){
+              'FAILED: Real Microsoft Excel COM acceptance test failed.' | Set-Content -LiteralPath $status
+              throw "Real Microsoft Excel acceptance failed ($LASTEXITCODE)."
+            }
+            'PASS: Actual Microsoft Excel COM acceptance completed.' | Set-Content -LiteralPath $status
+            'Live Excel acceptance: PASS' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           }
 
       - name: Upload R111 portable candidate for live Excel acceptance (NOT an update)
@@ -1485,8 +1503,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DeskSpace-R111-Real-Excel-Portable-Test
-          path: r111/portable-acceptance/
+          path: |
+            r111/DeskSpace_R111_Real_Excel_Portable_Test.zip
+            r111/DeskSpace_R111_Real_Excel_Portable_Test.sha256.txt
+            r111/R111_LIVE_EXCEL_STATUS.txt
           retention-days: 7
+          compression-level: 0
           if-no-files-found: error
 
       # Do not duplicate hundreds of MB of installer binaries in a
