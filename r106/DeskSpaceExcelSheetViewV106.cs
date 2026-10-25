@@ -107,6 +107,19 @@ internal static class DeskSpaceExcelVisualCaptureV101
         catch(FormatException){return fallback;}
         catch(OverflowException){return fallback;}
     }
+    private static double RequiredMeasure(Func<object?> read,string label)
+    {
+        try
+        {
+            var value=Convert.ToDouble(read(),CultureInfo.InvariantCulture);
+            if(double.IsFinite(value) && value>0)return value;
+        }
+        catch(COMException){}
+        catch(InvalidCastException){}
+        catch(FormatException){}
+        throw new InvalidDataException("Excel did not provide an exact "+label+
+            ". Source formatting was NOT captured.");
+    }
     private static string Format(Func<object?> read,string fallback="")
     {
         try{return Text(read());}
@@ -145,14 +158,15 @@ internal static class DeskSpaceExcelVisualCaptureV101
             range,startRow,startCol,rows,columns);
         for(int r=1;r<=rows;r++)
         {
-            double height=Measure(()=> (object?)range.Rows[r].RowHeight,15);
+            double height=RequiredMeasure(
+                ()=> (object?)range.Rows[r].RowHeight,"row height");
             view.NativeRowHeights.Add(height);
             view.RowHeights.Add(Math.Clamp(height*96/72,18,220));
         }
         for(int c=1;c<=columns;c++)
         {
-            view.NativeColumnWidths.Add(Measure(
-                ()=> (object?)range.Columns[c].ColumnWidth,8.43));
+            view.NativeColumnWidths.Add(RequiredMeasure(
+                ()=> (object?)range.Columns[c].ColumnWidth,"column width"));
             view.ColumnWidths.Add(Math.Clamp(
                 Measure(()=> (object?)range.Columns[c].Width,75)*96/72,38,440));
         }
