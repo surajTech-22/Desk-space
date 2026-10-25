@@ -47,6 +47,14 @@ internal sealed class DeskSpaceExcelStyledCellV101
     public int VerticalAlignment {get;set;}
     public int FillBgr {get;set;}=0xFFFFFF;
     public int FontBgr {get;set;}=0x000000;
+    // Excel TableStyle and conditional formatting may affect the displayed
+    // appearance without changing Range.Interior/Font direct properties.
+    // Keep both layers; never overwrite the source's direct per-cell style.
+    public bool DisplayStyleAvailable {get;set;}
+    public int DisplayFillBgr {get;set;}=0xFFFFFF;
+    public int DisplayFontBgr {get;set;}=0;
+    public bool DisplayBold {get;set;}
+    public bool DisplayItalic {get;set;}
     public bool BorderTop {get;set;}
     public bool BorderBottom {get;set;}
     public bool BorderLeft {get;set;}
@@ -178,15 +186,23 @@ internal static class DeskSpaceExcelVisualCaptureV101
                 BorderRightWeight=BorderWeight(cell,10)
             };
             style.ConditionalAppearance=HasConditionalAppearance(cell);
-            if(style.ConditionalAppearance)
+            // Read DISPLAY formatting for every physical cell, not only
+            // conditional-format rules. TableStyleMedium2 etc. can apply
+            // colours/fonts without any direct Font/Interior assignment.
+            try
             {
-                // DisplayFormat is a visual snapshot. Preserve computed
-                // appearance without pretending to capture rule logic.
-                style.FillBgr=Number(()=> (object?)cell.DisplayFormat.Interior.Color,
+                dynamic shown=cell.DisplayFormat;
+                style.DisplayFillBgr=Number(()=> (object?)shown.Interior.Color,
                     style.FillBgr);
-                style.FontBgr=Number(()=> (object?)cell.DisplayFormat.Font.Color,
+                style.DisplayFontBgr=Number(()=> (object?)shown.Font.Color,
                     style.FontBgr);
+                style.DisplayBold=Flag(()=> (object?)shown.Font.Bold);
+                style.DisplayItalic=Flag(()=> (object?)shown.Font.Italic);
+                style.DisplayStyleAvailable=true;
             }
+            catch(COMException){style.DisplayStyleAvailable=false;}
+            catch(Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
+            {style.DisplayStyleAvailable=false;}
             bool formula=Flag(()=> (object?)cell.HasFormula);
             if(formula)
             {
@@ -375,7 +391,8 @@ internal static class DeskSpaceExcelSheetViewV101
                  !string.IsNullOrEmpty(item.FormulaA1));
             var border=new Border{
                 Background=new SolidColorBrush(
-                    ExcelColor(item?.FillBgr??0xFFFFFF)),
+                    ExcelColor(item?.DisplayStyleAvailable==true?
+                        item.DisplayFillBgr:item?.FillBgr??0xFFFFFF)),
                 BorderBrush=new SolidColorBrush(Color.FromRgb(210,218,230)),
                 BorderThickness=new Thickness(0.4),
                 ToolTip=(item?.Address??"")+
@@ -397,10 +414,13 @@ internal static class DeskSpaceExcelSheetViewV101
                     family:"Calibri"),
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 Foreground=new SolidColorBrush(
-                    ExcelColor(item?.FontBgr??0)),
-                FontWeight=item?.Bold==true?
+                    ExcelColor(item?.DisplayStyleAvailable==true?
+                        item.DisplayFontBgr:item?.FontBgr??0)),
+                FontWeight=(item?.DisplayStyleAvailable==true?
+                    item.DisplayBold:item?.Bold)==true?
                     FontWeights.Bold:FontWeights.Normal,
-                FontStyle=item?.Italic==true?
+                FontStyle=(item?.DisplayStyleAvailable==true?
+                    item.DisplayItalic:item?.Italic)==true?
                     FontStyles.Italic:FontStyles.Normal,
                 // A 60 pt Excel font must not draw across tiny row boundaries.
                 // Its true size is retained in the saved cell and inspector.
@@ -478,7 +498,10 @@ internal static class DeskSpaceExcelSheetViewV101
                             " "+feature.TableRole:"")+
                         (feature.Formula2.Length>0?" · Formula2 "+feature.Formula2:""))+
                     (item==null?"":
-                        " · Fill #"+(item.FillBgr&0xFFFFFF).ToString("X6")+
+                        (item.DisplayStyleAvailable?
+                            " · Display fill #"+(item.DisplayFillBgr&0xFFFFFF).ToString("X6")+
+                            " · Display font #"+(item.DisplayFontBgr&0xFFFFFF).ToString("X6"):"")+
+                        " · Direct fill #"+(item.FillBgr&0xFFFFFF).ToString("X6")+
                         " · Font color #"+(item.FontBgr&0xFFFFFF).ToString("X6")+
                         " · Edges "+(item.BorderLeft?"L":"")+(item.BorderTop?"T":"")+
                             (item.BorderRight?"R":"")+(item.BorderBottom?"B":"")+
