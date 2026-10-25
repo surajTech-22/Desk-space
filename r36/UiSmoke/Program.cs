@@ -565,8 +565,8 @@ internal static class Program
             "R103 appending selected Excel cells must preserve earlier styled cells and capture new ones");
         var placeholder=view.GetMethod("Placeholder",BindingFlags.Static|
             BindingFlags.NonPublic)!;
-        Assert((string)placeholder.Invoke(null,new object[]{original}) != "Aa" &&
-               (string)placeholder.Invoke(null,new object[]{more}) != "1,234.56789",
+        Assert((string)placeholder.Invoke(null,new object[]{original}) == "Aa" &&
+               (string)placeholder.Invoke(null,new object[]{more}) == "1,234.56789",
             "R103 real formatting must be shown using safe placeholder samples, not prior transaction data");
         var kind=Product.GetType("DeskSpace.DeskSpaceExcelInputTypeV101",true)!;
         var order=kind.GetMethod("DateOrderFromFormat",BindingFlags.Static|
