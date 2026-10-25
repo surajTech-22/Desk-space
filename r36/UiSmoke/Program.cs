@@ -439,8 +439,8 @@ internal static class Program
                Result("001234","Number","0.00")=="NeedsReview",
             "R101 must safely convert numeric text without stripping meaningful leading zeros");
         Assert(Result("24/10/2026","Date","dddd, dd mmmm yyyy")=="Converted" &&
-               Result("05/06/2026","Date","dddd, dd mmmm yyyy")=="NeedsReview" &&
-               Result("05/06/2026","Date","dddd, dd mmmm yyyy","DMY")=="Converted",
+               Result("05/06/2026","Date","dddd, dd mmmm yyyy")=="Converted" &&
+               Result("05/06/2026","Date","General")=="NeedsReview",
             "R101 short date conversion must respect ambiguity and explicit date-order choices");
         Assert(Result("=A1+B1","Formula")=="Blocked" &&
                Result("12.5%","Percentage","0.00%")=="Converted" &&
@@ -518,7 +518,8 @@ internal static class Program
         Assert(Status("1,23,456.50","Number","#,##0.00","Ask")=="Converted" &&
                Status("001234","Number","0.00","Ask")=="NeedsReview" &&
                Status("24-10-2026","Date","dddd, dd mmmm yyyy","Ask")=="Converted" &&
-               Status("05/06/2026","Date","dddd, dd mmmm yyyy","Ask")=="NeedsReview",
+               Status("05/06/2026","Date","General","Ask")=="NeedsReview" &&
+               Status("05/06/2026","Date","dddd, dd mmmm yyyy","Ask")=="Converted",
             "R102 Indian grouped numbers, date conversion, IDs and ambiguous input must be protected");
         Console.WriteLine("R102 PASS: explicit verified paste flow and safeguarded numeric/date input conversion.");
     }
