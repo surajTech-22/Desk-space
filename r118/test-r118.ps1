@@ -5,6 +5,7 @@ $s=[IO.File]::ReadAllText($hostFile)
 $wpf=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 foreach($needle in @(
  'ChooseReachableFlyoutV118(',
+ 'FreeSideBeforeDeckV118(',
  'WindowFlyoutReachableV118(',
  'bool preferAbove=tileY<=iconCard.ActualHeight/2;',
  'bool deckToRight=true;',
@@ -20,7 +21,8 @@ foreach($needle in @(
  'TestReachableFlyoutV118();',
  'R118 Excel top-row popup must open ABOVE',
  'R118 bottom-row multi-window app opens BELOW',
- 'R118 first-row flyout must touch top edge'
+ 'R118 first-row flyout must touch top edge',
+ 'R118 Deck directly beside right grid edge blocks outward popup'
 )){
  if(!$wpf.Contains($needle)){throw "R118 missing WPF regression: $needle"}
 }
