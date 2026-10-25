@@ -28,6 +28,7 @@ on:
       - fix/r117-blank-format-save-and-deck-grid
       - fix/r118-reachable-window-flyouts
       - fix/r119-excel-tuple-hasvalue
+      - fix/r120-header-value-signature-paste
 
 permissions:
   contents: write
@@ -1347,6 +1348,11 @@ jobs:
         run: |
           ./r119/apply-r119.ps1
           ./r119/test-r119.ps1
+      - name: R120 header-to-value signature matching and partial-value paste
+        shell: pwsh
+        run: |
+          ./r120/apply-r120.ps1
+          ./r120/test-r120.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
