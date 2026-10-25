@@ -27,6 +27,7 @@ on:
       - fix/r116-blank-excel-autofill-anchor
       - fix/r117-blank-format-save-and-deck-grid
       - fix/r118-reachable-window-flyouts
+      - fix/r119-excel-tuple-hasvalue
 
 permissions:
   contents: write
@@ -1341,6 +1342,11 @@ jobs:
         run: |
           ./r118/apply-r118.ps1
           ./r118/test-r118.ps1
+      - name: R119 stop ValueTuple HasValue exception in Excel paste
+        shell: pwsh
+        run: |
+          ./r119/apply-r119.ps1
+          ./r119/test-r119.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
