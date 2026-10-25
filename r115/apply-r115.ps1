@@ -95,6 +95,17 @@ Change $ed @'
 # Do not duplicate or move it: the sheet tab is already full-height.
 $smoke='r36/UiSmoke/Program.cs'
 Change $smoke @'
+        Assert(output is DockPanel &&
+               Walk(output).OfType<ScrollViewer>().Any() &&
+               Walk(output).OfType<ComboBox>().Any(),
+            "R104 preview must contain a scrollable Excel grid and zoom selector");
+'@ @'
+        Assert(output is DockPanel &&
+               Walk(output).OfType<ScrollViewer>().Any() &&
+               !Walk(output).OfType<ComboBox>().Any(),
+            "R115 preview must be scrollable at fixed 100% without a zoom selector");
+'@ 'replace obsolete R104 zoom UI assertion with fixed-scale R115 test'
+Change $smoke @'
             TestRunningAppsSideOnlyV113();
 '@ @'
             TestRunningAppsSideOnlyV113();
