@@ -17,7 +17,7 @@ function Swap([string]$file,[string]$before,[string]$after,[string]$label)
  $before=$before.Replace($nl,[string][char]10)
  $after=$after.Replace($nl,[string][char]10)
  $matches=([regex]::Matches($raw,[regex]::Escape($before))).Count
- if($matches -ne 1){throw "R104 $label: expected one integration anchor, got $matches"}
+ if($matches -ne 1){throw "R104 ${label}: expected one integration anchor, got $matches"}
  [IO.File]::WriteAllText($file,$raw.Replace($before,$after),[Text.UTF8Encoding]::new($false))
 }
 $xaml="$r/MainWindow.xaml"
