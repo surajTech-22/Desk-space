@@ -12,9 +12,15 @@ on:
         options:
           - tester
           - stable
+      live_excel_acceptance:
+        description: 'Use Office-installed Windows runner for R111 real Excel acceptance'
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - r42-excel-mapping-editor
+      - fix/r106-excel-structure-capture
 
 permissions:
   contents: write
@@ -31,8 +37,10 @@ jobs:
     # Draft PRs consume no Windows runner minutes. The ready-for-review
     # transition deliberately starts the release-candidate verification.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: windows-latest
-    timeout-minutes: 30
+    # Normal CI runs on GitHub Windows. Explicit R111 acceptance dispatch
+    # requires an Excel-installed Windows runner, never an unlicensed CI image.
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.live_excel_acceptance && github.ref == 'refs/heads/fix/r106-excel-structure-capture' && fromJSON('["self-hosted","Windows","X64","excel-installed"]') || 'windows-latest' }}
+    timeout-minutes: 35
     steps:
       - name: Checkout DeskSpace
         uses: actions/checkout@v4
@@ -1282,6 +1290,18 @@ jobs:
           ./r105/apply-r105.ps1
           ./r105/test-r105.ps1
 
+      - name: Apply R106 Excel table and input-type recognition (development candidate)
+        shell: pwsh
+        run: |
+          ./r106/apply-r106.ps1
+
+      - name: Apply R109 direct Excel format-only implementation (dev verification, no release)
+        shell: pwsh
+        run: |
+          ./r109/apply-r109.ps1
+          ./r109/test-r109.ps1
+          ./r110/test-r110.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1344,9 +1364,35 @@ jobs:
           choco install innosetup --yes --no-progress
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
 
+      - name: Verify R107 full-range empty, full-data and partial-data rejection
+        shell: pwsh
+        run: dotnet run --configuration Release --project r107/tests/GateTests.csproj
+
+      - name: Compile R111 real-Excel acceptance harness without executing Office COM
+        shell: pwsh
+        run: |
+          dotnet build r111/LiveExcelAcceptance/LiveExcelAcceptance.csproj --configuration Release
+
       - name: Compile, test and package self-contained app
         shell: pwsh
         run: ./BUILD_DESKSPACE_SETUP.ps1
+
+      - name: R111 live Office Excel integration acceptance on current compiled DeskSpace
+        if: github.event_name == 'workflow_dispatch' && inputs.live_excel_acceptance && github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ([Type]::GetTypeFromProgID('Excel.Application') -eq $null) {
+            throw 'BLOCKED: Real Microsoft Excel COM is not installed; no live acceptance result.'
+          }
+          $candidates=@(Get-ChildItem 'DeskSpace_Windows_R1/DeskSpace/bin' -Recurse -Filter DeskSpace.dll -File |
+            Where-Object {$_.FullName -match '[\\/]Release[\\/]'} |
+            Sort-Object -Property Length -Descending)
+          if($candidates.Count -lt 1){
+            throw 'Cannot find actual compiled DeskSpace.dll from this build.'
+          }
+          dotnet run --project 'r111/LiveExcelAcceptance/LiveExcelAcceptance.csproj' -c Release --no-build -- $candidates[0].FullName
+          if($LASTEXITCODE -ne 0){throw 'R111 REAL EXCEL ACCEPTANCE FAILED. Do not publish.'}
 
       - name: R41 WPF test Excel, scroll and weather scenes
         shell: pwsh
@@ -1392,6 +1438,78 @@ jobs:
           if($copied -ne $expected){throw 'Update.exe is not identical to verified setup'}
           [IO.File]::WriteAllText('release/Update.sha256.txt',
             ($copied+'  Update.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))
+
+      - name: Bundle R111 portable real-Excel acceptance (development branch only)
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root='r111/portable-acceptance'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          dotnet publish 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o "$root/DeskSpaceTestApp"
+          if($LASTEXITCODE -ne 0){throw 'R111 DeskSpace candidate DLL publish failed'}
+          dotnet publish 'r111/LiveExcelAcceptance/LiveExcelAcceptance.csproj' -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o "$root/R111Test"
+          if($LASTEXITCODE -ne 0){throw 'R111 executable acceptance publish failed'}
+          foreach($f in @("$root/DeskSpaceTestApp/DeskSpace.dll",
+                          "$root/R111Test/LiveExcelAcceptance.exe")){
+            if(!(Test-Path $f)){throw "R111 bundle missing $f"}
+          }
+          Copy-Item -LiteralPath 'r111/Run_R111_Excel_LiveAcceptance.ps1' -Destination "$root/Run_R111_Excel_LiveAcceptance.ps1" -Force
+          Copy-Item -LiteralPath 'r111/Run_R111_Excel_LiveAcceptance.cmd' -Destination "$root/Run_R111_Excel_LiveAcceptance.cmd" -Force
+          Copy-Item -LiteralPath 'r111/README_LIVE_TEST.md' -Destination "$root/README_LIVE_TEST.md" -Force
+          $files=@(Get-ChildItem $root -File -Recurse)
+          $manifest=$files | ForEach-Object {
+            $hash=Get-FileHash $_.FullName -Algorithm SHA256
+            "$($hash.Hash.ToLowerInvariant())  $($_.FullName.Substring((Resolve-Path $root).Path.Length+1))"
+          }
+          [IO.File]::WriteAllLines("$root/MANIFEST.sha256.txt",$manifest)
+          Write-Host "R111 portable files $($files.Count), all checksummed; no installer release."
+          # Upload ONE ZIP instead of thousands of tiny runtime files; the
+          # previous upload was hanging for several Windows runner attempts.
+          $archive='r111/DeskSpace_R111_Real_Excel_Portable_Test.zip'
+          if(Test-Path $archive){Remove-Item -LiteralPath $archive -Force}
+          Compress-Archive -LiteralPath $root -DestinationPath $archive -CompressionLevel Optimal
+          if(!(Test-Path $archive) -or (Get-Item $archive).Length -lt 5000000){
+            throw 'R111 portable ZIP missing/too small'
+          }
+          $hash=(Get-FileHash $archive -Algorithm SHA256).Hash
+          Set-Content -LiteralPath 'r111/DeskSpace_R111_Real_Excel_Portable_Test.sha256.txt' -Value ($hash+'  DeskSpace_R111_Real_Excel_Portable_Test.zip')
+          Write-Host ("R111 ZIP size "+(Get-Item $archive).Length+" SHA256 "+$hash)
+          
+      - name: Attempt real Excel COM acceptance if Office is installed on the runner
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $office=[Type]::GetTypeFromProgID('Excel.Application')
+          $status='r111/R111_LIVE_EXCEL_STATUS.txt'
+          if($null -eq $office){
+            'NOT_VERIFIED: Desktop Microsoft Excel is absent from this Windows runner.' | Set-Content -LiteralPath $status
+            'Live Excel acceptance: NOT VERIFIED (desktop Excel unavailable)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+            Write-Warning 'R111 NOT VERIFIED: desktop Microsoft Excel is absent. Portable test must run on an Office-installed PC.'
+          }else{
+            $root='r111/portable-acceptance'
+            & "$root/R111Test/LiveExcelAcceptance.exe" "$root/DeskSpaceTestApp/DeskSpace.dll"
+            if($LASTEXITCODE -ne 0){
+              'FAILED: Real Microsoft Excel COM acceptance test failed.' | Set-Content -LiteralPath $status
+              throw "Real Microsoft Excel acceptance failed ($LASTEXITCODE)."
+            }
+            'PASS: Actual Microsoft Excel COM acceptance completed.' | Set-Content -LiteralPath $status
+            'Live Excel acceptance: PASS' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+
+      - name: Upload R111 portable candidate for live Excel acceptance (NOT an update)
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R111-Real-Excel-Portable-Test
+          path: |
+            r111/DeskSpace_R111_Real_Excel_Portable_Test.zip
+            r111/DeskSpace_R111_Real_Excel_Portable_Test.sha256.txt
+            r111/R111_LIVE_EXCEL_STATUS.txt
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
 
       # Do not duplicate hundreds of MB of installer binaries in a
       # short-lived Actions artifact. The next verified step publishes
