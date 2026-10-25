@@ -21,6 +21,7 @@ on:
     branches:
       - r42-excel-mapping-editor
       - fix/r106-excel-structure-capture
+      - fix/r113-running-windows-side-only
 
 permissions:
   contents: write
