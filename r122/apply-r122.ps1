@@ -20,19 +20,19 @@ Swap $app @'
 '@ 'pinned app opens last recently-used matching document, otherwise application'
 $shelf="$r/DeskSpaceDropShelfV15.cs"
 Swap $shelf @'
-        runningAppsTimer.Start();
-        RefreshRunningApps();
+    private async void RefreshRunningApps()
+    {
 '@ @'
-        runningAppsTimer.Start();
-        RefreshRunningApps();
-        if(!excelSuggestTimerConnectedV122)
+    private async void RefreshRunningApps()
+    {
+        if(!disposed && !excelSuggestTimerConnectedV122)
         {
             excelSuggestTimerConnectedV122=true;
             excelSuggestTimerV122.Tick+=(_,_)=>RefreshExcelSuggestionsV122();
+            excelSuggestTimerV122.Start();
+            RefreshExcelSuggestionsV122();
         }
-        excelSuggestTimerV122.Start();
-        RefreshExcelSuggestionsV122();
-'@ 'start foreground-only suggestions'
+'@ 'start suggestions alongside existing running-app refresh'
 Swap $shelf @'
     // Scan in the background. Do not block circle hover, dragging, or file drops.
     private async void RefreshRunningApps()
