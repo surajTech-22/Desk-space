@@ -3,6 +3,7 @@ Set-StrictMode -Version Latest
 $r='DeskSpace_Windows_R1/DeskSpace'
 Copy-Item -LiteralPath 'r105/DeskSpaceExcelSheetViewV105.cs' -Destination "$r/DeskSpaceExcelSheetViewV101.cs" -Force
 Copy-Item -LiteralPath 'r105/DeskSpaceStableHoverV105.cs' -Destination "$r/DeskSpaceStableHoverV93.cs" -Force
+Copy-Item -LiteralPath 'r105/DeskSpaceDualChannelUpdaterV105.cs' -Destination "$r/DeskSpacePublicUpdaterV44.cs" -Force
 function Swap([string]$path,[string]$before,[string]$after,[string]$tag)
 {
   $nl=[string][char]13+[string][char]10
