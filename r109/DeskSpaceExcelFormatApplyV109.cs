@@ -435,8 +435,25 @@ internal static class DeskSpaceExcelFormatApplyV109
                         Text(live.Range.Cells[s.Row+1,s.Column+1].Address));
                 dynamic cell=live.Range.Cells[s.Row+1,s.Column+1];
                 var signature=signatures[i];
-                if(signature.Formula!=(IsFormula(cell)?Text(cell.FormulaR1C1):"") ||
-                   signature.Value!=Text((object?)cell.Value2))
+                if(originallyEmpty)
+                {
+                    string formula=s.StoredType=="Formula"?s.FormulaR1C1:"";
+                    string header="";
+                    foreach(var t in live.Visual.FeaturesV106!.Tables)
+                        if(t.HasHeaders && s.Row==t.Row &&
+                           s.Column>=t.Column &&
+                           s.Column<t.Column+t.ColumnCount)
+                            header=t.ColumnNames[s.Column-t.Column];
+                    if(formula!=(IsFormula(cell)?Text(cell.FormulaR1C1):""))
+                        throw new InvalidDataException(
+                            "Recorded Excel formula could not be reconstructed.");
+                    if(formula.Length==0 &&
+                       header!=Text((object?)cell.Value2))
+                        throw new InvalidDataException(
+                            "Formatting changed an unexpected blank cell or table header.");
+                }
+                else if(signature.Formula!=(IsFormula(cell)?Text(cell.FormulaR1C1):"") ||
+                        signature.Value!=Text((object?)cell.Value2))
                     throw new InvalidDataException(
                         "An existing Excel value/formula changed unexpectedly.");
             }
@@ -468,8 +485,19 @@ internal static class DeskSpaceExcelFormatApplyV109
                     x.ColumnStripes==expectedTable.ColumnStripes &&
                     x.FirstColumnEmphasis==expectedTable.FirstColumnEmphasis &&
                     x.LastColumnEmphasis==expectedTable.LastColumnEmphasis &&
-                    x.ShowAutoFilter==expectedTable.ShowAutoFilter))
+                    x.ShowAutoFilter==expectedTable.ShowAutoFilter &&
+                    x.ColumnNames.SequenceEqual(expectedTable.ColumnNames)))
                     throw new InvalidDataException("A real Excel Table structure/style was not reproduced.");
+            }
+            foreach(var anchor in live.Visual.Cells.Where(c=>
+                c.MergeRows>1 || c.MergeColumns>1))
+            {
+                var observed=actual.FirstOrDefault(c=>c.Row==anchor.Row &&
+                    c.Column==anchor.Column);
+                if(observed==null || observed.MergeRows!=anchor.MergeRows ||
+                   observed.MergeColumns!=anchor.MergeColumns)
+                    throw new InvalidDataException(
+                        "A source merged-cell area could not be reproduced.");
             }
             for(int row=0;row<live.Visual.Rows;row++)
                 if(Math.Abs(live.Visual.NativeRowHeights[row]-after.NativeRowHeights[row])>0.2)
