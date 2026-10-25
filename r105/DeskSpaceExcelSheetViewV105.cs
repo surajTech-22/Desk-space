@@ -277,13 +277,17 @@ internal static class DeskSpaceExcelSheetViewV101
         }
         int rows=Math.Clamp(visual.Rows,1,1800);
         int cols=Math.Clamp(visual.Columns,1,1800);
+        int recorded=visual.Cells.Where(c=>c.Row>=0 && c.Row<rows &&
+            c.Column>=0 && c.Column<cols).Select(c=>(c.Row,c.Column)).Distinct().Count();
+        bool incomplete=entry.SheetVisualV101!=null && recorded<rows*cols;
         var layout=new StackPanel{Background=Brushes.White};
         // All formatting is indexed by each physical cell address;
         // we never use a range-wide style for this view.
         // Zoom the whole physical sheet uniformly; never stretch columns independently.
         var head=new TextBlock{
             Text=entry.SourceSheet+"  ·  "+entry.SourceAddress+
-                "  ·  captured sheet structure (data hidden)",
+                "  ·  "+recorded+"/"+(rows*cols)+" individually captured cell styles"+
+                (incomplete?" · INCOMPLETE: recapture the source range":""),
             Foreground=new SolidColorBrush(Color.FromRgb(43,64,94)),
             FontWeight=FontWeights.SemiBold,FontSize=12,
             Margin=new Thickness(10,9,4,6)
@@ -291,8 +295,10 @@ internal static class DeskSpaceExcelSheetViewV101
         layout.Children.Add(head);
         var detail=new TextBlock{
             Text=entry.SheetVisualV101==null?
-                "Older mapping: cell styles were not captured. Capture again to inspect them.":
-                "Select a cell to inspect its exact formatting and formula.",
+                "Older mapping: no cell-style capture; select the original Excel range and capture again.":
+                incomplete?
+                "Some older cells were not captured individually. Recapture the original selected range before trusting the preview.":
+                "Select any cell to inspect its OWN number format, font, fill, borders and formula.",
             Foreground=new SolidColorBrush(Color.FromRgb(72,84,112)),
             FontSize=11,TextWrapping=TextWrapping.Wrap,
             Margin=new Thickness(10,4,6,8)
@@ -473,7 +479,7 @@ internal static class DeskSpaceExcelSheetViewV101
                 Math.Clamp(visual.ColumnWidths[c],38,440):105);
             double factor=selected switch {
                 "100%"=>1.0,"150%"=>1.5,"200%"=>2.0,"300%"=>3.0,
-                _=>Math.Clamp((scroll.ActualWidth-36)/Math.Max(width,1),1.0,2.6)
+                _=>Math.Clamp((scroll.ActualWidth-36)/Math.Max(width,1),1.0,4.5)
             };
             scale.ScaleX=factor;scale.ScaleY=factor;
         }
