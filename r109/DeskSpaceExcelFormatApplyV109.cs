@@ -1,0 +1,328 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+
+namespace DeskSpace;
+
+// Direct Excel COM formatting, NOT a recorded macro or keystroke sequence.
+// Only runs after verifying the entire destination as Empty or Fully Matching.
+// Unsupported workbook structures block before the first change.
+internal static class DeskSpaceExcelFormatApplyV109
+{
+    [DllImport("ole32.dll",CharSet=CharSet.Unicode,PreserveSig=false)]
+    private static extern void CLSIDFromProgID(string progId,out Guid clsid);
+    [DllImport("oleaut32.dll",PreserveSig=false)]
+    private static extern void GetActiveObject(ref Guid clsid,IntPtr reserved,
+        [MarshalAs(UnmanagedType.IUnknown)]out object application);
+
+    internal sealed record Review(string Workbook,string Sheet,string Destination,
+        DeskSpaceExcelFullRangeGateV107.Decision Gate,IReadOnlyList<string> Blockers)
+    {
+        internal bool Eligible=>Gate.MayApply && Blockers.Count==0;
+        public override string ToString()=>Gate.Explanation+
+            (Blockers.Count>0?Environment.NewLine+string.Join(Environment.NewLine,Blockers):"");
+    }
+    private static dynamic Excel()
+    {
+        CLSIDFromProgID("Excel.Application",out var id);
+        GetActiveObject(ref id,IntPtr.Zero,out object app);
+        dynamic excel=app;
+        if(excel.ActiveWorkbook==null)
+            throw new InvalidOperationException("Open a workbook in Microsoft Excel.");
+        return excel;
+    }
+    private static string Text(object? obj)=>
+        Convert.ToString(obj,CultureInfo.InvariantCulture)??"";
+    private static bool IsFormula(dynamic cell)=>Convert.ToBoolean((object?)cell.HasFormula);
+    private static string Norm(string text)=>
+        text.Replace("$","",StringComparison.Ordinal).ToUpperInvariant();
+    private static int ToInt(object? value)=>
+        Convert.ToInt32(value,CultureInfo.InvariantCulture);
+
+    private sealed class Checked
+    {
+        internal required dynamic Excel;
+        internal required dynamic Sheet;
+        internal required dynamic Range;
+        internal required DeskSpaceExcelSheetVisualV101 Visual;
+        internal required Review Review;
+        internal required int FirstRow;
+        internal required int FirstColumn;
+    }
+    private static Checked Inspect(DeskSpaceExcelTemplateV16 template)
+    {
+        var visual=template.SheetVisualV101 ??
+            throw new InvalidOperationException("Recapture source Excel format; old snapshot is incomplete.");
+        int rows=visual.Rows,cols=visual.Columns;
+        if(rows<1||cols<1||rows*(long)cols>1800 ||
+           visual.Cells.Count!=rows*cols ||
+           visual.Cells.Select(c=>(c.Row,c.Column)).Distinct().Count()!=rows*cols)
+            throw new InvalidDataException("Incomplete source formatting; nothing will be changed.");
+        if(visual.FeaturesV106 is not { } features ||
+           features.Cells.Count!=rows*cols)
+            throw new InvalidDataException(
+                "Source is missing table/underline/input metadata. Recapture using new version.");
+
+        dynamic app=Excel(), sheet=app.ActiveSheet, selected=app.Selection;
+        if(ToInt(selected.Areas.Count)!=1)
+            throw new InvalidOperationException("Select one contiguous destination range.");
+        int sr=ToInt(selected.Row),sc=ToInt(selected.Column);
+        int sh=ToInt(selected.Rows.Count),sw=ToInt(selected.Columns.Count);
+        if((sh!=1||sw!=1)&&(sh!=rows||sw!=cols))
+            throw new InvalidOperationException(
+                "Select only the first destination cell or the exact "+rows+"×"+cols+" range.");
+        if(sr+rows-1>1048576||sc+cols-1>16384)
+            throw new InvalidOperationException("Destination extends outside the worksheet.");
+        dynamic target=sheet.Range[sheet.Cells[sr,sc],sheet.Cells[sr+rows-1,sc+cols-1]];
+        var order=visual.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
+        var from=new List<DeskSpaceExcelFullRangeGateV107.Cell>();
+        var to=new List<DeskSpaceExcelFullRangeGateV107.Cell>();
+        var problems=new List<string>();
+        bool sourceFormula=false;
+        for(int i=0;i<order.Length;i++)
+        {
+            int r=i/cols,c=i%cols;
+            var source=order[i];
+            if(source.Row!=r || source.Column!=c)
+                throw new InvalidDataException("Source positions are incomplete or out of order.");
+            from.Add(new(source.StoredType!="Blank",source.StoredType));
+            dynamic cell=target.Cells[r+1,c+1];
+            bool formula=IsFormula(cell);
+            var raw=(object?)cell.Value2;
+            to.Add(new(formula||raw!=null,
+                DeskSpaceExcelInputTypeV101.Stored(raw,formula)));
+            if(source.FormulaR1C1.Length>0)sourceFormula=true;
+        }
+        var decision=DeskSpaceExcelFullRangeGateV107.Evaluate(from,to);
+        if(!decision.MayApply)problems.Add(decision.Explanation);
+        if((bool)sheet.ProtectContents)problems.Add("Worksheet is protected.");
+        if((bool)app.ActiveWorkbook.ReadOnly)problems.Add("Workbook is read-only.");
+        if(sourceFormula && decision.State==DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty)
+            problems.Add("Source includes formulas; this format-only action does not insert formulas into blank target cells.");
+        if(features.Cells.Any(c=>c.ValidationType>=0 || c.ConditionalRuleCount>0))
+            problems.Add("Source uses data validation or conditional rules not covered by this format-only transaction.");
+        if(features.Cells.Any(c=>c.IsArrayFormula))
+            problems.Add("Source uses array/spill formulas; format-only apply is not safe.");
+        if(features.Cells.Any(c=>c.Superscript || c.Subscript))
+            problems.Add("Superscript/subscript characters require rich-text verification.");
+        if(features.Tables.Any(x=>!x.FullySelected))
+            problems.Add("Source table is only partly captured.");
+        if(features.Tables.Any(x=>x.TableStyle.Length==0))
+            problems.Add("Excel Table style was not captured.");
+        // A formatted table must be an ACTUAL ListObject in the destination.
+        // Never fake a table by colouring a rectangle. Creating a new table
+        // can rewrite header values; block rather than silently do that.
+        int targetTableCount=0;
+        try
+        {
+            dynamic tableObjects=sheet.ListObjects;
+            for(int i=1;i<=ToInt(tableObjects.Count);i++)
+            {
+                dynamic table=tableObjects[i],area=table.Range;
+                int tr=ToInt(area.Row)-sr,tc=ToInt(area.Column)-sc;
+                int th=ToInt(area.Rows.Count),tw=ToInt(area.Columns.Count);
+                bool overlap=tr<rows&&tc<cols&&tr+th>0&&tc+tw>0;
+                if(!overlap)continue;
+                targetTableCount++;
+                if(!features.Tables.Any(src=>src.Row==tr &&
+                    src.Column==tc && src.RowCount==th && src.ColumnCount==tw))
+                    problems.Add("An unrelated or differently sized Excel Table overlaps the destination.");
+            }
+        }
+        catch(COMException){problems.Add("Cannot inspect destination Excel Table objects.");}
+        if(targetTableCount!=features.Tables.Count)
+            problems.Add("Destination must already contain the same actual Excel Table structure. "+
+                "Automatic table creation would alter headers and is not yet verified.");
+        // Merged areas must be pre-existing and match exactly. Changing
+        // merge topology can erase data in non-anchor cells.
+        foreach(var source in order.Where(x=>x.MergeRows>1||x.MergeColumns>1))
+        {
+            dynamic cell=target.Cells[source.Row+1,source.Column+1];
+            if(!(bool)cell.MergeCells)
+            {
+                problems.Add("Missing pre-existing merged destination at "+
+                    Text(cell.Address));continue;
+            }
+            dynamic merge=cell.MergeArea;
+            if(ToInt(merge.Row)!=sr+source.Row ||
+               ToInt(merge.Column)!=sc+source.Column ||
+               ToInt(merge.Rows.Count)!=source.MergeRows ||
+               ToInt(merge.Columns.Count)!=source.MergeColumns)
+                problems.Add("Merged-cell geometry mismatch at "+Text(cell.Address));
+        }
+        // Prevent overwriting the captured source workbook or accidental
+        // changes when the user simply selects the same region again.
+        if(string.Equals(Text(app.ActiveWorkbook.Name),template.SourceWorkbook,
+                StringComparison.OrdinalIgnoreCase) &&
+           string.Equals(Text(sheet.Name),template.SourceSheet,
+                StringComparison.OrdinalIgnoreCase) &&
+           Norm(Text(target.Address))==Norm(template.SourceAddress))
+            problems.Add("This is the original captured source range, not a destination.");
+        return new Checked{
+            Excel=app,Sheet=sheet,Range=target,Visual=visual,
+            FirstRow=sr,FirstColumn=sc,
+            Review=new(Text(app.ActiveWorkbook.FullName),Text(sheet.Name),
+                Text(target.Address),decision,problems)
+        };
+    }
+    internal static Review Preview(DeskSpaceExcelTemplateV16 template)=>
+        Inspect(template).Review;
+
+    private static void WriteCell(dynamic cell,DeskSpaceExcelStyledCellV101 s,
+        DeskSpaceExcelCellFeatureV106? feature)
+    {
+        cell.NumberFormat=s.NumberFormat;
+        cell.Font.Name=s.FontName;
+        cell.Font.Size=s.FontSize;
+        cell.Font.Bold=s.Bold;
+        cell.Font.Italic=s.Italic;
+        cell.Font.Strikethrough=s.StrikeThrough;
+        cell.Font.Underline=feature?.UnderlineStyle??(s.Underline?2:-4142);
+        cell.Font.Color=s.FontBgr;
+        cell.Interior.Color=s.FillBgr;
+        cell.HorizontalAlignment=s.HorizontalAlignment;
+        cell.VerticalAlignment=s.VerticalAlignment;
+        cell.WrapText=s.WrapText;
+        cell.ShrinkToFit=s.ShrinkToFit;
+        cell.IndentLevel=s.IndentLevel;
+        // Neither formulas nor values are changed by format-only application.
+        for(int i=0;i<4;i++)
+        {
+            int edge=new[]{7,8,9,10}[i];
+            bool present=new[]{s.BorderLeft,s.BorderTop,s.BorderBottom,s.BorderRight}[i];
+            dynamic border=cell.Borders[edge];
+            border.LineStyle=present?1:-4142;
+            if(!present)continue;
+            border.Color=new[]{s.BorderLeftColor,s.BorderTopColor,
+                s.BorderBottomColor,s.BorderRightColor}[i];
+            int weight=new[]{s.BorderLeftWeight,s.BorderTopWeight,
+                s.BorderBottomWeight,s.BorderRightWeight}[i];
+            if(weight>0)border.Weight=weight;
+        }
+    }
+    private static void WriteSnapshot(dynamic target,DeskSpaceExcelSheetVisualV101 snap,
+        bool writeTables)
+    {
+        var feature=snap.FeaturesV106?.Cells.ToDictionary(c=>(c.Row,c.Column));
+        foreach(var s in snap.Cells.OrderBy(c=>c.Row).ThenBy(c=>c.Column))
+        {
+            feature?.TryGetValue((s.Row,s.Column),out var f);
+            // Avoid relying on an out variable from null-conditional dynamic access.
+            DeskSpaceExcelCellFeatureV106? item=
+                feature!=null && feature.TryGetValue((s.Row,s.Column),out var found)?
+                    found:null;
+            WriteCell(target.Cells[s.Row+1,s.Column+1],s,item);
+        }
+        for(int i=0;i<snap.RowHeights.Count;i++)
+            target.Rows[i+1].RowHeight=snap.RowHeights[i]*72/96;
+        for(int i=0;i<snap.ColumnWidths.Count;i++)
+            target.Columns[i+1].ColumnWidth=snap.ColumnWidths[i]/8;
+        if(writeTables && snap.FeaturesV106!=null)
+        {
+            dynamic sheet=target.Worksheet;
+            foreach(var metadata in snap.FeaturesV106.Tables)
+            {
+                dynamic tRange=sheet.Range[
+                    target.Cells[metadata.Row+1,metadata.Column+1],
+                    target.Cells[metadata.Row+metadata.RowCount,
+                        metadata.Column+metadata.ColumnCount]];
+                bool found=false;
+                dynamic objects=sheet.ListObjects;
+                for(int i=1;i<=ToInt(objects.Count);i++)
+                {
+                    dynamic table=objects[i];
+                    if(Norm(Text(table.Range.Address))!=Norm(Text(tRange.Address)))
+                        continue;
+                    table.TableStyle=metadata.TableStyle;
+                    table.ShowTableStyleRowStripes=metadata.RowStripes;
+                    table.ShowTableStyleColumnStripes=metadata.ColumnStripes;
+                    if((bool)table.ShowTotals!=metadata.HasTotals ||
+                       (bool)table.ShowHeaders!=metadata.HasHeaders)
+                        throw new InvalidOperationException(
+                            "Destination table header/totals configuration differs.");
+                    found=true;break;
+                }
+                if(!found)throw new InvalidOperationException("Excel table disappeared before apply.");
+            }
+        }
+    }
+    // Explicit, supervised call; users must have previewed and approved.
+    internal static string Apply(DeskSpaceExcelTemplateV16 template,Review approved)
+    {
+        var live=Inspect(template);
+        if(!live.Review.Eligible)
+            throw new InvalidOperationException("Cannot apply format: "+live.Review);
+        if(live.Review.Workbook!=approved.Workbook ||
+           live.Review.Sheet!=approved.Sheet ||
+           live.Review.Destination!=approved.Destination ||
+           live.Review.Gate.State!=approved.Gate.State)
+            throw new InvalidOperationException("Target changed after preview. Preview again.");
+        dynamic book=live.Excel.ActiveWorkbook;
+        var backupFolder=Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData),
+            "DeskSpace","ExcelBackups");
+        Directory.CreateDirectory(backupFolder);
+        var extension=Path.GetExtension(Text(book.Name));
+        if(extension.Length==0)extension=".xlsx";
+        var backup=Path.Combine(backupFolder,
+            "Before_Excel_Formatting_"+DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")+
+            extension);
+        book.SaveCopyAs(backup);
+        if(!File.Exists(backup) || new FileInfo(backup).Length==0)
+            throw new IOException("Could not create safety copy; nothing was changed.");
+        var before=DeskSpaceExcelVisualCaptureV101.Capture(live.Range);
+        // Original stored input/formulas are never copied or changed.
+        var signatures=new List<(string Address,string Formula,string Value)>();
+        for(int r=1;r<=live.Visual.Rows;r++)
+        for(int c=1;c<=live.Visual.Columns;c++)
+        {
+            dynamic cell=live.Range.Cells[r,c];
+            signatures.Add((Text(cell.Address),
+                IsFormula(cell)?Text(cell.FormulaR1C1):"",
+                Text((object?)cell.Value2)));
+        }
+        try
+        {
+            WriteSnapshot(live.Range,live.Visual,true);
+            var after=DeskSpaceExcelVisualCaptureV101.Capture(live.Range);
+            var source=live.Visual.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
+            var actual=after.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
+            for(int i=0;i<source.Length;i++)
+            {
+                var a=actual[i],s=source[i];
+                if(s.NumberFormat!=a.NumberFormat ||
+                   s.FontName!=a.FontName ||
+                   Math.Abs(s.FontSize-a.FontSize)>0.5 ||
+                   s.Bold!=a.Bold || s.Italic!=a.Italic ||
+                   s.Underline!=a.Underline || s.StrikeThrough!=a.StrikeThrough ||
+                   s.FillBgr!=a.FillBgr || s.FontBgr!=a.FontBgr ||
+                   s.BorderLeft!=a.BorderLeft||s.BorderRight!=a.BorderRight ||
+                   s.BorderTop!=a.BorderTop||s.BorderBottom!=a.BorderBottom)
+                    throw new InvalidDataException(
+                        "Formatting readback differs at "+
+                        Text(live.Range.Cells[s.Row+1,s.Column+1].Address));
+                dynamic cell=live.Range.Cells[s.Row+1,s.Column+1];
+                var signature=signatures[i];
+                if(signature.Formula!=(IsFormula(cell)?Text(cell.FormulaR1C1):"") ||
+                   signature.Value!=Text((object?)cell.Value2))
+                    throw new InvalidDataException(
+                        "An existing Excel value/formula changed unexpectedly.");
+            }
+            // Do not save the open workbook behind the user's back.
+            return "Verified "+source.Length+" cells. Existing values preserved. "+
+                "Safety copy: "+backup;
+        }
+        catch
+        {
+            // Best-effort in-memory rollback, backed by an independent
+            // SaveCopyAs file even if COM is in an unusable state.
+            try{WriteSnapshot(live.Range,before,true);}catch(COMException){}
+            throw new InvalidOperationException(
+                "Excel formatting could not be fully verified. A pre-change "+
+                "workbook copy is at "+backup+". Review before saving.");
+        }
+    }
+}
