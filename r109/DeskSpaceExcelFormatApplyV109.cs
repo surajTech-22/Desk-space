@@ -106,8 +106,12 @@ internal static class DeskSpaceExcelFormatApplyV109
         if(!decision.MayApply)problems.Add(decision.Explanation);
         if((bool)sheet.ProtectContents)problems.Add("Worksheet is protected.");
         if((bool)app.ActiveWorkbook.ReadOnly)problems.Add("Workbook is read-only.");
-        if(sourceFormula && decision.State==DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty)
-            problems.Add("Source includes formulas; this format-only action does not insert formulas into blank target cells.");
+        // A wholly empty destination may receive *recorded formulas* as part
+        // of its reusable Excel structure. Existing populated data/formulas
+        // are NEVER overwritten. This is declarative cell state, not macros.
+        if(sourceFormula && decision.State==DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty &&
+           order.Any(x=>x.StoredType=="Formula" && x.FormulaR1C1.Length==0))
+            problems.Add("One or more source formulas lack their exact R1C1 definition.");
         if(features.Cells.Any(c=>c.ValidationType>=0 || c.ConditionalRuleCount>0))
             problems.Add("Source uses data validation or conditional rules not covered by this format-only transaction.");
         if(features.Cells.Any(c=>c.IsArrayFormula))
@@ -122,6 +126,19 @@ internal static class DeskSpaceExcelFormatApplyV109
             problems.Add("Source table recognition could not be verified.");
         if(features.Tables.Any(x=>x.TableStyle.Length==0))
             problems.Add("Excel Table style was not captured.");
+        foreach(var t in features.Tables)
+        {
+            if(!t.HasHeaders || t.ColumnNames.Count!=t.ColumnCount ||
+               t.ColumnNames.Any(x=>string.IsNullOrWhiteSpace(x)) ||
+               t.ColumnNames.Distinct(StringComparer.OrdinalIgnoreCase).Count()!=t.ColumnCount)
+                problems.Add("A source Excel Table has missing/duplicate header metadata.");
+            if(decision.State==DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty &&
+               t.HasTotals)
+                problems.Add("Creating a blank Excel Table with an active Total Row is not yet supported.");
+            if(!t.FullySelected || t.Row<0 || t.Column<0 ||
+               t.Row+t.RowCount>rows || t.Column+t.ColumnCount>cols)
+                problems.Add("Source Excel Table coordinates do not fit the captured range.");
+        }
         // A formatted table must be an ACTUAL ListObject in the destination.
         // Never fake a table by colouring a rectangle. Creating a new table
         // can rewrite header values; block rather than silently do that.
@@ -143,9 +160,28 @@ internal static class DeskSpaceExcelFormatApplyV109
             }
         }
         catch(COMException){problems.Add("Cannot inspect destination Excel Table objects.");}
-        if(targetTableCount!=features.Tables.Count)
-            problems.Add("Destination must already contain the same actual Excel Table structure. "+
-                "Automatic table creation would alter headers and is not yet verified.");
+        bool allEmpty=decision.State==DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty;
+        if(targetTableCount!=features.Tables.Count &&
+           !(allEmpty && targetTableCount==0))
+            problems.Add("Destination contains an incomplete or overlapping Excel Table structure.");
+        if(allEmpty && targetTableCount==0)
+        {
+            // Names are workbook-global. Reject collisions before any write.
+            try
+            {
+                dynamic workbookSheets=app.ActiveWorkbook.Worksheets;
+                for(int sheetNo=1;sheetNo<=ToInt(workbookSheets.Count);sheetNo++)
+                {
+                    dynamic other=workbookSheets[sheetNo];
+                    dynamic tables=other.ListObjects;
+                    for(int i=1;i<=ToInt(tables.Count);i++)
+                        if(features.Tables.Any(t=>string.Equals(t.Name,
+                            Text(tables[i].Name),StringComparison.OrdinalIgnoreCase)))
+                            problems.Add("Excel Table name already exists in workbook.");
+                }
+            }
+            catch(COMException){problems.Add("Could not verify workbook-wide Excel Table name uniqueness.");}
+        }
         // Merged areas must be pre-existing and match exactly. Changing
         // merge topology can erase data in non-anchor cells.
         foreach(var source in order.Where(x=>x.MergeRows>1||x.MergeColumns>1))
@@ -153,8 +189,10 @@ internal static class DeskSpaceExcelFormatApplyV109
             dynamic cell=target.Cells[source.Row+1,source.Column+1];
             if(!(bool)cell.MergeCells)
             {
-                problems.Add("Missing pre-existing merged destination at "+
-                    Text(cell.Address));continue;
+                if(!allEmpty)
+                    problems.Add("Missing pre-existing merged destination at "+
+                        Text(cell.Address));
+                continue;
             }
             dynamic merge=cell.MergeArea;
             if(ToInt(merge.Row)!=sr+source.Row ||
