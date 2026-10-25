@@ -59,6 +59,12 @@ internal sealed class DeskSpaceExcelStyledCellV101
     public int BorderBottomWeight {get;set;}
     public bool ConditionalAppearance {get;set;}
     public string Address {get;set;}="";
+    internal DeskSpaceExcelStyledCellV101 OffsetCopy(int row,int column)
+    {
+        var copy=(DeskSpaceExcelStyledCellV101)MemberwiseClone();
+        copy.Row+=row;copy.Column+=column;
+        return copy;
+    }
 }
 
 // Excel COM lives on the dedicated STA capture worker. Never run on WPF UI.
@@ -125,7 +131,7 @@ internal static class DeskSpaceExcelVisualCaptureV101
         var view=new DeskSpaceExcelSheetVisualV101{Rows=rows,Columns=columns};
         for(int r=1;r<=rows;r++)
             view.RowHeights.Add(Math.Clamp(
-                Measure(()=> (object?)range.Rows[r].RowHeight,15)*1.333,18,95));
+                Measure(()=> (object?)range.Rows[r].RowHeight,15)*96/72,18,220));
         for(int c=1;c<=columns;c++)
             view.ColumnWidths.Add(Math.Clamp(
                 Measure(()=> (object?)range.Columns[c].Width,75)*96/72,38,440));
@@ -140,7 +146,7 @@ internal static class DeskSpaceExcelVisualCaptureV101
                 Address=Format(()=> (object?)cell.Address),
                 NumberFormat=Format(()=> (object?)cell.NumberFormat,"General"),
                 FontName=Format(()=> (object?)cell.Font.Name,"Calibri"),
-                FontSize=Math.Clamp(Measure(()=> (object?)cell.Font.Size,11),7,24),
+                FontSize=Math.Clamp(Measure(()=> (object?)cell.Font.Size,11),7,60),
                 Bold=Flag(()=> (object?)cell.Font.Bold),
                 Italic=Flag(()=> (object?)cell.Font.Italic),
                 Underline=Number(()=> (object?)cell.Font.Underline,-4142)!=-4142,
@@ -287,7 +293,7 @@ internal static class DeskSpaceExcelSheetViewV101
         for(int r=0;r<rows;r++)
             grid.RowDefinitions.Add(new RowDefinition{
                 Height=new GridLength(r<visual.RowHeights.Count?
-                    Math.Clamp(visual.RowHeights[r],18,95):26)});
+                    Math.Clamp(visual.RowHeights[r],18,220):26)});
         for(int c=0;c<cols;c++)
         {
             var label=Header(ColumnLabel(entry.SourceColumn+c));
@@ -418,6 +424,45 @@ internal static class DeskSpaceExcelSheetViewV101
             Content=layout
         };
     }
+    internal static DeskSpaceExcelSheetVisualV101? MergeCapturedVisuals(
+        DeskSpaceExcelSheetVisualV101? prior,int priorRowShift,int priorColumnShift,
+        DeskSpaceExcelSheetVisualV101? addition,int newRowShift,int newColumnShift,
+        int rows,int columns)
+    {
+        if(prior==null)return addition;
+        if(addition==null)return prior;
+        if(rows<1 || columns<1 || rows*(long)columns>1800)return prior;
+        var merged=new DeskSpaceExcelSheetVisualV101{
+            Rows=rows,Columns=columns,
+            RowHeights=Enumerable.Repeat(26d,rows).ToList(),
+            ColumnWidths=Enumerable.Repeat(105d,columns).ToList()
+        };
+        void Layer(DeskSpaceExcelSheetVisualV101 layer,int rowBase,int colBase)
+        {
+            for(int i=0;i<layer.RowHeights.Count;i++)
+                if(i+rowBase>=0&&i+rowBase<rows)
+                    merged.RowHeights[i+rowBase]=layer.RowHeights[i];
+            for(int i=0;i<layer.ColumnWidths.Count;i++)
+                if(i+colBase>=0&&i+colBase<columns)
+                    merged.ColumnWidths[i+colBase]=layer.ColumnWidths[i];
+        }
+        Layer(prior,priorRowShift,priorColumnShift);
+        Layer(addition,newRowShift,newColumnShift);
+        var cells=new Dictionary<(int,int),DeskSpaceExcelStyledCellV101>();
+        foreach(var (snapshot,dr,dc) in new[]{
+            (prior,priorRowShift,priorColumnShift),
+            (addition,newRowShift,newColumnShift)})
+            foreach(var cell in snapshot.Cells)
+            {
+                var mapped=cell.OffsetCopy(dr,dc);
+                if(mapped.Row>=0&&mapped.Row<rows&&
+                   mapped.Column>=0&&mapped.Column<columns)
+                    cells[(mapped.Row,mapped.Column)]=mapped;
+            }
+        merged.Cells=cells.Values.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToList();
+        return merged;
+    }
+
     internal static string Placeholder(DeskSpaceExcelStyledCellV101? cell)
     {
         if(cell==null)return "";
