@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -18,6 +19,13 @@ internal static class Program
         {
             Console.Error.WriteLine("Usage: DeskSpaceExcelLiveAcceptance <DeskSpace.dll>");
             return 2;
+        }
+        // The test must never risk attaching DeskSpace to an already-open
+        // personal Excel session. Test ONLY in a clean dedicated Excel process.
+        if(Process.GetProcessesByName("EXCEL").Length>0)
+        {
+            Console.Error.WriteLine("BLOCKED: Close existing Microsoft Excel instances before running isolated acceptance.");
+            return 4;
         }
         Type? progId=Type.GetTypeFromProgID("Excel.Application");
         if(progId==null)
@@ -42,6 +50,7 @@ internal static class Program
             excel=Activator.CreateInstance(progId)!;
             excel.DisplayAlerts=false;
             excel.Visible=true;
+            Thread.Sleep(1800); // Excel must register its automation instance
             dynamic sourceBook=excel.Workbooks.Add();
             dynamic source=sourceBook.Worksheets[1];
             source.Name="Reference";
@@ -94,8 +103,12 @@ internal static class Program
             dynamic emptySheet=emptyBook.Worksheets[1];
             emptySheet.Name="Blank target";
             emptySheet.Activate();
+            string blankPath=Path.Combine(work,"blank_before.xlsx");
+            emptyBook.SaveAs(blankPath,51);
             emptySheet.Range["E16"].Select();
             object emptyReview=preview.Invoke(null,new[]{template})!;
+            Expect((string)emptyReview.GetType().GetProperty("Workbook")!.GetValue(emptyReview)!==blankPath,
+                "DeskSpace connected to a DIFFERENT Excel application/workbook; aborting safely.");
             Expect(Eligible(emptyReview),"Empty destination must pass preflight: "+emptyReview);
             var created=InvokeApply(apply,template,emptyReview);
             Console.WriteLine("EMPTY APPLIED: "+created);
@@ -116,6 +129,7 @@ internal static class Program
             dynamic partialBook=excel.Workbooks.Add();
             dynamic partialSheet=partialBook.Worksheets[1];
             partialSheet.Range["F8"].Value2=123;
+            partialBook.SaveAs(Path.Combine(work,"partial_before.xlsx"),51);
             partialSheet.Activate();
             partialSheet.Range["E7"].Select();
             object partial=preview.Invoke(null,new[]{template})!;
@@ -144,6 +158,7 @@ internal static class Program
             for(int col=6;col<=10;col++)
                 fullSheet.Cells[11,col].FormulaR1C1="=SUM(R[-3]C:R[-1]C)";
             double retained=(double)fullSheet.Range["F8"].Value2;
+            fullBook.SaveAs(Path.Combine(work,"full_before.xlsx"),51);
             fullSheet.Activate();
             fullSheet.Range["E7"].Select();
             var fullReview=preview.Invoke(null,new[]{template})!;
@@ -188,6 +203,7 @@ internal static class Program
             try
             {
                 styleProperty.SetValue(firstTable,"DeskSpaceInvalidStyleForRollback");
+                failureBook.SaveAs(Path.Combine(work,"failure_before.xlsx"),51);
                 failureSheet.Activate();
                 failureSheet.Range["E7"].Select();
                 var failureReview=preview.Invoke(null,new[]{template})!;
@@ -212,7 +228,7 @@ internal static class Program
             emptyBook.Close(false);
             fullBook.Close(false);
             sourceBook.Close(false);
-            Console.WriteLine("R110 LIVE MICROSOFT EXCEL ACCEPTANCE PASSED");
+            Console.WriteLine("R111 LIVE MICROSOFT EXCEL ACCEPTANCE PASSED");
             Console.WriteLine("Disposable evidence files: "+work);
             return 0;
         }
