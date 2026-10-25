@@ -121,12 +121,12 @@ $method=@'
             (string[])order.Invoke(null,new object[]{groups,outward})!;
         var left=Sort(false,("Chrome",1),("Explorer",4),
             ("Excel",3),("Calculator",1));
-        Assert(left.SequenceEqual(new[]{"Explorer","Calculator","Chrome","Excel"}),
-            "R115 multiwindow apps must be on both edges; single apps alphabetical");
+        Assert(left.SequenceEqual(new[]{"Explorer","Calculator","Excel","Chrome"}),
+            "R115 multiple-window apps must occupy actual left/right 3-column positions");
         var right=Sort(true,("Chrome",1),("Explorer",4),
             ("Excel",3),("Calculator",1));
-        Assert(right.SequenceEqual(new[]{"Excel","Calculator","Chrome","Explorer"}),
-            "R115 outward-right must place largest multiple-window group at right edge");
+        Assert(right.SequenceEqual(new[]{"Excel","Calculator","Explorer","Chrome"}),
+            "R115 outward-right must place largest multi-window group in right column");
         var singles=Sort(false,("Word",1),("Excel",1),("Chrome",1));
         Assert(singles.SequenceEqual(new[]{"Chrome","Excel","Word"}),
             "R115 all single-window apps must be alphabetical");
