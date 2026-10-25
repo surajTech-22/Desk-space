@@ -22,6 +22,7 @@ on:
       - r42-excel-mapping-editor
       - fix/r106-excel-structure-capture
       - fix/r113-running-windows-side-only
+      - fix/r114-excel-capture-and-runningapps-hover
 
 permissions:
   contents: write
@@ -1308,6 +1309,12 @@ jobs:
         run: |
           ./r113/apply-r113.ps1
           ./r113/test-r113.ps1
+
+      - name: R114 robust Excel selection capture and immediate Running Apps window flyout
+        shell: pwsh
+        run: |
+          ./r114/apply-r114.ps1
+          ./r114/test-r114.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
