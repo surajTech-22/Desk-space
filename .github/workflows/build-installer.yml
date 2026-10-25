@@ -31,6 +31,7 @@ on:
       - fix/r120-header-value-signature-paste
       - fix/r121-separate-excel-format-library
       - fix/r122-contextual-pins-excel-deck-vault-placeholder
+      - fix/r123-format-no-source-headers-media-deck
 
 permissions:
   contents: write
@@ -1365,6 +1366,11 @@ jobs:
         run: |
           ./r122/apply-r122.ps1
           ./r122/test-r122.ps1
+      - name: R123 header-independent format and integrated deck media player
+        shell: pwsh
+        run: |
+          ./r123/apply-r123.ps1
+          ./r123/test-r123.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
