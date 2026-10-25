@@ -29,6 +29,7 @@ on:
       - fix/r118-reachable-window-flyouts
       - fix/r119-excel-tuple-hasvalue
       - fix/r120-header-value-signature-paste
+      - fix/r121-separate-excel-format-library
 
 permissions:
   contents: write
@@ -1353,6 +1354,11 @@ jobs:
         run: |
           ./r120/apply-r120.ps1
           ./r120/test-r120.ps1
+      - name: R121 separate format-only Excel capture store and apply
+        shell: pwsh
+        run: |
+          ./r121/apply-r121.ps1
+          ./r121/test-r121.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
