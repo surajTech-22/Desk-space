@@ -74,7 +74,7 @@ Swap $editor @'
             pendingFormatReviewV109=checkedTarget;
             formatTemplateIdV109=entry.Id;
             if(status!=null)status.Text=checkedTarget.Eligible?
-                "READY: "+checkedTarget.Gate.Explanation+
+                "READY: "+checkedTarget.ToString()+
                 " Workbook: "+checkedTarget.Workbook+" · "+checkedTarget.Destination:
                 "BLOCKED — Nothing will change. "+checkedTarget.ToString();
         }
@@ -96,8 +96,9 @@ Swap $editor @'
             if(MessageBox.Show(
                 "Apply cell-specific formatting to "+approved.Sheet+
                 " "+approved.Destination+"?\n"+
-                "Only if every destination cell is empty or the FULL data layout matches.\n"+
-                "Existing input values and formulas will NOT be replaced.\n"+
+                "Only if the ENTIRE destination is empty or its FULL data layout matches.\n"+
+                approved.PlannedActions+"\n"+
+                "Existing input values/formulas will not be overwritten.\n"+
                 "The workbook will be backed up, and formatting read back before success.",
                 "DeskSpace — confirm Excel formatting",MessageBoxButton.YesNo,
                 MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;
