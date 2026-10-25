@@ -355,8 +355,8 @@ $method=@'
             "R123 preserve Excel Table structural safety: no missing/duplicate destination headers");
         var generator=fmt.GetMethod("StructuralHeaderV123",
             BindingFlags.NonPublic|BindingFlags.Static)!;
-        Assert((string)generator.Invoke(null,new object[]{0})!=="Column1" &&
-               (string)generator.Invoke(null,new object[]{1})!=="Column2",
+        Assert((string)generator.Invoke(null,new object[]{0})=="Column1" &&
+               (string)generator.Invoke(null,new object[]{1})=="Column2",
             "R123 blank Table gets neutral structural names, not source data");
         var media=Product.GetType("DeskSpace.DeskSpaceMediaV18",true)!;
         Assert(media.GetMethod("DeckCommandV123",BindingFlags.NonPublic|
