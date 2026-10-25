@@ -19,6 +19,8 @@ internal sealed class DeskSpaceExcelSheetVisualV101
     public int Columns {get;set;}
     public List<double> RowHeights {get;set;}=new();
     public List<double> ColumnWidths {get;set;}=new();
+    public List<double> NativeRowHeights {get;set;}=new();
+    public List<double> NativeColumnWidths {get;set;}=new();
     public List<DeskSpaceExcelStyledCellV101> Cells {get;set;}=new();
     public DeskSpaceExcelFeatureReportV106? FeaturesV106 {get;set;}
 }
@@ -142,11 +144,18 @@ internal static class DeskSpaceExcelVisualCaptureV101
         view.FeaturesV106=DeskSpaceExcelSemanticV106.Start(
             range,startRow,startCol,rows,columns);
         for(int r=1;r<=rows;r++)
-            view.RowHeights.Add(Math.Clamp(
-                Measure(()=> (object?)range.Rows[r].RowHeight,15)*96/72,18,220));
+        {
+            double height=Measure(()=> (object?)range.Rows[r].RowHeight,15);
+            view.NativeRowHeights.Add(height);
+            view.RowHeights.Add(Math.Clamp(height*96/72,18,220));
+        }
         for(int c=1;c<=columns;c++)
+        {
+            view.NativeColumnWidths.Add(Measure(
+                ()=> (object?)range.Columns[c].ColumnWidth,8.43));
             view.ColumnWidths.Add(Math.Clamp(
                 Measure(()=> (object?)range.Columns[c].Width,75)*96/72,38,440));
+        }
         // A merged region has several physical Excel cells, each with
         // independently capturable formatting. No cell is skipped in the model.
         var covered=new HashSet<(int,int)>();
@@ -586,16 +595,24 @@ internal static class DeskSpaceExcelSheetViewV101
         var merged=new DeskSpaceExcelSheetVisualV101{
             Rows=rows,Columns=columns,
             RowHeights=Enumerable.Repeat(26d,rows).ToList(),
-            ColumnWidths=Enumerable.Repeat(105d,columns).ToList()
+            ColumnWidths=Enumerable.Repeat(105d,columns).ToList(),
+            NativeRowHeights=Enumerable.Repeat(15d,rows).ToList(),
+            NativeColumnWidths=Enumerable.Repeat(8.43d,columns).ToList()
         };
         void Layer(DeskSpaceExcelSheetVisualV101 layer,int rowBase,int colBase)
         {
             for(int i=0;i<layer.RowHeights.Count;i++)
                 if(i+rowBase>=0&&i+rowBase<rows)
                     merged.RowHeights[i+rowBase]=layer.RowHeights[i];
+            for(int i=0;i<layer.NativeRowHeights.Count;i++)
+                if(i+rowBase>=0 && i+rowBase<rows)
+                    merged.NativeRowHeights[i+rowBase]=layer.NativeRowHeights[i];
             for(int i=0;i<layer.ColumnWidths.Count;i++)
                 if(i+colBase>=0&&i+colBase<columns)
                     merged.ColumnWidths[i+colBase]=layer.ColumnWidths[i];
+            for(int i=0;i<layer.NativeColumnWidths.Count;i++)
+                if(i+colBase>=0 && i+colBase<columns)
+                    merged.NativeColumnWidths[i+colBase]=layer.NativeColumnWidths[i];
         }
         if(prior!=null)Layer(prior,priorRowShift,priorColumnShift);
         if(addition!=null)Layer(addition,newRowShift,newColumnShift);
