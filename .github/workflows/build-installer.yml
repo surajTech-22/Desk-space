@@ -1459,7 +1459,10 @@ jobs:
           Write-Host "Verified tester release: $tag"
 
       - name: Publish R42 stable automatic release
-        if: github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor'
+        # One deliberately approved push publishes the recovery bridge through
+        # /releases/latest so existing v1.5.590 clients receive it automatically.
+        # Subsequent normal pushes still publish Tester ONLY.
+        if: (github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor' && github.event.head_commit.message == 'Release reviewed stable updater bridge [approved]')
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
