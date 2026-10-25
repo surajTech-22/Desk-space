@@ -442,7 +442,8 @@ internal static class DeskSpaceExcelSheetViewV101
         DockPanel.SetDock(zoomBar,Dock.Top);
         preview.Children.Add(zoomBar);
         var scale=new ScaleTransform(1,1);
-        layout.LayoutTransform=scale;
+        // Scale the Excel grid only: keep title, inspector and toolbar legible.
+        grid.LayoutTransform=scale;
         var scroll=new ScrollViewer{
             Background=Brushes.White,
             HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,
