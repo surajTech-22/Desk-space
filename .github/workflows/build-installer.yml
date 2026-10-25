@@ -15,6 +15,7 @@ on:
   push:
     branches:
       - r42-excel-mapping-editor
+      - fix/r106-excel-structure-capture
 
 permissions:
   contents: write
@@ -1282,6 +1283,11 @@ jobs:
           ./r105/apply-r105.ps1
           ./r105/test-r105.ps1
 
+      - name: Apply R106 Excel table and input-type recognition (development candidate)
+        shell: pwsh
+        run: |
+          ./r106/apply-r106.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1343,6 +1349,10 @@ jobs:
         run: |
           choco install innosetup --yes --no-progress
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+
+      - name: Verify R107 full-range empty, full-data and partial-data rejection
+        shell: pwsh
+        run: dotnet run --configuration Release --project r107/tests/GateTests.csproj
 
       - name: Compile, test and package self-contained app
         shell: pwsh
