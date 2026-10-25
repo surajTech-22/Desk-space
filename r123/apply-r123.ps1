@@ -49,8 +49,9 @@ Swap $fmt @'
 '@ @'
                     // Existing tables retain their OWN column names.
                     // Only geometric/header visibility compatibility matters.
-                    var currentNames=Enumerable.Range(1,tw).Select(i=>
-                        Text(table.ListColumns[i].Name)).ToArray();
+                    var currentNames=new string[tw];
+                    for(int i=0;i<tw;i++)
+                        currentNames[i]=Text((object?)table.ListColumns[i+1].Name);
                     if(!HeadersIndependentV123(currentNames,sourceTable.ColumnNames))
                         problems.Add("Destination Excel Table has blank/duplicate column names.");
 '@ 'stop source-to-destination label comparison'
@@ -112,8 +113,9 @@ Swap $fmt @'
 '@ @'
             // Excel may normalise its own generated names. Ensure unique
             // valid structural names without demanding SOURCE header data.
-            var createdNames=Enumerable.Range(1,table.ColumnCount).Select(i=>
-                Text(created.ListColumns[i].Name)).ToArray();
+            var createdNames=new string[table.ColumnCount];
+            for(int i=0;i<table.ColumnCount;i++)
+                createdNames[i]=Text((object?)created.ListColumns[i+1].Name);
             if(!HeadersIndependentV123(createdNames,table.ColumnNames))
                 throw new InvalidDataException(
                     "Excel Table creation produced invalid structural names.");
@@ -278,11 +280,12 @@ Swap $shelf @'
         {
             var mediaPanel=new StackPanel{Margin=new Thickness(3,3,3,5)};
             var header=new DockPanel{LastChildFill=true};
-            var close=new Button{Content="×",FontSize=13,
+            var mediaCloseButtonV123=new Button{Content="×",FontSize=13,
                 MinWidth=23,Padding=new Thickness(3,1,3,1),
                 ToolTip="Close media controls without stopping playback"};
-            close.Click+=(_,_)=>{activeMedia.DismissPanelV123();Render();};
-            DockPanel.SetDock(close,Dock.Right);header.Children.Add(close);
+            mediaCloseButtonV123.Click+=(_,_)=>{activeMedia.DismissPanelV123();Render();};
+            DockPanel.SetDock(mediaCloseButtonV123,Dock.Right);
+            header.Children.Add(mediaCloseButtonV123);
             header.Children.Add(Text("♫ Media Player",12,Brushes.White));
             mediaPanel.Children.Add(header);
             var track=Text(activeMedia.DeckTitleV123,11,Brushes.White);
