@@ -1455,6 +1455,7 @@ jobs:
             if(!(Test-Path $f)){throw "R111 bundle missing $f"}
           }
           Copy-Item -LiteralPath 'r111/Run_R111_Excel_LiveAcceptance.ps1' -Destination "$root/Run_R111_Excel_LiveAcceptance.ps1" -Force
+          Copy-Item -LiteralPath 'r111/Run_R111_Excel_LiveAcceptance.cmd' -Destination "$root/Run_R111_Excel_LiveAcceptance.cmd" -Force
           Copy-Item -LiteralPath 'r111/README_LIVE_TEST.md' -Destination "$root/README_LIVE_TEST.md" -Force
           $files=@(Get-ChildItem $root -File -Recurse)
           $manifest=$files | ForEach-Object {
