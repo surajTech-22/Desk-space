@@ -61,6 +61,12 @@ internal static class DeskSpaceExcelFormatApplyV109
            visual.Cells.Count!=rows*cols ||
            visual.Cells.Select(c=>(c.Row,c.Column)).Distinct().Count()!=rows*cols)
             throw new InvalidDataException("Incomplete source formatting; nothing will be changed.");
+        if(visual.NativeRowHeights.Count!=rows ||
+           visual.NativeColumnWidths.Count!=cols ||
+           visual.NativeColumnWidths.Any(x=>x<=0 || x>255) ||
+           visual.NativeRowHeights.Any(x=>x<=0 || x>409))
+            throw new InvalidDataException(
+                "Exact native Excel row/column dimensions missing. Recapture source.");
         if(visual.FeaturesV106 is not { } features ||
            features.Cells.Count!=rows*cols)
             throw new InvalidDataException(
@@ -110,6 +116,10 @@ internal static class DeskSpaceExcelFormatApplyV109
             problems.Add("Superscript/subscript characters require rich-text verification.");
         if(features.Tables.Any(x=>!x.FullySelected))
             problems.Add("Source table is only partly captured.");
+        if(features.Limitations.Any(x=>
+            x.Contains("ListObjects unavailable",StringComparison.OrdinalIgnoreCase) ||
+            x.Contains("table object inspection failed",StringComparison.OrdinalIgnoreCase)))
+            problems.Add("Source table recognition could not be verified.");
         if(features.Tables.Any(x=>x.TableStyle.Length==0))
             problems.Add("Excel Table style was not captured.");
         // A formatted table must be an ACTUAL ListObject in the destination.
@@ -200,12 +210,15 @@ internal static class DeskSpaceExcelFormatApplyV109
                 s.BorderBottomColor,s.BorderRightColor}[i];
             int weight=new[]{s.BorderLeftWeight,s.BorderTopWeight,
                 s.BorderBottomWeight,s.BorderRightWeight}[i];
-            if(weight>0)border.Weight=weight;
+            if(weight!=0)border.Weight=weight;
         }
     }
     private static void WriteSnapshot(dynamic target,DeskSpaceExcelSheetVisualV101 snap,
         bool writeTables)
     {
+        if(snap.NativeColumnWidths.Count!=snap.Columns ||
+           snap.NativeRowHeights.Count!=snap.Rows)
+            throw new InvalidDataException("Missing exact original Excel dimensions.");
         var feature=snap.FeaturesV106?.Cells.ToDictionary(c=>(c.Row,c.Column));
         foreach(var s in snap.Cells.OrderBy(c=>c.Row).ThenBy(c=>c.Column))
         {
@@ -218,9 +231,6 @@ internal static class DeskSpaceExcelFormatApplyV109
         for(int i=0;i<snap.NativeRowHeights.Count;i++)
             target.Rows[i+1].RowHeight=snap.NativeRowHeights[i];
         // Excel ColumnWidth uses character units, not points or pixels.
-        if(snap.NativeColumnWidths.Count!=snap.Columns ||
-           snap.NativeRowHeights.Count!=snap.Rows)
-            throw new InvalidDataException("Missing exact source row/column dimensions.");
         for(int i=0;i<snap.NativeColumnWidths.Count;i++)
             target.Columns[i+1].ColumnWidth=snap.NativeColumnWidths[i];
         if(writeTables && snap.FeaturesV106!=null)
