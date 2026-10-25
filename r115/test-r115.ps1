@@ -21,8 +21,8 @@ foreach($bad in @('Sheet zoom','zoom.SelectionChanged','zoom.SelectedIndex')){
 foreach($phrase in @('collectionAndData.Children.Add(collectionColumn)',
     'collectionAndData.Children.Add(dataColumn)',
     'editorHead.Children.Add(collectionAndData)',
-    'footer.Visibility=Visibility.Collapsed',
-    'tabs.SelectionChanged+=',
+    'mappingPane.Children.Add(footer)',
+    'Content=previewPane',
     'new GridLength(168)')){
  if(!$editor.Contains($phrase)){throw "R115 missing compact Excel editor $phrase"}
 }
