@@ -1276,6 +1276,12 @@ jobs:
           ./r104/apply-r104.ps1
           ./r104/test-r104.ps1
 
+      - name: Apply R105 complete cell styles, side-only Running Apps and dual-channel update notices
+        shell: pwsh
+        run: |
+          ./r105/apply-r105.ps1
+          ./r105/test-r105.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1458,11 +1464,10 @@ jobs:
           if(-not $published){throw 'Automatic stable release publication failed after retries'}
           Write-Host "Verified tester release: $tag"
 
-      - name: Publish R42 stable automatic release
-        # One deliberately approved push publishes the recovery bridge through
-        # /releases/latest so existing v1.5.590 clients receive it automatically.
-        # Subsequent normal pushes still publish Tester ONLY.
-        if: (github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor' && github.event.head_commit.message == 'Release reviewed stable updater bridge [approved]')
+      - name: Publish verified Stable channel automatic release
+        # Every branch push publishes BOTH Stable and Tester only after
+        # compilation, real WPF rendering tests and installer hash checks.
+        if: (github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor')
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
