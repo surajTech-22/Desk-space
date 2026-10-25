@@ -194,6 +194,43 @@ internal static class DeskSpaceStableHoverV93
         return left.Concat(singles).Concat(right).ToArray();
     }
 
+    // A 3-column app grid has edge positions 0 and 2 in each row.
+    // Multi-window groups take those edge positions before the single-window
+    // applications are placed alphabetically in the remaining slots.
+    internal static IReadOnlyList<int> OrderByWindowCountToEdgesV115(
+        IReadOnlyList<(string Name,int Windows)> items)
+    {
+        int n=items.Count;
+        int[] order=Enumerable.Repeat(-1,n).ToArray();
+        var multiple=Enumerable.Range(0,n)
+            .Where(i=>items[i].Windows>1)
+            .OrderByDescending(i=>items[i].Windows)
+            .ThenBy(i=>items[i].Name,StringComparer.OrdinalIgnoreCase).ToArray();
+        var single=Enumerable.Range(0,n)
+            .Where(i=>items[i].Windows<=1)
+            .OrderBy(i=>items[i].Name,StringComparer.OrdinalIgnoreCase).ToArray();
+        var edgeSlots=Enumerable.Range(0,n)
+            .Where(p=>p%3==0 || p%3==2).ToArray();
+        int index=0;
+        foreach(int item in multiple)
+        {
+            int position=index<edgeSlots.Length?
+                edgeSlots[index]:Array.IndexOf(order,-1);
+            if(position<0)throw new InvalidOperationException(
+                "Running Apps window grouping exceeds available slots.");
+            order[position]=item;
+            index++;
+        }
+        foreach(int item in single)
+        {
+            int position=Array.IndexOf(order,-1);
+            if(position<0)throw new InvalidOperationException(
+                "Running Apps alphabetical sorting exceeded available slots.");
+            order[position]=item;
+        }
+        return order;
+    }
+
     // Shared per-window close control. Separate from the switch button, so
     // clicking X never activates or minimises a window.
     internal static Button MakeCloseButton(DeskSpaceRunningAppsV88.Entry window)
@@ -574,8 +611,14 @@ internal static class DeskSpaceStableHoverV93
         windowCard.MouseEnter+=(_,_)=>{StopIntent();KeepOpen();};
         windowCard.MouseLeave+=(_,_)=>CloseLater();
 
-        foreach(var app in apps)
+        var ranked=OrderByWindowCountToEdgesV115(apps.Select(app=>(
+            app.Name,DeskSpaceRunningAppsV88.WindowsFor(app,windows).Count()
+        )).ToArray());
+        // Fixed three-column row width makes the edge placement meaningful.
+        iconRow.Width=234;
+        foreach(int appPosition in ranked)
         {
+            var app=apps[appPosition];
             var matches=DeskSpaceRunningAppsV88.WindowsFor(app,windows).ToArray();
             if(matches.Length==0)matches=new[]{app};
             var picture=new StackPanel{Width=68};
