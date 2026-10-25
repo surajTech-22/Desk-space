@@ -241,9 +241,11 @@ Swap $shelf @'
     private void Render()
 '@ 'add media-aware deck without altering other groups'
 Swap $shelf @'
-    public void Enable(){if(!disposed)Render();}
+    private void Render()
+    {
+        if(disposed)return;
 '@ @'
-    public void Enable()
+    private void Render()
     {
         if(disposed)return;
         DeskSpaceMediaV18.DeckIntegrationV123=true;
@@ -253,9 +255,7 @@ Swap $shelf @'
             mediaDeckTimerV123.Tick+=(_,_)=>RefreshMediaDeckV123();
             mediaDeckTimerV123.Start();
         }
-        Render();
-    }
-'@ 'enable deck-owned player and background state refresh'
+'@ 'enable deck-owned player on the current Render lifecycle'
 Swap $shelf @'
             excelMatchesV122.Count==0 && !busy)
 '@ @'
