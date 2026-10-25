@@ -114,10 +114,17 @@ internal static class DeskSpaceExcelFormatApplyV109
         if(sourceFormula && decision.State==DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty &&
            order.Any(x=>x.StoredType=="Formula" && x.FormulaR1C1.Length==0))
             problems.Add("One or more source formulas lack their exact R1C1 definition.");
-        if(order.Any(c=>c.DirectFillPattern==int.MinValue ||
-            c.DirectFontColorIndex==int.MinValue ||
-            (c.DirectFillPattern!=1 && c.DirectFillPattern!=-4142 &&
-             c.DirectFillPattern!=-4105)))
+        var mergedChildren=new HashSet<(int,int)>();
+        foreach(var parent in order.Where(x=>x.MergeRows>1 || x.MergeColumns>1))
+            for(int mr=parent.Row;mr<parent.Row+parent.MergeRows;mr++)
+                for(int mc=parent.Column;mc<parent.Column+parent.MergeColumns;mc++)
+                    if(mr!=parent.Row || mc!=parent.Column)
+                        mergedChildren.Add((mr,mc));
+        if(order.Any(c=>!mergedChildren.Contains((c.Row,c.Column)) &&
+            (c.DirectFillPattern==int.MinValue ||
+             c.DirectFontColorIndex==int.MinValue ||
+             (c.DirectFillPattern!=1 && c.DirectFillPattern!=-4142 &&
+              c.DirectFillPattern!=-4105))))
             problems.Add("Some source cells have unsupported or unreadable direct fill-pattern/font-colour metadata.");
         if(features.Cells.Any(c=>c.ValidationType>=0 || c.ConditionalRuleCount>0))
             problems.Add("Source uses data validation or conditional rules not covered by this format-only transaction.");
@@ -239,6 +246,28 @@ internal static class DeskSpaceExcelFormatApplyV109
                ToInt(merge.Rows.Count)!=source.MergeRows ||
                ToInt(merge.Columns.Count)!=source.MergeColumns)
                 problems.Add("Merged-cell geometry mismatch at "+Text(cell.Address));
+        }
+        // An unexpected merge anywhere inside the destination could alter
+        // unrelated structural cells. Preflight ALL physical cells, not only
+        // the expected source merge anchors.
+        for(int rr=0;rr<rows;rr++)
+        for(int cc=0;cc<cols;cc++)
+        {
+            dynamic physical=target.Cells[rr+1,cc+1];
+            if(!(bool)physical.MergeCells)continue;
+            dynamic actualMerge=physical.MergeArea;
+            int mr=ToInt(actualMerge.Row)-sr;
+            int mc=ToInt(actualMerge.Column)-sc;
+            int mh=ToInt(actualMerge.Rows.Count);
+            int mw=ToInt(actualMerge.Columns.Count);
+            if(!order.Any(src=>src.Row==mr && src.Column==mc &&
+                src.MergeRows==mh && src.MergeColumns==mw &&
+                (mh>1||mw>1)))
+            {
+                problems.Add("Destination contains an unrelated merged area at "+
+                    Text(actualMerge.Address)+". No formatting is permitted.");
+                rr=rows;break;
+            }
         }
         // Prevent overwriting the captured source workbook or accidental
         // changes when the user simply selects the same region again.
