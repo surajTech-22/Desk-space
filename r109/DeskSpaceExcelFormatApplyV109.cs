@@ -433,18 +433,26 @@ internal static class DeskSpaceExcelFormatApplyV109
                 DeskSpaceExcelVisualCaptureV101.Capture((object)live.Range);
             var source=live.Visual.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
             var actual=after.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
+            var mergeChildren=new HashSet<(int,int)>();
+            foreach(var area in live.Visual.Cells.Where(c=>
+                c.MergeRows>1 || c.MergeColumns>1))
+                for(int mr=area.Row;mr<area.Row+area.MergeRows;mr++)
+                    for(int mc=area.Column;mc<area.Column+area.MergeColumns;mc++)
+                        if(mr!=area.Row || mc!=area.Column)
+                            mergeChildren.Add((mr,mc));
             for(int i=0;i<source.Length;i++)
             {
                 var a=actual[i];
                 var s=source[i];
-                if(s.NumberFormat!=a.NumberFormat ||
+                if(!mergeChildren.Contains((s.Row,s.Column)) &&
+                   (s.NumberFormat!=a.NumberFormat ||
                    s.FontName!=a.FontName ||
                    Math.Abs(s.FontSize-a.FontSize)>0.5 ||
                    s.Bold!=a.Bold || s.Italic!=a.Italic ||
                    s.Underline!=a.Underline || s.StrikeThrough!=a.StrikeThrough ||
                    s.FillBgr!=a.FillBgr || s.FontBgr!=a.FontBgr ||
                    s.BorderLeft!=a.BorderLeft||s.BorderRight!=a.BorderRight ||
-                   s.BorderTop!=a.BorderTop||s.BorderBottom!=a.BorderBottom)
+                   s.BorderTop!=a.BorderTop||s.BorderBottom!=a.BorderBottom))
                     throw new InvalidDataException(
                         "Formatting readback differs at "+
                         Text(live.Range.Cells[s.Row+1,s.Column+1].Address));
@@ -481,10 +489,11 @@ internal static class DeskSpaceExcelFormatApplyV109
             {
                 if(!byPosition.TryGetValue((wanted.Row,wanted.Column),out var observed))
                     throw new InvalidDataException("Missing cell during Excel feature readback.");
-                if(wanted.UnderlineStyle!=observed.UnderlineStyle ||
+                if(!mergeChildren.Contains((wanted.Row,wanted.Column)) &&
+                   (wanted.UnderlineStyle!=observed.UnderlineStyle ||
                    wanted.TableRole!=observed.TableRole ||
                    wanted.Locked!=observed.Locked ||
-                   wanted.FormulaHidden!=observed.FormulaHidden)
+                   wanted.FormulaHidden!=observed.FormulaHidden))
                     throw new InvalidDataException("Excel underline, table role or protection mismatch at "+
                         Text(live.Range.Cells[wanted.Row+1,wanted.Column+1].Address));
             }
