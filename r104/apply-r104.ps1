@@ -66,4 +66,25 @@ Swap $main @'
 
     private void SafeSave()
 '@ 'wire Settings selector to updater'
+$smoke='r36/UiSmoke/Program.cs'
+# The new returned viewer is a zoom toolbar + nested ScrollViewer,
+# rather than the old bare ScrollViewer that wasted the right side.
+Swap $smoke @'
+        Assert(output is ScrollViewer,
+            "R101 preview must retain a real scrollable sheet-like grid");
+'@ @'
+        Assert(output is DockPanel &&
+               Walk(output).OfType<ScrollViewer>().Any() &&
+               Walk(output).OfType<ComboBox>().Any(),
+            "R104 preview must contain a scrollable Excel grid and zoom selector");
+'@ 'update WPF smoke to check actual zoom-enabled view'
+Swap $smoke @'
+        Assert((string)placeholder.Invoke(null,new object[]{original}) == "Aa" &&
+               (string)placeholder.Invoke(null,new object[]{more}) == "1,234.56789",
+            "R103 real formatting must be shown using safe placeholder samples, not prior transaction data");
+'@ @'
+        Assert((string)placeholder.Invoke(null,new object[]{original}) == "Aa" &&
+               (string)placeholder.Invoke(null,new object[]{more}) == "123",
+            "R104 preview samples must be short, data-free and unable to overflow tiny cells");
+'@ 'remove long overflowing numeric sample in WPF smoke'
 Write-Host 'R104 applied: responsive readable Excel preview and independent tester updates.'
