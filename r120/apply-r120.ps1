@@ -230,16 +230,126 @@ $before=@'
                 refreshed.Explanation+" Nothing was written.");
 '@
 ReplaceOnce $bridge $before '' 'remove formatting restriction from value apply'
-# Guard the complete SOURCE identity as well as workbook/sheet selection.
-# Revalidate reference labels before sending queued writes.
-$before=@'
-    public static string Apply(DeskSpaceExcelProposalV16 preview,
-        DeskSpaceExcelTemplateV16 entry,bool overwrite)
+# Retain the matched header signature as a volatile preview credential;
+# never persist it or mix it with stored format templates.
+ReplaceOnce $bridge @'
+    public bool Verified {get;set;}
+    public List<DeskSpaceExcelChangeV16> Changes {get;set;}=new();
+'@ @'
+    public bool Verified {get;set;}
+    public bool UsedReferenceSignatureV120 {get;set;}
+    public List<DeskSpaceExcelChangeV16> Changes {get;set;}=new();
+'@ 'tag reference-verified preview'
+ReplaceOnce $bridge @'
+            Verified=verified,Reason=reason
+'@ @'
+            Verified=verified,Reason=reason,
+            UsedReferenceSignatureV120=!useSelection
+'@ 'record whether target came from signature or manual selection'
+ReplaceOnce $bridge @'
+        if((bool)sheet.ProtectContents)
+            throw new InvalidOperationException("The destination worksheet is protected.");
+        // Detect modifications made since the preview before touching the workbook.
+'@ @'
+        if((bool)sheet.ProtectContents)
+            throw new InvalidOperationException("The destination worksheet is protected.");
+        if(preview.UsedReferenceSignatureV120)
+        {
+            var matched=FindAnchorMatch((object)sheet,entry);
+            if(!matched.Unique || matched.Row!=preview.StartRow ||
+               matched.Col!=preview.StartColumn)
+                throw new InvalidOperationException(
+                    "Header/reference signature changed since preview. "+
+                    "No Excel cells changed. Preview the value mapping again.");
+        }
+        // Detect modifications made since the preview before touching the workbook.
+'@ 'prevent stale header signature before writes'
+
+$smoke='r36/UiSmoke/Program.cs'
+ReplaceOnce $smoke @'
+            TestNullableSelectedOriginV119();
+'@ @'
+            TestNullableSelectedOriginV119();
+            TestHeaderValueSignatureV120();
+'@ 'run header signature and partially filled target tests'
+
+$method=@'
+    // Values-only mapping regression, including the reported 8/30-filled
+    // worksheet. This tests production signature and write-decision helpers.
+    private static void TestHeaderValueSignatureV120()
+    {
+        var engine=Product.GetType("DeskSpace.DeskSpaceExcelBridgeV16",true)!;
+        var template=Product.GetType("DeskSpace.DeskSpaceExcelTemplateV16",true)!;
+        var cell=Product.GetType("DeskSpace.DeskSpaceExcelCellV16",true)!;
+        var entry=Activator.CreateInstance(template,true)!;
+        var cells=(System.Collections.IList)template.GetProperty("Cells")!.
+            GetValue(entry)!;
+        void Add(string role,string label,int row,int col)
+        {
+            var saved=Activator.CreateInstance(cell,true)!;
+            cell.GetProperty("Role")!.SetValue(saved,role);
+            cell.GetProperty("RawValue")!.SetValue(saved,label);
+            cell.GetProperty("RowOffset")!.SetValue(saved,row);
+            cell.GetProperty("ColumnOffset")!.SetValue(saved,col);
+            cells.Add(saved);
+        }
+        Add("Reference","Signature",0,0);
+        Add("Reference","Authorised signatory",1,0);
+        Add("Value","ACME",0,1);
+        var method=engine.GetMethod("MatchHeaderSignatureV120",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        object Match(params (int Row,int Col,string Label)[] labels)=>
+            method.Invoke(null,new object[]{entry,labels})!;
+        var correct=(ValueTuple<int,int,int,bool>)Match(
+            (22,7,"SIGNATURE"),(23,7,"Authorised Signatory"),
+            (44,7,"Signature"));
+        Assert(correct.Item1==22&&correct.Item2==7&&correct.Item3==2&&
+               correct.Item4,
+            "R120 two explicit reference labels must match exact relative signature");
+        var missing=(ValueTuple<int,int,int,bool>)Match(
+            (22,7,"Signature"),(44,7,"Unrelated"));
+        Assert(!missing.Item4,"R120 one label cannot authorize automatic paste");
+        var duplicate=(ValueTuple<int,int,int,bool>)Match(
+            (22,7,"Signature"),(23,7,"Authorised signatory"),
+            (44,7,"Signature"),(45,7,"Authorised signatory"));
+        Assert(!duplicate.Item4,"R120 ambiguous repeated signature must block paste");
+        var decision=engine.GetMethod("HeaderValueDecisionV120",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        string Decide(bool verified,string role,string kind,
+            bool formula,bool occupied,bool overwrite=false,
+            bool protectedSheet=false)=>
+            (string)decision.Invoke(null,new object[]{
+                verified,role,kind,formula,occupied,overwrite,protectedSheet})!;
+        // 8 occupied cells (with existing values), 22 empty cells:
+        // Values-only autofill is allowed to fill the blank cells, but may
+        // NEVER erase the 8 occupied cells under the default safety option.
+        int ready=0,protectedValues=0;
+        for(int i=0;i<30;i++)
+        {
+            var result=Decide(true,"Value","number",false,i<8);
+            if(result=="Ready")ready++;
+            if(result=="Existing value protected")protectedValues++;
+        }
+        Assert(ready==22&&protectedValues==8,
+            "R120 populated 8/30 destination must allow 22 safe value writes");
+        Assert(Decide(true,"Reference","text",false,false)!= "Ready",
+            "R120 reference/signature cells must never be pasted");
+        Assert(Decide(true,"Value","number",true,false)!="Ready",
+            "R120 existing Excel formula must never be overwritten");
+        Assert(Decide(true,"Value","number",false,true,true)=="Ready",
+            "R120 explicit replace permits non-formula occupied value");
+        Assert(Decide(false,"Value","number",false,false)!="Ready",
+            "R120 unmatched or ambiguous headers cannot authorize paste");
+        Assert(Decide(true,"Value","blank",false,false)!="Ready",
+            "R120 blank captured cells cannot clear target values");
+        Assert(Decide(true,"Value","text",false,false,false,true)!="Ready",
+            "R120 protected worksheets cannot receive mapped values");
+        Console.WriteLine(
+            "R120 PASS: header signatures, duplicate/missing labels, 8/30 partial values, source references, formulas and overwrite protections.");
+    }
+
 '@
-$after=@'
-    public static string Apply(DeskSpaceExcelProposalV16 preview,
-        DeskSpaceExcelTemplateV16 entry,bool overwrite)
-'@
-# We intentionally leave the old Apply method signature and destination
-# integrity/readback intact: no extra workbook side effects and no new store.
-Write-Host 'R120: header/value signature matching includes user reference cells; partially filled destination permitted with per-cell protection. Formatting engine unchanged.'
+ReplaceOnce $smoke @'
+    private static void TestExcelTypeAwareSheetV101()
+'@ ($method+'    private static void TestExcelTypeAwareSheetV101()') 'WPF runtime header/value regression'
+Write-Host 'R120: values-only header/value signatures and per-cell protections are independent from format-template occupancy rules.'
