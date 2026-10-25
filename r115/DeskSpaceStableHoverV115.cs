@@ -172,63 +172,45 @@ internal static class DeskSpaceStableHoverV93
     // Multi-window applications sit on the OUTSIDE edges. If every app has
     // exactly one window, alphabetical ordering applies throughout.
     // More windows take precedence; subsequent grouped apps alternate edges.
+    // Place groups on actual outside columns of a THREE-column grid.
+    // A flat leading/trailing sort is wrong whenever a row wraps.
     internal static string[] OrderAppNamesV115(
         IEnumerable<(string Name,int Count)> groups,bool outwardRight)
     {
-        var items=groups.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase)
+        var items=groups.ToArray();
+        var all=items.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var multis=items.Where(x=>x.Count>1)
+        var multi=all.Where(x=>x.Count>1)
             .OrderByDescending(x=>x.Count)
             .ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
-        var singles=items.Where(x=>x.Count<=1)
-            .Select(x=>x.Name).ToArray();
-        if(multis.Length==0)return singles;
-        var left=new List<string>();
-        var right=new List<string>();
-        for(int i=0;i<multis.Length;i++)
-        {
-            bool toRight=outwardRight ? i%2==0:i%2==1;
-            if(toRight)right.Insert(0,multis[i].Name);
-            else left.Add(multis[i].Name);
-        }
-        return left.Concat(singles).Concat(right).ToArray();
-    }
+        var single=all.Where(x=>x.Count<=1)
+            .OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+        if(multi.Length==0)return single.Select(x=>x.Name).ToArray();
 
-    // A 3-column app grid has edge positions 0 and 2 in each row.
-    // Multi-window groups take those edge positions before the single-window
-    // applications are placed alphabetically in the remaining slots.
-    internal static IReadOnlyList<int> OrderByWindowCountToEdgesV115(
-        IReadOnlyList<(string Name,int Windows)> items)
-    {
-        int n=items.Count;
-        int[] order=Enumerable.Repeat(-1,n).ToArray();
-        var multiple=Enumerable.Range(0,n)
-            .Where(i=>items[i].Windows>1)
-            .OrderByDescending(i=>items[i].Windows)
-            .ThenBy(i=>items[i].Name,StringComparer.OrdinalIgnoreCase).ToArray();
-        var single=Enumerable.Range(0,n)
-            .Where(i=>items[i].Windows<=1)
-            .OrderBy(i=>items[i].Name,StringComparer.OrdinalIgnoreCase).ToArray();
+        int n=all.Length;
+        string?[] grid=new string?[n];
+        // Edge positions 0,2,3,5,6,8...; put largest group on
+        // the outward side first, then distribute other groups.
         var edgeSlots=Enumerable.Range(0,n)
-            .Where(p=>p%3==0 || p%3==2).ToArray();
-        int index=0;
-        foreach(int item in multiple)
+            .Where(i=>i%3==0 || i%3==2)
+            .OrderBy(i=>i/3)
+            .ThenBy(i=>outwardRight?(i%3==2?0:1):
+                (i%3==0?0:1)).ToArray();
+        var fallbackSlots=Enumerable.Range(0,n)
+            .Where(i=>i%3==1).ToArray();
+        int multiIndex=0;
+        foreach(var item in multi)
         {
-            int position=index<edgeSlots.Length?
-                edgeSlots[index]:Array.IndexOf(order,-1);
-            if(position<0)throw new InvalidOperationException(
-                "Running Apps window grouping exceeds available slots.");
-            order[position]=item;
-            index++;
+            int slot=multiIndex<edgeSlots.Length?
+                edgeSlots[multiIndex]:
+                fallbackSlots[multiIndex-edgeSlots.Length];
+            grid[slot]=item.Name;
+            multiIndex++;
         }
-        foreach(int item in single)
-        {
-            int position=Array.IndexOf(order,-1);
-            if(position<0)throw new InvalidOperationException(
-                "Running Apps alphabetical sorting exceeded available slots.");
-            order[position]=item;
-        }
-        return order;
+        int singleIndex=0;
+        for(int i=0;i<n;i++)
+            if(grid[i]==null)grid[i]=single[singleIndex++].Name;
+        return grid.Select(x=>x!).ToArray();
     }
 
     // Shared per-window close control. Separate from the switch button, so
@@ -611,14 +593,10 @@ internal static class DeskSpaceStableHoverV93
         windowCard.MouseEnter+=(_,_)=>{StopIntent();KeepOpen();};
         windowCard.MouseLeave+=(_,_)=>CloseLater();
 
-        var ranked=OrderByWindowCountToEdgesV115(apps.Select(app=>(
-            app.Name,DeskSpaceRunningAppsV88.WindowsFor(app,windows).Count()
-        )).ToArray());
-        // Fixed three-column row width makes the edge placement meaningful.
+        // Width corresponds to exactly three 78-DIP tiles per row.
         iconRow.Width=234;
-        foreach(int appPosition in ranked)
+        foreach(var app in apps)
         {
-            var app=apps[appPosition];
             var matches=DeskSpaceRunningAppsV88.WindowsFor(app,windows).ToArray();
             if(matches.Length==0)matches=new[]{app};
             var picture=new StackPanel{Width=68};
