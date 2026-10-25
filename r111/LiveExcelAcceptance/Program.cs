@@ -116,7 +116,7 @@ internal static class Program
             emptyBook.SaveAs(blankPath,51);
             emptySheet.Range["E16"].Select();
             object emptyReview=preview.Invoke(null,new[]{template})!;
-            Expect((string)emptyReview.GetType().GetProperty("Workbook")!.GetValue(emptyReview)!==blankPath,
+            Expect((string)emptyReview.GetType().GetProperty("Workbook")!.GetValue(emptyReview)! == blankPath,
                 "DeskSpace connected to a DIFFERENT Excel application/workbook; aborting safely.");
             Expect(Eligible(emptyReview),"Empty destination must pass preflight: "+emptyReview);
             var created=InvokeApply(apply,template,emptyReview);
