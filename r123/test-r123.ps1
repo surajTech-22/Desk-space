@@ -6,8 +6,7 @@ $deck=[IO.File]::ReadAllText("$root/DeskSpaceDropShelfV15.cs")
 $smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 foreach($need in @('StructuralHeaderV123(', 'HeadersIndependentV123(',
  'region.Cells[1,i+1].Value2=StructuralHeaderV123(i)',
- 'x.ShowAutoFilter==expectedTable.ShowAutoFilter &&
-                    HeadersIndependentV123(',
+ 'HeadersIndependentV123(x.ColumnNames,expectedTable.ColumnNames)',
  'DeskSpaceExcelFullRangeGateV107.Evaluate(from,to)',
  'sheet.ProtectContents','book.SaveCopyAs(backup)','PopulateBlankFormulas(live)',
  'return "Verified "')){
