@@ -81,6 +81,16 @@ $helper=@'
     // reachable directly above/below the selected tile and must not cover
     // the Deck header on the adjacent side. Keep the original four-way
     // positioning for horizontal cases.
+    // Constrain a vertical flyout between the real monitor and Deck.
+    // If the deck is on the left, there may be less room on the
+    // monitor's right side: make the flyout narrower instead of
+    // clamping it across the deck.
+    internal static double SafeVerticalWidthV118(
+        double gridWidth,double workLeft,double workRight,
+        bool deckToRight,double requestedWidth)=>
+        Math.Min(requestedWidth,Math.Max(0,deckToRight
+            ?gridWidth-8-workLeft:workRight-8));
+
     internal static Point WindowFlyoutReachableV118(
         WindowDirectionV115 direction,double targetWidth,double targetHeight,
         double popupWidth,double popupHeight,double rowTop,double alignX,
@@ -156,6 +166,28 @@ ReplaceOnce $source @'
                     left,right,top,bottom,deckToRight),
                     PopupPrimaryAxis.None)};
 '@ 'place popup near tile and away from the deck'
+ReplaceOnce $source @'
+            windowCard.Width=placement.WidthDip;
+            windowItems.MaxWidth=Math.Max(100,placement.WidthDip-12);
+            ((ScrollViewer)windowCard.Child).MaxHeight=placement.MaxHeightDip;
+            var direction=placement.Direction;
+'@ @'
+            var direction=placement.Direction;
+            if(direction is WindowDirectionV115.Up or WindowDirectionV115.Down)
+            {
+                double safe=SafeVerticalWidthV118(iconCard.ActualWidth,
+                    left,right,deckToRight,placement.WidthDip);
+                if(safe<128)
+                {
+                    windowPopup.IsOpen=false;
+                    return;
+                }
+                placement=placement with {WidthDip=safe};
+            }
+            windowCard.Width=placement.WidthDip;
+            windowItems.MaxWidth=Math.Max(100,placement.WidthDip-12);
+            ((ScrollViewer)windowCard.Child).MaxHeight=placement.MaxHeightDip;
+'@ 'clamp real flyout width before invoking WPF placement'
 $smoke='r36/UiSmoke/Program.cs'
 ReplaceOnce $smoke @'
             TestRunningAppsGridV117();
@@ -219,8 +251,17 @@ $method=@'
         var below=Where("Down",true);
         Assert(below.Y>=126 && below.X+276<=252-7,
             "R118 lower-row flyout must stay below all app tiles and away from Deck");
-        var leftDeck=Where("Up",false);
-        Assert(leftDeck.X>=8,
+        var safe=cls.GetMethod("SafeVerticalWidthV118",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        double width=(double)safe.Invoke(null,new object[]{
+            252d,-410d,220d,false,276d})!;
+        Assert(width==212,
+            "R118 reverse Deck should narrow popup to safe visible width");
+        var up=Enum.Parse(directionType,"Up");
+        var leftDeck=(Point)point.Invoke(null,new object[]{
+            up,252d,120d,width,110d,5d,208d,
+            -410d,220d,-250d,320d,false})!;
+        Assert(leftDeck.X>=8 && leftDeck.X+width<=220,
             "R118 reverse-side deck must not be covered by vertical popup");
         Console.WriteLine("R118 PASS: screenshot regression, four-way reachability, no app-grid/deck overlap.");
     }
