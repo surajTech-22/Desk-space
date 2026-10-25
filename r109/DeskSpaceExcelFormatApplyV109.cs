@@ -295,7 +295,8 @@ internal static class DeskSpaceExcelFormatApplyV109
         book.SaveCopyAs(backup);
         if(!File.Exists(backup) || new FileInfo(backup).Length==0)
             throw new IOException("Could not create safety copy; nothing was changed.");
-        var before=DeskSpaceExcelVisualCaptureV101.Capture(live.Range);
+        DeskSpaceExcelSheetVisualV101 before=
+            DeskSpaceExcelVisualCaptureV101.Capture((object)live.Range);
         // Original stored input/formulas are never copied or changed.
         var signatures=new List<(string Address,string Formula,string Value)>();
         for(int r=1;r<=live.Visual.Rows;r++)
@@ -309,7 +310,8 @@ internal static class DeskSpaceExcelFormatApplyV109
         try
         {
             WriteSnapshot(live.Range,live.Visual,true);
-            var after=DeskSpaceExcelVisualCaptureV101.Capture(live.Range);
+            DeskSpaceExcelSheetVisualV101 after=
+                DeskSpaceExcelVisualCaptureV101.Capture((object)live.Range);
             var source=live.Visual.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
             var actual=after.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
             for(int i=0;i<source.Length;i++)
