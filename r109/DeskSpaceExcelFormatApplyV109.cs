@@ -154,9 +154,24 @@ internal static class DeskSpaceExcelFormatApplyV109
                 bool overlap=tr<rows&&tc<cols&&tr+th>0&&tc+tw>0;
                 if(!overlap)continue;
                 targetTableCount++;
-                if(!features.Tables.Any(src=>src.Row==tr &&
-                    src.Column==tc && src.RowCount==th && src.ColumnCount==tw))
+                var sourceTable=features.Tables.FirstOrDefault(src=>
+                    src.Row==tr && src.Column==tc &&
+                    src.RowCount==th && src.ColumnCount==tw);
+                if(sourceTable==null)
                     problems.Add("An unrelated or differently sized Excel Table overlaps the destination.");
+                else
+                {
+                    if(sourceTable.ColumnNames.Count!=tw)
+                        problems.Add("Source Excel Table column names were not captured.");
+                    else
+                        for(int headerNo=0;headerNo<tw;headerNo++)
+                            if(!string.Equals(Text(table.ListColumns[headerNo+1].Name),
+                                sourceTable.ColumnNames[headerNo],StringComparison.Ordinal))
+                                problems.Add("Destination Excel Table header layout does not match its source.");
+                    if((bool)table.ShowHeaders!=sourceTable.HasHeaders ||
+                       (bool)table.ShowTotals!=sourceTable.HasTotals)
+                        problems.Add("Destination Excel Table header/totals settings differ.");
+                }
             }
         }
         catch(COMException){problems.Add("Cannot inspect destination Excel Table objects.");}
