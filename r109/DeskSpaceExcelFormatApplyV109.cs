@@ -251,6 +251,63 @@ internal static class DeskSpaceExcelFormatApplyV109
             if(weight!=0)border.Weight=weight;
         }
     }
+    // Only called after the entire target was verified empty and a complete
+    // backup was written. Table headers are structural ListObject metadata;
+    // no captured transaction values are copied.
+    private static void BuildBlankStructure(Checked live)
+    {
+        var features=live.Visual.FeaturesV106 ??
+            throw new InvalidDataException("No structural Excel metadata.");
+        foreach(var table in features.Tables)
+        {
+            dynamic region=live.Sheet.Range[
+                live.Range.Cells[table.Row+1,table.Column+1],
+                live.Range.Cells[table.Row+table.RowCount,
+                    table.Column+table.ColumnCount]];
+            for(int i=0;i<table.ColumnCount;i++)
+                region.Cells[1,i+1].Value2=table.ColumnNames[i];
+            // Microsoft Excel: xlSrcRange=1, xlYes=1. Source is an
+            // explicitly sized Range; omit LinkSource with Type.Missing.
+            dynamic created=live.Sheet.ListObjects.Add(
+                1,region,Type.Missing,1);
+            created.Name=table.Name;
+            created.TableStyle=table.TableStyle;
+            created.ShowTableStyleRowStripes=table.RowStripes;
+            created.ShowTableStyleColumnStripes=table.ColumnStripes;
+            created.ShowTableStyleFirstColumn=table.FirstColumnEmphasis;
+            created.ShowTableStyleLastColumn=table.LastColumnEmphasis;
+            created.ShowAutoFilter=table.ShowAutoFilter;
+            for(int i=0;i<table.ColumnCount;i++)
+                if(!string.Equals(Text(created.ListColumns[i+1].Name),
+                    table.ColumnNames[i],StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        "Excel changed a required table header during creation.");
+        }
+        foreach(var merge in live.Visual.Cells.Where(x=>
+            x.MergeRows>1 || x.MergeColumns>1))
+        {
+            dynamic area=live.Sheet.Range[
+                live.Range.Cells[merge.Row+1,merge.Column+1],
+                live.Range.Cells[merge.Row+merge.MergeRows,
+                    merge.Column+merge.MergeColumns]];
+            if(!(bool)area.MergeCells)area.Merge(false);
+        }
+    }
+    // These formulas are relative R1C1 expressions saved per source cell.
+    // They are inserted only into a wholly empty destination, not into
+    // the user's existing inputs or formulas.
+    private static void PopulateBlankFormulas(Checked live)
+    {
+        foreach(var source in live.Visual.Cells.Where(c=>
+            c.StoredType=="Formula"))
+        {
+            if(string.IsNullOrWhiteSpace(source.FormulaR1C1))
+                throw new InvalidDataException(
+                    "A captured formula lacks an R1C1 expression.");
+            live.Range.Cells[source.Row+1,source.Column+1].
+                FormulaR1C1=source.FormulaR1C1;
+        }
+    }
     private static void WriteSnapshot(dynamic target,DeskSpaceExcelSheetVisualV101 snap,
         bool writeTables)
     {
@@ -350,7 +407,13 @@ internal static class DeskSpaceExcelFormatApplyV109
         }
         try
         {
+            bool originallyEmpty=live.Review.Gate.State==
+                DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty;
+            if(originallyEmpty)
+                BuildBlankStructure(live);
             WriteSnapshot(live.Range,live.Visual,true);
+            if(originallyEmpty)
+                PopulateBlankFormulas(live);
             DeskSpaceExcelSheetVisualV101 after=
                 DeskSpaceExcelVisualCaptureV101.Capture((object)live.Range);
             var source=live.Visual.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
