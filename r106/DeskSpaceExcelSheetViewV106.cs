@@ -49,6 +49,13 @@ internal sealed class DeskSpaceExcelStyledCellV101
     public int VerticalAlignment {get;set;}
     public int FillBgr {get;set;}=0xFFFFFF;
     public int FontBgr {get;set;}=0x000000;
+    // Direct pattern/color metadata MUST be separate from the style visible
+    // through a ListObject. None=-4142, Solid=1. Other patterns are blocked
+    // by the format application preflight until fully implemented.
+    public int DirectFillPattern {get;set;}=int.MinValue;
+    public int DirectFontColorIndex {get;set;}=int.MinValue;
+    public int DirectFontThemeColor {get;set;}
+    public int DirectFillThemeColor {get;set;}
     // Excel TableStyle and conditional formatting may affect the displayed
     // appearance without changing Range.Interior/Font direct properties.
     // Keep both layers; never overwrite the source's direct per-cell style.
@@ -195,6 +202,10 @@ internal static class DeskSpaceExcelVisualCaptureV101
                 VerticalAlignment=Number(()=> (object?)cell.VerticalAlignment),
                 FillBgr=Number(()=> (object?)cell.Interior.Color,0xFFFFFF),
                 FontBgr=Number(()=> (object?)cell.Font.Color,0),
+                DirectFillPattern=Number(()=> (object?)cell.Interior.Pattern,int.MinValue),
+                DirectFontColorIndex=Number(()=> (object?)cell.Font.ColorIndex,int.MinValue),
+                DirectFontThemeColor=Number(()=> (object?)cell.Font.ThemeColor,0),
+                DirectFillThemeColor=Number(()=> (object?)cell.Interior.ThemeColor,0),
                 BorderLeft=VisibleBorder(cell,7),   // xlEdgeLeft
                 BorderTop=VisibleBorder(cell,8),    // xlEdgeTop
                 BorderBottom=VisibleBorder(cell,9), // xlEdgeBottom
@@ -524,6 +535,10 @@ internal static class DeskSpaceExcelSheetViewV101
                         (item.DisplayStyleAvailable?
                             " · Display fill #"+(item.DisplayFillBgr&0xFFFFFF).ToString("X6")+
                             " · Display font #"+(item.DisplayFontBgr&0xFFFFFF).ToString("X6"):"")+
+                        " · Direct pattern "+item.DirectFillPattern+
+                        " · Font colour index "+item.DirectFontColorIndex+
+                        (item.DirectFontThemeColor>0?
+                            " · Font theme "+item.DirectFontThemeColor:"")+
                         " · Direct fill #"+(item.FillBgr&0xFFFFFF).ToString("X6")+
                         " · Font color #"+(item.FontBgr&0xFFFFFF).ToString("X6")+
                         " · Edges "+(item.BorderLeft?"L":"")+(item.BorderTop?"T":"")+
