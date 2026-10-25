@@ -146,6 +146,9 @@ $before=@'
                 : "Insufficient unique matching labels.";
             if(!verified)
             {
+                // Force static call and nullable tuple type. Calling with
+                // dynamic Excel COM otherwise boxes the nullable tuple into
+                // ValueTuple<int,int>; that does not have HasValue.
                 (int Row,int Column)? selected=
                     SelectedOriginV116((object)app,entry);
                 if(selected.HasValue)
