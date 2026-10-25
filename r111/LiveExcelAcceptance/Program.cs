@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Threading;
 
 internal static class Program
@@ -39,7 +40,15 @@ internal static class Program
         Directory.CreateDirectory(work);
         try
         {
-            var assembly=Assembly.LoadFrom(Path.GetFullPath(args[0]));
+            string assemblyPath=Path.GetFullPath(args[0]);
+            var dependencyResolver=new AssemblyDependencyResolver(assemblyPath);
+            AssemblyLoadContext.Default.Resolving+=(loadContext,assemblyName)=>{
+                string? dependency=dependencyResolver.ResolveAssemblyToPath(assemblyName);
+                return dependency==null?null:
+                    loadContext.LoadFromAssemblyPath(dependency);
+            };
+            var assembly=AssemblyLoadContext.Default.LoadFromAssemblyPath(
+                assemblyPath);
             var templateType=assembly.GetType("DeskSpace.DeskSpaceExcelTemplateV16",true)!;
             var captureType=assembly.GetType("DeskSpace.DeskSpaceExcelVisualCaptureV101",true)!;
             var engineType=assembly.GetType("DeskSpace.DeskSpaceExcelFormatApplyV109",true)!;
