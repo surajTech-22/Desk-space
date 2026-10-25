@@ -91,25 +91,8 @@ Change $ed @'
 '@ @'
         var tabs=new TabControl{Margin=new Thickness(0,2,0,0)};
 '@ 'compact tab margin'
-Change $ed @'
-        tabs.Items.Add(new TabItem{
-            Header="Mappings · edit & paste",
-            Content=mappingGridV42});
-        right.Children.Add(tabs);
-'@ @'
-        tabs.Items.Add(new TabItem{
-            Header="Mappings · edit & paste",
-            Content=mappingGridV42});
-        // The sheet view needs all vertical space. The mapping-only paste
-        // footer returns when switching to the edit/paste tab.
-        footer.Visibility=Visibility.Collapsed;
-        tabs.SelectionChanged+=(_,e)=>{
-            if(!ReferenceEquals(e.Source,tabs))return;
-            footer.Visibility=tabs.SelectedIndex==0?
-                Visibility.Collapsed:Visibility.Visible;
-        };
-        right.Children.Add(tabs);
-'@ 'expand sheet preview by collapsing mapping-only footer on sheet tab'
+# R103 already puts the paste/format footer INSIDE the mapping-only tab.
+# Do not duplicate or move it: the sheet tab is already full-height.
 $smoke='r36/UiSmoke/Program.cs'
 Change $smoke @'
             TestRunningAppsSideOnlyV113();
