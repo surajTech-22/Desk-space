@@ -126,6 +126,14 @@ Swap $shelf @'
     private async void RefreshRunningApps()
 '@ 'isolated foreground Excel read-only preview and explicit confirmed paste'
 Swap $shelf @'
+    private string NonAppSignature()=>string.Join("\u001e",
+        held.Concat(detected).Select(x=>x.StagedPath));
+'@ @'
+    private string NonAppSignature()=>string.Join("\u001e",
+        held.Concat(detected).Select(x=>x.StagedPath)
+            .Concat(excelMatchesV122.Select(x=>x.Id.ToString())));
+'@ 'new Excel match causes previously dismissed deck to reappear'
+Swap $shelf @'
         if(held.Count+detected.Count+runningApps.Count==0 && !busy)
 '@ @'
         if(held.Count+detected.Count+runningApps.Count+
@@ -138,10 +146,10 @@ Swap $shelf @'
         excelMatchesV122.Count)>0;}
 '@ 'shelf visibility when Excel-only suggestions'
 Swap $shelf @'
-        if(appsExpanded)DeskSpaceRunningAppsV88.Fill(appsGroup,runningApps);
+        DeskSpaceRunningAppsV88.AddHoverGroup(list,runningApps,runningWindows);
         var heldGroup=DeskSpaceShelfGroupsV88.Add(list,"Held Files",
 '@ @'
-        if(appsExpanded)DeskSpaceRunningAppsV88.Fill(appsGroup,runningApps);
+        DeskSpaceRunningAppsV88.AddHoverGroup(list,runningApps,runningWindows);
         var suggestionGroup=DeskSpaceShelfGroupsV88.Add(list,
             "Excel paste suggestions",excelMatchesV122.Count,
             excelExpandedV122,()=>{
