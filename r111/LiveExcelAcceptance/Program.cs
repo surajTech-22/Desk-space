@@ -161,6 +161,54 @@ internal static class Program
             fullBook.SaveAs(Path.Combine(work,"applied_full.xlsx"),51);
             Console.WriteLine("PASS: full-data target preserves values and creates real table.");
 
+            // Test D: existing genuine table has one wrong header.
+            // The check must reject before changing any other cell.
+            fullSheet.Range["G7"].Value2="WRONG HEADER";
+            fullSheet.Range["E7"].Select();
+            var wrongHeaders=preview.Invoke(null,new[]{template})!;
+            Expect(!Eligible(wrongHeaders),
+                "Different Excel Table column names were accepted");
+            Expect((string)fullSheet.Range["G7"].Value2=="WRONG HEADER",
+                "Header mismatch preview unexpectedly changed workbook values");
+            fullSheet.Range["G7"].Value2="b";
+            Console.WriteLine("PASS: mismatched existing Table headers rejected.");
+
+            // Test E: a simulated Excel COM table-style rejection must not
+            // report success and must attempt to roll back a blank destination.
+            var features=snapshot.GetType().GetProperty("FeaturesV106")!.
+                GetValue(snapshot)!;
+            var capturedTables=(IList)features.GetType().GetProperty("Tables")!.
+                GetValue(features)!;
+            Expect(capturedTables.Count==1,"Expected exactly one captured table");
+            var firstTable=capturedTables[0]!;
+            var styleProperty=firstTable.GetType().GetProperty("TableStyle")!;
+            var savedStyle=(string)styleProperty.GetValue(firstTable)!;
+            dynamic failureBook=excel.Workbooks.Add();
+            dynamic failureSheet=failureBook.Worksheets[1];
+            try
+            {
+                styleProperty.SetValue(firstTable,"DeskSpaceInvalidStyleForRollback");
+                failureSheet.Activate();
+                failureSheet.Range["E7"].Select();
+                var failureReview=preview.Invoke(null,new[]{template})!;
+                Expect(Eligible(failureReview),
+                    "Rollback simulation must reach application step");
+                bool failed=false;
+                try{InvokeApply(apply,template,failureReview);}
+                catch(InvalidOperationException){failed=true;}
+                Expect(failed,"Invalid Excel Table style was reported as success");
+                Expect((int)failureSheet.ListObjects.Count==0,
+                    "Failed transaction left a newly created Excel Table");
+                Expect(failureSheet.Range["F7"].Value2==null,
+                    "Failed transaction left a fabricated header in an empty cell");
+                Console.WriteLine("PASS: failure is detected, table/header rollback attempted.");
+            }
+            finally
+            {
+                styleProperty.SetValue(firstTable,savedStyle);
+                failureBook.Close(false);
+            }
+
             emptyBook.Close(false);
             fullBook.Close(false);
             sourceBook.Close(false);
