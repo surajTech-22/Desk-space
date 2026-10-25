@@ -64,6 +64,18 @@ internal static class DeskSpaceExcelInputTypeV101
         return code.Split(';')[0].Trim();
     }
 
+    // Infer interpretation from the CAPTURED cell's Excel number format.
+    // "dddd, dd mmmm yyyy" is day-first; "mmmm dd, yyyy" is month-first.
+    // A format without an unambiguous order still requires per-cell review.
+    internal static string DateOrderFromFormat(string? sourceFormat)
+    {
+        string code=Simplify(sourceFormat).ToLowerInvariant();
+        var day=Regex.Match(code,@"d{1,4}");
+        var month=Regex.Match(code,@"m{1,4}");
+        if(!day.Success||!month.Success)return "Ask";
+        return day.Index<month.Index?"DMY":"MDY";
+    }
+
     // Never interpret a serial-looking string as a real date unless the
     // expected format is date/time. Never automatically convert an identifier
     // with significant leading zeroes or a number beyond Excel precision.
@@ -152,6 +164,8 @@ internal static class DeskSpaceExcelInputTypeV101
                 int first=int.Parse(match.Groups[1].Value,CultureInfo.InvariantCulture);
                 int second=int.Parse(match.Groups[2].Value,CultureInfo.InvariantCulture);
                 int year=int.Parse(match.Groups[3].Value,CultureInfo.InvariantCulture);
+                if(dateOrder!="DMY"&&dateOrder!="MDY")
+                    dateOrder=DateOrderFromFormat(originalNumberFormat);
                 if(first<=12&&second<=12&&
                    dateOrder!="DMY"&&dateOrder!="MDY")
                     return new("NeedsReview",expected,null,
