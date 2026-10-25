@@ -9,7 +9,7 @@ foreach($n in @(
   'private static Checked Inspect(',
   'DeskSpaceExcelFullRangeGateV107.Evaluate(from,to)',
   'if(!decision.MayApply)problems.Add',
-  'if(targetTableCount!=features.Tables.Count)',
+  'if(targetTableCount!=features.Tables.Count &&',
   'Missing pre-existing merged destination',
   'Backup',
   'SaveCopyAs(backup)',
