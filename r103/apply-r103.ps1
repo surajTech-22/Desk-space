@@ -96,4 +96,42 @@ Swap $ed @'
             existing.SourceRow=rowBase;existing.SourceColumn=colBase;
             editingTemplateV42=existing;
 '@ 'merge all captured styles on subsequent capture add-fields'
+# Older WPF smoke tests searched the default tab for a paste button.
+# The new default is deliberately the large read-only captured sheet. Switch
+# to the Mappings tab when verifying legacy mapping actions, without weakening
+# any action assertion or changing the production layout.
+$smoke='r36/UiSmoke/Program.cs'
+Swap $smoke @'
+    private static Button ButtonWith(DependencyObject root,string label) =>
+        Walk(root).OfType<Button>().FirstOrDefault(x=>x.Content is string s&&s==label)
+        ??throw new Exception("Missing button "+label);
+'@ @'
+    private static Button ButtonWith(DependencyObject root,string label)
+    {
+        Button? found=Walk(root).OfType<Button>().
+            FirstOrDefault(x=>x.Content is string s && s==label);
+        if(found==null && label=="Preview matching cells")
+        {
+            var excelTabs=Walk(root).OfType<TabControl>().FirstOrDefault(t=>
+                t.Items.OfType<TabItem>().Any(item=>
+                    item.Header?.ToString()=="Mappings · edit & paste"));
+            if(excelTabs!=null)
+            {
+                var mapping=excelTabs.Items.OfType<TabItem>().First(item=>
+                    item.Header?.ToString()=="Mappings · edit & paste");
+                excelTabs.SelectedItem=mapping;
+                if(root is FrameworkElement surface)
+                {
+                    surface.Measure(new Size(1000,780));
+                    surface.Arrange(new Rect(0,0,1000,780));
+                    surface.UpdateLayout();
+                }
+                found=Walk(root).OfType<Button>().
+                    FirstOrDefault(x=>x.Content is string s&&s==label);
+            }
+        }
+        return found??throw new Exception("Missing button "+label);
+    }
+'@ 'legacy WPF smoke must navigate to the actual mapping controls tab'
+
 Write-Host 'R103: full-height spreadsheet view, expandable Excel sheet, mapped edits isolated, no global date dropdown, added ranges merge all captured styles.'
