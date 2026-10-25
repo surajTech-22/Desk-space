@@ -209,17 +209,20 @@ internal static class DeskSpaceExcelFormatApplyV109
         var feature=snap.FeaturesV106?.Cells.ToDictionary(c=>(c.Row,c.Column));
         foreach(var s in snap.Cells.OrderBy(c=>c.Row).ThenBy(c=>c.Column))
         {
-            feature?.TryGetValue((s.Row,s.Column),out var f);
             // Avoid relying on an out variable from null-conditional dynamic access.
             DeskSpaceExcelCellFeatureV106? item=
                 feature!=null && feature.TryGetValue((s.Row,s.Column),out var found)?
                     found:null;
             WriteCell(target.Cells[s.Row+1,s.Column+1],s,item);
         }
-        for(int i=0;i<snap.RowHeights.Count;i++)
-            target.Rows[i+1].RowHeight=snap.RowHeights[i]*72/96;
-        for(int i=0;i<snap.ColumnWidths.Count;i++)
-            target.Columns[i+1].ColumnWidth=snap.ColumnWidths[i]/8;
+        for(int i=0;i<snap.NativeRowHeights.Count;i++)
+            target.Rows[i+1].RowHeight=snap.NativeRowHeights[i];
+        // Excel ColumnWidth uses character units, not points or pixels.
+        if(snap.NativeColumnWidths.Count!=snap.Columns ||
+           snap.NativeRowHeights.Count!=snap.Rows)
+            throw new InvalidDataException("Missing exact source row/column dimensions.");
+        for(int i=0;i<snap.NativeColumnWidths.Count;i++)
+            target.Columns[i+1].ColumnWidth=snap.NativeColumnWidths[i];
         if(writeTables && snap.FeaturesV106!=null)
         {
             dynamic sheet=target.Worksheet;
