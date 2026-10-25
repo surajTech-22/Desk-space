@@ -178,10 +178,27 @@ internal static class DeskSpaceExcelFormatApplyV109
         }
         catch(COMException){problems.Add("Cannot inspect destination Excel Table objects.");}
         bool allEmpty=decision.State==DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty;
+        bool fullData=decision.State==
+            DeskSpaceExcelFullRangeGateV107.Status.CompleteMatchingLayout;
         if(targetTableCount!=features.Tables.Count &&
-           !(allEmpty && targetTableCount==0))
+           !(targetTableCount==0 && (allEmpty || fullData)))
             problems.Add("Destination contains an incomplete or overlapping Excel Table structure.");
-        if(allEmpty && targetTableCount==0)
+        if(fullData && targetTableCount==0)
+        {
+            foreach(var sourceTable in features.Tables)
+            {
+                for(int c=0;c<sourceTable.ColumnCount;c++)
+                {
+                    dynamic header=target.Cells[sourceTable.Row+1,
+                        sourceTable.Column+c+1];
+                    if(!string.Equals(Text((object?)header.Value2),
+                        sourceTable.ColumnNames[c],StringComparison.Ordinal))
+                        problems.Add("Cannot create an Excel Table over populated data: "+
+                            "existing column headers differ from captured structural headers.");
+                }
+            }
+        }
+        if(targetTableCount==0 && (allEmpty || fullData))
         {
             // Names are workbook-global. Reject collisions before any write.
             try
@@ -206,7 +223,7 @@ internal static class DeskSpaceExcelFormatApplyV109
             dynamic cell=target.Cells[source.Row+1,source.Column+1];
             if(!(bool)cell.MergeCells)
             {
-                if(!allEmpty)
+                if(!allEmpty && !fullData)
                     problems.Add("Missing pre-existing merged destination at "+
                         Text(cell.Address));
                 continue;
@@ -239,8 +256,10 @@ internal static class DeskSpaceExcelFormatApplyV109
                       " structural table headers and "+
                       order.Count(x=>x.StoredType=="Formula")+
                       " captured formulas. No transaction values copied."
-                    :"All input positions match. Apply cell-specific formats and "+
-                      "table styling only; existing values and formulas retained.")
+                    :"All input positions match. "+
+                      (targetTableCount==0 && features.Tables.Count>0?
+                          "Create "+features.Tables.Count+" real table(s) using already matching headers; ":"")+
+                      "Apply cell-specific formatting. Existing values and formulas retained.")
         };
     }
     internal static Review Preview(DeskSpaceExcelTemplateV16 template)=>
