@@ -539,6 +539,21 @@ internal static class DeskSpaceExcelFormatApplyV109
                     throw new InvalidDataException(
                         "Formatting readback differs at "+
                         Text(live.Range.Cells[s.Row+1,s.Column+1].Address));
+                // Excel TableStyle and conditional effects are DISPLAY layers,
+                // not necessarily equal to the cell's direct Font/Interior.
+                // Comparing only direct properties could report success even
+                // when a restored real table looks completely different.
+                if(!mergeChildren.Contains((s.Row,s.Column)) &&
+                   s.DisplayStyleAvailable &&
+                   (!a.DisplayStyleAvailable ||
+                    s.DisplayFillBgr!=a.DisplayFillBgr ||
+                    s.DisplayFontBgr!=a.DisplayFontBgr ||
+                    s.DisplayBold!=a.DisplayBold ||
+                    s.DisplayItalic!=a.DisplayItalic))
+                    throw new InvalidDataException(
+                        "Rendered Excel Table/cell appearance differs at "+
+                        Text(live.Range.Cells[s.Row+1,s.Column+1].Address)+
+                        "; source and destination colours/fonts not identical.");
                 dynamic cell=live.Range.Cells[s.Row+1,s.Column+1];
                 var signature=signatures[i];
                 if(originallyEmpty)
