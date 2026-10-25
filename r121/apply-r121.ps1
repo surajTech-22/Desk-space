@@ -29,7 +29,7 @@ $methods=@'
     public static void SaveFormats(List<DeskSpaceExcelTemplateV16> formats)
     {
         Directory.CreateDirectory(Folder);
-        if(formats.Any(x=>x.SheetVisualV101==null))
+        if(formats.Exists(x=>x.SheetVisualV101==null))
             throw new InvalidDataException("A saved Excel format has no visual snapshot.");
         var plaintext=Encoding.UTF8.GetBytes(JsonSerializer.Serialize(formats));
         byte[] encrypted;
