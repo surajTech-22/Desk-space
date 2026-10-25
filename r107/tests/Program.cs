@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using DeskSpace;
 using Gate=DeskSpace.DeskSpaceExcelFullRangeGateV107;
 internal static class Program
@@ -43,6 +44,35 @@ internal static class Program
             "fully empty structure allowed");
         Assert(Gate.Evaluate(Array.Empty<Gate.Cell>(),Array.Empty<Gate.Cell>())
             .State==Gate.Status.RejectMismatch,"no source cells blocks");
+        // Book1(4).xlsx structural test: 5 rows x 6 cols (E7:J11).
+        // E7 is a merged anchor; E8:E11 are structural blanks.
+        // F7:J7 are five genuine ListObject headers; remaining cells
+        // contain numbers and formula-driven values.
+        var tableLayout=new Gate.Cell[30];
+        for(int row=0;row<5;row++)
+        for(int col=0;col<6;col++)
+            tableLayout[row*6+col]=
+                col==0?(row==0?T():E()):
+                row==0?T():
+                (col==5 || row==4)?F():N();
+        Assert(Gate.Evaluate(tableLayout,Enumerable.Repeat(E(),30).ToArray())
+            .State==Gate.Status.EntirelyEmpty,
+            "Book1 five-by-six selection accepts completely blank destination");
+        Assert(Gate.Evaluate(tableLayout,tableLayout)
+            .State==Gate.Status.CompleteMatchingLayout,
+            "Book1 table/merged structure accepts all matching input positions");
+        var incomplete=(Gate.Cell[])tableLayout.Clone();
+        incomplete[7]=E();
+        Assert(Gate.Evaluate(tableLayout,incomplete).State==Gate.Status.RejectPartial,
+            "Book1 missing one populated input blocks entire range");
+        var shifted=(Gate.Cell[])tableLayout.Clone();
+        shifted[7]=E();shifted[12]=N();
+        Assert(Gate.Evaluate(tableLayout,shifted).State==Gate.Status.RejectPartial,
+            "Book1 same filled count but merged structural blank overwritten blocks");
+        var changedFormula=(Gate.Cell[])tableLayout.Clone();
+        changedFormula[11]=N();
+        Assert(Gate.Evaluate(tableLayout,changedFormula).State==Gate.Status.RejectMismatch,
+            "Book1 formulas replaced by numeric values block application");
         Console.WriteLine("All R107 guard tests passed. No Excel destination modified.");
         return 0;
     }
