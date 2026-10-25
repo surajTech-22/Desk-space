@@ -20,17 +20,6 @@ Swap $app @'
 '@ 'pinned app opens last recently-used matching document, otherwise application'
 $shelf="$r/DeskSpaceDropShelfV15.cs"
 Swap $shelf @'
-    private bool appsExpanded=false,heldExpanded=true,recentExpanded=true;
-'@ @'
-    private bool appsExpanded=false,heldExpanded=true,recentExpanded=true;
-    private bool excelExpandedV122=true,excelRefreshingV122;
-    private readonly List<(Guid Id,string Name,int Writable)> excelMatchesV122=new();
-    private readonly DispatcherTimer excelSuggestTimerV122=new(){
-        Interval=TimeSpan.FromSeconds(18)
-    };
-    private bool excelSuggestTimerConnectedV122;
-'@ 'deck Excel suggestion state'
-Swap $shelf @'
         runningAppsTimer.Start();
         RefreshRunningApps();
 '@ @'
@@ -48,6 +37,13 @@ Swap $shelf @'
     // Scan in the background. Do not block circle hover, dragging, or file drops.
     private async void RefreshRunningApps()
 '@ @'
+    // Excel suggestion state is independent of Running Apps expansion.
+    private bool excelExpandedV122=true,excelRefreshingV122;
+    private readonly List<(Guid Id,string Name,int Writable)> excelMatchesV122=new();
+    private readonly DispatcherTimer excelSuggestTimerV122=new(){
+        Interval=TimeSpan.FromSeconds(18)
+    };
+    private bool excelSuggestTimerConnectedV122;
     // Read-only previews only. Requires an ACTUAL foreground Excel window,
     // a unique saved reference-label signature and at least one safe value.
     // Never silently change a workbook.
