@@ -1293,6 +1293,7 @@ jobs:
         run: |
           ./r109/apply-r109.ps1
           ./r109/test-r109.ps1
+          ./r110/test-r110.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
