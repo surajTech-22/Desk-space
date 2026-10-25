@@ -336,8 +336,43 @@ internal static class DeskSpaceExcelFormatApplyV109
                     throw new InvalidDataException(
                         "An existing Excel value/formula changed unexpectedly.");
             }
+            // Verify EXACT underline styles, not merely "underlined=true".
+            var requestedFeatures=live.Visual.FeaturesV106!;
+            var measuredFeatures=after.FeaturesV106 ??
+                throw new InvalidDataException("Excel feature readback unavailable.");
+            var byPosition=measuredFeatures.Cells.ToDictionary(x=>(x.Row,x.Column));
+            foreach(var wanted in requestedFeatures.Cells)
+            {
+                if(!byPosition.TryGetValue((wanted.Row,wanted.Column),out var observed))
+                    throw new InvalidDataException("Missing cell during Excel feature readback.");
+                if(wanted.UnderlineStyle!=observed.UnderlineStyle ||
+                   wanted.TableRole!=observed.TableRole ||
+                   wanted.Locked!=observed.Locked ||
+                   wanted.FormulaHidden!=observed.FormulaHidden)
+                    throw new InvalidDataException("Excel underline, table role or protection mismatch at "+
+                        Text(live.Range.Cells[wanted.Row+1,wanted.Column+1].Address));
+            }
+            foreach(var expectedTable in requestedFeatures.Tables)
+            {
+                if(!measuredFeatures.Tables.Any(x=>x.Row==expectedTable.Row &&
+                    x.Column==expectedTable.Column && x.RowCount==expectedTable.RowCount &&
+                    x.ColumnCount==expectedTable.ColumnCount &&
+                    x.TableStyle==expectedTable.TableStyle &&
+                    x.HasHeaders==expectedTable.HasHeaders &&
+                    x.HasTotals==expectedTable.HasTotals &&
+                    x.RowStripes==expectedTable.RowStripes &&
+                    x.ColumnStripes==expectedTable.ColumnStripes))
+                    throw new InvalidDataException("A real Excel Table structure/style was not reproduced.");
+            }
+            for(int row=0;row<live.Visual.Rows;row++)
+                if(Math.Abs(live.Visual.NativeRowHeights[row]-after.NativeRowHeights[row])>0.2)
+                    throw new InvalidDataException("Excel row height readback mismatch.");
+            for(int col=0;col<live.Visual.Columns;col++)
+                if(Math.Abs(live.Visual.NativeColumnWidths[col]-after.NativeColumnWidths[col])>0.3)
+                    throw new InvalidDataException("Excel native column width readback mismatch.");
             // Do not save the open workbook behind the user's back.
-            return "Verified "+source.Length+" cells. Existing values preserved. "+
+            return "Verified "+source.Length+" cells, "+requestedFeatures.Tables.Count+
+                " real Excel tables and exact underline styles. Existing values preserved. "+
                 "Safety copy: "+backup;
         }
         catch
