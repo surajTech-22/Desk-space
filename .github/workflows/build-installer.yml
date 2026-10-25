@@ -1439,6 +1439,39 @@ jobs:
           [IO.File]::WriteAllText('release/Update.sha256.txt',
             ($copied+'  Update.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))
 
+      - name: Bundle R111 portable real-Excel acceptance (development branch only)
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root='r111/portable-acceptance'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          dotnet publish 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o "$root/DeskSpaceTestApp"
+          if($LASTEXITCODE -ne 0){throw 'R111 DeskSpace candidate DLL publish failed'}
+          dotnet publish 'r111/LiveExcelAcceptance/LiveExcelAcceptance.csproj' -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o "$root/R111Test"
+          if($LASTEXITCODE -ne 0){throw 'R111 executable acceptance publish failed'}
+          foreach($f in @("$root/DeskSpaceTestApp/DeskSpace.dll",
+                          "$root/R111Test/LiveExcelAcceptance.exe")){
+            if(!(Test-Path $f)){throw "R111 bundle missing $f"}
+          }
+          Copy-Item -LiteralPath 'r111/Run_R111_Excel_LiveAcceptance.ps1' -Destination "$root/Run_R111_Excel_LiveAcceptance.ps1" -Force
+          Copy-Item -LiteralPath 'r111/README_LIVE_TEST.md' -Destination "$root/README_LIVE_TEST.md" -Force
+          $files=@(Get-ChildItem $root -File -Recurse)
+          $manifest=$files | ForEach-Object {
+            $hash=Get-FileHash $_.FullName -Algorithm SHA256
+            "$($hash.Hash.ToLowerInvariant())  $($_.FullName.Substring((Resolve-Path $root).Path.Length+1))"
+          }
+          [IO.File]::WriteAllLines("$root/MANIFEST.sha256.txt",$manifest)
+          Write-Host "R111 portable files $($files.Count), all checksummed; no installer release."
+      - name: Upload R111 portable candidate for live Excel acceptance (NOT an update)
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R111-Real-Excel-Portable-Test
+          path: r111/portable-acceptance/
+          retention-days: 7
+          if-no-files-found: error
+
       # Do not duplicate hundreds of MB of installer binaries in a
       # short-lived Actions artifact. The next verified step publishes
       # exactly these binaries and hashes to the canonical GitHub Release.
