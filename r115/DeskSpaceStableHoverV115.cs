@@ -279,18 +279,6 @@ internal static class DeskSpaceStableHoverV93
                     index++;
                 }
         }
-        bool PreferOutwardRight()
-        {
-            try
-            {
-                var card=iconCard.PointToScreen(
-                    new Point(iconCard.ActualWidth/2,0));
-                var deck=heading.PointToScreen(
-                    new Point(heading.ActualWidth/2,0));
-                return deck.X<card.X;
-            }
-            catch(InvalidOperationException){return false;}
-        }
         int liveCount=windows.Count;
         var iconCard=new Border{
             Background=new SolidColorBrush(Color.FromRgb(32,44,71)),
@@ -310,6 +298,18 @@ internal static class DeskSpaceStableHoverV93
             StaysOpen=true,AllowsTransparency=true,
             PopupAnimation=PopupAnimation.Fade,Child=iconCard
         };
+        bool PreferOutwardRight()
+        {
+            try
+            {
+                var card=iconCard.PointToScreen(
+                    new Point(iconCard.ActualWidth/2,0));
+                var deck=heading.PointToScreen(
+                    new Point(heading.ActualWidth/2,0));
+                return deck.X<card.X;
+            }
+            catch(InvalidOperationException){return false;}
+        }
         // Content width is constrained to actual free monitor space on hover.
         var windowItems=new StackPanel{MinWidth=0,MaxWidth=268};
         var windowCard=new Border{
