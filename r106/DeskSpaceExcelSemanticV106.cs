@@ -48,6 +48,10 @@ internal sealed class DeskSpaceExcelTableV106
     public string Name {get;set;}="";
     public string Address {get;set;}="";
     public string TableStyle {get;set;}="";
+    public List<string> ColumnNames {get;set;}=new();
+    public bool ShowAutoFilter {get;set;}
+    public bool FirstColumnEmphasis {get;set;}
+    public bool LastColumnEmphasis {get;set;}
     public int Row {get;set;}
     public int Column {get;set;}
     public int RowCount {get;set;}
@@ -59,6 +63,10 @@ internal sealed class DeskSpaceExcelTableV106
     public bool FullySelected {get;set;}
     public DeskSpaceExcelTableV106 Shift(int r,int c)=>
         new(){Name=Name,Address=Address,TableStyle=TableStyle,
+            ColumnNames=new List<string>(ColumnNames),
+            ShowAutoFilter=ShowAutoFilter,
+            FirstColumnEmphasis=FirstColumnEmphasis,
+            LastColumnEmphasis=LastColumnEmphasis,
             Row=Row+r,Column=Column+c,RowCount=RowCount,
             ColumnCount=ColumnCount,HasHeaders=HasHeaders,
             HasTotals=HasTotals,RowStripes=RowStripes,
@@ -128,6 +136,9 @@ internal static class DeskSpaceExcelSemanticV106
                     Name=Safe(()=>(object?)table.Name),
                     Address=Safe(()=>(object?)area.Address),
                     TableStyle=Safe(()=>(object?)table.TableStyle),
+                    ShowAutoFilter=Flag(()=>(object?)table.ShowAutoFilter),
+                    FirstColumnEmphasis=Flag(()=>(object?)table.ShowTableStyleFirstColumn),
+                    LastColumnEmphasis=Flag(()=>(object?)table.ShowTableStyleLastColumn),
                     Row=row,Column=col,RowCount=rows,ColumnCount=cols,
                     HasHeaders=Flag(()=>(object?)table.ShowHeaders),
                     HasTotals=Flag(()=>(object?)table.ShowTotals),
@@ -136,6 +147,8 @@ internal static class DeskSpaceExcelSemanticV106
                     FullySelected=row>=0 && col>=0 &&
                         row+rows<=height && col+cols<=width
                 };
+                for(int columnIndex=1;columnIndex<=cols;columnIndex++)
+                    snapshot.ColumnNames.Add(Safe(()=>(object?)table.ListColumns[columnIndex].Name));
                 report.Tables.Add(snapshot);
                 if(!snapshot.FullySelected)
                     report.Limitations.Add("Table "+snapshot.Name+
