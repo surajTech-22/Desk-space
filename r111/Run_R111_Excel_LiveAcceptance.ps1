@@ -24,8 +24,10 @@ $diag=Join-Path $downloads "DeskSpace_R111_LiveExcel_$stamp.zip"
 "SHA256 Acceptance.exe: $((Get-FileHash $test -Algorithm SHA256).Hash)" | Add-Content $log
 "Windows: $([Environment]::OSVersion.VersionString)" | Add-Content $log
 try {
-    & $test $app *>&1 | Out-String | Tee-Object -FilePath $log -Append
+    $liveOutput = (& $test $app *>&1 | Out-String)
     $exit=$LASTEXITCODE
+    $liveOutput | Add-Content -LiteralPath $log
+    Write-Host $liveOutput
     if($exit -ne 0){throw "Live Excel COM acceptance failed; exit code $exit"}
     "RESULT: PASS (actual Microsoft Excel COM)" | Add-Content -LiteralPath $log
 }
