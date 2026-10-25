@@ -29,6 +29,7 @@ Swap @'
         list.Children.Add(title);
         if(deckMinimized)
         {
+            deckPreview?.Close();
             popup.IsOpen=host.IsVisible;
             return;
         }
@@ -37,12 +38,13 @@ Swap @'
         if(deckMinimized)
         {
             excelDeckSuggestionsV123?.Bind(null);
+            deckPreview?.Close();
             popup.IsOpen=host.IsVisible;
             return;
         }
 '@ 'keep suggestions out of minimized header'
 Swap @'
-        popup.IsOpen=host.IsVisible;
+        popup.IsOpen=DeskSpaceDeckVisibilityV89.Visible&&host.IsVisible;
     }
     public void Dispose()
 '@ @'
@@ -53,7 +55,7 @@ Swap @'
             Margin=new Thickness(2,2,2,1)};
         list.Children.Add(excelSuggestionsHost);
         excelDeckSuggestionsV123?.Bind(excelSuggestionsHost);
-        popup.IsOpen=host.IsVisible;
+        popup.IsOpen=DeskSpaceDeckVisibilityV89.Visible&&host.IsVisible;
     }
     public void Dispose()
 '@ 'suggestions in existing deck'
