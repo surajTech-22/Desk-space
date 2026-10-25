@@ -146,10 +146,8 @@ Swap $shelf @'
         excelMatchesV122.Count)>0;}
 '@ 'shelf visibility when Excel-only suggestions'
 Swap $shelf @'
-        DeskSpaceRunningAppsV88.AddHoverGroup(list,runningApps,runningWindows);
         var heldGroup=DeskSpaceShelfGroupsV88.Add(list,"Held Files",
 '@ @'
-        DeskSpaceRunningAppsV88.AddHoverGroup(list,runningApps,runningWindows);
         var suggestionGroup=DeskSpaceShelfGroupsV88.Add(list,
             "Excel paste suggestions",excelMatchesV122.Count,
             excelExpandedV122,()=>{
