@@ -3,6 +3,15 @@ name: DeskSpace Windows Installer
 # Public repository: build R42 on branch updates and allow manual reruns.
 on:
   workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Release destination (stable requires deliberate approval)'
+        required: true
+        type: choice
+        default: tester
+        options:
+          - tester
+          - stable
   push:
     branches:
       - r42-excel-mapping-editor
@@ -1261,6 +1270,12 @@ jobs:
           ./r103/apply-r103.ps1
           ./r103/test-r103.ps1
 
+      - name: Apply R104 Excel sheet legibility and independent tester update channel
+        shell: pwsh
+        run: |
+          ./r104/apply-r104.ps1
+          ./r104/test-r104.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1385,8 +1400,66 @@ jobs:
           Write-Host 'Both Windows executables and checksum files are ready for GitHub Releases.'
 
 
+      - name: Publish R104 opt-in tester prerelease
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'workflow_dispatch' && inputs.channel == 'tester' && github.ref == 'refs/heads/r42-excel-mapping-editor')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $currentHead=(gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/r42-excel-mapping-editor" --jq '.object.sha').Trim()
+          if($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentHead)){
+            throw 'Cannot verify current R42 branch head'
+          }
+          if($currentHead -ne $env:GITHUB_SHA){
+            Write-Host 'Obsolete commit; verified release intentionally not published'
+            exit 0
+          }
+          $exe = 'release/DeskSpace_Setup.exe'
+          $checksum = 'release/DeskSpace_Setup.sha256.txt'
+          if (!(Test-Path $exe) -or !(Test-Path $checksum)) { throw 'Installer and checksum required' }
+          $digest = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = ((Get-Content $checksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          if ($digest -ne $expected) { throw 'Installer SHA256 mismatch' }
+          $update='release/Update.exe'
+          $updateChecksum='release/Update.sha256.txt'
+          if(!(Test-Path $update) -or !(Test-Path $updateChecksum)){throw 'Update.exe bridge missing'}
+          $copied=(Get-FileHash $update -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expectedUpdate=((Get-Content $updateChecksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          if($copied -ne $digest -or $expectedUpdate -ne $digest){
+            throw 'Update.exe SHA256 does not match trusted Setup.exe'
+          }
+          $versionLine = Select-String -Path 'installer/DeskSpace.iss' -Pattern '^#define AppVersion "([^"]+)"$' | Select-Object -First 1
+          if (!$versionLine) { throw 'Installer version missing' }
+          $version = $versionLine.Matches[0].Groups[1].Value
+          $tag = 'tester-v' + $version
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Refusing to overwrite tester release $tag" }
+          # GitHub API occasionally returns a transient 500 even after all
+          # Windows checks pass. Retry creation safely rather than withholding
+          # a verified build on a temporary backend failure.
+          $published=$false
+          for($attempt=1;$attempt -le 4;$attempt++){
+            gh release create $tag $exe $checksum $update $updateChecksum --prerelease --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace tester automatic update $version" --notes "Opt-in DeskSpace tester-channel prerelease from commit $env:GITHUB_SHA. Windows build, actual V36 widget and main Workspace WPF smoke tests, installer validation, and SHA-256 verification passed. Installs through the existing supervised updater."
+            if($LASTEXITCODE -eq 0){$published=$true;break}
+            gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+            if($LASTEXITCODE -eq 0){
+              # May have been created by the failed attempt. Require all
+              # four attached artifacts and identical trusted SHA256 digests.
+              $assets=gh release view $tag --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name'
+              if($LASTEXITCODE -ne 0){throw 'Cannot inspect partially created release'}
+              foreach($needed in @('DeskSpace_Setup.exe','DeskSpace_Setup.sha256.txt','Update.exe','Update.sha256.txt')){
+                if($assets -notcontains $needed){throw "Partially created release $tag lacks $needed"}
+              }
+              $published=$true;break
+            }
+            if($attempt -lt 4){Start-Sleep -Seconds (3*$attempt)}
+          }
+          if(-not $published){throw 'Automatic stable release publication failed after retries'}
+          Write-Host "Verified tester release: $tag"
+
       - name: Publish R42 stable automatic release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor'
+        if: github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1425,7 +1498,7 @@ jobs:
           # a verified build on a temporary backend failure.
           $published=$false
           for($attempt=1;$attempt -le 4;$attempt++){
-            gh release create $tag $exe $checksum $update $updateChecksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 automatic update $version" --notes "Stable DeskSpace R42 automatic-channel release from commit $env:GITHUB_SHA. Windows build, actual V36 widget and main Workspace WPF smoke tests, installer validation, and SHA-256 verification passed. Installs through the existing supervised updater."
+            gh release create $tag $exe $checksum $update $updateChecksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 automatic update $version" --notes "Approved DeskSpace stable-channel release from commit $env:GITHUB_SHA. Windows build, actual V36 widget and main Workspace WPF smoke tests, installer validation, and SHA-256 verification passed. Installs through the existing supervised updater."
             if($LASTEXITCODE -eq 0){$published=$true;break}
             gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
             if($LASTEXITCODE -eq 0){
