@@ -15,7 +15,7 @@ foreach($n in @(
   'SaveCopyAs(backup)',
   'WriteSnapshot(live.Range,live.Visual,true)',
   'var after=DeskSpaceExcelVisualCaptureV101.Capture(live.Range)',
-  'Existing Excel value/formula changed unexpectedly',
+  'An existing Excel value/formula changed unexpectedly.',
   'source.FormulaR1C1',
   'return "Verified "+source.Length',
   'WriteSnapshot(live.Range,before,true)'
