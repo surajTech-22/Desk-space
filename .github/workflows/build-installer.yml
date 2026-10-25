@@ -30,6 +30,7 @@ on:
       - fix/r119-excel-tuple-hasvalue
       - fix/r120-header-value-signature-paste
       - fix/r121-separate-excel-format-library
+      - fix/r122-contextual-pins-excel-deck-vault-placeholder
 
 permissions:
   contents: write
@@ -1359,6 +1360,11 @@ jobs:
         run: |
           ./r121/apply-r121.ps1
           ./r121/test-r121.ps1
+      - name: R122 recent pinned document, Excel match deck and vault placeholder
+        shell: pwsh
+        run: |
+          ./r122/apply-r122.ps1
+          ./r122/test-r122.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
