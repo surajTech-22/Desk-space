@@ -44,7 +44,7 @@ internal sealed partial class DeskSpaceExcelV16
         };
         area.Children.Add(formatLibraryV121);
         var saveActions=new WrapPanel();
-        saveActions.Children.Add(RequiresExcel(
+        saveActions.Children.Add(ButtonV42(
             "Capture selected formats & formulas",
             ()=>_ = CaptureFormatSnapshotV121(),true));
         saveActions.Children.Add(ButtonV42(
@@ -56,9 +56,9 @@ internal sealed partial class DeskSpaceExcelV16
             "Refresh formats",()=>Run(RefreshFormatsV121)));
         area.Children.Add(saveActions);
         var useActions=new WrapPanel();
-        useActions.Children.Add(RequiresExcel(
+        useActions.Children.Add(ButtonV42(
             "Preview format destination",PreviewFormatV109));
-        useActions.Children.Add(RequiresExcel(
+        useActions.Children.Add(ButtonV42(
             "Apply formats & formulas",ApplyFormatV109,true));
         area.Children.Add(useActions);
         formatStatusV121=HintV42(
