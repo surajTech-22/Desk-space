@@ -9,7 +9,7 @@ using System.Text.Json;
 namespace DeskSpace;
 
 // Dedicated, per-user encrypted format library. Never uses the header/value
-// templates.dpapi file; old mapping records are neither migrated nor overwritten.
+// the header/value library file; old mapping records are neither migrated nor overwritten.
 internal static class DeskSpaceExcelFormatStoreV121
 {
     [StructLayout(LayoutKind.Sequential)]
