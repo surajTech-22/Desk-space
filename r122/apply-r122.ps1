@@ -192,4 +192,42 @@ Swap $info @'
             ToolTip="Placeholder only — existing security vault remains unchanged"
         });
 '@ 'vault autofill association informational placeholder'
+$smoke='r36/UiSmoke/Program.cs'
+Swap $smoke @'
+            TestHeaderValueSignatureV120();
+'@ @'
+            TestHeaderValueSignatureV120();
+            TestContextualFeaturesV122();
+'@ 'new R122 pure rules runtime smoke'
+$method=@'
+    private static void TestContextualFeaturesV122()
+    {
+        var recent=Product.GetType("DeskSpace.DeskSpacePinnedRecentV122",true)!;
+        var same=recent.GetMethod("SameExecutableV122",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        bool Same(string a,string b)=>(bool)same.Invoke(null,new object[]{a,b})!;
+        Assert(Same(@"C:\Program Files\Microsoft Office\EXCEL.EXE",
+                    @"D:\Programs\Excel.exe"),
+            "R122 Excel pinned handler must match same application");
+        Assert(!Same(@"C:\Windows\notepad.exe",
+                     @"C:\Windows\explorer.exe"),
+            "R122 never open unrelated recent document for a pin");
+        var matching=Product.GetType("DeskSpace.DeskSpaceExcelActiveV122",true)!;
+        var safe=matching.GetMethod("SafeToSuggest",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        bool Suggest(bool foreground,bool verified,int writable)=>
+            (bool)safe.Invoke(null,new object[]{foreground,verified,writable})!;
+        Assert(Suggest(true,true,1),
+            "R122 verified foreground Excel header mapping may suggest");
+        Assert(!Suggest(false,true,1) &&
+               !Suggest(true,false,1) &&
+               !Suggest(true,true,0),
+            "R122 never suggest when Excel inactive, label signature ambiguous, or no writable cells");
+        Console.WriteLine("R122 PASS: app-linked recent paths, foreground Excel suggestion constraints.");
+    }
+
+'@
+Swap $smoke @'
+    private static void TestExcelTypeAwareSheetV101()
+'@ ($method+'    private static void TestExcelTypeAwareSheetV101()') 'compiled recent path and Excel suggestion guards'
 Write-Host 'R122: pinned app recent-document open; active Excel verified-match buttons on deck with explicit confirmation; credential placeholder without monitoring.'
