@@ -1288,6 +1288,12 @@ jobs:
         run: |
           ./r106/apply-r106.ps1
 
+      - name: Apply R109 direct Excel format-only implementation (dev verification, no release)
+        shell: pwsh
+        run: |
+          ./r109/apply-r109.ps1
+          ./r109/test-r109.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
