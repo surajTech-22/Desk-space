@@ -249,7 +249,6 @@ ReplaceOnce $bridge @'
 ReplaceOnce $bridge @'
         if((bool)sheet.ProtectContents)
             throw new InvalidOperationException("The destination worksheet is protected.");
-        // Detect modifications made since the preview before touching the workbook.
 '@ @'
         if((bool)sheet.ProtectContents)
             throw new InvalidOperationException("The destination worksheet is protected.");
@@ -262,7 +261,6 @@ ReplaceOnce $bridge @'
                     "Header/reference signature changed since preview. "+
                     "No Excel cells changed. Preview the value mapping again.");
         }
-        // Detect modifications made since the preview before touching the workbook.
 '@ 'prevent stale header signature before writes'
 
 $smoke='r36/UiSmoke/Program.cs'
