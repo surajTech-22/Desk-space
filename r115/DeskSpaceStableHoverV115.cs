@@ -169,6 +169,31 @@ internal static class DeskSpaceStableHoverV93
         };
     }
 
+    // Multi-window applications sit on the OUTSIDE edges. If every app has
+    // exactly one window, alphabetical ordering applies throughout.
+    // More windows take precedence; subsequent grouped apps alternate edges.
+    internal static string[] OrderAppNamesV115(
+        IEnumerable<(string Name,int Count)> groups,bool outwardRight)
+    {
+        var items=groups.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var multis=items.Where(x=>x.Count>1)
+            .OrderByDescending(x=>x.Count)
+            .ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToArray();
+        var singles=items.Where(x=>x.Count<=1)
+            .Select(x=>x.Name).ToArray();
+        if(multis.Length==0)return singles;
+        var left=new List<string>();
+        var right=new List<string>();
+        for(int i=0;i<multis.Length;i++)
+        {
+            bool toRight=outwardRight ? i%2==0:i%2==1;
+            if(toRight)right.Insert(0,multis[i].Name);
+            else left.Add(multis[i].Name);
+        }
+        return left.Concat(singles).Concat(right).ToArray();
+    }
+
     // Shared per-window close control. Separate from the switch button, so
     // clicking X never activates or minimises a window.
     internal static Button MakeCloseButton(DeskSpaceRunningAppsV88.Entry window)
@@ -233,6 +258,39 @@ internal static class DeskSpaceStableHoverV93
             StringComparer.OrdinalIgnoreCase);
         var appBadges=new Dictionary<string,TextBlock>(
             StringComparer.OrdinalIgnoreCase);
+        // Updating order never recreates tiles, HWNDs, or the menu.
+        void OrderIconTiles(bool outwardRight,
+            IReadOnlyList<DeskSpaceRunningAppsV88.Entry> current)
+        {
+            var appOrder=OrderAppNamesV115(appTiles.Keys.Select(name=>
+                (Name:name,Count:current.Count(w=>
+                    string.Equals(w.Name,name,StringComparison.OrdinalIgnoreCase)))),
+                outwardRight);
+            int index=0;
+            foreach(var name in appOrder)
+                if(appTiles.TryGetValue(name,out var tile))
+                {
+                    int at=iconRow.Children.IndexOf(tile);
+                    if(at>=0 && at!=index)
+                    {
+                        iconRow.Children.RemoveAt(at);
+                        iconRow.Children.Insert(index,tile);
+                    }
+                    index++;
+                }
+        }
+        bool PreferOutwardRight()
+        {
+            try
+            {
+                var card=iconCard.PointToScreen(
+                    new Point(iconCard.ActualWidth/2,0));
+                var deck=heading.PointToScreen(
+                    new Point(heading.ActualWidth/2,0));
+                return deck.X<card.X;
+            }
+            catch(InvalidOperationException){return false;}
+        }
         int liveCount=windows.Count;
         var iconCard=new Border{
             Background=new SolidColorBrush(Color.FromRgb(32,44,71)),
@@ -343,7 +401,9 @@ internal static class DeskSpaceStableHoverV93
                         (int)Math.Round((from.X+far.X)/2),
                         (int)Math.Round((from.Y+far.Y)/2))).WorkingArea;
                 double dpi=VisualTreeHelper.GetDpi(iconCard).DpiScaleX;
-                bool outwardRight=(from.X+far.X)/2>=headingPoint.X;
+                // Place the list outward from the PARTICULAR multi-window
+                // tile, not toward the centre of its sibling app icons.
+                bool outwardRight=alignX>=iconCard.ActualWidth/2;
                 placement=ChooseFourWayPlacement(
                     from.X-monitor.Left,monitor.Right-far.X,
                     from.Y-monitor.Top,monitor.Bottom-far.Y,
@@ -470,6 +530,7 @@ internal static class DeskSpaceStableHoverV93
             if(activeMatches.Length==0)windowPopup.IsOpen=false;
             if(heading.Child is TextBlock label)
                 label.Text="▸  Running Apps · "+groups.Count;
+            OrderIconTiles(PreferOutwardRight(),live);
             // Update the deck count without destroying the hovered popup.
             if(groups.Count==0)Hide();
             onLiveChanged?.Invoke(groups,live);
@@ -501,6 +562,11 @@ internal static class DeskSpaceStableHoverV93
             iconPopup.IsOpen=true;
             activeIconPopup=iconPopup;
             Reconcile();
+            // WPF decides whether the parent grid opens left or right.
+            // Reorder after that decision; grouped tiles stay on its outer edge.
+            iconCard.Dispatcher.BeginInvoke(new Action(()=>
+                OrderIconTiles(PreferOutwardRight(),windows)),
+                System.Windows.Threading.DispatcherPriority.Loaded);
             if(iconPopup.IsOpen)liveTimer.Start();
         };
         heading.MouseLeave+=(_,_)=>CloseLater();
@@ -619,6 +685,7 @@ internal static class DeskSpaceStableHoverV93
                 appTiles[app.Name]=appButton;
             }
         }
+        OrderIconTiles(false,windows);
         // Separate Popup HWNDs must close when the old deck is hidden
         // or its contents are regenerated.
         heading.Unloaded+=(_,_)=>{
