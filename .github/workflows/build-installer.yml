@@ -26,6 +26,7 @@ on:
       - fix/r115-four-way-running-windows
       - fix/r116-blank-excel-autofill-anchor
       - fix/r117-blank-format-save-and-deck-grid
+      - fix/r118-reachable-window-flyouts
 
 permissions:
   contents: write
@@ -1335,6 +1336,11 @@ jobs:
         run: |
           ./r117/apply-r117.ps1
           ./r117/test-r117.ps1
+      - name: R118 anchor multi-window flyouts to reachable four-way positions
+        shell: pwsh
+        run: |
+          ./r118/apply-r118.ps1
+          ./r118/test-r118.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
