@@ -21,6 +21,7 @@ on:
     branches:
       - r42-excel-mapping-editor
       - fix/r106-excel-structure-capture
+      - fix/r113-running-windows-side-only
 
 permissions:
   contents: write
@@ -1301,6 +1302,12 @@ jobs:
           ./r109/apply-r109.ps1
           ./r109/test-r109.ps1
           ./r110/test-r110.ps1
+
+      - name: Apply and verify R113 running-app multi-window side-only placement
+        shell: pwsh
+        run: |
+          ./r113/apply-r113.ps1
+          ./r113/test-r113.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
