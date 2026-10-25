@@ -316,7 +316,8 @@ internal static class DeskSpaceExcelFormatApplyV109
             var actual=after.Cells.OrderBy(x=>x.Row).ThenBy(x=>x.Column).ToArray();
             for(int i=0;i<source.Length;i++)
             {
-                var a=actual[i],s=source[i];
+                var a=actual[i];
+                var s=source[i];
                 if(s.NumberFormat!=a.NumberFormat ||
                    s.FontName!=a.FontName ||
                    Math.Abs(s.FontSize-a.FontSize)>0.5 ||
