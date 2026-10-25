@@ -23,6 +23,7 @@ on:
       - fix/r106-excel-structure-capture
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
+      - fix/r115-four-way-running-windows
 
 permissions:
   contents: write
@@ -1315,6 +1316,12 @@ jobs:
         run: |
           ./r114/apply-r114.ps1
           ./r114/test-r114.ps1
+
+      - name: R115 four-way grouped apps and native 100 percent Excel mapping preview
+        shell: pwsh
+        run: |
+          ./r115/apply-r115.ps1
+          ./r115/test-r115.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
