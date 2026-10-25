@@ -18,6 +18,14 @@ $helper=@'
     // Prefer a flyout immediately above/below the *whole* grid, aligned
     // to the hovered tile. Only fall back to the opposite side when there
     // is no reachable vertical area. Both dimensions are DPI aware.
+    // Measure the actual adjacent Deck surface, NOT merely the monitor.
+    // A heading directly against the grid leaves zero outward flyout room
+    // even if there are hundreds of monitor pixels beyond that heading.
+    internal static double FreeSideBeforeDeckV118(
+        double monitorRoomPx,double gridEdgePx,double deckNearEdgePx)=>
+        Math.Max(0,Math.Min(Math.Max(0,monitorRoomPx),
+            deckNearEdgePx-gridEdgePx-8));
+
     internal static WindowPlacementV115 ChooseReachableFlyoutV118(
         double freeLeftPx,double freeRightPx,double freeTopPx,
         double freeBottomPx,double monitorWidthPx,double dpi,
@@ -119,8 +127,19 @@ ReplaceOnce $source @'
                 bool preferAbove=tileY<=iconCard.ActualHeight/2;
                 deckToRight=heading.PointToScreen(new Point(
                     heading.ActualWidth/2,0)).X>(from.X+far.X)/2;
+                var deckFrom=heading.PointToScreen(new Point(0,0));
+                var deckFar=heading.PointToScreen(
+                    new Point(heading.ActualWidth,0));
+                double freeLeft=from.X-monitor.Left;
+                double freeRight=monitor.Right-far.X;
+                if(deckToRight)
+                    freeRight=FreeSideBeforeDeckV118(
+                        freeRight,far.X,deckFrom.X);
+                else
+                    freeLeft=FreeSideBeforeDeckV118(
+                        freeLeft,deckFar.X,from.X);
                 placement=ChooseReachableFlyoutV118(
-                    from.X-monitor.Left,monitor.Right-far.X,
+                    freeLeft,freeRight,
                     from.Y-monitor.Top,monitor.Bottom-far.Y,
                     monitor.Width,dpi,pendingWindows.Length,outwardRight,
                     preferAbove);
@@ -182,6 +201,16 @@ $method=@'
                 enumValue,252d,120d,276d,110d,5d,208d,
                 -410d,220d,-250d,320d,deckRight})!;
         }
+        var boundary=cls.GetMethod("FreeSideBeforeDeckV118",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        double Remaining(double room,double from,double deck)=>
+            (double)boundary.Invoke(null,new object[]{room,from,deck})!;
+        Assert(Remaining(573,1347,1340)==0,
+            "R118 Deck directly beside right grid edge blocks outward popup");
+        Assert(Remaining(500,600,810)==202,
+            "R118 stop at Deck surface despite available monitor width");
+        Assert(Remaining(300,800,1200)==300,
+            "R118 preserve available room when no Deck obstruction");
         var above=Where("Up",true);
         Assert(above.Y+110<=-6 &&
                above.X+276<=252-7 &&
