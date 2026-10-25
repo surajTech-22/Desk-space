@@ -14,9 +14,6 @@ function Swap([string]$path,[string]$before,[string]$after,[string]$label)
     [Text.UTF8Encoding]::new($false))
 }
 $ui="$r/DeskSpaceExcelEditorV42.cs"
-Swap $ui '        editButtons.Children.Add(ButtonV42("Save collection & data",' @'
-        editButtons.Children.Add(ButtonV42("Save header/value mapping",
-'@ 'clarify value-only save'
 Swap $ui @'
         editorHead.Children.Add(editButtons);
         DockPanel.SetDock(editorHead,Dock.Top);right.Children.Add(editorHead);
@@ -36,7 +33,7 @@ Swap $ui @'
             "Apply selected format",ApplyFormatV109,true));
 '@ @'
         pasteButtons.Children.Add(RequiresExcel(
-            "Apply header/value mapping",()=>Run(Apply),true));
+            "Apply autofill",()=>Run(Apply),true));
 '@ 'remove format buttons from value paste'
 Swap $ui @'
     private DeskSpaceExcelTemplateV16 FormatSourceV109()
