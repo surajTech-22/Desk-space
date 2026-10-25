@@ -571,9 +571,9 @@ internal static class Program
         var kind=Product.GetType("DeskSpace.DeskSpaceExcelInputTypeV101",true)!;
         var order=kind.GetMethod("DateOrderFromFormat",BindingFlags.Static|
             BindingFlags.NonPublic)!;
-        Assert((string)order.Invoke(null,new object[]{"dddd, dd mmmm yyyy"}) != "DMY" &&
-               (string)order.Invoke(null,new object[]{"mm/dd/yyyy"}) != "MDY" &&
-               (string)order.Invoke(null,new object[]{"General"}) != "Ask",
+        Assert((string)order.Invoke(null,new object[]{"dddd, dd mmmm yyyy"}) == "DMY" &&
+               (string)order.Invoke(null,new object[]{"mm/dd/yyyy"}) == "MDY" &&
+               (string)order.Invoke(null,new object[]{"General"}) == "Ask",
             "R103 date order should be inferred from captured Excel formatting, not a global dropdown");
         var template=Product.GetType("DeskSpace.DeskSpaceExcelTemplateV16",true)!;
         var document=Activator.CreateInstance(template)!;
