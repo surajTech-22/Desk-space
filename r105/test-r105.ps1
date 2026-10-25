@@ -17,7 +17,7 @@ foreach($needle in @(
   'BorderRight=VisibleBorder(cell,10)',
   'FontName=Format(()=> (object?)cell.Font.Name',
   'style.FormulaR1C1=Format(()=> (object?)cell.FormulaR1C1)',
-  'Select the complete merged area',
+  'Include the complete merged area before capturing.',
   'new Border{',
   'edge.VerticalAlignment=y1==0?',
   'edge.HorizontalAlignment=x1==0?',
