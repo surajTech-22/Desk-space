@@ -426,6 +426,14 @@ internal static class DeskSpaceExcelSheetViewV101
                      (item.Italic?" · Italic":"")+
                      (item.MergeColumns>1 || item.MergeRows>1?
                         " · Merged "+item.MergeRows+"×"+item.MergeColumns:""))+
+                    (item==null?"":
+                        " · Fill #"+(item.FillBgr&0xFFFFFF).ToString("X6")+
+                        " · Font color #"+(item.FontBgr&0xFFFFFF).ToString("X6")+
+                        " · Edges "+(item.BorderLeft?"L":"")+(item.BorderTop?"T":"")+
+                            (item.BorderRight?"R":"")+(item.BorderBottom?"B":"")+
+                        " · Alignment "+item.HorizontalAlignment+"/"+item.VerticalAlignment+
+                        (item.WrapText?" · Wrap":"")+
+                        (item.ConditionalAppearance?" · Conditional appearance":""))+
                     (isFormula?"  |  "+(item!.FormulaA1.Length>0?
                         item.FormulaA1:item.FormulaR1C1):"  |  Data hidden")+
                     "  |  Stored: "+(item?.StoredType??"Unknown")+
