@@ -394,8 +394,9 @@ internal static class DeskSpaceStableHoverV93
                 var from=iconCard.PointToScreen(new Point(0,0));
                 var far=iconCard.PointToScreen(
                     new Point(iconCard.ActualWidth,iconCard.ActualHeight));
-                var headingPoint=heading.PointToScreen(
-                    new Point(heading.ActualWidth/2,0));
+                // The tile is measured inside the grid after layout.
+                alignX=anchor.TranslatePoint(
+                    new Point(anchor.ActualWidth/2,0),iconCard).X;
                 var monitor=System.Windows.Forms.Screen.FromPoint(
                     new System.Drawing.Point(
                         (int)Math.Round((from.X+far.X)/2),
@@ -413,8 +414,6 @@ internal static class DeskSpaceStableHoverV93
                 right=(monitor.Right-from.X)/dpi-8;
                 top=(monitor.Top-from.Y)/dpi+8;
                 bottom=(monitor.Bottom-from.Y)/dpi-8;
-                alignX=anchor.TranslatePoint(
-                    new Point(anchor.ActualWidth/2,0),iconCard).X;
             }
             catch(InvalidOperationException)
             {
