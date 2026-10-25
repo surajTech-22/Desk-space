@@ -220,8 +220,17 @@ internal static class DeskSpaceExcelFormatApplyV109
            snap.NativeRowHeights.Count!=snap.Rows)
             throw new InvalidDataException("Missing exact original Excel dimensions.");
         var feature=snap.FeaturesV106?.Cells.ToDictionary(c=>(c.Row,c.Column));
+        var mergedUnderlying=new HashSet<(int,int)>();
+        foreach(var anchor in snap.Cells.Where(x=>x.MergeRows>1 || x.MergeColumns>1))
+            for(int mr=anchor.Row;mr<anchor.Row+anchor.MergeRows;mr++)
+                for(int mc=anchor.Column;mc<anchor.Column+anchor.MergeColumns;mc++)
+                    if(mr!=anchor.Row || mc!=anchor.Column)
+                        mergedUnderlying.Add((mr,mc));
         foreach(var s in snap.Cells.OrderBy(c=>c.Row).ThenBy(c=>c.Column))
         {
+            // Never individually edit a non-anchor cell inside a merged area;
+            // Excel rejects it and could otherwise corrupt the merge.
+            if(mergedUnderlying.Contains((s.Row,s.Column)))continue;
             // Avoid relying on an out variable from null-conditional dynamic access.
             DeskSpaceExcelCellFeatureV106? item=
                 feature!=null && feature.TryGetValue((s.Row,s.Column),out var found)?
