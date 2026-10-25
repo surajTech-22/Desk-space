@@ -1463,6 +1463,22 @@ jobs:
           }
           [IO.File]::WriteAllLines("$root/MANIFEST.sha256.txt",$manifest)
           Write-Host "R111 portable files $($files.Count), all checksummed; no installer release."
+      - name: Attempt real Excel COM acceptance if Office is installed on the runner
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $office=[Type]::GetTypeFromProgID('Excel.Application')
+          if($null -eq $office){
+            Write-Host 'R111 NOT VERIFIED: desktop Microsoft Excel is absent on this runner.'
+            Write-Host 'R111 portable test artifact must run on an Excel-installed Windows PC.'
+          }else{
+            $root='r111/portable-acceptance'
+            & "$root/R111Test/LiveExcelAcceptance.exe" "$root/DeskSpaceTestApp/DeskSpace.dll"
+            if($LASTEXITCODE -ne 0){throw "Real Microsoft Excel acceptance failed ($LASTEXITCODE)."}
+            Write-Host 'R111 REAL Excel COM acceptance PASSED on Windows runner.'
+          }
+
       - name: Upload R111 portable candidate for live Excel acceptance (NOT an update)
         if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
         uses: actions/upload-artifact@v4
