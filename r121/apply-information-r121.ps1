@@ -4,7 +4,6 @@ $p='DeskSpace_Windows_R1/DeskSpace/DeskSpaceInformationV36.cs'
 $lf=[string][char]10;$crlf=[string][char]13+$lf
 $s=[IO.File]::ReadAllText($p).Replace($crlf,$lf)
 $old=@'
-        shelfBody.Children.Add(name);
         var rowsHost=new StackPanel();
 '@
 $new=@'
