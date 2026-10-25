@@ -114,6 +114,11 @@ internal static class DeskSpaceExcelFormatApplyV109
         if(sourceFormula && decision.State==DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty &&
            order.Any(x=>x.StoredType=="Formula" && x.FormulaR1C1.Length==0))
             problems.Add("One or more source formulas lack their exact R1C1 definition.");
+        if(order.Any(c=>c.DirectFillPattern==int.MinValue ||
+            c.DirectFontColorIndex==int.MinValue ||
+            (c.DirectFillPattern!=1 && c.DirectFillPattern!=-4142 &&
+             c.DirectFillPattern!=-4105)))
+            problems.Add("Some source cells have unsupported or unreadable direct fill-pattern/font-colour metadata.");
         if(features.Cells.Any(c=>c.ValidationType>=0 || c.ConditionalRuleCount>0))
             problems.Add("Source uses data validation or conditional rules not covered by this format-only transaction.");
         if(features.Cells.Any(c=>c.IsArrayFormula))
@@ -275,8 +280,30 @@ internal static class DeskSpaceExcelFormatApplyV109
         cell.Font.Italic=s.Italic;
         cell.Font.Strikethrough=s.StrikeThrough;
         cell.Font.Underline=feature?.UnderlineStyle??(s.Underline?2:-4142);
-        cell.Font.Color=s.FontBgr;
-        cell.Interior.Color=s.FillBgr;
+        // Do not paint every table cell white or set every font black:
+        // those explicit overrides suppress Excel's real ListObject styling.
+        // Restore the source DIRECT style layer, never the computed display
+        // colour from DisplayFormat. Excel recreates the display via TableStyle.
+        if(s.DirectFontThemeColor>0)
+            cell.Font.ThemeColor=s.DirectFontThemeColor;
+        else if(s.DirectFontColorIndex==-4105)
+            cell.Font.ColorIndex=-4105;
+        else
+            cell.Font.Color=s.FontBgr;
+        if(s.DirectFillPattern==-4142)
+            cell.Interior.Pattern=-4142;
+        else if(s.DirectFillPattern==-4105)
+            cell.Interior.Pattern=-4105;
+        else if(s.DirectFillPattern==1)
+        {
+            cell.Interior.Pattern=1;
+            if(s.DirectFillThemeColor>0)
+                cell.Interior.ThemeColor=s.DirectFillThemeColor;
+            else
+                cell.Interior.Color=s.FillBgr;
+        }
+        else
+            throw new InvalidDataException("Unsupported direct Excel fill pattern.");
         cell.HorizontalAlignment=s.HorizontalAlignment;
         cell.VerticalAlignment=s.VerticalAlignment;
         cell.WrapText=s.WrapText;
@@ -534,6 +561,7 @@ internal static class DeskSpaceExcelFormatApplyV109
                    s.Bold!=a.Bold || s.Italic!=a.Italic ||
                    s.Underline!=a.Underline || s.StrikeThrough!=a.StrikeThrough ||
                    s.FillBgr!=a.FillBgr || s.FontBgr!=a.FontBgr ||
+                   s.DirectFillPattern!=a.DirectFillPattern ||
                    s.BorderLeft!=a.BorderLeft||s.BorderRight!=a.BorderRight ||
                    s.BorderTop!=a.BorderTop||s.BorderBottom!=a.BorderBottom))
                     throw new InvalidDataException(
