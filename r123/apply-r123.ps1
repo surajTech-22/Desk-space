@@ -325,4 +325,48 @@ Swap $shelf @'
         mediaDeckTimerV123.Stop();
         DeskSpaceMediaV18.DeckIntegrationV123=false;
 '@ 'stop deck media state watcher when widget closes'
+$smoke='r36/UiSmoke/Program.cs'
+Swap $smoke @'
+            TestContextualFeaturesV122();
+'@ @'
+            TestContextualFeaturesV122();
+            TestFormatHeadersAndDeckV123();
+'@ 'run actual header-independent format helper regression'
+$method=@'
+    private static void TestFormatHeadersAndDeckV123()
+    {
+        var fmt=Product.GetType("DeskSpace.DeskSpaceExcelFormatApplyV109",true)!;
+        var check=fmt.GetMethod("HeadersIndependentV123",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        bool CanUse(string[] dest,string[] source)=>
+            (bool)check.Invoke(null,new object[]{dest,source})!;
+        Assert(CanUse(new[]{"Date","Amount"},
+                      new[]{"Invoice no","Tax"}),
+            "R123 destination Table columns must NOT have to match source headers");
+        Assert(CanUse(new[]{"MyHeader1","MyHeader2"},
+                      Array.Empty<string>()),
+            "R123 format-only templates require no saved header labels");
+        Assert(!CanUse(new[]{"","Amount"},new[]{"A","B"}) &&
+               !CanUse(new[]{"Dup","dup"},new[]{"X","Y"}),
+            "R123 preserve Excel Table structural safety: no missing/duplicate destination headers");
+        var generator=fmt.GetMethod("StructuralHeaderV123",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        Assert((string)generator.Invoke(null,new object[]{0})!=="Column1" &&
+               (string)generator.Invoke(null,new object[]{1})!=="Column2",
+            "R123 blank Table gets neutral structural names, not source data");
+        var media=Product.GetType("DeskSpace.DeskSpaceMediaV18",true)!;
+        Assert(media.GetMethod("DeckCommandV123",BindingFlags.NonPublic|
+                   BindingFlags.Instance)!=null &&
+               media.GetMethod("DismissPanelV123",BindingFlags.NonPublic|
+                   BindingFlags.Instance)!=null &&
+               media.GetProperty("DeckVisibleV123",BindingFlags.NonPublic|
+                   BindingFlags.Instance)!=null,
+            "R123 deck exposes actual session playback commands and non-stop close");
+        Console.WriteLine("R123 PASS: source-header independent Table metadata and integrated media close/controls.");
+    }
+
+'@
+Swap $smoke @'
+    private static void TestExcelTypeAwareSheetV101()
+'@ ($method+'    private static void TestExcelTypeAwareSheetV101()') 'WPF runtime regression for header-neutral formats and player controls'
 Write-Host 'R123: Excel formatting ignores source headers, preserving structural safety; media player controls + Close are inside existing deck.'
