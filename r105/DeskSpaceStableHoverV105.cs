@@ -421,10 +421,15 @@ internal static class DeskSpaceStableHoverV93
                         new Point(iconCard.ActualWidth,0));
                     var tile=appButton.PointToScreen(
                         new Point(appButton.ActualWidth/2,0));
-                    var work=SystemParameters.WorkArea;
+                    // Evaluate the actual monitor under this app icon, not
+                    // only the primary monitor's desktop working area.
+                    var work=System.Windows.Forms.Screen.FromPoint(
+                        new System.Drawing.Point((int)Math.Round(tile.X),
+                            (int)Math.Round(tile.Y))).WorkingArea;
+                    double needed=280*VisualTreeHelper.GetDpi(iconCard).DpiScaleX;
                     pendingRight=PreferRight(
                         left.X-work.Left,work.Right-right.X,
-                        (tile.X-left.X)/Math.Max(1,right.X-left.X),280);
+                        (tile.X-left.X)/Math.Max(1,right.X-left.X),needed);
                 }
                 catch(InvalidOperationException)
                 {
