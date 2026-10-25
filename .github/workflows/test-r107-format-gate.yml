@@ -1,0 +1,20 @@
+name: DeskSpace Strict Excel Full-Range Gate Tests
+on:
+  push:
+    branches:
+      - fix/r106-excel-structure-capture
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  format-gate-test:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build and test all-empty / complete / partial / mismatch states
+        shell: pwsh
+        run: dotnet run --configuration Release --project r107/tests/GateTests.csproj
