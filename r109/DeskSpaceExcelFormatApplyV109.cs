@@ -284,7 +284,13 @@ internal static class DeskSpaceExcelFormatApplyV109
         // those explicit overrides suppress Excel's real ListObject styling.
         // Restore the source DIRECT style layer, never the computed display
         // colour from DisplayFormat. Excel recreates the display via TableStyle.
-        if(s.DirectFontThemeColor>0)
+        if(feature?.TableName.Length>0 && s.DisplayStyleAvailable &&
+           s.DisplayFontBgr!=s.FontBgr)
+            // The visible colour is supplied by the real Excel table style,
+            // while the ordinary Font layer is an automatic/default colour.
+            // An explicit RGB write would incorrectly override the header.
+            cell.Font.ColorIndex=-4105;
+        else if(s.DirectFontThemeColor>0)
             cell.Font.ThemeColor=s.DirectFontThemeColor;
         else if(s.DirectFontColorIndex==-4105)
             cell.Font.ColorIndex=-4105;
