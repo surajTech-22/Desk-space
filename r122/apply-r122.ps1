@@ -173,12 +173,16 @@ Swap $shelf @'
 '@ 'real click-to-confirm suggestions inside existing deck'
 Swap $shelf @'
         runningAppsTimer.Stop();
+        deckPreview?.Dispose();
+        deckPreview=null;
         DeskSpaceDeckVisibilityV89.Changed-=DeckVisibilityChanged;
 '@ @'
         runningAppsTimer.Stop();
         excelSuggestTimerV122.Stop();
+        deckPreview?.Dispose();
+        deckPreview=null;
         DeskSpaceDeckVisibilityV89.Changed-=DeckVisibilityChanged;
-'@ 'cleanup suggestion timer when shelf disposed'
+'@ 'cleanup suggestion timer after R99 detached preview'
 $info="$r/DeskSpaceInformationV36.cs"
 Swap $info @'
         shelfBody.Children.Add(rowsHost);
