@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace DeskSpace;
 
@@ -34,6 +35,11 @@ internal sealed class DeskSpaceExcelStyledCellV101
     public double FontSize {get;set;}=11;
     public bool Bold {get;set;}
     public bool Italic {get;set;}
+    public bool Underline {get;set;}
+    public bool StrikeThrough {get;set;}
+    public int IndentLevel {get;set;}
+    public int TextOrientation {get;set;}
+    public bool ShrinkToFit {get;set;}
     public bool WrapText {get;set;}
     public int HorizontalAlignment {get;set;}
     public int VerticalAlignment {get;set;}
@@ -43,6 +49,15 @@ internal sealed class DeskSpaceExcelStyledCellV101
     public bool BorderBottom {get;set;}
     public bool BorderLeft {get;set;}
     public bool BorderRight {get;set;}
+    public int BorderLeftColor {get;set;}
+    public int BorderTopColor {get;set;}
+    public int BorderRightColor {get;set;}
+    public int BorderBottomColor {get;set;}
+    public int BorderLeftWeight {get;set;}
+    public int BorderTopWeight {get;set;}
+    public int BorderRightWeight {get;set;}
+    public int BorderBottomWeight {get;set;}
+    public bool ConditionalAppearance {get;set;}
     public string Address {get;set;}="";
 }
 
@@ -91,6 +106,15 @@ internal static class DeskSpaceExcelVisualCaptureV101
         catch(COMException){return false;}
         catch(InvalidCastException){return false;}
     }
+    private static int BorderColor(dynamic cell,int edge)=>
+        Number(()=>(object?)cell.Borders[edge].Color,0x222222);
+    private static int BorderWeight(dynamic cell,int edge)=>
+        Number(()=>(object?)cell.Borders[edge].Weight,2);
+    private static bool HasConditionalAppearance(dynamic cell)
+    {
+        try{return (int)cell.FormatConditions.Count>0;}
+        catch(COMException){return false;}
+    }
     internal static DeskSpaceExcelSheetVisualV101 Capture(dynamic range)
     {
         int rows=(int)range.Rows.Count,columns=(int)range.Columns.Count;
@@ -104,7 +128,7 @@ internal static class DeskSpaceExcelVisualCaptureV101
                 Measure(()=> (object?)range.Rows[r].RowHeight,15)*1.333,18,95));
         for(int c=1;c<=columns;c++)
             view.ColumnWidths.Add(Math.Clamp(
-                Measure(()=> (object?)range.Columns[c].ColumnWidth,10)*7.3+8,54,245));
+                Measure(()=> (object?)range.Columns[c].Width,75)*96/72,38,440));
         var covered=new HashSet<(int,int)>();
         for(int r=1;r<=rows;r++)
         for(int c=1;c<=columns;c++)
@@ -119,6 +143,11 @@ internal static class DeskSpaceExcelVisualCaptureV101
                 FontSize=Math.Clamp(Measure(()=> (object?)cell.Font.Size,11),7,24),
                 Bold=Flag(()=> (object?)cell.Font.Bold),
                 Italic=Flag(()=> (object?)cell.Font.Italic),
+                Underline=Number(()=> (object?)cell.Font.Underline,-4142)!=-4142,
+                StrikeThrough=Flag(()=> (object?)cell.Font.Strikethrough),
+                IndentLevel=Math.Clamp(Number(()=> (object?)cell.IndentLevel),0,15),
+                TextOrientation=Number(()=> (object?)cell.Orientation),
+                ShrinkToFit=Flag(()=> (object?)cell.ShrinkToFit),
                 WrapText=Flag(()=> (object?)cell.WrapText),
                 HorizontalAlignment=Number(()=> (object?)cell.HorizontalAlignment),
                 VerticalAlignment=Number(()=> (object?)cell.VerticalAlignment),
@@ -127,8 +156,26 @@ internal static class DeskSpaceExcelVisualCaptureV101
                 BorderLeft=VisibleBorder(cell,7),   // xlEdgeLeft
                 BorderTop=VisibleBorder(cell,8),    // xlEdgeTop
                 BorderBottom=VisibleBorder(cell,9), // xlEdgeBottom
-                BorderRight=VisibleBorder(cell,10)  // xlEdgeRight
+                BorderRight=VisibleBorder(cell,10), // xlEdgeRight
+                BorderLeftColor=BorderColor(cell,7),
+                BorderTopColor=BorderColor(cell,8),
+                BorderBottomColor=BorderColor(cell,9),
+                BorderRightColor=BorderColor(cell,10),
+                BorderLeftWeight=BorderWeight(cell,7),
+                BorderTopWeight=BorderWeight(cell,8),
+                BorderBottomWeight=BorderWeight(cell,9),
+                BorderRightWeight=BorderWeight(cell,10)
             };
+            style.ConditionalAppearance=HasConditionalAppearance(cell);
+            if(style.ConditionalAppearance)
+            {
+                // DisplayFormat is a visual snapshot. Preserve computed
+                // appearance without pretending to capture rule logic.
+                style.FillBgr=Number(()=> (object?)cell.DisplayFormat.Interior.Color,
+                    style.FillBgr);
+                style.FontBgr=Number(()=> (object?)cell.DisplayFormat.Font.Color,
+                    style.FontBgr);
+            }
             bool formula=Flag(()=> (object?)cell.HasFormula);
             if(formula)
             {
@@ -151,6 +198,15 @@ internal static class DeskSpaceExcelVisualCaptureV101
                     if(top==r && left==c && height<=rows-r+1 && width<=columns-c+1)
                     {
                         style.MergeRows=height;style.MergeColumns=width;
+                        // Merged cells may define bottom/right edges on
+                        // the final underlying cell, not on the anchor.
+                        dynamic last=range.Cells[r+height-1,c+width-1];
+                        style.BorderBottom=VisibleBorder(last,9) || style.BorderBottom;
+                        style.BorderRight=VisibleBorder(last,10) || style.BorderRight;
+                        if(VisibleBorder(last,9))
+                            style.BorderBottomColor=BorderColor(last,9);
+                        if(VisibleBorder(last,10))
+                            style.BorderRightColor=BorderColor(last,10);
                         for(int rr=r;rr<r+height;rr++)
                             for(int cc=c;cc<c+width;cc++)
                                 if(rr!=r || cc!=c)covered.Add((rr,cc));
@@ -226,7 +282,7 @@ internal static class DeskSpaceExcelSheetViewV101
         for(int c=0;c<cols;c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition{
                 Width=new GridLength(c<visual.ColumnWidths.Count?
-                    Math.Clamp(visual.ColumnWidths[c],54,245):100)});
+                    Math.Clamp(visual.ColumnWidths[c],38,440):105)});
         grid.RowDefinitions.Add(new RowDefinition{Height=new GridLength(27)});
         for(int r=0;r<rows;r++)
             grid.RowDefinitions.Add(new RowDefinition{
@@ -261,12 +317,8 @@ internal static class DeskSpaceExcelSheetViewV101
             var border=new Border{
                 Background=new SolidColorBrush(
                     ExcelColor(item?.FillBgr??0xFFFFFF)),
-                BorderBrush=new SolidColorBrush(Color.FromRgb(205,214,226)),
-                BorderThickness=new Thickness(
-                    item?.BorderLeft==true?1.5:0.45,
-                    item?.BorderTop==true?1.5:0.45,
-                    item?.BorderRight==true?1.5:0.45,
-                    item?.BorderBottom==true?1.5:0.45),
+                BorderBrush=new SolidColorBrush(Color.FromRgb(210,218,230)),
+                BorderThickness=new Thickness(0.4),
                 ToolTip=(item?.Address??"")+
                     (isFormula?" · "+item!.FormulaA1:" · "+
                     (item?.NumberFormat??"General")+
@@ -278,7 +330,9 @@ internal static class DeskSpaceExcelSheetViewV101
                 Text=isFormula?
                     "ƒx "+(item!.FormulaA1.Length>0?
                         item.FormulaA1:item.FormulaR1C1):
-                    "",
+                    Placeholder(item),
+                FontFamily=new FontFamily(item?.FontName is {Length:>0} family?
+                    family:"Calibri"),
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 Foreground=new SolidColorBrush(
                     ExcelColor(item?.FontBgr??0)),
@@ -286,19 +340,47 @@ internal static class DeskSpaceExcelSheetViewV101
                     FontWeights.Bold:FontWeights.Normal,
                 FontStyle=item?.Italic==true?
                     FontStyles.Italic:FontStyles.Normal,
-                FontSize=Math.Clamp(item?.FontSize??11,8,18),
-                VerticalAlignment=VerticalAlignment.Center,
+                FontSize=Math.Clamp(item?.FontSize??11,7,60),
+                VerticalAlignment=item?.VerticalAlignment switch{
+                    -4160=>VerticalAlignment.Top,  // xlVAlignTop
+                    -4107=>VerticalAlignment.Bottom, // xlVAlignBottom
+                    _=>VerticalAlignment.Center
+                },
                 HorizontalAlignment=item?.HorizontalAlignment switch
                 {
                     -4108=>HorizontalAlignment.Center, // xlHAlignCenter
                     -4152=>HorizontalAlignment.Right,  // xlHAlignRight
                     _=>HorizontalAlignment.Left
                 },
-                Margin=new Thickness(4,1,4,1),
+                Margin=new Thickness(4+Math.Clamp(item?.IndentLevel??0,0,15)*9,
+                    1,4,1),
                 TextWrapping=item?.WrapText==true?
                     TextWrapping.Wrap:TextWrapping.NoWrap
             };
-            border.Child=text;
+            if(item?.Underline==true)
+                text.TextDecorations=TextDecorations.Underline;
+            if(item?.StrikeThrough==true)
+            {
+                var marks=new TextDecorationCollection();
+                if(item.Underline)
+                    foreach(var mark in TextDecorations.Underline)marks.Add(mark.Clone());
+                foreach(var mark in TextDecorations.Strikethrough)marks.Add(mark.Clone());
+                text.TextDecorations=marks;
+            }
+            var surface=new Grid{ClipToBounds=true};
+            surface.Children.Add(text);
+            if(item!=null)
+            {
+                AddBorderLine(surface,item.BorderTop,item.BorderTopColor,
+                    0,0,1,0,item.BorderTopWeight);
+                AddBorderLine(surface,item.BorderBottom,item.BorderBottomColor,
+                    0,1,1,1,item.BorderBottomWeight);
+                AddBorderLine(surface,item.BorderLeft,item.BorderLeftColor,
+                    0,0,0,1,item.BorderLeftWeight);
+                AddBorderLine(surface,item.BorderRight,item.BorderRightColor,
+                    1,0,1,1,item.BorderRightWeight);
+            }
+            border.Child=surface;
             int localRow=r,localCol=c;
             border.MouseLeftButtonDown+=(_,_)=>{
                 var address=item?.Address??(
@@ -336,6 +418,45 @@ internal static class DeskSpaceExcelSheetViewV101
             Content=layout
         };
     }
+    internal static string Placeholder(DeskSpaceExcelStyledCellV101? cell)
+    {
+        if(cell==null)return "";
+        // Deliberately use samples so the old input data never appears.
+        if(cell.StoredType=="Blank")
+            return cell.Bold||cell.Italic||cell.Underline||cell.StrikeThrough?
+                "Aa":""; // Only formatting needs a visible text sample.
+        return cell.ExpectedType switch
+        {
+            "Date"=>"25 Oct 2026",
+            "DateTime"=>"25 Oct 2026 10:30",
+            "Time"=>"10:30",
+            "Percentage"=>"12.50%",
+            "Number"=>cell.NumberFormat.Contains("0.00000",
+                StringComparison.Ordinal)?"1,234.56789":
+                cell.NumberFormat.Contains("0.00",
+                    StringComparison.Ordinal)?"1,234.50":"1,234",
+            "Boolean"=>"TRUE",
+            "Text"=>"Aa",
+            _=>cell.StoredType=="Text"?"Aa":""
+        };
+    }
+
+    // Keep true independent Excel edge colours instead of simplifying all
+    // four sides to one generic WPF BorderBrush.
+    private static void AddBorderLine(Grid surface,bool present,int bgr,
+        double x1,double y1,double x2,double y2,int weight)
+    {
+        if(!present)return;
+        var line=new Line{
+            X1=x1,Y1=y1,X2=x2,Y2=y2,
+            Stretch=Stretch.Fill,
+            Stroke=new SolidColorBrush(ExcelColor(bgr)),
+            StrokeThickness=weight>=4?2.5:weight>=3?1.7:1.1,
+            IsHitTestVisible=false
+        };
+        surface.Children.Add(line);
+    }
+
     private static Border Header(string content)=>new(){
         Child=new TextBlock{
             Text=content,TextAlignment=TextAlignment.Center,
