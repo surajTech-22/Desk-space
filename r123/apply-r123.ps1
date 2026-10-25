@@ -50,8 +50,9 @@ Swap $fmt @'
                     // Existing tables retain their OWN column names.
                     // Only geometric/header visibility compatibility matters.
                     var currentNames=new string[tw];
-                    for(int i=0;i<tw;i++)
-                        currentNames[i]=Text((object?)table.ListColumns[i+1].Name);
+                    for(int headerIndex=0;headerIndex<tw;headerIndex++)
+                        currentNames[headerIndex]=Text(
+                            (object?)table.ListColumns[headerIndex+1].Name);
                     if(!HeadersIndependentV123(currentNames,sourceTable.ColumnNames))
                         problems.Add("Destination Excel Table has blank/duplicate column names.");
 '@ 'stop source-to-destination label comparison'
