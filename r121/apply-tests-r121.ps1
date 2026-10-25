@@ -60,8 +60,9 @@ $test=@'
         var preserved=(System.Collections.IList)
             styleType.GetProperty("Cells")!.GetValue(style)!;
         Assert(preserved.Count==1 &&
-            (string)styledCellType.GetProperty("FormulaR1C1")!
-                .GetValue(preserved[0])!=="=SUM(R[-1]C:R[-2]C)",
+            string.Equals(Convert.ToString(styledCellType
+                .GetProperty("FormulaR1C1")!.GetValue(preserved[0])),
+                "=SUM(R[-1]C:R[-2]C)",StringComparison.Ordinal),
             "R121 exact source formula must survive in format-only snapshot");
         var appRecents=Product.GetType(
             "DeskSpace.DeskSpacePinnedRecentV122",true)!;
