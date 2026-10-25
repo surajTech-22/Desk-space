@@ -261,6 +261,9 @@ internal static class DeskSpaceExcelFormatApplyV109
                     table.TableStyle=metadata.TableStyle;
                     table.ShowTableStyleRowStripes=metadata.RowStripes;
                     table.ShowTableStyleColumnStripes=metadata.ColumnStripes;
+                    table.ShowTableStyleFirstColumn=metadata.FirstColumnEmphasis;
+                    table.ShowTableStyleLastColumn=metadata.LastColumnEmphasis;
+                    table.ShowAutoFilter=metadata.ShowAutoFilter;
                     if((bool)table.ShowTotals!=metadata.HasTotals ||
                        (bool)table.ShowHeaders!=metadata.HasHeaders)
                         throw new InvalidOperationException(
@@ -361,7 +364,10 @@ internal static class DeskSpaceExcelFormatApplyV109
                     x.HasHeaders==expectedTable.HasHeaders &&
                     x.HasTotals==expectedTable.HasTotals &&
                     x.RowStripes==expectedTable.RowStripes &&
-                    x.ColumnStripes==expectedTable.ColumnStripes))
+                    x.ColumnStripes==expectedTable.ColumnStripes &&
+                    x.FirstColumnEmphasis==expectedTable.FirstColumnEmphasis &&
+                    x.LastColumnEmphasis==expectedTable.LastColumnEmphasis &&
+                    x.ShowAutoFilter==expectedTable.ShowAutoFilter))
                     throw new InvalidDataException("A real Excel Table structure/style was not reproduced.");
             }
             for(int row=0;row<live.Visual.Rows;row++)
