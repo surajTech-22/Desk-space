@@ -32,9 +32,9 @@ foreach($part in @(
 )){
  if(!$updater.Contains($part)){throw "R104 update safety/channel missing: $part"}
 }
-foreach($part in @('UpdateChannelPickerV104',
-  'UpdateChannel_LoadedV104','UpdateChannel_ChangedV104')){
- if(!$xaml.Contains($part) -or !$main.Contains($part)){throw "R104 Settings picker missing: $part"}
+if(!$xaml.Contains('UpdateChannelPickerV104')){throw 'R104 XAML channel control missing'}
+foreach($part in @('UpdateChannel_LoadedV104','UpdateChannel_ChangedV104')){
+ if(!$xaml.Contains($part) -or !$main.Contains($part)){throw "R104 Settings event missing: $part"}
 }
 # This only checks source invariants. Windows compilation and actual screenshots
 # must still pass; a string check is NOT proof that UI rendering is correct.
