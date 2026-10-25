@@ -297,10 +297,10 @@ internal static class DeskSpaceExcelFormatApplyV109
             if(weight!=0)border.Weight=weight;
         }
     }
-    // Only called after the entire target was verified empty and a complete
-    // backup was written. Table headers are structural ListObject metadata;
-    // no captured transaction values are copied.
-    private static void BuildBlankStructure(Checked live)
+    // Only called after a full-range gate and complete SaveCopyAs backup.
+    // On an empty target, structural table headers are created. On a fully
+    // populated target, headers must have been verified to match already.
+    private static void BuildMissingStructure(Checked live,bool empty)
     {
         var features=live.Visual.FeaturesV106 ??
             throw new InvalidDataException("No structural Excel metadata.");
@@ -310,8 +310,16 @@ internal static class DeskSpaceExcelFormatApplyV109
                 live.Range.Cells[table.Row+1,table.Column+1],
                 live.Range.Cells[table.Row+table.RowCount,
                     table.Column+table.ColumnCount]];
-            for(int i=0;i<table.ColumnCount;i++)
-                region.Cells[1,i+1].Value2=table.ColumnNames[i];
+            bool exists=false;
+            dynamic objects=live.Sheet.ListObjects;
+            for(int priorIndex=1;priorIndex<=ToInt(objects.Count);priorIndex++)
+                if(Norm(Text(objects[priorIndex].Range.Address))==
+                   Norm(Text(region.Address)))
+                    exists=true;
+            if(exists)continue;
+            if(empty)
+                for(int i=0;i<table.ColumnCount;i++)
+                    region.Cells[1,i+1].Value2=table.ColumnNames[i];
             // Microsoft Excel: xlSrcRange=1, xlYes=1. Source is an
             // explicitly sized Range; omit LinkSource with Type.Missing.
             dynamic created=live.Sheet.ListObjects.Add(
@@ -498,8 +506,7 @@ internal static class DeskSpaceExcelFormatApplyV109
         {
             bool originallyEmpty=live.Review.Gate.State==
                 DeskSpaceExcelFullRangeGateV107.Status.EntirelyEmpty;
-            if(originallyEmpty)
-                BuildBlankStructure(live);
+            BuildMissingStructure(live,originallyEmpty);
             WriteSnapshot(live.Range,live.Visual,true);
             if(originallyEmpty)
                 PopulateBlankFormulas(live);
