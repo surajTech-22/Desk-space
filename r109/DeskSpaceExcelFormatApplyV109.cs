@@ -19,10 +19,12 @@ internal static class DeskSpaceExcelFormatApplyV109
         [MarshalAs(UnmanagedType.IUnknown)]out object application);
 
     internal sealed record Review(string Workbook,string Sheet,string Destination,
-        DeskSpaceExcelFullRangeGateV107.Decision Gate,IReadOnlyList<string> Blockers)
+        DeskSpaceExcelFullRangeGateV107.Decision Gate,IReadOnlyList<string> Blockers,
+        string PlannedActions)
     {
         internal bool Eligible=>Gate.MayApply && Blockers.Count==0;
         public override string ToString()=>Gate.Explanation+
+            Environment.NewLine+PlannedActions+
             (Blockers.Count>0?Environment.NewLine+string.Join(Environment.NewLine,Blockers):"");
     }
     private static dynamic Excel()
@@ -228,7 +230,17 @@ internal static class DeskSpaceExcelFormatApplyV109
             Excel=app,Sheet=sheet,Range=target,Visual=visual,
             FirstRow=sr,FirstColumn=sc,
             Review=new(Text(app.ActiveWorkbook.FullName),Text(sheet.Name),
-                Text(target.Address),decision,problems)
+                Text(target.Address),decision,problems,
+                allEmpty
+                    ?"Whole destination empty. Will create "+features.Tables.Count+
+                      " real Excel table(s), "+order.Count(x=>x.MergeRows>1 ||
+                      x.MergeColumns>1)+" merged area(s), insert "+
+                      features.Tables.Sum(x=>x.ColumnNames.Count)+
+                      " structural table headers and "+
+                      order.Count(x=>x.StoredType=="Formula")+
+                      " captured formulas. No transaction values copied."
+                    :"All input positions match. Apply cell-specific formats and "+
+                      "table styling only; existing values and formulas retained.")
         };
     }
     internal static Review Preview(DeskSpaceExcelTemplateV16 template)=>
