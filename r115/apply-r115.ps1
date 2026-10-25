@@ -159,9 +159,8 @@ $method=@'
     }
 
 '@
-Change $smoke @'
+$methodAnchor=@'
     private static void TestRunningAppsSideOnlyV113()
-'@ ($method+@'
-    private static void TestRunningAppsSideOnlyV113()
-'@) 'inject R115 WPF regression'
+'@
+Change $smoke $methodAnchor ($method+$methodAnchor) 'inject R115 WPF regression'
 Write-Host 'R115 applied: four-way Running Apps, multiple-window edge sorting, wider 100% Excel sheet, horizontal names.'
