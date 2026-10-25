@@ -12,6 +12,11 @@ on:
         options:
           - tester
           - stable
+      live_excel_acceptance:
+        description: 'Use Office-installed Windows runner for R111 real Excel acceptance'
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - r42-excel-mapping-editor
@@ -32,8 +37,10 @@ jobs:
     # Draft PRs consume no Windows runner minutes. The ready-for-review
     # transition deliberately starts the release-candidate verification.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: windows-latest
-    timeout-minutes: 30
+    # Normal CI runs on GitHub Windows. Explicit R111 acceptance dispatch
+    # requires an Excel-installed Windows runner, never an unlicensed CI image.
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.live_excel_acceptance && github.ref == 'refs/heads/fix/r106-excel-structure-capture' && fromJSON('["self-hosted","Windows","X64","excel-installed"]') || 'windows-latest' }}
+    timeout-minutes: 35
     steps:
       - name: Checkout DeskSpace
         uses: actions/checkout@v4
@@ -1369,6 +1376,23 @@ jobs:
       - name: Compile, test and package self-contained app
         shell: pwsh
         run: ./BUILD_DESKSPACE_SETUP.ps1
+
+      - name: R111 live Office Excel integration acceptance on current compiled DeskSpace
+        if: github.event_name == 'workflow_dispatch' && inputs.live_excel_acceptance && github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ([Type]::GetTypeFromProgID('Excel.Application') -eq $null) {
+            throw 'BLOCKED: Real Microsoft Excel COM is not installed; no live acceptance result.'
+          }
+          $candidates=@(Get-ChildItem 'DeskSpace_Windows_R1/DeskSpace/bin' -Recurse -Filter DeskSpace.dll -File |
+            Where-Object {$_.FullName -match '[\\/]Release[\\/]'} |
+            Sort-Object -Property Length -Descending)
+          if($candidates.Count -lt 1){
+            throw 'Cannot find actual compiled DeskSpace.dll from this build.'
+          }
+          dotnet run --project 'r111/LiveExcelAcceptance/LiveExcelAcceptance.csproj' -c Release --no-build -- $candidates[0].FullName
+          if($LASTEXITCODE -ne 0){throw 'R111 REAL EXCEL ACCEPTANCE FAILED. Do not publish.'}
 
       - name: R41 WPF test Excel, scroll and weather scenes
         shell: pwsh
