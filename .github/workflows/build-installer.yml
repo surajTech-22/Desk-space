@@ -25,6 +25,7 @@ on:
       - fix/r133-release-push-autoupdate
       - fix/r134-excel-shortcut-reference
       - fix/r135-excel-format-no-prompt-readback
+      - fix/r136-blank-format-no-formula-zero
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1451,6 +1452,13 @@ jobs:
         run: |
           ./r135/apply-r135.ps1
           ./r135/test-r135.ps1
+
+      - name: R136 remove blank-sheet formulas and zeros without weakening Excel safety
+        shell: pwsh
+        run: |
+          ./r136/apply-r136.ps1
+          ./r136/apply-tests-r136.ps1
+          ./r136/test-r136.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
