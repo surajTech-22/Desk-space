@@ -269,4 +269,22 @@ Swap $wheel @'
             var backup=await DeskSpaceExcelWorkerV41.ApplyAsync(
                 preview,entry,overwrite:!selectedCellPasteV124);
 '@ 'manual destination preview confirmation and no overwrite'
+# The older R42 WPF acceptance suite expects a now-removed shared copy
+# button. Update assertions to verify the NEW separate primary routes;
+# don't weaken the actual button-walk or screenshot tests.
+$smoke='r36/UiSmoke/Program.cs'
+$ui=[IO.File]::ReadAllText($smoke)
+foreach($change in @(
+    @('"Copy and analyze selected Excel cells"','"Data mappings · copy / paste"'),
+    @('"Preview matching cells"','"Preview saved-header match"'),
+    @('"Apply autofill"','"Paste reviewed mapping values"')
+)) {
+    $from=$change[0]
+    $to=$change[1]
+    if(!$ui.Contains($from)){throw "R124 obsolete WPF smoke label missing: $from"}
+    $ui=$ui.Replace($from,$to)
+}
+[IO.File]::WriteAllText($smoke,$ui,[Text.UTF8Encoding]::new($false))
+Write-Host 'R124 WPF tests now assert the new value-mapping actions rather than obsolete controls.'
+
 Write-Host 'R124 routes: separate main copy/paste pages, independent format naming/library, explicit selected-cell value paste, safe widget fallback.'
