@@ -123,7 +123,7 @@ internal static class Program
             Console.WriteLine("EMPTY APPLIED: "+created);
             Expect((int)emptySheet.ListObjects.Count==1,
                 "Blank destination did not create a real Excel ListObject");
-            Expect((string)emptySheet.ListObjects[1].TableStyle=="TableStyleMedium2",
+            Expect(ReadStyleName(emptySheet.ListObjects[1])=="TableStyleMedium2",
                 "Excel Table style was not restored");
             Expect((int)emptySheet.Range["E16"].MergeArea.Rows.Count==5,
                 "Excel merged area was not restored");
@@ -207,6 +207,8 @@ internal static class Program
             var firstTable=capturedTables[0]!;
             var styleProperty=firstTable.GetType().GetProperty("TableStyle")!;
             var savedStyle=(string)styleProperty.GetValue(firstTable)!;
+            Expect(savedStyle=="TableStyleMedium2",
+                "The captured TableStyle is not its real Excel name: "+savedStyle);
             dynamic failureBook=excel.Workbooks.Add();
             dynamic failureSheet=failureBook.Worksheets[1];
             try
@@ -216,12 +218,9 @@ internal static class Program
                 failureSheet.Activate();
                 failureSheet.Range["E7"].Select();
                 var failureReview=preview.Invoke(null,new[]{template})!;
-                Expect(Eligible(failureReview),
-                    "Rollback simulation must reach application step");
-                bool failed=false;
-                try{InvokeApply(apply,template,failureReview);}
-                catch(InvalidOperationException){failed=true;}
-                Expect(failed,"Invalid Excel Table style was reported as success");
+                Expect(!Eligible(failureReview),
+                    "Invalid Excel Table style was allowed through read-only preflight");
+                // No Apply call: safety preflight must reject before any writes.
                 Expect((int)failureSheet.ListObjects.Count==0,
                     "Failed transaction left a newly created Excel Table");
                 Expect(failureSheet.Range["F7"].Value2==null,
@@ -233,6 +232,27 @@ internal static class Program
                 styleProperty.SetValue(firstTable,savedStyle);
                 failureBook.Close(false);
             }
+
+            // Test F: paste into a second location INSIDE the source workbook.
+            // A new Excel Table may not inherit the source's workbook-global
+            // ListObject.Name ("Table1"); Excel must assign a distinct name.
+            source.Activate();
+            source.Range["E16"].Select();
+            var sameBookReview=preview.Invoke(null,new[]{template})!;
+            Expect(Eligible(sameBookReview),
+                "Same-workbook blank range preflight failed: "+sameBookReview);
+            InvokeApply(apply,template,sameBookReview);
+            Expect((int)source.ListObjects.Count==2,
+                "Same-workbook paste did not create another real Excel Table");
+            Expect((string)source.ListObjects[1].Name !=
+                   (string)source.ListObjects[2].Name,
+                "Same-workbook format paste duplicated original Excel table identity");
+            Expect(ReadStyleName(source.ListObjects[2])=="TableStyleMedium2",
+                "Same-workbook destination table style differs");
+            Expect((bool)source.Range["J17"].HasFormula,
+                "Same-workbook destination formula missing");
+            Console.WriteLine("PASS: same workbook new table keeps unique ListObject identity and restores style/formulas.");
+            sourceBook.SaveAs(Path.Combine(work,"applied_same_workbook.xlsx"),51);
 
             emptyBook.Close(false);
             fullBook.Close(false);
@@ -253,6 +273,14 @@ internal static class Program
             try{if(excel!=null){excel.DisplayAlerts=false;excel.Quit();}}
             catch(Exception e){Console.Error.WriteLine("Excel cleanup: "+e.Message);}
         }
+    }
+    private static string ReadStyleName(dynamic table)
+    {
+        object? raw=table.TableStyle;
+        if(raw is string name)return name;
+        if(raw==null)return "";
+        dynamic style=raw;
+        return (string)style.Name;
     }
     private static void Put(object instance,string name,object value)=>
         instance.GetType().GetProperty(name,BindingFlags.Public|BindingFlags.Instance)!.
