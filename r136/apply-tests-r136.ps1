@@ -31,7 +31,7 @@ Swap @'
         Set("Row",1);Set("Column",2);Set("RowCount",4);Set("ColumnCount",2);
         var columnNames=(List<string>)tableType.GetProperty("ColumnNames")!.
             GetValue(table)!;
-        columnNames.Add("Column1");columnNames.Add("Column2");
+        columnNames.Add("SOURCE LABEL A");columnNames.Add("SOURCE LABEL B");
         var tables=Array.CreateInstance(tableType,1);
         tables.SetValue(table,0);
         string Expected(int r,int c)=>(string)read.Invoke(null,
