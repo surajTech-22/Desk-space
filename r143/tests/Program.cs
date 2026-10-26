@@ -63,6 +63,25 @@ static class Tests
                     new(true,"Text"),new(true,"Number"),new(true,"Formula"),
                     new(false,"Blank")},full).MayApply,
                 "already full target remains eligible without overwriting formulas");
+            var realTarget=new FakeTarget();
+            source[2].Row=0;source[2].Column=2;source[2].Address="$C$1";
+            DeskSpaceExcelFormulaPasteV143.WriteExactFormulas(realTarget,source);
+            Expect(realTarget.Cells[1,3].FormulaR1C1=="=SUM(RC[-2]:RC[-1])",
+                "insert actual captured formula into correct target cell");
+            DeskSpaceExcelFormulaPasteV143.WriteExactFormulas(realTarget,source);
+            Expect(realTarget.Cells[1,3].FormulaR1C1=="=SUM(RC[-2]:RC[-1])",
+                "identical table auto-filled formula is safe and not overwritten");
+            realTarget.Cells[1,3].FormulaR1C1="=SUM(RC[-1])";
+            bool wrongFormulaRejected=false;
+            try{DeskSpaceExcelFormulaPasteV143.WriteExactFormulas(realTarget,source);}
+            catch(System.IO.InvalidDataException){wrongFormulaRejected=true;}
+            Expect(wrongFormulaRejected,"different calculated table formula rejected");
+            realTarget.Cells[1,3].HasFormula=false;
+            realTarget.Cells[1,3].Value2=97;
+            bool valueRejected=false;
+            try{DeskSpaceExcelFormulaPasteV143.WriteExactFormulas(realTarget,source);}
+            catch(System.IO.InvalidDataException){valueRejected=true;}
+            Expect(valueRejected,"existing user number never overwritten");
             Console.WriteLine("R143 PASS: "+assertions+" formula-footprint and no-zero guards.");
             return 0;
         }
@@ -79,5 +98,34 @@ namespace DeskSpace
         public string StoredType {get;set;}="";
         public string FormulaA1 {get;set;}="";
         public string FormulaR1C1 {get;set;}="";
+    }
+}
+
+public sealed class FakeTarget
+{
+    public FakeCells Cells {get;}=new();
+}
+public sealed class FakeCells
+{
+    private readonly Dictionary<(int,int),FakeCell> cells=new();
+    public FakeCell this[int row,int col]
+    {
+        get
+        {
+            if(!cells.TryGetValue((row,col),out var cell))
+                cells[(row,col)]=cell=new FakeCell();
+            return cell;
+        }
+    }
+}
+public sealed class FakeCell
+{
+    private string formula="";
+    public bool HasFormula {get;set;}
+    public object? Value2 {get;set;}
+    public string FormulaR1C1
+    {
+        get=>formula;
+        set {formula=value;HasFormula=true;}
     }
 }

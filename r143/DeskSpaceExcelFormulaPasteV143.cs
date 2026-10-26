@@ -64,11 +64,24 @@ internal static class DeskSpaceExcelFormulaPasteV143
         foreach(var src in source.Where(x=>x.StoredType=="Formula"))
         {
             dynamic cell=target.Cells[src.Row+1,src.Column+1];
-            if(Convert.ToBoolean((object?)cell.HasFormula) ||
-               (object?)cell.Value2 != null)
+            // An Excel calculated table column may auto-fill its remaining
+            // cells after the FIRST exact assignment. Such generated cells
+            // are permitted only when they ALREADY equal the captured formula.
+            // A different formula/value is never overwritten.
+            if(Convert.ToBoolean((object?)cell.HasFormula))
+            {
+                if(!string.Equals(
+                    Convert.ToString((object?)cell.FormulaR1C1),
+                    src.FormulaR1C1,StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        "Excel generated a different formula at "+src.Address+
+                        ". Existing formulas are never overwritten.");
+                continue;
+            }
+            if((object?)cell.Value2 != null)
                 throw new InvalidDataException(
-                    "Formula destination was modified before writing at "+
-                    src.Address+"; no existing content will be overwritten.");
+                    "Formula target contains an existing value at "+src.Address+
+                    "; nothing will be overwritten.");
             if(string.IsNullOrWhiteSpace(src.FormulaR1C1) ||
                !src.FormulaR1C1.StartsWith("=",StringComparison.Ordinal))
                 throw new InvalidDataException(
