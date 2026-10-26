@@ -36,6 +36,7 @@ on:
       - fix/r125-strict-data-format-mapping
       - fix/r126-unified-excel-library-tabs
       - fix/r128-shared-saved-list-trash-icon
+      - fix/r129-verified-updater-rate-recovery
 
 permissions:
   contents: write
@@ -1400,6 +1401,12 @@ jobs:
           ./r128/apply-r128.ps1
           ./r128/test-r128.ps1
 
+      - name: R129 rate-safe updater and progressive failure classification
+        shell: pwsh
+        run: |
+          ./r129/apply-r129.ps1
+          ./r129/test-r129.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1461,6 +1468,11 @@ jobs:
         run: |
           choco install innosetup --yes --no-progress
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+
+      - name: R129 compiled update rate-limit regression tests
+        shell: pwsh
+        run: |
+          dotnet run --project r129/RateLimiterTests/RateLimiterTests.csproj -c Release
 
       - name: Verify R107 full-range empty, full-data and partial-data rejection
         shell: pwsh
