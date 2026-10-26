@@ -30,6 +30,7 @@ on:
       - fix/r138-release-notice-recovery
       - fix/r139-excel-direct-style-readback
       - fix/r140-full-excel-format-audit
+      - fix/r141-excel-protection-writes
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1492,6 +1493,14 @@ jobs:
           ./r140/apply-tests-r140.ps1
           ./r140/apply-live-acceptance-r140.ps1
           ./r140/test-r140.ps1
+
+      - name: R141 safe Excel Locked and FormulaHidden COM handling
+        shell: pwsh
+        run: |
+          ./r141/apply-r141.ps1
+          ./r141/apply-tests-r141.ps1
+          ./r141/apply-live-r141.ps1
+          ./r141/test-r141.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
