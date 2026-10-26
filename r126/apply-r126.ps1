@@ -74,7 +74,7 @@ Swap $editor @'
         savedRow.AppendChild(itemName);
         templates.ItemTemplate=new DataTemplate{VisualTree=savedRow};
         templates.SelectionChanged+=(_,_)=>OnUnifiedLibrarySelectedV126();
-'@ 'inline delete and selected item's library'
+'@ 'inline delete and selected entry library'
 # Remove redundant embedded editor commands; top copy/new/save actions own
 # them. Delete is exclusively per-row in the saved list.
 Swap $editor @'
