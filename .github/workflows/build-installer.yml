@@ -37,6 +37,7 @@ on:
       - fix/r126-unified-excel-library-tabs
       - fix/r128-shared-saved-list-trash-icon
       - fix/r129-verified-updater-rate-recovery
+      - fix/r130-excel-collection-groups-wheel-routing
 
 permissions:
   contents: write
@@ -1406,6 +1407,13 @@ jobs:
         run: |
           ./r129/apply-r129.ps1
           ./r129/test-r129.ps1
+
+      - name: R130 restore Excel mapping groups and correct donut library routes
+        shell: pwsh
+        run: |
+          ./r130/apply-groups-r130.ps1
+          ./r130/apply-wheel-r130.ps1
+          ./r130/test-r130.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
