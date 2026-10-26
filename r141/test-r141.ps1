@@ -53,7 +53,7 @@ foreach($term in @(
  'bool resultFormulaHidden=(bool)emptySheet.Range["G18"].FormulaHidden;',
  'created.Contains("Locked/FormulaHidden settings could not be copied")',
  'Blank destination calculated column returned a visible zero',
- 'Partial target blocked with no workbook edits'
+ 'partial target blocked with no workbook edits'
 )){Check $office $term 'real Excel acceptance'}
 Write-Host 'R141 STATIC PASS: no redundant Locked/FormulaHidden writes; Excel COM refusals leave original protection unchanged and reported; all direct formatting, table, formula, blank/partial gate, back up and rollback checks remain strict.'
 Write-Warning 'Full Excel COM behavior requires actual Microsoft Excel; Windows GitHub CI compiles Office harness but cannot execute it without Office.'
