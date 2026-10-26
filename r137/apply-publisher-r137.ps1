@@ -4,6 +4,7 @@ $file='r133/publish-r133.ps1'
 $lf=[string][char]10;$crlf=[string][char]13+$lf
 $s=[IO.File]::ReadAllText($file).Replace($crlf,$lf)
 function Swap([string]$a,[string]$b,[string]$label){
+ $a=$a.Replace($crlf,$lf);$b=$b.Replace($crlf,$lf)
  $count=([regex]::Matches($script:s,[regex]::Escape($a))).Count
  if($count -ne 1){throw "R137 publishing $label anchor count $count"}
  $script:s=$script:s.Replace($a,$b)
