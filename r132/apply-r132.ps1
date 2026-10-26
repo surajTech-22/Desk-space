@@ -50,36 +50,8 @@ Swap $format @'
 '@ 'avoid source table name collision in same workbook'
 
 $editor="$r/DeskSpaceExcelEditorV42.cs"
-Swap $editor @'
-        editorHead.Children.Add(editorInfoV42);
-'@ @'
-        editorHead.Children.Add(editorInfoV42);
-        // Original collection and mapping inputs, side-by-side.
-        // Reparent the EXISTING text boxes so their save/change handlers stay.
-        var collectionLabelV132=editorHead.Children.OfType<TextBlock>()
-            .Single(x=>x.Text=="Collection name (groups related data together)");
-        var dataLabelV132=editorHead.Children.OfType<TextBlock>()
-            .Single(x=>x.Text=="Data name (saved Excel mapping)");
-        editorHead.Children.Remove(collectionLabelV132);
-        editorHead.Children.Remove(mappingGroupV42);
-        editorHead.Children.Remove(dataLabelV132);
-        editorHead.Children.Remove(mappingNameV42);
-        var pairedDataNamesV132=new Grid{Margin=new Thickness(0,1,0,5)};
-        pairedDataNamesV132.ColumnDefinitions.Add(new ColumnDefinition{
-            Width=new GridLength(1,GridUnitType.Star)});
-        pairedDataNamesV132.ColumnDefinitions.Add(new ColumnDefinition{
-            Width=new GridLength(1,GridUnitType.Star)});
-        var leftDataNameV132=new StackPanel{Margin=new Thickness(0,0,8,0)};
-        leftDataNameV132.Children.Add(collectionLabelV132);
-        leftDataNameV132.Children.Add(mappingGroupV42);
-        var rightDataNameV132=new StackPanel{Margin=new Thickness(8,0,0,0)};
-        rightDataNameV132.Children.Add(dataLabelV132);
-        rightDataNameV132.Children.Add(mappingNameV42);
-        Grid.SetColumn(rightDataNameV132,1);
-        pairedDataNamesV132.Children.Add(leftDataNameV132);
-        pairedDataNamesV132.Children.Add(rightDataNameV132);
-        editorHead.Children.Insert(1,pairedDataNamesV132);
-'@ 'data collection and mapping names in one row'
+# R115 already puts the original Collection and Data names side by side.
+# Preserve that verified horizontal editor; only fix the format route below.
 Swap $editor @'
         formatHeadV126.Children.Add(formatGroupV130);
 '@ @'
