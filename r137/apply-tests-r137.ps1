@@ -4,8 +4,9 @@ $test='r36/UiSmoke/Program.cs'
 $lf=[string][char]10;$crlf=[string][char]13+$lf
 $s=[IO.File]::ReadAllText($test).Replace($crlf,$lf)
 function Swap([string]$a,[string]$b,[string]$label){
+ $a=$a.Replace($crlf,$lf);$b=$b.Replace($crlf,$lf)
  $count=([regex]::Matches($script:s,[regex]::Escape($a))).Count
- if($count -ne 1){throw "R137 $label: expected one insertion; got $count"}
+ if($count -ne 1){throw "R137 ${label}: expected one insertion; got $count"}
  $script:s=$script:s.Replace($a,$b)
 }
 Swap @'
