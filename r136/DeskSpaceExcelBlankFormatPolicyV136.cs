@@ -18,8 +18,10 @@ internal static class DeskSpaceExcelBlankFormatPolicyV136
                 col<table.Column || col>=table.Column+table.ColumnCount)
                 continue;
             int index=col-table.Column;
-            return index>=0 && index<table.ColumnNames.Count
-                ? table.ColumnNames[index] : "";
+            // R123 format-only creates neutral Column1..ColumnN headers;
+            // never copy source workbook labels or transaction content.
+            return index>=0 && index<table.ColumnCount
+                ? DeskSpaceExcelFormatApplyV109.StructuralHeaderV123(index) : "";
         }
         return "";
     }
