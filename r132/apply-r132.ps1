@@ -51,9 +51,9 @@ Swap $format @'
 
 $editor="$r/DeskSpaceExcelEditorV42.cs"
 Swap $editor @'
-        editorHead.Children.Add(mappingNameV42);
+        editorHead.Children.Add(editorInfoV42);
 '@ @'
-        editorHead.Children.Add(mappingNameV42);
+        editorHead.Children.Add(editorInfoV42);
         // Original collection and mapping inputs, side-by-side.
         // Reparent the EXISTING text boxes so their save/change handlers stay.
         var collectionLabelV132=editorHead.Children.OfType<TextBlock>()
