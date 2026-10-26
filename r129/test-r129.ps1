@@ -23,7 +23,7 @@ if($app.Contains('timer=new DispatcherTimer{Interval=TimeSpan.FromMinutes(5)};')
     throw 'R129 automatic polling still uses five minutes'
 }
 foreach($needle in @(
-    'Retry-After','x-ratelimit-remaining','x-ratelimit-reset',
+    'response.Headers.RetryAfter','x-ratelimit-remaining','x-ratelimit-reset',
     'github-api-backoff-utc.txt','github-api-last-poll-',
     'utcNow.AddMinutes(65)',
     'return utcNow<next;'
