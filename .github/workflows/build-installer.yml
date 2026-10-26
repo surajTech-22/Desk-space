@@ -1520,6 +1520,13 @@ jobs:
           ./r144/apply-r144.ps1
           ./r144/test-r144.ps1
 
+      - name: R145 protect saved formulas and reject zero-value contamination
+        shell: pwsh
+        run: |
+          ./r145/apply-r145.ps1
+          ./r145/apply-auto-fill-guard.ps1
+          ./r145/test-r145.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
