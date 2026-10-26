@@ -8,7 +8,7 @@ function Swap([string]$path,[string]$before,[string]$after,[string]$label)
     $before=$before.Replace($crlf,$lf)
     $after=$after.Replace($crlf,$lf)
     $count=([regex]::Matches($source,[regex]::Escape($before))).Count
-    if($count -ne 1){throw "R125 $label: expected one anchor, found $count"}
+    if($count -ne 1){throw "R125 ${label}: expected one anchor, found $count"}
     [IO.File]::WriteAllText($path,$source.Replace($before,$after),
         [Text.UTF8Encoding]::new($false))
 }
@@ -19,10 +19,10 @@ function ReplaceSpan([string]$path,[string]$first,[string]$last,
     $s=[IO.File]::ReadAllText($path).Replace($crlf,$lf)
     $start=$s.IndexOf($first,[StringComparison]::Ordinal)
     if($start -lt 0 -or $s.IndexOf($first,$start+1,[StringComparison]::Ordinal) -ge 0){
-        throw "R125 $label: start marker missing or ambiguous"
+        throw "R125 ${label}: start marker missing or ambiguous"
     }
     $end=$s.IndexOf($last,$start+$first.Length,[StringComparison]::Ordinal)
-    if($end -lt 0){throw "R125 $label: end marker missing"}
+    if($end -lt 0){throw "R125 ${label}: end marker missing"}
     [IO.File]::WriteAllText($path,
         $s.Substring(0,$start)+$replacement.Replace($crlf,$lf)+$s.Substring($end),
         [Text.UTF8Encoding]::new($false))
