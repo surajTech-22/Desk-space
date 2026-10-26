@@ -26,6 +26,7 @@ on:
       - fix/r134-excel-shortcut-reference
       - fix/r135-excel-format-no-prompt-readback
       - fix/r136-blank-format-no-formula-zero
+      - fix/r137-durable-release-notification
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1459,6 +1460,14 @@ jobs:
           ./r136/apply-r136.ps1
           ./r136/apply-tests-r136.ps1
           ./r136/test-r136.ps1
+
+      - name: R137 relay cache recovery and visible Windows release notice
+        shell: pwsh
+        run: |
+          ./r137/apply-r137.ps1
+          ./r137/apply-publisher-r137.ps1
+          ./r137/apply-tests-r137.ps1
+          ./r137/test-r137.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
