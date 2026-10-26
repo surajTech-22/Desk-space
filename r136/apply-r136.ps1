@@ -105,7 +105,7 @@ Swap $worker @'
                         if(t.HasHeaders && s.Row==t.Row &&
                            s.Column>=t.Column &&
                            s.Column<t.Column+t.ColumnCount)
-                            header=t.ColumnNames[s.Column-t.Column];
+                            header=StructuralHeaderV123(s.Column-t.Column);
                     if(formula!=(IsFormula(cell)?Text(cell.FormulaR1C1):""))
                         throw new InvalidDataException(
                             "Recorded Excel formula could not be reconstructed.");
