@@ -1514,6 +1514,12 @@ jobs:
           ./r143/apply-r143.ps1
           ./r143/test-r143.ps1
 
+      - name: R144 Excel-style in-cell formula expansion and native Paste Special formulas
+        shell: pwsh
+        run: |
+          ./r144/apply-r144.ps1
+          ./r144/test-r144.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
