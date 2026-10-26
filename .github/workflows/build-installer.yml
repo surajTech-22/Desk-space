@@ -35,6 +35,7 @@ on:
       - fix/r124-independent-excel-copy-paste
       - fix/r125-strict-data-format-mapping
       - fix/r126-unified-excel-library-tabs
+      - fix/r128-shared-saved-list-trash-icon
 
 permissions:
   contents: write
@@ -1392,6 +1393,12 @@ jobs:
         run: |
           ./r126/apply-r126.ps1
           ./r126/test-r126.ps1
+
+      - name: R128 combined mapping list and compact library-safe delete
+        shell: pwsh
+        run: |
+          ./r128/apply-r128.ps1
+          ./r128/test-r128.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
