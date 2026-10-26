@@ -94,7 +94,7 @@ Swap $view @'
 
 Swap $view @'
         var preview=new DockPanel{Background=Brushes.White,LastChildFill=true};
-        var zoomBar=new StackPanel{Orientation=Orientation.Horizontal,
+        // 100% is always the default and only sheet scale. The source's
 '@ @'
         var preview=new DockPanel{Background=Brushes.White,LastChildFill=true};
         var formulaBarV142=new DockPanel{
@@ -104,7 +104,7 @@ Swap $view @'
         formulaBarV142.Children.Add(formulaTextV142);
         DockPanel.SetDock(formulaBarV142,Dock.Top);
         preview.Children.Add(formulaBarV142);
-        var zoomBar=new StackPanel{Orientation=Orientation.Horizontal,
+        // 100% is always the default and only sheet scale. The source's
 '@ 'formula bar stays visible while physical sheet scrolls'
 
 # Refuse saving an incomplete snapshot; verify actual A1/R1C1 text
