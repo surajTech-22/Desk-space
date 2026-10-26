@@ -8,7 +8,7 @@ function Swap([string]$old,[string]$new,[string]$label){
  $s=[IO.File]::ReadAllText($script:updater).Replace($crlf,$lf)
  $a=$old.Replace($crlf,$lf);$b=$new.Replace($crlf,$lf)
  $n=([regex]::Matches($s,[regex]::Escape($a))).Count
- if($n -ne 1){throw "R133 $label: expected one insertion, got $n"}
+ if($n -ne 1){throw "R133 ${label}: expected one insertion, got $n"}
  [IO.File]::WriteAllText($script:updater,$s.Replace($a,$b),[Text.UTF8Encoding]::new($false))
 }
 Swap @'
