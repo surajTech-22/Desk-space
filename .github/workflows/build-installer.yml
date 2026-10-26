@@ -32,6 +32,7 @@ on:
       - fix/r121-separate-excel-format-library
       - fix/r122-contextual-pins-excel-deck-vault-placeholder
       - fix/r123-format-no-source-headers-media-deck
+      - fix/r124-independent-excel-copy-paste
 
 permissions:
   contents: write
@@ -1371,6 +1372,12 @@ jobs:
         run: |
           ./r123/apply-r123.ps1
           ./r123/test-r123.ps1
+
+      - name: R124 independent Excel copying and safe selected-cell mapping
+        shell: pwsh
+        run: |
+          ./r124/apply-r124.ps1
+          ./r124/test-r124.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
