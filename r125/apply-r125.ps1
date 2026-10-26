@@ -140,21 +140,19 @@ ReplaceSpan $wheel @'
 # Old WPF button expectations should track the two distinct routes, not
 # silently revert the UI to a shared capture/paste button.
 $smoke='r36/UiSmoke/Program.cs'
-Swap $smoke @'
-            "Data mappings · copy / paste",
-'@ @'
-            "Information / Data · matched headers",
-'@ 'WPF assert visible strict data navigation'
-Swap $smoke @'
-            "Preview saved-header match",
-'@ @'
-            "Preview verified data headers",
-'@ 'WPF assert renamed header preview'
-Swap $smoke @'
-            "Paste reviewed mapping values",
-'@ @'
-            "Paste matching information",
-'@ 'WPF assert renamed information paste'
+# Older R39/R40 acceptance suites test the same actions in multiple views.
+# Replace ALL their expected labels, keeping assertions operational.
+$ui=[IO.File]::ReadAllText($smoke)
+foreach($pair in @(
+    @('"Data mappings · copy / paste"','"Information / Data · matched headers"'),
+    @('"Preview saved-header match"','"Preview verified data headers"'),
+    @('"Paste reviewed mapping values"','"Paste matching information"')
+)){
+    $old=$pair[0];$new=$pair[1]
+    if(!$ui.Contains($old)){throw "R125 missing WPF assertion $old"}
+    $ui=$ui.Replace($old,$new)
+}
+[IO.File]::WriteAllText($smoke,$ui,[Text.UTF8Encoding]::new($false))
 
 # Compiled WPF guard checks engine rejection without Excel running.
 Swap $smoke @'
