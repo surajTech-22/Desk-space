@@ -45,7 +45,7 @@ foreach($p in @(
   'Expect(!Eligible(failureReview)',
   'Same-workbook destination table style differs',
   'Same-workbook format paste duplicated original Excel table identity',
-  'PASS: same workbook new table keeps unique ListObject identity'
+  'PASS: same-workbook table identity/style preserved,'
 )){Require $tests $p 'real Excel acceptance'}
 Write-Host 'R132 STATIC PASS: COM style handling, source-table identity, original safety gate and rollback, both two-column editors, real Excel scenario harness.'
 Write-Warning 'STATIC PASS is NOT live Excel COM paste evidence. Do not publish stable until real Office acceptance passes.'
