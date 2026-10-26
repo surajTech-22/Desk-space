@@ -29,12 +29,12 @@ foreach($p in @(
   'Marshal.IsComObject(value)'
 )){Require $capture $p 'source COM capture'}
 foreach($p in @(
-  'pairedDataNamesV132',
+  'var collectionAndData=new Grid',
+  'collectionColumn.Children.Add(mappingGroupV42);',
+  'dataColumn.Children.Add(mappingNameV42);',
+  'editorHead.Children.Add(collectionAndData);',
   'pairedFormatNamesV132',
-  'editorHead.Children.Insert(1,pairedDataNamesV132);',
   'formatHeadV126.Children.Insert(0,pairedFormatNamesV132);',
-  'leftDataNameV132.Children.Add(mappingGroupV42);',
-  'rightDataNameV132.Children.Add(mappingNameV42);',
   'leftFormatNameV132.Children.Add(formatGroupV130);',
   'rightFormatNameV132.Children.Add(formatNameV124);'
 )){Require $ui $p 'same-row collection/name editor'}
