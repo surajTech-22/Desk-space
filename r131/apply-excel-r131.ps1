@@ -23,9 +23,10 @@ Swap @'
         foreach(var name in tables.Select(t=>t.TableStyle)
             .Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if(string.IsNullOrWhiteSpace(name))
+            if(string.IsNullOrWhiteSpace(name) ||
+                name.StartsWith("System._ComObject",StringComparison.OrdinalIgnoreCase))
             {
-                problems.Add("Captured Excel table has no style name. Recapture the format.");
+                problems.Add("Saved table style is invalid or missing. Recapture this format from Excel; existing saved mappings are preserved.");
                 continue;
             }
             try
