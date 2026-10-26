@@ -8,7 +8,12 @@ function Swap([string]$a,[string]$b,[string]$label) {
   $s=[IO.File]::ReadAllText($script:wheel).Replace($crlf,$lf)
   $a=$a.Replace($crlf,$lf);$b=$b.Replace($crlf,$lf)
   $count=([regex]::Matches($s,[regex]::Escape($a))).Count
-  if($count -ne 1){throw "R130 $($label) expected 1 match, found $count"}
+  if($count -ne 1){
+    $hit=$s.IndexOf('drillTimer.Tick', [StringComparison]::Ordinal)
+    if($hit -ge 0){Write-Host ('R130 diagnostic surrounding drillTimer: '+
+        $s.Substring($hit,[Math]::Min(1300,$s.Length-$hit)))}
+    throw "R130 $($label) expected 1 match, found $count"
+  }
   [IO.File]::WriteAllText($script:wheel,$s.Replace($a,$b),[Text.UTF8Encoding]::new($false))
 }
 function Section([string]$a,[string]$z,[string]$body,[string]$label){
