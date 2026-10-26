@@ -19,6 +19,10 @@ function Section([string]$a,[string]$z,[string]$body,[string]$label){
   if($start -lt 0 -or $s.IndexOf($a,$start+1,[StringComparison]::Ordinal) -ge 0)
     {throw "R130 $($label) ambiguous start"}
   $end=$s.IndexOf($z,$start+$a.Length,[StringComparison]::Ordinal)
+  if($end -lt 0){
+    $end=$s.IndexOf('    private void ExpandRing(',
+       $start+$a.Length,[StringComparison]::Ordinal)
+  }
   if($end -lt 0){throw "R130 $($label) no end"}
   [IO.File]::WriteAllText($script:wheel,
     $s.Substring(0,$start)+$body.Replace($crlf,$lf)+$s.Substring($end),
