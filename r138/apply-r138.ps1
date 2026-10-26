@@ -23,4 +23,16 @@ Swap @'
                     DeskSpaceUpdateRateV127.PollFile(Local,"stable")).AddMinutes(1);
 '@ 'persist 1m stable check throttle across restarts'
 [IO.File]::WriteAllText($file,$s,[Text.UTF8Encoding]::new($false))
-Write-Host 'R138: stable uses immediate release stream plus 1-minute trusted public release redirect recovery; tester still respects its existing rate-limit rules; installer SHA256 and update supervisor unmodified.'
+# Force ntfy caching explicitly for release hints. The receiver replays
+# cached messages on reconnect, so this is material to instant delivery.
+$publisherFile='r133/publish-r133.ps1'
+$publisher=[IO.File]::ReadAllText($publisherFile).Replace($crlf,$lf)
+$old='-ContentType ''text/plain; charset=utf-8'' -Body $message -TimeoutSec 18'
+$new='-ContentType ''text/plain; charset=utf-8'' -Headers @{"Cache"="yes"} -Body $message -TimeoutSec 18'
+if(([regex]::Matches($publisher,[regex]::Escape($old))).Count -ne 1){
+ throw 'R138 ntfy publisher caching header insertion anchor missing'
+}
+$publisher=$publisher.Replace($old,$new)
+[IO.File]::WriteAllText($publisherFile,$publisher,[Text.UTF8Encoding]::new($false))
+
+Write-Host 'R138: stable uses immediate release stream plus 1-minute trusted public release redirect recovery; tester still respects its existing rate-limit rules; ntfy publisher explicitly caches release events; installer SHA256 and supervisor unmodified.'
