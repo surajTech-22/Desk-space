@@ -29,6 +29,7 @@ on:
       - fix/r137-durable-release-notification
       - fix/r138-release-notice-recovery
       - fix/r139-excel-direct-style-readback
+      - fix/r140-full-excel-format-audit
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1483,6 +1484,14 @@ jobs:
           ./r139/apply-r139.ps1
           ./r139/apply-tests-r139.ps1
           ./r139/test-r139.ps1
+
+      - name: R140 full Excel colour, format, table and formula audit
+        shell: pwsh
+        run: |
+          ./r140/apply-r140.ps1
+          ./r140/apply-tests-r140.ps1
+          ./r140/apply-live-acceptance-r140.ps1
+          ./r140/test-r140.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
