@@ -92,19 +92,16 @@ Swap $bridge @'
     public static DeskSpaceExcelProposalV16 Preview(
         DeskSpaceExcelTemplateV16 entry,bool useSelection,bool overwrite)
     {
-        dynamic app=Excel();
 '@ @'
     public static DeskSpaceExcelProposalV16 Preview(
         DeskSpaceExcelTemplateV16 entry,bool useSelection,bool overwrite)
     {
-        // R125: values/information are NEVER pasted without a uniquely
-        // matched saved header signature. Manual Excel selection is reserved
-        // for the entirely different format/formula mapper (V109).
+        // R125: information/data is always header-signature matched. The
+        // independent format/formula writer uses selected Excel destinations.
         if(useSelection)
             throw new InvalidOperationException(
                 "Information paste requires verified matching headers. "+
                 "Selected-cell fallback is disabled for data.");
-        dynamic app=Excel();
 '@ 'no selected-cell bypass for any value writer'
 
 # Restore the strict existing wheel data route. R124's mismatch prompt was
