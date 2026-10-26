@@ -35,16 +35,14 @@ Swap $worker @'
         // Existing populated destination values/formulas stay protected.
 '@ 'blank destination no longer needs stored formulas to be executable'
 Swap $worker @'
-                      " Excel-generated neutral table column names. "+
-                      "Saved formula definitions ("+order.Count(x=>
-                          x.StoredType=="Formula")+
-                      ") remain in the format library; NO formulas or "+
-                      "transaction values are pasted into blank input cells."
+                      " Excel-generated neutral table column names and "+
+                      order.Count(x=>x.StoredType=="Formula")+
+                      " captured formulas. No transaction values copied."
 '@ @'
-                      " structural table headers. All "+order.Count(x=>
-                          x.StoredType=="Formula")+
-                      " saved formulas remain in the library, but will NOT "+
-                      "be pasted to empty cells; all blank input cells stay blank."
+                      " Excel-generated neutral table column names. "+
+                      order.Count(x=>x.StoredType=="Formula")+
+                      " source formulas stay saved in the library, but none "+
+                      "are inserted into empty cells. All inputs stay blank."
 '@ 'correct format paste status to describe actual operation'
 Swap $worker @'
     // These formulas are relative R1C1 expressions saved per source cell.
