@@ -97,8 +97,8 @@ internal static class DeskSpaceExcelSemanticV106
             if(value is not null && Marshal.IsComObject(value))
             {
                 dynamic style=value;
-                object? name=style.Name;
-                return name is string text &&
+                object? styleName=style.Name;
+                return styleName is string text &&
                     !text.StartsWith("System._ComObject",StringComparison.OrdinalIgnoreCase)
                     ? text : "";
             }
