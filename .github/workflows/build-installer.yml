@@ -1470,7 +1470,7 @@ jobs:
           ./r137/apply-tests-r137.ps1
           ./r137/test-r137.ps1
 
-      - name: R138 durable release channel: cached push plus API-free recovery check
+      - name: "R138 durable release channel: cached push plus API-free recovery check"
         shell: pwsh
         run: |
           ./r138/apply-r138.ps1
