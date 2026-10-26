@@ -87,7 +87,7 @@ foreach($x in @('Automatic font colour was turned into a direct theme/colour',
 'Border colour or weight missing','Superscript missing',
 'Captured input protection settings not restored',
 'all body cells blank with zero formula injection.',
-'Partial target blocked with no workbook edits.',
+'partial target blocked with no workbook edits.',
 'full-data target preserves values and creates real table.')){
  Has $office $x 'live Excel acceptance'
 }
