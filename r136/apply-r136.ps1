@@ -35,9 +35,11 @@ Swap $worker @'
         // Existing populated destination values/formulas stay protected.
 '@ 'blank destination no longer needs stored formulas to be executable'
 Swap $worker @'
-                      " structural table headers and "+
-                      order.Count(x=>x.StoredType=="Formula")+
-                      " captured formulas. No transaction values copied."
+                      " Excel-generated neutral table column names. "+
+                      "Saved formula definitions ("+order.Count(x=>
+                          x.StoredType=="Formula")+
+                      ") remain in the format library; NO formulas or "+
+                      "transaction values are pasted into blank input cells."
 '@ @'
                       " structural table headers. All "+order.Count(x=>
                           x.StoredType=="Formula")+
