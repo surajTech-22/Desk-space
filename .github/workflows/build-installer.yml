@@ -27,6 +27,7 @@ on:
       - fix/r135-excel-format-no-prompt-readback
       - fix/r136-blank-format-no-formula-zero
       - fix/r137-durable-release-notification
+      - fix/r138-release-notice-recovery
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1468,6 +1469,12 @@ jobs:
           ./r137/apply-publisher-r137.ps1
           ./r137/apply-tests-r137.ps1
           ./r137/test-r137.ps1
+
+      - name: R138 durable release channel: cached push plus API-free recovery check
+        shell: pwsh
+        run: |
+          ./r138/apply-r138.ps1
+          ./r138/test-r138.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
