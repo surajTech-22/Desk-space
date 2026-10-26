@@ -38,6 +38,7 @@ on:
       - fix/r128-shared-saved-list-trash-icon
       - fix/r129-verified-updater-rate-recovery
       - fix/r130-excel-collection-groups-wheel-routing
+      - fix/r131-format-tablestyle-preflight-autoupdate
 
 permissions:
   contents: write
@@ -1414,6 +1415,13 @@ jobs:
           ./r130/apply-groups-r130.ps1
           ./r130/apply-wheel-r130.ps1
           ./r130/test-r130.ps1
+
+      - name: R131 preflight TableStyle and API-free trusted stable updates
+        shell: pwsh
+        run: |
+          ./r131/apply-excel-r131.ps1
+          ./r131/apply-updater-r131.ps1
+          ./r131/test-r131.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
