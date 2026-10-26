@@ -33,6 +33,7 @@ on:
       - fix/r122-contextual-pins-excel-deck-vault-placeholder
       - fix/r123-format-no-source-headers-media-deck
       - fix/r124-independent-excel-copy-paste
+      - fix/r125-strict-data-format-mapping
 
 permissions:
   contents: write
@@ -1378,6 +1379,12 @@ jobs:
         run: |
           ./r124/apply-r124.ps1
           ./r124/test-r124.ps1
+
+      - name: R125 strict data header match and independent format paste
+        shell: pwsh
+        run: |
+          ./r125/apply-r125.ps1
+          ./r125/test-r125.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
