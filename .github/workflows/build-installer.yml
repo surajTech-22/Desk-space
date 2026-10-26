@@ -22,6 +22,7 @@ on:
       - r42-excel-mapping-editor
       - fix/r106-excel-structure-capture
       - fix/r132-real-excel-paste-acceptance
+      - fix/r133-release-push-autoupdate
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1431,6 +1432,12 @@ jobs:
           ./r132/apply-updater-r132.ps1
           ./r132/test-r132.ps1
 
+      - name: R133 instant verified release event update receiver
+        shell: pwsh
+        run: |
+          ./r133/apply-r133.ps1
+          ./r133/test-r133.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1775,6 +1782,14 @@ jobs:
           }
           if(-not $published){throw 'Automatic stable release publication failed after retries'}
           Write-Host "Verified stable release: $tag"
+
+      - name: R133 notify active Stable and Tester clients immediately after publication
+        if: (github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./r133/publish-r133.ps1
 
       - name: Publish successful version to private GitHub Releases
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
