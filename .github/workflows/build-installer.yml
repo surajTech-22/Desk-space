@@ -1502,6 +1502,12 @@ jobs:
           ./r141/apply-live-r141.ps1
           ./r141/test-r141.ps1
 
+      - name: R142 exact Excel formulas, live preview, and saved-library readback
+        shell: pwsh
+        run: |
+          ./r142/apply-r142.ps1
+          ./r142/test-r142.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
