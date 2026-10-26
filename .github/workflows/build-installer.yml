@@ -53,7 +53,7 @@ permissions:
 # can remain in GitHub's teardown state and must not block new safety fixes.
 # Only the CURRENT branch head is allowed to publish a stable release.
 concurrency:
-  group: deskspace-installer-${{ github.sha }}
+  group: deskspace-installer-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
