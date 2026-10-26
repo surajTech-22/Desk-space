@@ -14,6 +14,7 @@ function Swap([string]$a,[string]$b,[string]$label) {
 function Section([string]$a,[string]$z,[string]$body,[string]$label){
   $lf=[string][char]10;$crlf=[string][char]13+$lf
   $s=[IO.File]::ReadAllText($script:wheel).Replace($crlf,$lf)
+  $a=$a.Replace($crlf,$lf);$z=$z.Replace($crlf,$lf)
   $start=$s.IndexOf($a,[StringComparison]::Ordinal)
   if($start -lt 0 -or $s.IndexOf($a,$start+1,[StringComparison]::Ordinal) -ge 0)
     {throw "R130 $($label) ambiguous start"}
