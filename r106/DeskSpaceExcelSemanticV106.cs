@@ -81,6 +81,31 @@ internal static class DeskSpaceExcelSemanticV106
         catch(Microsoft.CSharp.RuntimeBinder.RuntimeBinderException){return fallback;}
         catch(InvalidCastException){return fallback;}
     }
+    // Excel may return a COM TableStyle object, not its string name.
+    // Never persist the Runtime Callable Wrapper type as a style identifier.
+    private static string TableStyleName(Func<object?> read)
+    {
+        try
+        {
+            object? value=read();
+            if(value is null)return "";
+            if(value is string name)
+                return name.StartsWith("System._ComObject",StringComparison.OrdinalIgnoreCase)
+                    ? "" : name;
+            if(Marshal.IsComObject(value))
+            {
+                dynamic style=value;
+                object? styleName=style.Name;
+                return styleName is string resolved &&
+                    !resolved.StartsWith("System._ComObject",StringComparison.OrdinalIgnoreCase)
+                    ? resolved : "";
+            }
+            return "";
+        }
+        catch(COMException){return "";}
+        catch(Microsoft.CSharp.RuntimeBinder.RuntimeBinderException){return "";}
+        catch(InvalidCastException){return "";}
+    }
     private static int Int(Func<object?> read,int fallback=0)
     {
         var text=Safe(read);
@@ -135,7 +160,7 @@ internal static class DeskSpaceExcelSemanticV106
                 var snapshot=new DeskSpaceExcelTableV106{
                     Name=Safe(()=>(object?)table.Name),
                     Address=Safe(()=>(object?)area.Address),
-                    TableStyle=Safe(()=>(object?)table.TableStyle),
+                    TableStyle=TableStyleName(()=>(object?)table.TableStyle),
                     ShowAutoFilter=Flag(()=>(object?)table.ShowAutoFilter),
                     FirstColumnEmphasis=Flag(()=>(object?)table.ShowTableStyleFirstColumn),
                     LastColumnEmphasis=Flag(()=>(object?)table.ShowTableStyleLastColumn),
