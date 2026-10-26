@@ -34,7 +34,7 @@ if($w.Contains('PopulateBlankFormulas(live);') -or
 }
 foreach($term in @(
  'table.HasHeaders',
- '? table.ColumnNames[index] : ""',
+ 'DeskSpaceExcelFormatApplyV109.StructuralHeaderV123(index)',
  'return "";',
  'col>=table.Column+table.ColumnCount')){
  Must $p $term 'blank structural-only policy'
