@@ -34,6 +34,7 @@ on:
       - fix/r123-format-no-source-headers-media-deck
       - fix/r124-independent-excel-copy-paste
       - fix/r125-strict-data-format-mapping
+      - fix/r126-unified-excel-library-tabs
 
 permissions:
   contents: write
@@ -1385,6 +1386,12 @@ jobs:
         run: |
           ./r125/apply-r125.ps1
           ./r125/test-r125.ps1
+
+      - name: R126 shared Excel captured sheet and library-aware mappings
+        shell: pwsh
+        run: |
+          ./r126/apply-r126.ps1
+          ./r126/test-r126.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
