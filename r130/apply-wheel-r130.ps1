@@ -86,17 +86,15 @@ Section @'
     }
 '@ 'branch nested groups to correct saved data library'
 Swap @'
-            formats=DeskSpaceExcelStoreV16.Load()
-                .OrderBy(x=>x.GroupPath,StringComparer.OrdinalIgnoreCase)
-                .ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();
+            level=ExcelLevel.Functions;
+            groupPath="";
 '@ @'
-            formats=DeskSpaceExcelStoreV16.Load()
-                .OrderBy(x=>x.GroupPath,StringComparer.OrdinalIgnoreCase)
-                .ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();
             formatTemplatesV130=DeskSpaceExcelStoreV16.LoadFormats()
                 .OrderBy(x=>x.GroupPath,StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();
-'@ 'load information and format libraries independently'
+            level=ExcelLevel.Functions;
+            groupPath="";
+'@ 'load saved format library in addition to existing information store'
 Swap @'
             entries.Add(("Information","information","",null));
             return entries;
