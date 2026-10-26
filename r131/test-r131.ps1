@@ -33,12 +33,12 @@ foreach($needle in @(
     'resolved.AbsolutePath.StartsWith(prefix',
     '^v\d+\.\d+\.\d+$',
     'if(channel=="stable")',
-    'Verify(installer,sha,null)',
+    'Verify(stableInstaller,sha,null)',
     'DeskSpaceUpdateRateV127.PollFile(Local,"stable")',
     'private static void Verify(string installer,string checksum,JsonElement? root)',
     'if(root.HasValue)',
     'SHA256.HashData(data)',
-    'await StartSupervisor(installer,stableFolder,stableTag)',
+    'await StartSupervisor(stableInstaller,stableFolder,stableTag)',
     'if(DeskSpaceUpdateRateV127.IsLimitResponse(answer,denial))'
 )){
     if(!$upd.Contains($needle)){throw "R131 updater regression: $needle"}
