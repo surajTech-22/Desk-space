@@ -1428,6 +1428,7 @@ jobs:
         shell: pwsh
         run: |
           ./r132/apply-r132.ps1
+          ./r132/apply-updater-r132.ps1
           ./r132/test-r132.ps1
 
       - name: Assign monotonic build version to installer and app
