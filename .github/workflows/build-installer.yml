@@ -1508,6 +1508,12 @@ jobs:
           ./r142/apply-r142.ps1
           ./r142/test-r142.ps1
 
+      - name: R143 render exact formulas inside cells and safely paste saved formulas
+        shell: pwsh
+        run: |
+          ./r143/apply-r143.ps1
+          ./r143/test-r143.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |

@@ -1,0 +1,83 @@
+using System;
+using System.Collections.Generic;
+using DeskSpace;
+
+static class Tests
+{
+    static int assertions;
+    static void Expect(bool result,string label)
+    {
+        assertions++;
+        if(!result)throw new Exception("R143 FAILED: "+label);
+    }
+    static List<DeskSpaceExcelStyledCellV101> Source()=>new()
+    {
+        new(){StoredType="Text"},
+        new(){StoredType="Number"},
+        new(){StoredType="Formula",FormulaA1="=SUM(A1:B1)",
+            FormulaR1C1="=SUM(RC[-2]:RC[-1])"},
+        new(){StoredType="Blank"}
+    };
+    static List<DeskSpaceExcelFullRangeGateV107.Cell> Target(
+        bool first=true,bool second=true,bool formula=false,bool extra=false,
+        string secondType="Number")=>new()
+    {
+        new(first,"Text"),
+        new(second,secondType),
+        new(formula,formula?"Formula":"Blank"),
+        new(extra,extra?"Text":"Blank")
+    };
+    static int Main()
+    {
+        try
+        {
+            var source=Source();
+            var candidate=Target();
+            Expect(DeskSpaceExcelFormulaPasteV143.Ready(source,candidate),
+                "all required input cells present with formula slot blank");
+            var oldGate=DeskSpaceExcelFullRangeGateV107.Evaluate(
+                new List<DeskSpaceExcelFullRangeGateV107.Cell>{
+                    new(true,"Text"),new(true,"Number"),
+                    new(true,"Formula"),new(false,"Blank")},candidate);
+            Expect(!oldGate.MayApply,"legacy gate rejects formula-ready cells");
+            Expect(!DeskSpaceExcelFormulaPasteV143.Ready(source,Target(false,false)),
+                "completely empty range must not show zero-valued formulas");
+            Expect(!DeskSpaceExcelFormulaPasteV143.Ready(source,Target(false,true)),
+                "partially entered required input rejected");
+            Expect(!DeskSpaceExcelFormulaPasteV143.Ready(source,Target(true,false)),
+                "another partially entered required input rejected");
+            Expect(!DeskSpaceExcelFormulaPasteV143.Ready(source,Target(true,true,true)),
+                "existing formula may never be overwritten");
+            Expect(!DeskSpaceExcelFormulaPasteV143.Ready(source,Target(true,true,false,true)),
+                "unrelated data in a saved blank position rejected");
+            Expect(!DeskSpaceExcelFormulaPasteV143.Ready(
+                source,Target(true,true,false,false,"Text")),
+                "incompatible input type rejected");
+            var corrupt=Source();
+            corrupt[2].FormulaR1C1="";
+            Expect(!DeskSpaceExcelFormulaPasteV143.Ready(corrupt,Target()),
+                "formula marker without actual R1C1 expression rejected");
+            var full=Target(true,true,true);
+            Expect(DeskSpaceExcelFullRangeGateV107.Evaluate(
+                new List<DeskSpaceExcelFullRangeGateV107.Cell>{
+                    new(true,"Text"),new(true,"Number"),new(true,"Formula"),
+                    new(false,"Blank")},full).MayApply,
+                "already full target remains eligible without overwriting formulas");
+            Console.WriteLine("R143 PASS: "+assertions+" formula-footprint and no-zero guards.");
+            return 0;
+        }
+        catch(Exception e){Console.Error.WriteLine(e);return 1;}
+    }
+}
+namespace DeskSpace
+{
+    internal sealed class DeskSpaceExcelStyledCellV101
+    {
+        public int Row {get;set;}
+        public int Column {get;set;}
+        public string Address {get;set;}="";
+        public string StoredType {get;set;}="";
+        public string FormulaA1 {get;set;}="";
+        public string FormulaR1C1 {get;set;}="";
+    }
+}
