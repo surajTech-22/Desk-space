@@ -22,8 +22,8 @@ Swap $format @'
         if(Marshal.IsComObject(raw))
         {
             dynamic style=raw;
-            object? name=style.Name;
-            if(name is string resolved)return resolved;
+            object? styleName=style.Name;
+            if(styleName is string resolved)return resolved;
         }
         return "";
     }
