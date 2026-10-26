@@ -47,7 +47,7 @@ internal static class DeskSpaceReleaseNoticeV137
                 TextWrapping=TextWrapping.Wrap
             });
             stack.Children.Add(new TextBlock {
-                Text="Verified "+channel+" release. Automatic installation is starting.",
+                Text="Official "+channel+" release found. Verifying package for installation.",
                 FontSize=11,
                 Margin=new Thickness(0,5,0,0),
                 TextWrapping=TextWrapping.Wrap,
