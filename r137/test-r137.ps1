@@ -8,7 +8,7 @@ $publisher=[IO.File]::ReadAllText('r133/publish-r133.ps1')
 $ui=[IO.File]::ReadAllText("$r/DeskSpaceExcelEditorV42.cs")
 $smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 function Need([string]$s,[string]$phrase,[string]$source){
- if(!$s.Contains($phrase)){throw "R137 missing $source: $phrase"}
+ if(!$s.Contains($phrase)){throw "R137 missing ${source}: $phrase"}
 }
 foreach($k in @(
  '?since=1h',
