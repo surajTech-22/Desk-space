@@ -21,6 +21,7 @@ on:
     branches:
       - r42-excel-mapping-editor
       - fix/r106-excel-structure-capture
+      - fix/r132-real-excel-paste-acceptance
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1423,6 +1424,12 @@ jobs:
           ./r131/apply-updater-r131.ps1
           ./r131/test-r131.ps1
 
+      - name: R132 correct real Excel table style paste and paired naming panels
+        shell: pwsh
+        run: |
+          ./r132/apply-r132.ps1
+          ./r132/test-r132.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1566,7 +1573,7 @@ jobs:
             ($copied+'  Update.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))
 
       - name: Bundle R111 portable real-Excel acceptance (development branch only)
-        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture' || github.ref == 'refs/heads/fix/r132-real-excel-paste-acceptance'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -1603,7 +1610,7 @@ jobs:
           Write-Host ("R111 ZIP size "+(Get-Item $archive).Length+" SHA256 "+$hash)
           
       - name: Attempt real Excel COM acceptance if Office is installed on the runner
-        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture' || github.ref == 'refs/heads/fix/r132-real-excel-paste-acceptance'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -1625,7 +1632,7 @@ jobs:
           }
 
       - name: Upload R111 portable candidate for live Excel acceptance (NOT an update)
-        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture'
+        if: github.ref == 'refs/heads/fix/r106-excel-structure-capture' || github.ref == 'refs/heads/fix/r132-real-excel-paste-acceptance'
         uses: actions/upload-artifact@v4
         with:
           name: DeskSpace-R111-Real-Excel-Portable-Test
