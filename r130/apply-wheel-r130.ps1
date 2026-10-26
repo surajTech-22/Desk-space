@@ -110,12 +110,12 @@ Swap @'
 '@ 'separate donut branches'
 Swap @'
                 if(displayed[slot].Command=="information")
-                    ExpandRing(1,"",RootAngle(slot));
+                    ExpandRing(1,"",RootAngle(slot),rootStep);
 '@ @'
                 if(displayed[slot].Command=="information" ||
                    displayed[slot].Command=="formats")
                     ExpandRing(1,displayed[slot].Command=="formats"
-                        ?FormatRootV130:"",RootAngle(slot));
+                        ?FormatRootV130:"",RootAngle(slot),rootStep);
 '@ 'hover both donut root branches'
 Swap @'
         if(item.Command=="information"||item.Command=="group")
@@ -126,14 +126,14 @@ Swap @'
 Swap @'
         if(item.Command=="information")
         {
-            ExpandRing(1,"",RootAngle(slot));
+            ExpandRing(1,"",RootAngle(slot),rootStep);
             return;
         }
 '@ @'
         if(item.Command=="information" || item.Command=="formats")
         {
             ExpandRing(1,item.Command=="formats"?FormatRootV130:"",
-                RootAngle(slot));
+                RootAngle(slot),rootStep);
             return;
         }
 '@ 'activate root format branch'
