@@ -28,6 +28,7 @@ on:
       - fix/r136-blank-format-no-formula-zero
       - fix/r137-durable-release-notification
       - fix/r138-release-notice-recovery
+      - fix/r139-excel-direct-style-readback
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1475,6 +1476,13 @@ jobs:
         run: |
           ./r138/apply-r138.ps1
           ./r138/test-r138.ps1
+
+      - name: R139 Excel theme-aware direct style readback and no-rollback regression
+        shell: pwsh
+        run: |
+          ./r139/apply-r139.ps1
+          ./r139/apply-tests-r139.ps1
+          ./r139/test-r139.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
