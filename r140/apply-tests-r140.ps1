@@ -27,17 +27,6 @@ Swap $smoke @'
         Set(actual,"DirectFontThemeColor",4);
 '@ 'update R139 explicit-theme fixture to a nonautomatic colour'
 Swap $smoke @'
-        Set(src,"DirectFontThemeColor",0);
-        Set(actual,"DirectFontThemeColor",0);
-
-        // Explicit colours
-'@ @'
-        Set(src,"DirectFontThemeColor",0);
-        Set(actual,"DirectFontThemeColor",0);
-
-        // Explicit colours
-'@ 'R139 smoke context unchanged'
-Swap $smoke @'
     private static void TestExcelTableRenderedPolicyV135()
 '@ @'
     private static void TestFullExcelFormatMatrixV140()
