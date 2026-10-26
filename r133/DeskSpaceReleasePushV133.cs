@@ -23,6 +23,7 @@ internal static class DeskSpaceReleasePushV133
         Timeout=System.Threading.Timeout.InfiniteTimeSpan
     };
     private static bool started;
+    private static System.Threading.Mutex? streamOwner;
     private static string lastAttemptedTag="";
     private static DateTime lastAttemptUtc=DateTime.MinValue;
 
@@ -43,6 +44,25 @@ internal static class DeskSpaceReleasePushV133
     {
         if(started)return;
         started=true;
+        // A Workspace and a widget-host process can coexist. Only ONE
+        // process subscribes and starts supervised installs for a user.
+        try
+        {
+            streamOwner=new System.Threading.Mutex(true,
+                @"Local\DeskSpace-ReleasePushV133",out bool ownsStream);
+            if(!ownsStream)
+            {
+                Log("Release listener already active in another DeskSpace process.");
+                streamOwner.Dispose();
+                streamOwner=null;
+                return;
+            }
+        }
+        catch(UnauthorizedAccessException)
+        {
+            Log("Cannot acquire single-instance release listener mutex.");
+            return;
+        }
         _=ListenAsync(owner);
     }
 
@@ -112,15 +132,16 @@ internal static class DeskSpaceReleasePushV133
                 using var request=new HttpRequestMessage(HttpMethod.Get,Endpoint);
                 request.Headers.UserAgent.ParseAdd("DeskSpace-Release-Listener/1.0");
                 using var response=await StreamHttp.SendAsync(request,
-                    HttpCompletionOption.ResponseHeadersRead);
+                    HttpCompletionOption.ResponseHeadersRead)
+                    .ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 failures=0;
                 Log("Release-event stream connected.");
-                await using var stream=await response.Content.ReadAsStreamAsync();
+                await using var stream=await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 using var reader=new StreamReader(stream);
                 while(!reader.EndOfStream && !owner.Dispatcher.HasShutdownStarted)
                 {
-                    string? line=await reader.ReadLineAsync();
+                    string? line=await reader.ReadLineAsync().ConfigureAwait(false);
                     if(line==null)break;
                     if(line.Length>4096)continue;
                     if(TryReleaseEvent(line,DeskSpacePublicUpdaterV44.Channel,
@@ -138,7 +159,8 @@ internal static class DeskSpaceReleasePushV133
             }
             // Network loss does not spin, or block five-minute recovery checks.
             failures=Math.Min(failures+1,6);
-            await Task.Delay(TimeSpan.FromSeconds(Math.Min(60,5*failures)));
+            await Task.Delay(TimeSpan.FromSeconds(Math.Min(60,5*failures)))
+                .ConfigureAwait(false);
         }
     }
 }
