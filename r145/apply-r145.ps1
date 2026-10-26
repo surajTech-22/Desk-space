@@ -10,7 +10,7 @@ function Swap([string]$p,[string]$before,[string]$after,[string]$label)
   $s=[IO.File]::ReadAllText($p).Replace($crlf,$lf)
   $old=$before.Replace($crlf,$lf);$new=$after.Replace($crlf,$lf)
   $count=([regex]::Matches($s,[regex]::Escape($old))).Count
-  if($count -ne 1){throw "R145 $label: required one anchor; found $count"}
+  if($count -ne 1){throw "R145 $($label): required one anchor; found $count"}
   [IO.File]::WriteAllText($p,$s.Replace($old,$new),
     [Text.UTF8Encoding]::new($false))
 }
