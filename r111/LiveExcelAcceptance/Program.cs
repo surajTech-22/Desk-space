@@ -107,7 +107,8 @@ internal static class Program
             Put(template,"SheetVisualV101",snapshot);
             Console.WriteLine("SOURCE: actual Excel Table1, E7:E11 merged, 30 cells, single/double underline captured.");
 
-            // Test A: wholly empty selection, real ListObject, merges and formulas.
+            // Test A: wholly empty destination creates true table and formatting,
+            // WITHOUT copying any source transaction values or formulas.
             dynamic emptyBook=excel.Workbooks.Add();
             dynamic emptySheet=emptyBook.Worksheets[1];
             emptySheet.Name="Blank target";
@@ -129,10 +130,25 @@ internal static class Program
                 "Excel merged area was not restored");
             Expect((int)emptySheet.Range["G20"].Font.Underline==-4119,
                 "Double underline was not restored");
-            Expect((bool)emptySheet.Range["J17"].HasFormula,
-                "Relative Excel formula was not restored");
+            // Every source formula column must remain blank, not display 0.
+            for(int row=16;row<=20;row++)
+            for(int col=5;col<=10;col++)
+            {
+                if(row==16 && col>=6)continue; // Actual ListObject header
+                dynamic blankCell=emptySheet.Cells[row,col];
+                if((bool)blankCell.HasFormula ||
+                   (object?)blankCell.Value2 != null)
+                    throw new InvalidOperationException(
+                        "Format-only pasted a formula/value into empty cell "+
+                        (string)blankCell.Address);
+            }
+            Expect((object?)emptySheet.Range["J17"].Value2==null,
+                "Blank destination calculated column returned a visible zero");
+            Expect((object?)emptySheet.Range["F17"].Value2==null,
+                "Blank destination input returned an unwanted value");
             emptyBook.SaveAs(Path.Combine(work,"applied_blank.xlsx"),51);
-            Console.WriteLine("PASS: empty target real table/merged cells/formulas/underline.");
+            Console.WriteLine("PASS: empty target real table, merges, underline, "+
+                "all body cells blank with zero formula injection.");
 
             // Test B: partial target MUST block before the first write.
             dynamic partialBook=excel.Workbooks.Add();
@@ -249,9 +265,13 @@ internal static class Program
                 "Same-workbook format paste duplicated original Excel table identity");
             Expect(ReadStyleName(source.ListObjects[2])=="TableStyleMedium2",
                 "Same-workbook destination table style differs");
-            Expect((bool)source.Range["J17"].HasFormula,
-                "Same-workbook destination formula missing");
-            Console.WriteLine("PASS: same workbook new table keeps unique ListObject identity and restores style/formulas.");
+            Expect(!(bool)source.Range["J17"].HasFormula &&
+                   (object?)source.Range["J17"].Value2==null,
+                "Same-workbook format paste introduced a formula/zero into blank area");
+            Expect((bool)source.Range["J8"].HasFormula,
+                "Same-workbook format paste unexpectedly modified source formulas");
+            Console.WriteLine("PASS: same-workbook table identity/style preserved, "+
+                "target body blank and original source formulas intact.");
             sourceBook.SaveAs(Path.Combine(work,"applied_same_workbook.xlsx"),51);
 
             emptyBook.Close(false);
