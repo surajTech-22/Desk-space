@@ -231,6 +231,9 @@ Swap $editor @'
 # helper changes. No child of a second outer routing TabControl exists.
 $smoke='r36/UiSmoke/Program.cs'
 $s=[IO.File]::ReadAllText($smoke)
+$s=$s.Replace('"Capture / add fields"','"Information / Data · matched headers"')
+$s=$s.Replace('"Save collection & data"','"Save Mapping"')
+$s=$s.Replace('"Delete selected data"','"New Mapping"')
 $s=$s.Replace('"Mappings · edit & paste"','"Mappings"')
 $s=$s.Replace('"Captured sheet · formats & formulas"','"Captured Sheet"')
 [IO.File]::WriteAllText($smoke,$s,[Text.UTF8Encoding]::new($false))
