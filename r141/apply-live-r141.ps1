@@ -17,9 +17,7 @@ $b=@'
             // or the initial default, never an unexplained third state.
             bool protectionCopied=!resultLocked && resultFormulaHidden;
             if(!protectionCopied)
-                Expect(created.Contains("could not be copied") &&
-                       (!resultLocked || resultLocked) &&
-                       (resultFormulaHidden || !resultFormulaHidden),
+                Expect(created.Contains("Locked/FormulaHidden settings could not be copied"),
                     "Excel refused cell protection but DeskSpace failed to "+
                     "report the incomplete protection metadata.");
 '@
