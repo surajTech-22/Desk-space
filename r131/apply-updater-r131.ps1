@@ -126,20 +126,20 @@ Swap @'
                 }
                 var stableFolder=Path.Combine(Local,"Updates",stableTag);
                 Directory.CreateDirectory(stableFolder);
-                var installer=Path.Combine(stableFolder,"DeskSpace_Setup.exe");
+                var stableInstaller=Path.Combine(stableFolder,"DeskSpace_Setup.exe");
                 DeskSpaceUpdateProgress.Publish("Downloading",0);
                 stage="Download official GitHub checksum";
                 var sha=await Checksum(StableAssetV131(stableTag,
                     "DeskSpace_Setup.sha256.txt"),stableTimeout.Token);
                 stage="Download official GitHub installer";
                 await Download(StableAssetV131(stableTag,
-                    "DeskSpace_Setup.exe"),installer,stableTimeout.Token);
+                    "DeskSpace_Setup.exe"),stableInstaller,stableTimeout.Token);
                 stage="Verify installer SHA-256";
                 DeskSpaceUpdateProgress.Publish("Verifying",100);
-                Verify(installer,sha,null);
+                Verify(stableInstaller,sha,null);
                 stage="Launch verified installer supervisor";
                 DeskSpaceUpdateProgress.Publish("Restarting",100);
-                await StartSupervisor(installer,stableFolder,stableTag);
+                await StartSupervisor(stableInstaller,stableFolder,stableTag);
                 supervisorLaunched=true;
                 return;
             }
