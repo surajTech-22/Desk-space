@@ -83,6 +83,32 @@ internal static class DeskSpaceExcelSemanticV106
         catch(ArgumentException){return fallback;}
         catch(FormatException){return fallback;}
     }
+    // A ListObject.TableStyle is a Variant. Office may hand COM clients a
+    // TableStyle object, whose default ToString() is System._ComObject.
+    // Store its exact .Name instead, for later target-workbook preflight.
+    private static string TableStyleName(Func<object?> read)
+    {
+        try
+        {
+            object? value=read();
+            if(value is string name)
+                return name.StartsWith("System._ComObject",StringComparison.OrdinalIgnoreCase)
+                    ? "" : name;
+            if(value is not null && Marshal.IsComObject(value))
+            {
+                dynamic style=value;
+                object? name=style.Name;
+                return name is string text &&
+                    !text.StartsWith("System._ComObject",StringComparison.OrdinalIgnoreCase)
+                    ? text : "";
+            }
+            return "";
+        }
+        catch(COMException){return "";}
+        catch(Microsoft.CSharp.RuntimeBinder.RuntimeBinderException){return "";}
+        catch(InvalidCastException){return "";}
+        catch(ArgumentException){return "";}
+    }
     private static int Int(Func<object?> read,int fallback=0)
     {
         var text=Safe(read);
@@ -137,7 +163,7 @@ internal static class DeskSpaceExcelSemanticV106
                 var snapshot=new DeskSpaceExcelTableV106{
                     Name=Safe(()=>(object?)table.Name),
                     Address=Safe(()=>(object?)area.Address),
-                    TableStyle=Safe(()=>(object?)table.TableStyle),
+                    TableStyle=TableStyleName(()=>(object?)table.TableStyle),
                     ShowAutoFilter=Flag(()=>(object?)table.ShowAutoFilter),
                     FirstColumnEmphasis=Flag(()=>(object?)table.ShowTableStyleFirstColumn),
                     LastColumnEmphasis=Flag(()=>(object?)table.ShowTableStyleLastColumn),
