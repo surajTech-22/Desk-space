@@ -68,22 +68,21 @@ internal sealed class DeskSpaceAppearanceV148
     {
         get{TryColor(Current.Accent,out var c);return c;}
     }
-    private static bool Dark
+    // Use the draft mode in the settings preview rather than the last saved mode.
+    internal static bool IsDarkFor(DeskSpaceAppearanceV148 appearance)
     {
-        get
+        if(appearance.Mode=="Dark")return true;
+        if(appearance.Mode=="Light")return false;
+        try
         {
-            if(Current.Mode=="Dark")return true;
-            if(Current.Mode=="Light")return false;
-            try
-            {
-                var v=Registry.GetValue(
-                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                    "AppsUseLightTheme",1);
-                return Convert.ToInt32(v)==0;
-            }
-            catch{return false;}
+            var value=Registry.GetValue(
+                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "AppsUseLightTheme",1);
+            return Convert.ToInt32(value)==0;
         }
+        catch{return false;}
     }
+    private static bool Dark=>IsDarkFor(Current);
     internal static Brush AccentBrush=>new SolidColorBrush(AccentColor);
     internal static Brush LightBrush
     {
@@ -162,6 +161,8 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     private readonly StackPanel body=new(){Margin=new Thickness(18)};
     private readonly TextBlock subtitle=new(){FontSize=13,Margin=new Thickness(0,4,0,8)};
     private readonly TextBlock status=new(){FontSize=12,TextWrapping=TextWrapping.Wrap};
+    // Edits stay local to this settings window until Apply is clicked.
+    private readonly List<string> pinnedDraft=new();
     private readonly ListBox pinned=new(){Height=230,MinWidth=270};
     private readonly Canvas donut=new(){Width=290,Height=290};
     private string current="Donut toolbar";
@@ -178,6 +179,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         Action redraw,Action showGeneral)
     {
         settings=prefs;refresh=redraw;general=showGeneral;
+        pinnedDraft.AddRange(settings.PinnedApps);
         var source=DeskSpaceAppearanceV148.Current;
         draft=new(){Style=source.Style,Mode=source.Mode,Accent=source.Accent,
             Scale=source.Scale,Opacity=source.Opacity,Softness=source.Softness};
@@ -264,7 +266,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         right.Children.Add(Caption("Pinned applications"));
         right.Children.Add(new TextBlock{Text="Order changes apply to the existing Applications module.",
             TextWrapping=TextWrapping.Wrap,Foreground=Brushes.Gray});
-        pinned.ItemsSource=settings.PinnedApps;
+        pinned.ItemsSource=pinnedDraft;
         pinned.DisplayMemberPath="";
         right.Children.Add(pinned);
         var buttons=new WrapPanel{Margin=new Thickness(0,9,0,0)};
@@ -400,9 +402,9 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     {
         int index=pinned.SelectedIndex;
         int destination=index+direction;
-        if(index<0||destination<0||destination>=settings.PinnedApps.Count)return;
-        (settings.PinnedApps[index],settings.PinnedApps[destination])=
-            (settings.PinnedApps[destination],settings.PinnedApps[index]);
+        if(index<0||destination<0||destination>=pinnedDraft.Count)return;
+        (pinnedDraft[index],pinnedDraft[destination])=
+            (pinnedDraft[destination],pinnedDraft[index]);
         pinned.Items.Refresh();pinned.SelectedIndex=destination;
     }
     private void AddPin()
@@ -410,14 +412,14 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         var chooser=new OpenFileDialog{Filter="Applications|*.exe;*.lnk|All files|*.*",
             Title="Pin a Windows application to DeskSpace"};
         if(chooser.ShowDialog()!=true)return;
-        if(settings.PinnedApps.Contains(chooser.FileName,StringComparer.OrdinalIgnoreCase))return;
-        settings.PinnedApps.Add(chooser.FileName);pinned.Items.Refresh();
+        if(pinnedDraft.Contains(chooser.FileName,StringComparer.OrdinalIgnoreCase))return;
+        pinnedDraft.Add(chooser.FileName);pinned.Items.Refresh();
     }
     private void RemovePin()
     {
         int i=pinned.SelectedIndex;
-        if(i<0||i>=settings.PinnedApps.Count)return;
-        settings.PinnedApps.RemoveAt(i);pinned.Items.Refresh();
+        if(i<0||i>=pinnedDraft.Count)return;
+        pinnedDraft.RemoveAt(i);pinned.Items.Refresh();
     }
     private static Point Polar(double cx,double cy,double r,double degrees)
     {
@@ -438,10 +440,16 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     {
         donut.Children.Clear();
         var accent=DeskSpaceAppearanceV148.TryColor(draft.Accent,out var a)?a:Colors.MediumPurple;
-        var pale=DeskSpaceAppearanceV148.Mix(accent,Colors.White,
-            draft.Style=="Material"?.76:.88);
-        var second=DeskSpaceAppearanceV148.Mix(accent,Colors.White,.75);
-        donut.Background=new SolidColorBrush(Color.FromRgb(246,246,252));
+        var dark=DeskSpaceAppearanceV148.IsDarkFor(draft);
+        var backdrop=dark?Color.FromRgb(32,34,49):Colors.White;
+        double blend=draft.Style=="Material"?.78:.88;
+        blend=Math.Clamp(blend+(draft.Softness-16)*.003,.67,.94);
+        var pale=DeskSpaceAppearanceV148.Mix(accent,backdrop,blend);
+        var second=DeskSpaceAppearanceV148.Mix(accent,
+            dark?Color.FromRgb(41,43,56):Colors.White,
+            draft.Style=="Material"?.68:.80);
+        donut.Background=new SolidColorBrush(dark?Color.FromRgb(27,29,43):
+            Color.FromRgb(246,246,252));
         double radius=126*Math.Clamp(draft.Scale,.75,1.25);
         for(int i=0;i<12;i++)
         {
@@ -457,7 +465,8 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             var pos=Polar(145,145,(inner+outerRadius)/2,angle+29);
             var label=new TextBlock{Text=Modules[i],FontSize=outer?10:9,
                 TextAlignment=TextAlignment.Center,Width=76,TextWrapping=TextWrapping.Wrap,
-                Foreground=new SolidColorBrush(Color.FromRgb(50,49,78))};
+                Foreground=new SolidColorBrush(dark?
+                    Color.FromRgb(244,242,255):Color.FromRgb(48,43,73))};
             Canvas.SetLeft(label,pos.X-38);Canvas.SetTop(label,pos.Y-11);
             donut.Children.Add(label);
         }
@@ -475,8 +484,12 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     {
         try
         {
-            DeskSpaceAppearanceV148.Save(draft);
+            // Cancel/closing the studio has no effect on the shared pin list.
+            // Apply is the single commit point for staged application changes.
+            settings.PinnedApps.Clear();
+            foreach(var app in pinnedDraft)settings.PinnedApps.Add(app);
             settings.Save();
+            DeskSpaceAppearanceV148.Save(draft);
             refresh();
             status.Text="Saved. Widget colours, size, opacity and pinned applications updated.";
         }
