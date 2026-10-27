@@ -57,9 +57,6 @@ Swap $format @'
 # Therefore the same rollback undoes partially inserted formulas.
 Swap $format @'
             // Do not save the open workbook behind the user's back.
-            return "Verified "+source.Length+" cells, "+requestedFeatures.Tables.Count+
-                " real Excel tables and exact underline styles. Existing values preserved. "+
-                "Safety copy: "+backup;
 '@ @'
             // R147: combined paste. Native R1C1 formula writes use the exact
             // saved relative/absolute expressions, independent of old source
@@ -107,12 +104,7 @@ Swap $format @'
                             Text(cell.Address));
                 }
             }
-            // Never save user's open workbook automatically.
-            return "Verified "+source.Length+" cell formats, "+
-                requestedFeatures.Tables.Count+" real Excel tables, "+
-                writtenV147+" formulas inserted and "+matchingV147+
-                " matching formulas retained. Blank input values preserved. "+
-                "Safety copy: "+backup;
+            // Do not save the open workbook behind the user's back.
 '@ 'write exact formulas after styles and tables inside same backup/rollback'
 
 # One visible mapping action. Keep underlying legacy formula-only library
