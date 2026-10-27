@@ -89,4 +89,47 @@ if(!$match.Success){throw 'R151 display clamp method not found'}
 $whole=$whole.Insert($match.Index+$match.Length,
     ([string][char]10+'        if(DeskSpaceMultiMonitorV151.IsSatellite(this))return;'))
 [IO.File]::WriteAllText($widget,$whole,[Text.UTF8Encoding]::new($false))
+# Exercise actual WPF page creation and repeat navigation, not just source text.
+$smoke='r36/UiSmoke/Program.cs'
+$sm=[IO.File]::ReadAllText($smoke).Replace($nl,[string][char]10)
+$call='            TestSubArcScreenFit();'
+if(([regex]::Matches($sm,[regex]::Escape($call))).Count -ne 1){
+    throw 'R151 WPF smoke test call anchor changed'
+}
+$sm=$sm.Replace($call,$call+[string][char]10+'            TestSettingsPagesV151();')
+$method='    private static void TestDeckVisibilityV89()'
+if(([regex]::Matches($sm,[regex]::Escape($method))).Count -ne 1){
+    throw 'R151 WPF smoke method anchor changed'
+}
+$test=@'
+    private static void TestSettingsPagesV151()
+    {
+        var type=Product.GetType("DeskSpace.DeskSpaceSettingsStudioV148",true)!;
+        var ctor=type.GetConstructors(BindingFlags.NonPublic|BindingFlags.Instance)
+            .Single(x=>x.GetParameters().Length==4);
+        var prefs=new WidgetSettingsV3();
+        var window=(Window)ctor.Invoke(new object[]{
+            new Window(),prefs,(Action)(()=>{}),(Action)(()=>{})});
+        var navigate=type.GetMethod("Navigate",
+            BindingFlags.Instance|BindingFlags.NonPublic)!;
+        var body=(StackPanel)type.GetField("body",BindingFlags.Instance|
+            BindingFlags.NonPublic)!.GetValue(window)!;
+        foreach(var page in new[]{"Theme","Donut toolbar","Theme",
+            "Donut toolbar","Displays","Presets","General",
+            "Donut toolbar"})
+        {
+            navigate.Invoke(window,new object[]{page});
+            Assert(!body.Children.OfType<TextBlock>().Any(x=>
+                x.Text?.StartsWith("This settings page could not be opened",
+                    StringComparison.Ordinal)==true),
+                "R151 "+page+" must re-open without WPF logical-parent exceptions");
+        }
+        Console.WriteLine("R151 PASS: real settings pages navigate repeatedly, "+
+            "pinned applications list reparented, Displays loads safely.");
+    }
+
+'@
+$sm=$sm.Replace($method,$test.Replace($nl,[string][char]10)+$method)
+[IO.File]::WriteAllText($smoke,$sm,[Text.UTF8Encoding]::new($false))
+
 Write-Host 'R151 installed real interactive widget per monitor; monitor hotplug and persisted independent display setting.'
