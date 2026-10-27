@@ -80,6 +80,26 @@ internal static class DeskSpaceMonitorSessionsV154
         };
     }
 
+    internal static void PrepareExpansion(WidgetShellWindow widget,double targetDiameterDips)
+    {
+        if(!Sessions.TryGetValue(widget,out var session))return;
+        var screen=Forms.Screen.AllScreens.FirstOrDefault(x=>x.DeviceName.Equals(
+            session.Device,StringComparison.OrdinalIgnoreCase));
+        if(screen==null)return;
+        var hwnd=new WindowInteropHelper(widget).Handle;
+        if(hwnd==IntPtr.Zero||!GetWindowRect(hwnd,out var rect))return;
+        var source=System.Windows.PresentationSource.FromVisual(widget);
+        double scaleX=source?.CompositionTarget?.TransformToDevice.M11??1;
+        double scaleY=source?.CompositionTarget?.TransformToDevice.M22??1;
+        var desired=new Rectangle(rect.L,rect.T,
+            Math.Max(rect.R-rect.L,(int)Math.Ceiling(targetDiameterDips*scaleX)),
+            Math.Max(rect.B-rect.T,(int)Math.Ceiling(targetDiameterDips*scaleY)));
+        var fitted=DeskSpaceMonitorFenceV153.Constrain(desired,screen.WorkingArea);
+        if(fitted.X!=rect.L||fitted.Y!=rect.T)
+            SetWindowPos(hwnd,IntPtr.Zero,fitted.X,fitted.Y,0,0,
+                NoSize|NoZOrder|NoActivate);
+    }
+
     internal static bool IsSecondary(WidgetShellWindow widget)=>
         Sessions.TryGetValue(widget,out var s)&&!s.Primary;
 
