@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
@@ -125,6 +126,7 @@ internal static class DeskSpaceMonitorFenceV153
     private static readonly Dictionary<Window,Registration> Windows=new();
     private static readonly Dictionary<Popup,Registration> Popups=new();
     private static readonly Dictionary<Popup,Forms.Screen> PopupScreen=new();
+    private static readonly ConditionalWeakTable<Popup,object> Tracked=new();
 
     internal static void TrackWidget(WidgetShellWindow widget)
     {
@@ -151,7 +153,8 @@ internal static class DeskSpaceMonitorFenceV153
     // neighbouring screen; nested popups inherit the parent popup's screen.
     internal static void TrackPopup(FrameworkElement anchor,Popup popup)
     {
-        if(PopupScreen.ContainsKey(popup))return;
+        if(Tracked.TryGetValue(popup,out _))return;
+        Tracked.Add(popup,new object());
         Forms.Screen ScreenForAnchor()
         {
             var window=Window.GetWindow(anchor) as WidgetShellWindow;
@@ -177,11 +180,11 @@ internal static class DeskSpaceMonitorFenceV153
                     Forms.Screen.AllScreens[0];
             }
         }
-        PopupScreen[popup]=ScreenForAnchor();
         int deferredAttempts=0;
         void Opened(object? _,EventArgs __)
         {
             if(!popup.IsOpen||popup.Child==null)return;
+            PopupScreen[popup]=ScreenForAnchor();
             if(PresentationSource.FromVisual(popup.Child) is not HwndSource source)
             {
                 if(deferredAttempts++<3)
@@ -209,6 +212,7 @@ internal static class DeskSpaceMonitorFenceV153
         popup.Closed+=(_,_)=>{
             if(Popups.Remove(popup,out var registration))
                 registration.Uninstall();
+            PopupScreen.Remove(popup);
         };
         if(popup.IsOpen)Opened(popup,EventArgs.Empty);
     }
