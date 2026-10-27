@@ -145,7 +145,11 @@ internal static class DeskSpaceMultiMonitorV151
                     }
                     catch(Exception error)
                     {
-                        if(replica!=null)Satellites.Remove(screen.DeviceName);
+                        if(replica!=null)
+                        {
+                            try{replica.Close();}catch(Exception closeError){Log(closeError);}
+                            Satellites.Remove(screen.DeviceName);
+                        }
                         Log(error);
                     }
                     finally{creatingSatellite=false;}
@@ -178,8 +182,10 @@ internal static class DeskSpaceMultiMonitorV151
     private static void Remove(string deviceName)
     {
         if(!Satellites.TryGetValue(deviceName,out var widget))return;
-        Satellites.Remove(deviceName);
+        // Keep the satellite registered throughout Closing. Otherwise its
+        // original save-position handler would overwrite the primary position.
         try{widget.Close();}catch(Exception error){Log(error);}
+        finally{Satellites.Remove(deviceName);}
     }
     private static void CloseAll()
     {
