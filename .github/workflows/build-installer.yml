@@ -20,6 +20,7 @@ on:
   push:
     branches:
       - r42-excel-mapping-editor
+      - feature/r149-theme-donut-appearance
       - fix/r106-excel-structure-capture
       - fix/r132-real-excel-paste-acceptance
       - fix/r133-release-push-autoupdate
@@ -1539,46 +1540,13 @@ jobs:
           ./r147/apply-r147.ps1
           ./r147/test-r147.ps1
 
-      - name: R148 diagnostic inspect current widget settings and ring structure
+      - name: R149 theme editor and guarded donut rendering
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $paths=@('DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs',
-                   'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs',
-                   'DeskSpace_Windows_R1/DeskSpace/WidgetSettingsV3.cs')
-          foreach($path in $paths){
-            if(!(Test-Path $path)){continue}
-            $lines=Get-Content $path
-            Write-Host "==== R148 SOURCE $path ===="
-            $hits=for($i=0;$i -lt $lines.Count;$i++){
-              if($lines[$i] -match 'class WidgetSettingsV3|class WidgetHost|Settings|BuildCompact|BuildRing|Opacity|Color.FromRgb|Accent|ContextMenuStrip|menu.Items.Add|public .*Save|Root|Render|Gradient|Donut'){
-                $i
-              }
-            }
-            if($path -match 'WidgetHost.cs'){
-              $ranges=@(@(1,54),@(112,181),@(225,270),@(1015,1075),@(1265,1335),@(1370,1430))
-            } else { $ranges=@(@(118,142)) }
-            foreach($range in $ranges){
-              Write-Host ("R148 RANGE {0} TO {1}" -f $range[0],$range[1])
-              for($i=$range[0];$i -le $range[1] -and $i -le $lines.Count;$i++){
-                Write-Host ("LINE {0}: {1}" -f $i,$lines[$i-1])
-              }
-            }
-            if($path -like '*WidgetHost.cs'){
-              $ranges=@(@(1,49),@(150,172),@(985,1035),@(1024,1085),@(1268,1362))
-              $match=for($i=0;$i -lt $lines.Count;$i++){
-                if($lines[$i] -match 'class WidgetOptionsWindow'){ $i }
-              }
-              foreach($i in $match){$ranges+=,@([math]::Max(1,$i-4),[math]::Min($lines.Count,$i+180))}
-              foreach($r in $ranges){
-                Write-Host ("R148 DETAIL $path : {0}-{1}" -f $r[0],$r[1])
-                for($i=$r[0]-1;$i -lt [math]::Min($lines.Count,$r[1]);$i++){
-                  Write-Host ("SRC {0}: {1}" -f ($i+1),$lines[$i])
-                }
-              }
-            }
+          ./r149/apply-r149.ps1
+          foreach($name in @('DeskSpaceThemeV149.cs','DeskSpaceThemeEditorV149.cs')){
+            if(!(Test-Path "DeskSpace_Windows_R1/DeskSpace/$name")){throw "R149 missing $name"}
           }
-          throw 'R148 SOURCE INSPECTION ONLY — not a release'
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
