@@ -136,7 +136,10 @@ internal static class DeskSpaceMonitorFenceV152
                         window.MinHeight=0;
                         window.Width=Math.Max(1,w*ratio);
                         window.Height=Math.Max(1,h*ratio);
-                        // WPF sends SizeChanged, which schedules a fresh clamp.
+                        // SizeChanged can arrive while Moving is guarded.
+                        // Explicitly enqueue the post-layout native correction.
+                        window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,
+                            new Action(()=>ClampNow(window)));
                         return;
                     }
                 }
