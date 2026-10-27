@@ -28,11 +28,16 @@ Swap '    private readonly List<Held> held=new();' @'
     }
 '@ 'one shared held-file queue and view notification'
 
+Swap '    private readonly string staging=Path.Combine(' @'
+    private static readonly string staging=Path.Combine(
+'@ 'single process-held staging path'
+
+Swap '    private bool busy, disposed;' @'
+    private static bool busy;
+    private bool disposed;
+'@ 'one shared staged-file busy flag'
+
 Swap @'
-    private readonly string staging=Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "DeskSpace","TemporaryShelf",Guid.NewGuid().ToString("N"));
-    private bool busy, disposed;
     private static DeskSpaceDropShelfV15? active;
     public static bool IsActive=>active!=null;
     public static IReadOnlyList<string> ActivePaths=>
@@ -40,26 +45,24 @@ Swap @'
     public static void ImportClipboardFiles()=>active?.ImportFromClipboard();
     public static void ClearActive()=>active?.ClearAll();
 '@ @'
-    private static readonly string staging=Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "DeskSpace","TemporaryShelf",Guid.NewGuid().ToString("N"));
-    private static bool busy;
-    private bool disposed;
-    static DeskSpaceDropShelfV15()
-    {
-        // A monitor disconnect must not delete the files used by the other
-        // widget. Remove our temporary copies only on final process exit.
-        AppDomain.CurrentDomain.ProcessExit+=(_,_)=>{
-            try{if(Directory.Exists(staging))Directory.Delete(staging,true);}
-            catch(IOException){}catch(UnauthorizedAccessException){}
-        };
-    }
     public static bool IsActive=>Views.Count>0;
     public static IReadOnlyList<string> ActivePaths=>
         held.Select(x=>x.StagedPath).ToArray();
     public static void ImportClipboardFiles()=>Views.FirstOrDefault()?.ImportFromClipboard();
     public static void ClearActive()=>Views.FirstOrDefault()?.ClearAll();
-'@ 'static shared staging/clipboard routes and process-exit cleanup'
+'@ 'redirect clipboard routes to one shared queue'
+
+Swap '    public DeskSpaceDropShelfV15(Window window)' @'
+    static DeskSpaceDropShelfV15()
+    {
+        // Display disconnect must not delete files used by the other widget.
+        AppDomain.CurrentDomain.ProcessExit+=(_,_)=>{
+            try{if(Directory.Exists(staging))Directory.Delete(staging,true);}
+            catch(IOException){}catch(UnauthorizedAccessException){}
+        };
+    }
+    public DeskSpaceDropShelfV15(Window window)
+'@ 'delete staged copies only on final process exit'
 
 Swap '        active=this;' '        Views.Add(this);' 'register widget view without replacing primary'
 Swap @'
