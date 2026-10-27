@@ -32,6 +32,7 @@ on:
       - fix/r140-full-excel-format-audit
       - fix/r141-excel-protection-writes
       - fix/r150-settings-staged-pins-preview
+      - fix/r151-settings-crash-multimonitor
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1546,6 +1547,25 @@ jobs:
           ./r148/apply-r148.ps1
           ./r148/test-r148.ps1
 
+      - name: R151 inspect live widget constructors and monitor lifecycle
+        shell: pwsh
+        run: |
+          $source=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $lines=$source -split "\`n"
+          for($i=0;$i -lt $lines.Length;$i++){
+            if($lines[$i] -match 'class WidgetShellWindow|WidgetShellWindow\\(|class WidgetHostLauncher|EnsureRunning\\(|new WidgetShellWindow|WidgetHostLauncher|void BuildCompact\\(|void RefreshAppearanceV148\\(|public.*Widget|private.*Widget|Closing \\+=' -and $lines[$i].Length -lt 250){
+              $a=[Math]::Max(0,$i-2);$z=[Math]::Min($lines.Length-1,$i+7)
+              Write-Host ("SOURCE AT "+$i+" "+($lines[$a..$z] -join ' | '))
+            }
+          }
+          $main=Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs' -Raw
+          $m=$main -split "\`n"
+          for($i=0;$i -lt $m.Length;$i++){
+            if($m[$i] -match 'WidgetSettings_Click|WidgetHostLauncher|WidgetOptionsWindow' -and $m[$i].Length -lt 250){
+              $a=[Math]::Max(0,$i-2);$z=[Math]::Min($m.Length-1,$i+6)
+              Write-Host ("MAIN AT "+$i+" "+($m[$a..$z] -join ' | '))
+            }
+          }
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
