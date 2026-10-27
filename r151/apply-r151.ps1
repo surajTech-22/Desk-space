@@ -30,4 +30,45 @@ timer.Stop();
             if(!DeskSpaceMultiMonitorV151.IsSatellite(this))SavePosition();
             tray.Visible = false; tray.Dispose();
 '@ 'do not overwrite primary position when secondary widgets close'
+Swap 'Text = "DeskSpace Live Widget", Visible = true };' @'
+Text = "DeskSpace Live Widget",
+            Visible = !DeskSpaceMultiMonitorV151.ConstructingSatellite };
+'@ 'one tray icon across all monitors'
+Swap '            DeskSpaceStartupV82.EnableOnFirstLaunch(prefs);' @'
+            if(!DeskSpaceMultiMonitorV151.IsSatellite(this))
+                DeskSpaceStartupV82.EnableOnFirstLaunch(prefs);
+'@ 'only original widget controls Windows startup'
+Swap @'
+            commandShortcut ??= new DeskSpaceCommandShortcutV85(
+                this,()=>OpenInWidget("Search"));
+            DeskSpaceSearchIndexV13.WarmStart();
+'@ @'
+            if(!DeskSpaceMultiMonitorV151.IsSatellite(this))
+            {
+                commandShortcut ??= new DeskSpaceCommandShortcutV85(
+                    this,()=>OpenInWidget("Search"));
+                DeskSpaceSearchIndexV13.WarmStart();
+            }
+'@ 'global hotkey and file index only once'
+Swap '        Loaded+=(_,_)=>dueShelf?.Start();' @'
+        Loaded+=(_,_)=>{
+            if(!DeskSpaceMultiMonitorV151.IsSatellite(this))dueShelf?.Start();
+        };
+'@ 'only one reminder scheduler'
+Swap '        recent.Start(); Tick();' @'
+        if(!DeskSpaceMultiMonitorV151.IsSatellite(this))recent.Start();
+        Tick();
+'@ 'only one recent file collector'
+Swap @'
+        Loaded += (_, _) => DeskSpaceUpdater.StartAutomaticChecks(this);
+        _ = ListenForShowRequests();
+'@ @'
+        Loaded += (_, _) =>{
+            if(!DeskSpaceMultiMonitorV151.IsSatellite(this))
+                DeskSpaceUpdater.StartAutomaticChecks(this);
+        };
+        if(!DeskSpaceMultiMonitorV151.IsSatellite(this))
+            _ = ListenForShowRequests();
+'@ 'one updater and one named pipe host'
+
 Write-Host 'R151 installed real interactive widget per monitor; monitor hotplug and persisted independent display setting.'
