@@ -30,10 +30,15 @@ timer.Stop();
             if(!DeskSpaceMultiMonitorV151.IsSatellite(this))SavePosition();
             tray.Visible = false; tray.Dispose();
 '@ 'do not overwrite primary position when secondary widgets close'
-Swap '        KeepOnVisibleDesktop();' @'
-        // The primary host keeps the normal desktop clamp. A satellite will
-        // be placed on its assigned physical monitor after construction.
+Swap @'
+        ringExpanded = false;
+        KeepOnVisibleDesktop();
+        Content = new Viewbox { Child = canvas, Stretch = Stretch.Uniform };
+'@ @'
+        ringExpanded = false;
+        // A replica's physical monitor is assigned after construction.
         if(!DeskSpaceMultiMonitorV151.IsSatellite(this))KeepOnVisibleDesktop();
+        Content = new Viewbox { Child = canvas, Stretch = Stretch.Uniform };
 '@ 'do not clamp secondary display widgets to the primary work area'
 Swap 'Text = "DeskSpace Live Widget", Visible = true };' @'
 Text = "DeskSpace Live Widget",
