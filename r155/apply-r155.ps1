@@ -85,14 +85,21 @@ Swap @'
 '@ 'notify both decks when file arrives'
 Swap '        finally{busy=false;if(!disposed)Render();}' '        finally{busy=false;RefreshViews();}' 'all decks leave busy state'
 Swap @'
-        held.Remove(item);
-        DeletePath(item.StagedPath);
+        else
+        {
+            held.Remove(item);
+            DeletePath(item.StagedPath);
+        }
         Render();
 '@ @'
-        if(!held.Remove(item))return;
-        DeletePath(item.StagedPath);
-        RefreshViews();
-'@ 'remove file globally and update both decks'
+        else
+        {
+            if(!held.Remove(item))return;
+            DeletePath(item.StagedPath);
+            RefreshViews();
+        }
+        Render();
+'@ 'held removals broadcast to both decks without deleting detected originals'
 Swap '        if(ReferenceEquals(active,this))active=null;' '        Views.Remove(this);' 'disconnect only the closing deck view'
 Swap @'
         try { if(Directory.Exists(staging))Directory.Delete(staging,true); }
@@ -141,7 +148,7 @@ $test=@'
         {
             Assert(shared.Count==0,"R155 test requires an initially empty shelf");
             var item=Activator.CreateInstance(heldType,
-                new object[]{"r155-shared-held-file.txt",path})!;
+                new object[]{"r155-shared-held-file.txt",path,false})!;
             shared.Add(item);
             refresh.Invoke(null,null);
             var paths=((IEnumerable<string>)active.GetValue(null)!).ToArray();
