@@ -1539,6 +1539,28 @@ jobs:
           ./r147/apply-r147.ps1
           ./r147/test-r147.ps1
 
+      - name: R148 diagnostic inspect current widget settings and ring structure
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $paths=@('DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs',
+                   'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs',
+                   'DeskSpace_Windows_R1/DeskSpace/WidgetSettingsV3.cs')
+          foreach($path in $paths){
+            if(!(Test-Path $path)){continue}
+            $lines=Get-Content $path
+            Write-Host "==== R148 SOURCE $path ===="
+            $hits=for($i=0;$i -lt $lines.Count;$i++){
+              if($lines[$i] -match 'class WidgetSettingsV3|class WidgetHost|Settings|BuildCompact|BuildRing|Opacity|Color.FromRgb|Accent|ContextMenuStrip|menu.Items.Add|public .*Save|Root|Render|Gradient|Donut'){
+                $i
+              }
+            }
+            foreach($i in $hits | Select-Object -First 75){
+              Write-Host ("LINE {0}: {1}" -f ($i+1),$lines[$i])
+            }
+          }
+          throw 'R148 SOURCE INSPECTION ONLY — not a release'
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
