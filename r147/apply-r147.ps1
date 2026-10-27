@@ -12,7 +12,7 @@ function Swap([string]$file,[string]$before,[string]$after,[string]$label){
  $src=[IO.File]::ReadAllText($file).Replace($crlf,$lf)
  $a=$before.Replace($crlf,$lf);$b=$after.Replace($crlf,$lf)
  $n=([regex]::Matches($src,[regex]::Escape($a))).Count
- if($n -ne 1){throw "R147 $label: expected exactly one anchor, found $n"}
+ if($n -ne 1){throw "R147 ${label}: expected exactly one anchor, found $n"}
  [IO.File]::WriteAllText($file,$src.Replace($a,$b),
     [Text.UTF8Encoding]::new($false))
 }
