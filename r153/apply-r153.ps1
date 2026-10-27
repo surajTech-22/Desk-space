@@ -99,6 +99,7 @@ $test=@'
             "R153 expanded popup must fit within work area");
 
         var track=t.GetMethod("TrackPopup",BindingFlags.Static|BindingFlags.NonPublic)!;
+        var force=t.GetMethod("OverridePopupAreaForTest",BindingFlags.Static|BindingFlags.NonPublic)!;
         var move=t.GetMethod("TryMovePopupForTest",BindingFlags.Static|BindingFlags.NonPublic)!;
         var bounds=t.GetMethod("PopupBounds",BindingFlags.Static|BindingFlags.NonPublic)!;
         var screen=System.Windows.Forms.Screen.PrimaryScreen!;
@@ -115,6 +116,12 @@ $test=@'
         {
             host.Show();
             track.Invoke(null,new object[]{host,popup});
+            // Force a virtual left monitor INSIDE the actual test monitor.
+            // The right half stays available to Windows, so this detects
+            // the exact seam leak that pure screen-bounds tests miss.
+            var virtualLeft=new System.Drawing.Rectangle(work.Left,work.Top,
+                Math.Max(300,work.Width/2),work.Height);
+            force.Invoke(null,new object[]{popup,virtualLeft});
             popup.IsOpen=true;
             host.Dispatcher.Invoke(() => {},DispatcherPriority.ContextIdle);
             Assert((bool)move.Invoke(null,new object[]{
@@ -125,21 +132,21 @@ $test=@'
                 "R153 WPF popup did not create an HWND");
             var actual=(System.Drawing.Rectangle)value!;
             Assert(actual.Left>=work.Left && actual.Top>=work.Top &&
-                actual.Right<=work.Right && actual.Bottom<=work.Bottom,
-                "R153 real WPF Popup HWND crossed monitor after native SetWindowPos");
+                actual.Right<=virtualLeft.Right && actual.Bottom<=virtualLeft.Bottom,
+                "R153 real WPF Popup HWND crossed the simulated monitor seam");
             popup.HorizontalOffset=work.Right+2000;
             host.Dispatcher.Invoke(() => {},DispatcherPriority.ContextIdle);
             actual=(System.Drawing.Rectangle)bounds.Invoke(null,new object[]{popup})!;
-            Assert(actual.Left>=work.Left && actual.Right<=work.Right,
-                "R153 WPF reposition should not leak popup into adjacent monitor");
+            Assert(actual.Left>=virtualLeft.Left && actual.Right<=virtualLeft.Right,
+                "R153 WPF reposition leaked across simulated monitor seam");
         }
         finally
         {
             popup.IsOpen=false;
             host.Close();
         }
-        Console.WriteLine("R153 PASS: actual WPF Popup HWND stays within the monitor "+
-            "through native moves, WPF reposition, and negative-screen cases.");
+        Console.WriteLine("R153 PASS: actual WPF Popup HWND stays inside its virtual "+
+            "assigned monitor through native moves and WPF repositions.");
     }
 
 '@
