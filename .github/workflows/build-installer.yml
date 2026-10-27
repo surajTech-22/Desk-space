@@ -1527,6 +1527,12 @@ jobs:
           ./r145/apply-auto-fill-guard.ps1
           ./r145/test-r145.ps1
 
+      - name: R146 repeatable table mapping, direct donut formula action and safe temp cleanup
+        shell: pwsh
+        run: |
+          ./r146/apply-r146.ps1
+          ./r146/test-r146.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
