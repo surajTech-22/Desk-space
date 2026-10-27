@@ -23,7 +23,7 @@ internal sealed class DeskSpaceAppearanceV148
     public double Opacity {get;set;}=.96;
     public int Softness {get;set;}=16;
     private static DeskSpaceAppearanceV148? cached;
-    internal static string PathName=>Path.Combine(WorkspaceStore.Root,"appearance-v148.json");
+    internal static string PathName=>System.IO.Path.Combine(WorkspaceStore.Root,"appearance-v148.json");
     internal static DeskSpaceAppearanceV148 Current=>cached??=Load();
     internal static DeskSpaceAppearanceV148 Load()
     {
@@ -124,7 +124,7 @@ internal sealed class DeskSpaceVisualPresetV148
 }
 internal static class DeskSpaceAppearancePresetsV148
 {
-    internal static string Filename=>Path.Combine(WorkspaceStore.Root,
+    internal static string Filename=>System.IO.Path.Combine(WorkspaceStore.Root,
         "appearance-presets-v148.json");
     internal static List<DeskSpaceVisualPresetV148> Load()
     {
