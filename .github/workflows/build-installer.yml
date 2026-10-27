@@ -34,6 +34,7 @@ on:
       - fix/r150-settings-staged-pins-preview
       - fix/r151-settings-crash-multimonitor
       - fix/r152-monitor-boundary-fence
+      - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1559,6 +1560,12 @@ jobs:
         run: |
           ./r152/apply-r152.ps1
           ./r152/test-r152.ps1
+
+      - name: R153 prevent detached WPF Popup HWNDs crossing monitor seams
+        shell: pwsh
+        run: |
+          ./r153/apply-r153.ps1
+          ./r153/test-r153.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
