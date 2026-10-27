@@ -44,6 +44,6 @@ foreach($token in @(
 }
 if($widget.Contains('private readonly Brush accent = new SolidColorBrush(Color.FromRgb(115, 100, 211));'))
  {throw 'R148 legacy fixed widget accent still active'}
-if($studio.Contains('Filee') || $studio.Contains('Convert file'))
+if($studio.Contains('Content="Convert files"') || $studio.Contains('Content="Compress PDF"'))
  {throw 'R148 must not copy file conversion UI'}
 Write-Host 'R148 PASS: actual donut colour/scale/opacity wired, grouped settings Studio, persisted palettes and presets, pinned app ordering, original general options and data remain intact.'
