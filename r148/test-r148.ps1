@@ -45,7 +45,7 @@ foreach($token in @(
  'DeskSpaceMultiMonitorV151.Configure(showEveryMonitorDraft);',
  'private void DisplaysPage()',
  'DeskSpaceSettingsDiagnosticsV151.Report',
- 'pinnedDraft.AddRange(settings.PinnedApps);',
+ 'pinnedDraft.AddRange(settings.PinnedApps??new List<string>());',
  'pinned.ItemsSource=pinnedDraft;',
  'foreach(var app in pinnedDraft)settings.PinnedApps.Add(app);')){
  if(!$studio.Contains($token)){throw "R148 visual studio feature missing: $token"}
