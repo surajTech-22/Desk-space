@@ -1555,8 +1555,14 @@ jobs:
                 $i
               }
             }
-            foreach($i in $hits | Select-Object -First 75){
-              Write-Host ("LINE {0}: {1}" -f ($i+1),$lines[$i])
+            if($path -match 'WidgetHost.cs'){
+              $ranges=@(@(1,54),@(112,181),@(225,270),@(1015,1075),@(1265,1335),@(1370,1430))
+            } else { $ranges=@(@(118,142)) }
+            foreach($range in $ranges){
+              Write-Host ("R148 RANGE {0} TO {1}" -f $range[0],$range[1])
+              for($i=$range[0];$i -le $range[1] -and $i -le $lines.Count;$i++){
+                Write-Host ("LINE {0}: {1}" -f $i,$lines[$i-1])
+              }
             }
             if($path -like '*WidgetHost.cs'){
               $ranges=@(@(1,49),@(150,172),@(985,1035),@(1024,1085),@(1268,1362))
