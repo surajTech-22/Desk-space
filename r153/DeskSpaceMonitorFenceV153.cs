@@ -178,15 +178,18 @@ internal static class DeskSpaceMonitorFenceV153
             }
         }
         PopupScreen[popup]=ScreenForAnchor();
+        int deferredAttempts=0;
         void Opened(object? _,EventArgs __)
         {
             if(!popup.IsOpen||popup.Child==null)return;
             if(PresentationSource.FromVisual(popup.Child) is not HwndSource source)
             {
-                popup.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,
-                    new Action(()=>Opened(popup,EventArgs.Empty)));
+                if(deferredAttempts++<3)
+                    popup.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,
+                        new Action(()=>Opened(popup,EventArgs.Empty)));
                 return;
             }
+            deferredAttempts=0;
             if(Popups.TryGetValue(popup,out var existing))
             {
                 if(ReferenceEquals(existing.Source,source))
@@ -224,6 +227,22 @@ internal static class DeskSpaceMonitorFenceV153
                 NoZOrder|NoActivate);
     }
 
+    // Exercise the same native WM_WINDOWPOSCHANGING path used by WPF
+    // positioning and dragging, using an actual created Popup HWND.
+    internal static bool TryMovePopupForTest(Popup popup,int left,int top)
+    {
+        if(popup.Child==null ||
+           PresentationSource.FromVisual(popup.Child) is not HwndSource source)
+            return false;
+        return SetWindowPos(source.Handle,IntPtr.Zero,left,top,0,0,
+            NoSize|NoZOrder|NoActivate);
+    }
+    internal static Rectangle? WindowBounds(Window window)
+    {
+        var hwnd=new WindowInteropHelper(window).Handle;
+        if(hwnd==IntPtr.Zero||!GetWindowRect(hwnd,out var bounds))return null;
+        return new Rectangle(bounds.Left,bounds.Top,bounds.Width,bounds.Height);
+    }
     // Called by WPF smoke tests on a real HWND, not a mocked rectangle.
     internal static Rectangle? PopupBounds(Popup popup)
     {
