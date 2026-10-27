@@ -35,13 +35,14 @@ foreach($token in @('WindowPosChanging=0x0046','MovingMessage=0x0216',
  'PopupScreen[popup]=ScreenForAnchor();','PopupScreen.Remove(popup);',
  'internal static Rectangle Constrain(',
  'internal static bool TryMovePopupForTest(',
- 'internal static Rectangle? PopupBounds(')){
+ 'internal static Rectangle? PopupBounds(',
+ 'internal static void OverridePopupAreaForTest(')){
  if(!$fence.Contains($token)){throw "R153 screen fence missing: $token"}
 }
 foreach($token in @('TestMonitorPopupsV153();',
  'private static void TestMonitorPopupsV153()',
- 'R153 real WPF Popup HWND crossed monitor after native SetWindowPos',
- 'R153 WPF reposition should not leak popup into adjacent monitor')){
+ 'R153 real WPF Popup HWND crossed the simulated monitor seam',
+ 'R153 WPF reposition leaked across simulated monitor seam')){
  if(!$smoke.Contains($token)){throw "R153 real WPF smoke missing: $token"}
 }
 Write-Host 'R153 static PASS: main HWND and all module Popup HWNDs guarded; real native WPF positioning regression included.'
