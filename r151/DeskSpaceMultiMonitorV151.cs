@@ -176,7 +176,10 @@ internal static class DeskSpaceMultiMonitorV151
     }
     private static void PlaceIfOffscreen(WidgetShellWindow replica,Forms.Screen screen)
     {
-        if(!double.IsFinite(replica.Left)||!double.IsFinite(replica.Top))
+        if(!double.IsFinite(replica.Left)||!double.IsFinite(replica.Top) ||
+           !string.Equals(Forms.Screen.FromHandle(
+                new WindowInteropHelper(replica).Handle).DeviceName,
+                screen.DeviceName,StringComparison.OrdinalIgnoreCase))
             Place(replica,screen);
     }
     private static void Remove(string deviceName)
