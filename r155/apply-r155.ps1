@@ -101,13 +101,22 @@ Swap @'
         Render();
 '@ 'held removals broadcast to both decks without deleting detected originals'
 Swap '        if(ReferenceEquals(active,this))active=null;' '        Views.Remove(this);' 'disconnect only the closing deck view'
-Swap @'
-        try { if(Directory.Exists(staging))Directory.Delete(staging,true); }
-        catch(IOException){}catch(UnauthorizedAccessException){}
-'@ @'
-        // Shared copies outlive any single monitor view and are removed when
-        // explicitly cleared, dragged successfully or DeskSpace exits.
-'@ 'never delete shared files on a monitor disconnect'
+# Some Deck generations already moved their teardown logic. Inspect the
+# actual final Dispose method rather than requiring the 2025-era exact text.
+# NEVER replace ProcessExit cleanup: only widget-window teardown must retain
+# the files another monitor's widget is using.
+$disposeStart=$s.IndexOf('    public void Dispose()',[StringComparison]::Ordinal)
+if($disposeStart -lt 0){throw 'R155 Deck Dispose method missing'}
+$prefix=$s.Substring(0,$disposeStart)
+$dispose=$s.Substring($disposeStart)
+$deletePattern='Directory\.Delete\(\s*staging\s*,\s*true\s*\)'
+if(([regex]::Matches($dispose,$deletePattern)).Count -gt 1){
+    throw 'R155 unexpected multiple Deck per-view staging cleanup paths'
+}
+$dispose=[regex]::Replace($dispose,$deletePattern,
+    'System.Diagnostics.Debug.WriteLine("DeskSpace shared held files retained")')
+$s=$prefix+$dispose
+
 
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 
