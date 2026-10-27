@@ -12,7 +12,7 @@ foreach($key in @('DeskSpaceMultiMonitorV151.Register(this)',
 foreach($key in @('DeskSpaceMultiMonitorV151.Configure(showEveryMonitorDraft)',
  'new[]{"Donut toolbar","Theme","Displays","Presets","General"}',
  'DeskSpaceSettingsDiagnosticsV151.Report("Settings page: "+page,ex)',
- 'DeskSpaceSettingsDiagnosticsV151.Report("Settings action: "+name,ex)',
+ '"Settings action: "+name,ex);',
  'private void DisplaysPage()')){
  if(!$studio.Contains($key)){throw "R151 missing settings integration: $key"}
 }
