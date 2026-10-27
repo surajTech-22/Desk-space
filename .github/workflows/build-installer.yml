@@ -35,6 +35,7 @@ on:
       - fix/r151-settings-crash-multimonitor
       - fix/r152-monitor-boundary-fence
       - fix/r154-independent-widgets-screen-clip
+      - fix/r155-shared-held-files-deck
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1573,6 +1574,12 @@ jobs:
         run: |
           ./r154/apply-r154.ps1
           ./r154/test-r154.ps1
+
+      - name: R155 shared held files in Deck across independent monitor widgets
+        shell: pwsh
+        run: |
+          ./r155/apply-r155.ps1
+          ./r155/test-r155.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
