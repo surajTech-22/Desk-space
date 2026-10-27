@@ -32,14 +32,19 @@ foreach($token in @(
  'File.Move(tmp,PathName,true);',
  'DeskSpaceWorkspaceProfilesV85.Save(profile)',
  'DeskSpaceWorkspaceProfilesV85.Apply(selected,settings)',
- 'settings.PinnedApps.RemoveAt(i);',
- 'settings.PinnedApps.Add(chooser.FileName);',
+ 'pinnedDraft.RemoveAt(i);',
+ 'pinnedDraft.Add(chooser.FileName);',
  'DeskSpaceAppearanceV148.Save(draft);',
  'Current.Style=="Material"',
  'DeskSpaceAppearanceV148.Mix',
  'System.Windows.Shapes.Path',
  'new[]{"Donut toolbar","Theme","Presets","General"}',
- 'The existing DeskSpace general settings remain intact')){
+ 'The existing DeskSpace general settings remain intact',
+ 'internal static bool IsDarkFor(DeskSpaceAppearanceV148 appearance)',
+ 'DeskSpaceAppearanceV148.IsDarkFor(draft)',
+ 'pinnedDraft.AddRange(settings.PinnedApps);',
+ 'pinned.ItemsSource=pinnedDraft;',
+ 'foreach(var app in pinnedDraft)settings.PinnedApps.Add(app);')){
  if(!$studio.Contains($token)){throw "R148 visual studio feature missing: $token"}
 }
 if($widget.Contains('private readonly Brush accent = new SolidColorBrush(Color.FromRgb(115, 100, 211));'))
