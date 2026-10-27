@@ -184,7 +184,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         Action redraw,Action showGeneral)
     {
         settings=prefs;refresh=redraw;general=showGeneral;
-        pinnedDraft.AddRange(settings.PinnedApps);
+        pinnedDraft.AddRange(settings.PinnedApps??new List<string>());
         showEveryMonitorDraft=DeskSpaceMultiMonitorV151.Enabled;
         var source=DeskSpaceAppearanceV148.Current;
         draft=new(){Style=source.Style,Mode=source.Mode,Accent=source.Accent,
@@ -564,6 +564,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         {
             // Cancel/closing the studio has no effect on the shared pin list.
             // Apply is the single commit point for staged application changes.
+            settings.PinnedApps ??= new List<string>();
             settings.PinnedApps.Clear();
             foreach(var app in pinnedDraft)settings.PinnedApps.Add(app);
             settings.Save();
