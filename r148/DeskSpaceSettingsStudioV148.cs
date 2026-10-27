@@ -307,6 +307,9 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             TextWrapping=TextWrapping.Wrap,Foreground=Brushes.Gray});
         pinned.ItemsSource=pinnedDraft;
         pinned.DisplayMemberPath="";
+        // This ListBox is reused when revisiting the Donut page. WPF will
+        // throw if it is still parented to the old (detached) page container.
+        if(pinned.Parent is Panel oldPinnedHost)oldPinnedHost.Children.Remove(pinned);
         right.Children.Add(pinned);
         var buttons=new WrapPanel{Margin=new Thickness(0,9,0,0)};
         buttons.Children.Add(Button("Move up",()=>MovePin(-1)));
