@@ -45,6 +45,9 @@ Swap @'
     public static void ImportClipboardFiles()=>active?.ImportFromClipboard();
     public static void ClearActive()=>active?.ClearAll();
 '@ @'
+    // Compatibility pointer for older Deck UI hooks only; files, clipboard,
+    // lifecycle and refresh always use the shared store and Views.
+    private static DeskSpaceDropShelfV15? active;
     public static bool IsActive=>Views.Count>0;
     public static IReadOnlyList<string> ActivePaths=>
         held.Select(x=>x.StagedPath).ToArray();
@@ -64,7 +67,10 @@ Swap '    public DeskSpaceDropShelfV15(Window window)' @'
     public DeskSpaceDropShelfV15(Window window)
 '@ 'delete staged copies only on final process exit'
 
-Swap '        active=this;' '        Views.Add(this);' 'register widget view without replacing primary'
+Swap '        active=this;' @'
+        Views.Add(this);
+        active ??= this;
+'@ 'register widget without replacing primary and retain legacy UI compatibility'
 Swap @'
         busy=true;
         Render();
@@ -100,7 +106,10 @@ Swap @'
         }
         Render();
 '@ 'held removals broadcast to both decks without deleting detected originals'
-Swap '        if(ReferenceEquals(active,this))active=null;' '        Views.Remove(this);' 'disconnect only the closing deck view'
+Swap '        if(ReferenceEquals(active,this))active=null;' @'
+        Views.Remove(this);
+        if(ReferenceEquals(active,this))active=Views.FirstOrDefault();
+'@ 'disconnect only closing Deck; safely update legacy UI pointer'
 # Some Deck generations already moved their teardown logic. Inspect the
 # actual final Dispose method rather than requiring the 2025-era exact text.
 # NEVER replace ProcessExit cleanup: only widget-window teardown must retain
