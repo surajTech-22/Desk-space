@@ -34,6 +34,8 @@ internal static class DeskSpaceMultiMonitorV151
             return enabled;
         }
     }
+    // Consulted during satellite construction, before the new HWND is shown.
+    internal static bool ConstructingSatellite=>creatingSatellite;
     internal static bool IsSatellite(WidgetShellWindow widget)
         => creatingSatellite || Satellites.Values.Any(w=>ReferenceEquals(w,widget));
 
