@@ -174,7 +174,7 @@ internal sealed class DeskSpaceThemeEditorV149 : Window
             double start=-90+(i%6)*60-29;
             double end=start+58;
             bool outer=i>=6;
-            var wedge=new Path{Data=Sector(160,160,outer?102:54,outer?148:97,start,end),
+            var wedge=new System.Windows.Shapes.Path{Data=Sector(160,160,outer?102:54,outer?148:97,start,end),
                 Fill=new SolidColorBrush(i==0?accent:(i%2==0?light:alt)),
                 Opacity=draft.Opacity,Stroke=Brushes.White,StrokeThickness=1.8};
             donut.Children.Add(wedge);
