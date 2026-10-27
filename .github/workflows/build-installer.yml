@@ -1569,6 +1569,12 @@ jobs:
               Write-Host ("MAIN AT "+$i+" "+($m[$a..$z] -join ' | '))
             }
           }
+      - name: R151 guard Settings and reconcile all connected monitors
+        shell: pwsh
+        run: |
+          ./r151/apply-r151.ps1
+          ./r151/test-r151.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
