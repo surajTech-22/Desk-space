@@ -24,7 +24,8 @@ internal static class DeskSpaceNativeClipV154
     [DllImport("user32.dll")]
     private static extern int SetWindowRgn(IntPtr hwnd,IntPtr region,bool redraw);
 
-    private static readonly HashSet<IntPtr> Clipped=new();
+    private static readonly Dictionary<IntPtr,Rectangle> Clipped=new();
+    private static readonly HashSet<IntPtr> Applying=new();
 
     internal static Rectangle IntersectInWindow(Rectangle window,Rectangle monitor)
     {
@@ -36,7 +37,8 @@ internal static class DeskSpaceNativeClipV154
 
     internal static void Apply(IntPtr hwnd,Rectangle monitorWorkArea)
     {
-        if(hwnd==IntPtr.Zero||!GetWindowRect(hwnd,out var native))return;
+        if(hwnd==IntPtr.Zero||Applying.Contains(hwnd)||
+           !GetWindowRect(hwnd,out var native))return;
         var bounds=new Rectangle(native.L,native.T,native.R-native.L,
             native.B-native.T);
         if(bounds.Width<=0||bounds.Height<=0)return;
@@ -47,20 +49,34 @@ internal static class DeskSpaceNativeClipV154
             // Reset only our own previous clip, not WPF's normal round-region
             // and transparency handling on already-contained windows.
             if(Clipped.Remove(hwnd))
-                SetWindowRgn(hwnd,IntPtr.Zero,true);
+            {
+                Applying.Add(hwnd);
+                try{SetWindowRgn(hwnd,IntPtr.Zero,true);}
+                finally{Applying.Remove(hwnd);}
+            }
             return;
         }
+        if(Clipped.TryGetValue(hwnd,out var previous)&&previous==visible)
+            return; // A paint or window-pos message must not recurse forever.
         IntPtr region=CreateRectRgn(visible.Left,visible.Top,
             visible.Right,visible.Bottom);
         if(region==IntPtr.Zero)return;
-        // Successful SetWindowRgn transfers ownership of the region to Windows.
-        if(SetWindowRgn(hwnd,region,true)==0)
-            DeleteObject(region);
-        else Clipped.Add(hwnd);
+        Applying.Add(hwnd);
+        try
+        {
+            // Successful SetWindowRgn transfers ownership to Windows.
+            if(SetWindowRgn(hwnd,region,true)==0)
+                DeleteObject(region);
+            else Clipped[hwnd]=visible;
+        }
+        finally{Applying.Remove(hwnd);}
     }
 
     internal static void Release(IntPtr hwnd)
     {
-        if(Clipped.Remove(hwnd))SetWindowRgn(hwnd,IntPtr.Zero,true);
+        if(!Clipped.Remove(hwnd)||Applying.Contains(hwnd))return;
+        Applying.Add(hwnd);
+        try{SetWindowRgn(hwnd,IntPtr.Zero,true);}
+        finally{Applying.Remove(hwnd);}
     }
 }
