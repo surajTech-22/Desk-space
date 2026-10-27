@@ -33,6 +33,7 @@ on:
       - fix/r141-excel-protection-writes
       - fix/r150-settings-staged-pins-preview
       - fix/r151-settings-crash-multimonitor
+      - fix/r152-monitor-boundary-fence
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
       - fix/r115-four-way-running-windows
@@ -1552,6 +1553,12 @@ jobs:
         run: |
           ./r151/apply-r151.ps1
           ./r151/test-r151.ps1
+
+      - name: R152 keep each DeskSpace widget and expanded ring within its assigned monitor
+        shell: pwsh
+        run: |
+          ./r152/apply-r152.ps1
+          ./r152/test-r152.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
