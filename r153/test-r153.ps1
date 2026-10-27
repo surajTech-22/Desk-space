@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $r='DeskSpace_Windows_R1/DeskSpace'
-$host=[IO.File]::ReadAllText("$r/DeskSpaceMonitorFenceV152.cs")
+$widgetFenceSource=[IO.File]::ReadAllText("$r/DeskSpaceMonitorFenceV152.cs")
 $fence=[IO.File]::ReadAllText("$r/DeskSpaceMonitorFenceV153.cs")
 $info=[IO.File]::ReadAllText("$r/DeskSpaceInformationV36.cs")
 $excel=[IO.File]::ReadAllText("$r/DeskSpaceExcelWheelV42.cs")
@@ -11,7 +11,7 @@ $smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 
 foreach($token in @(
  'DeskSpaceMonitorFenceV153.TrackWidget(window);')){
- if(!$host.Contains($token)){throw "R153 widget binding missing: $token"}
+ if(!$widgetFenceSource.Contains($token)){throw "R153 widget binding missing: $token"}
 }
 foreach($token in @(
  'DeskSpaceMonitorFenceV153.TrackPopup(owner,arc);',
