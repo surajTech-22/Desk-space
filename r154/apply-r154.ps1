@@ -35,9 +35,16 @@ Swap "$r/DeskSpaceMultiMonitorV151.cs" @'
                         DeskSpaceMonitorFenceV152.PlaceNewSatellite(replica,screen);
                         replica.Closed+=(_,_)=>{
 '@ @'
+                        // Construct a real native HWND while still hidden, then
+                        // attach its OWN screen/session before its first paint.
+                        // This avoids flashing on the primary monitor and avoids
+                        // the first WPF show placing it across the seam.
+                        new WindowInteropHelper(replica).EnsureHandle();
                         DeskSpaceMonitorFenceV152.PlaceNewSatellite(replica,screen);
                         DeskSpaceMonitorSessionsV154.Attach(replica,screen.DeviceName,false);
                         DeskSpaceMonitorSessionsV154.Restore(replica);
+                        replica.Show();
+                        DeskSpaceMonitorFenceV152.ClampNow(replica);
                         replica.Closed+=(_,_)=>{
 '@ 'independent secondary session and native saved position'
 
