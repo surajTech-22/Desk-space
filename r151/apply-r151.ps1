@@ -81,4 +81,12 @@ Swap @'
             _ = ListenForShowRequests();
 '@ 'one updater and one named pipe host'
 
+# All drag/sizing paths call this screen-fit routine. Secondary widgets
+# must stay in their own monitor's bounds, never snap back to the primary.
+$whole=[IO.File]::ReadAllText($widget).Replace($nl,[string][char]10)
+$match=[regex]::Match($whole,'(?m)^\s*private\s+void\s+KeepOnVisibleDesktop\s*\([^)]*\)\s*\{')
+if(!$match.Success){throw 'R151 display clamp method not found'}
+$whole=$whole.Insert($match.Index+$match.Length,
+    ([string][char]10+'        if(DeskSpaceMultiMonitorV151.IsSatellite(this))return;'))
+[IO.File]::WriteAllText($widget,$whole,[Text.UTF8Encoding]::new($false))
 Write-Host 'R151 installed real interactive widget per monitor; monitor hotplug and persisted independent display setting.'
