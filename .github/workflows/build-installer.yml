@@ -1558,6 +1558,9 @@ jobs:
               Write-Host ("SOURCE AT "+$i+" "+($lines[$a..$z] -join ' | '))
             }
           }
+          for($i=202;$i -lt [Math]::Min($lines.Length,355);$i++){
+            Write-Host ("WIDGETCTOR "+$i+" "+$lines[$i])
+          }
           $main=Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs' -Raw
           $m=$main -split "`n"
           for($i=0;$i -lt $m.Length;$i++){
