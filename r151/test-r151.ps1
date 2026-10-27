@@ -6,7 +6,11 @@ $studio=[IO.File]::ReadAllText("$root/DeskSpaceSettingsStudioV148.cs")
 $manager=[IO.File]::ReadAllText("$root/DeskSpaceMultiMonitorV151.cs")
 foreach($key in @('DeskSpaceMultiMonitorV151.Register(this)',
  'DeskSpaceMultiMonitorV151.IsSatellite(this)',
- 'if(!DeskSpaceMultiMonitorV151.IsSatellite(this))SavePosition()')){
+ 'if(!DeskSpaceMultiMonitorV151.IsSatellite(this))SavePosition()',
+ 'Visible = !DeskSpaceMultiMonitorV151.ConstructingSatellite',
+ 'if(!DeskSpaceMultiMonitorV151.IsSatellite(this))recent.Start();',
+ 'if(!DeskSpaceMultiMonitorV151.IsSatellite(this))',
+ 'if(!DeskSpaceMultiMonitorV151.IsSatellite(this))dueShelf?.Start();')){
  if(!$source.Contains($key)){throw "R151 missing widget integration: $key"}
 }
 foreach($key in @('DeskSpaceMultiMonitorV151.Configure(showEveryMonitorDraft)',
@@ -18,6 +22,7 @@ foreach($key in @('DeskSpaceMultiMonitorV151.Configure(showEveryMonitorDraft)',
 }
 foreach($key in @('SystemEvents.DisplaySettingsChanged+=OnDisplaysChanged',
  'new WidgetShellWindow',
+ 'internal static bool ConstructingSatellite=>creatingSatellite',
  'private static void Reconcile()',
  'if(!primary.Dispatcher.CheckAccess())',
  'widget-displays-v151.json',
