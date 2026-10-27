@@ -56,12 +56,14 @@ internal sealed class DeskSpaceAppearanceV148
     }
     internal static void Save(DeskSpaceAppearanceV148 data)
     {
-        cached=Sanitize(data);
+        // Never advertise uncommitted preferences as active if the disk write fails.
+        var next=Sanitize(data);
         Directory.CreateDirectory(WorkspaceStore.Root);
         var tmp=PathName+"."+Guid.NewGuid().ToString("N")+".tmp";
         try{
-            File.WriteAllText(tmp,JsonSerializer.Serialize(cached));
+            File.WriteAllText(tmp,JsonSerializer.Serialize(next));
             File.Move(tmp,PathName,true);
+            cached=next;
         }finally{if(File.Exists(tmp))File.Delete(tmp);}
     }
     internal static Color AccentColor
@@ -129,7 +131,9 @@ internal static class DeskSpaceAppearancePresetsV148
     {
         try{return File.Exists(Filename)?
             (JsonSerializer.Deserialize<List<DeskSpaceVisualPresetV148>>(
-                File.ReadAllText(Filename))??new()).Where(x=>x.Name.Length is >0 and <=48)
+                File.ReadAllText(Filename))??new())
+                .Where(x=>x!=null && !string.IsNullOrWhiteSpace(x.Name) &&
+                    x.Name.Length<=48)
                 .Take(20).ToList():new();}
         catch(Exception e) when(e is JsonException or IOException or UnauthorizedAccessException)
         {System.Diagnostics.Debug.WriteLine(e);return new();}
@@ -223,10 +227,22 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     internal static void Show(Window owner,WidgetSettingsV3 prefs,
         Action refresh,Action general)
     {
-        if(open!=null){open.Activate();return;}
-        open=new DeskSpaceSettingsStudioV148(owner,prefs,refresh,general);
-        open.Show();
-        open.Activate();
+        if(open!=null)
+        {
+            try{open.Activate();return;}
+            catch(InvalidOperationException){open=null;}
+        }
+        try
+        {
+            open=new DeskSpaceSettingsStudioV148(owner,prefs,refresh,general);
+            open.Show();
+            open.Activate();
+        }
+        catch(Exception ex)
+        {
+            open=null;
+            DeskSpaceSettingsDiagnosticsV151.Report("Open settings",ex);
+        }
     }
     private static Button Button(string name,Action click)
     {
@@ -234,7 +250,13 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             Margin=new Thickness(0,0,9,6),Background=Brushes.White,
             HorizontalContentAlignment=HorizontalAlignment.Left,
             BorderBrush=new SolidColorBrush(Color.FromRgb(216,218,235))};
-        b.Click+=(_,_)=>click();
+        // WPF treats uncaught Click handlers as fatal dispatcher exceptions.
+        // An invalid/stale preset or a failing page must never exit DeskSpace.
+        b.Click+=(_,_)=>{
+            try{click();}
+            catch(Exception ex){DeskSpaceSettingsDiagnosticsV151.Report(
+                "Settings action: "+name,ex);}
+        };
         return b;
     }
     private static TextBlock Caption(string title)=>new(){
@@ -242,13 +264,27 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,14,0,5)};
     private void Navigate(string page)
     {
-        current=page;body.Children.Clear();
-        body.Children.Add(new TextBlock{Text=page,FontSize=25,FontWeight=FontWeights.SemiBold,
-            Foreground=new SolidColorBrush(Color.FromRgb(30,42,73))});
-        if(page=="Donut toolbar")DonutPage();
-        else if(page=="Theme")ThemePage();
-        else if(page=="Presets")PresetsPage();
-        else GeneralPage();
+        current=page;
+        try
+        {
+            body.Children.Clear();
+            body.Children.Add(new TextBlock{Text=page,FontSize=25,
+                FontWeight=FontWeights.SemiBold,
+                Foreground=new SolidColorBrush(Color.FromRgb(30,42,73))});
+            if(page=="Donut toolbar")DonutPage();
+            else if(page=="Theme")ThemePage();
+            else if(page=="Presets")PresetsPage();
+            else GeneralPage();
+        }
+        catch(Exception ex)
+        {
+            body.Children.Clear();
+            body.Children.Add(new TextBlock{
+                Text="This settings page could not be opened. Other modules remain available.",
+                TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,12,0,12)});
+            body.Children.Add(Button("Try again",()=>Navigate(page)));
+            DeskSpaceSettingsDiagnosticsV151.Report("Settings page: "+page,ex);
+        }
     }
     private void DonutPage()
     {
@@ -319,9 +355,11 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         var custom=new TextBox{Text=draft.Accent,Width=130,
             HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,5,0,7)};
         custom.LostFocus+=(_,_)=>{
-            if(DeskSpaceAppearanceV148.TryColor(custom.Text,out _)){
-                draft.Accent=custom.Text;Draw();
-            }else{custom.Text=draft.Accent;status.Text="Use a colour like #7364D3.";}
+            try{
+                if(DeskSpaceAppearanceV148.TryColor(custom.Text,out _)){
+                    draft.Accent=custom.Text;Draw();
+                }else{custom.Text=draft.Accent;status.Text="Use a colour like #7364D3.";}
+            }catch(Exception ex){DeskSpaceSettingsDiagnosticsV151.Report("Accent colour",ex);}
         };
         body.Children.Add(custom);
         body.Children.Add(Slider("Widget opacity",.65,1,draft.Opacity,
@@ -340,8 +378,12 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         var text=new TextBlock{Text=label+" · "+display(value),Margin=new Thickness(0,0,0,4)};
         var slider=new System.Windows.Controls.Slider{Minimum=min,Maximum=max,Value=value,Width=370,
             HorizontalAlignment=HorizontalAlignment.Left};
-        slider.ValueChanged+=(_,_)=>{if(text!=null){
-            text.Text=label+" · "+display(slider.Value);changed(slider.Value);}};
+        slider.ValueChanged+=(_,_)=>{
+            try{
+                text.Text=label+" · "+display(slider.Value);
+                changed(slider.Value);
+            }catch(Exception ex){DeskSpaceSettingsDiagnosticsV151.Report(label,ex);}
+        };
         stack.Children.Add(text);stack.Children.Add(slider);return stack;
     }
     private void PresetsPage()
@@ -381,7 +423,8 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
                 Navigate("Presets");status.Text="Workspace profile saved.";
             }catch(Exception ex){status.Text=ex.Message;}
         }));
-        foreach(var profile in DeskSpaceWorkspaceProfilesV85.Load()){
+        foreach(var profile in DeskSpaceWorkspaceProfilesV85.Load().Where(p=>p!=null &&
+            !string.IsNullOrWhiteSpace(p.Name))){
             var selected=profile;
             body.Children.Add(Button("Apply layout · "+selected.Name,()=>{
                 try{DeskSpaceWorkspaceProfilesV85.Apply(selected,settings);
@@ -494,5 +537,32 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             status.Text="Saved. Widget colours, size, opacity and pinned applications updated.";
         }
         catch(Exception ex){status.Text="Could not save settings: "+ex.Message;}
+    }
+}
+
+
+// Only Settings errors are intercepted. Keep an inspectable report in Downloads
+// while avoiding process-wide handlers that might swallow unrelated defects.
+internal static class DeskSpaceSettingsDiagnosticsV151
+{
+    internal static void Report(string action,Exception error)
+    {
+        var message=action+": "+error.Message;
+        try
+        {
+            var dir=System.IO.Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.UserProfile),"Downloads");
+            System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(dir,
+                "DeskSpace_Settings_Errors.log"),
+                "["+DateTime.Now.ToString("O")+"] "+action+Environment.NewLine+
+                error+Environment.NewLine+Environment.NewLine);
+        }
+        catch(Exception failure){System.Diagnostics.Debug.WriteLine(failure);}
+        try{System.Windows.MessageBox.Show(
+            "DeskSpace is still running. "+message+
+            "\n\nDetails were recorded in Downloads > DeskSpace_Settings_Errors.log.",
+            "DeskSpace settings",MessageBoxButton.OK,MessageBoxImage.Warning);}
+        catch(Exception failure){System.Diagnostics.Debug.WriteLine(failure);}
     }
 }
