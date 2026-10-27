@@ -34,12 +34,12 @@ internal static class DeskSpaceMonitorFenceV152
         int x,int y,int width,int height,uint flags);
     private const uint NoSize=0x0001, NoZOrder=0x0004, NoActivate=0x0010;
 
-    internal static Point ClampRectangle(Rectangle bounds,Rectangle available)
+    internal static System.Drawing.Point ClampRectangle(Rectangle bounds,Rectangle available)
     {
         // Include the taskbar and negative virtual desktop coordinates.
         int maxX=Math.Max(available.Left,available.Right-bounds.Width);
         int maxY=Math.Max(available.Top,available.Bottom-bounds.Height);
-        return new Point(Math.Clamp(bounds.Left,available.Left,maxX),
+        return new System.Drawing.Point(Math.Clamp(bounds.Left,available.Left,maxX),
                          Math.Clamp(bounds.Top,available.Top,maxY));
     }
 
