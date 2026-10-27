@@ -47,11 +47,11 @@ internal static class DeskSpaceMonitorFenceV153
     private sealed class Registration
     {
         internal readonly HwndSource Source;
-        internal readonly Func<Forms.Screen?> Screen;
+        internal readonly Func<Rectangle?> WorkArea;
         internal readonly HwndSourceHook Hook;
-        internal Registration(HwndSource source,Func<Forms.Screen?> screen)
+        internal Registration(HwndSource source,Func<Rectangle?> workArea)
         {
-            Source=source;Screen=screen;
+            Source=source;WorkArea=workArea;
             Hook=Handle;
             source.AddHook(Hook);
         }
@@ -60,9 +60,9 @@ internal static class DeskSpaceMonitorFenceV153
         {
             try
             {
-                var screen=Screen();
-                if(screen==null || lParam==IntPtr.Zero)return IntPtr.Zero;
-                var work=screen.WorkingArea;
+                var area=WorkArea();
+                if(area==null || lParam==IntPtr.Zero)return IntPtr.Zero;
+                var work=area.Value;
                 if(message==WindowPosChanging)
                 {
                     var pos=Marshal.PtrToStructure<WindowPos>(lParam);
@@ -126,6 +126,7 @@ internal static class DeskSpaceMonitorFenceV153
     private static readonly Dictionary<Window,Registration> Windows=new();
     private static readonly Dictionary<Popup,Registration> Popups=new();
     private static readonly Dictionary<Popup,Forms.Screen> PopupScreen=new();
+    private static readonly Dictionary<Popup,Rectangle> SyntheticWorkAreas=new();
     private static readonly ConditionalWeakTable<Popup,object> Tracked=new();
 
     internal static void TrackWidget(WidgetShellWindow widget)
@@ -137,9 +138,9 @@ internal static class DeskSpaceMonitorFenceV153
             var source=PresentationSource.FromVisual(widget) as HwndSource;
             if(source==null)return;
             var registration=new Registration(source,()=>
-                DeskSpaceMonitorFenceV152.BoundScreen(widget));
+                DeskSpaceMonitorFenceV152.BoundScreen(widget)?.WorkingArea);
             Windows[widget]=registration;
-            ClampNow(source,registration.Screen);
+            ClampNow(source,registration.WorkArea);
         }
         widget.SourceInitialized+=Install;
         widget.Closed+=(_,_)=>{
@@ -197,13 +198,14 @@ internal static class DeskSpaceMonitorFenceV153
             {
                 if(ReferenceEquals(existing.Source,source))
                 {
-                    ClampNow(source,existing.Screen);return;
+                    ClampNow(source,existing.WorkArea);return;
                 }
                 existing.Uninstall();
                 Popups.Remove(popup);
             }
-            Func<Forms.Screen?> assigned=()=>
-                PopupScreen.TryGetValue(popup,out var screen)?screen:null;
+            Func<Rectangle?> assigned=()=>
+                SyntheticWorkAreas.TryGetValue(popup,out var forced)?forced:
+                PopupScreen.TryGetValue(popup,out var screen)?screen.WorkingArea:null;
             var registration=new Registration(source,assigned);
             Popups[popup]=registration;
             ClampNow(source,assigned);
@@ -213,22 +215,30 @@ internal static class DeskSpaceMonitorFenceV153
             if(Popups.Remove(popup,out var registration))
                 registration.Uninstall();
             PopupScreen.Remove(popup);
+            SyntheticWorkAreas.Remove(popup);
         };
         if(popup.IsOpen)Opened(popup,EventArgs.Empty);
     }
 
-    private static void ClampNow(HwndSource source,Func<Forms.Screen?> monitor)
+    private static void ClampNow(HwndSource source,Func<Rectangle?> workArea)
     {
         if(source.IsDisposed)return;
-        var screen=monitor();
+        var screen=workArea();
         if(screen==null||!GetWindowRect(source.Handle,out var native))return;
         if(native.Width<=0||native.Height<=0)return;
         var fit=Constrain(new Rectangle(native.Left,native.Top,native.Width,
-            native.Height),screen.WorkingArea);
+            native.Height),screen.Value);
         if(fit.X!=native.Left||fit.Y!=native.Top||
            fit.Width!=native.Width||fit.Height!=native.Height)
             SetWindowPos(source.Handle,IntPtr.Zero,fit.X,fit.Y,fit.Width,fit.Height,
                 NoZOrder|NoActivate);
+    }
+
+    // A simulated monitor edge exercised against a REAL native WPF HWND.
+    // Only the UI smoke test calls this; production uses Screen.WorkingArea.
+    internal static void OverridePopupAreaForTest(Popup popup,Rectangle workArea)
+    {
+        SyntheticWorkAreas[popup]=workArea;
     }
 
     // Exercise the same native WM_WINDOWPOSCHANGING path used by WPF
