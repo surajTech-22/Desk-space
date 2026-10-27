@@ -34,7 +34,7 @@ internal static class DeskSpaceWorkspaceProfilesV85
             {
                 if(!File.Exists(Filename))return Array.Empty<DeskSpaceProfileV85>();
                 return JsonSerializer.Deserialize<List<DeskSpaceProfileV85>>(
-                    File.ReadAllText(Filename))?.Where(x=>
+                    File.ReadAllText(Filename))?.Where(x=>x!=null &&
                     !string.IsNullOrWhiteSpace(x.Name)).Take(24).ToArray() ??
                     Array.Empty<DeskSpaceProfileV85>();
             }
@@ -71,7 +71,7 @@ internal static class DeskSpaceWorkspaceProfilesV85
             CenterMode=source.CenterMode,
             ShowWeather=source.ShowWeather,
             WeatherCity=source.WeatherCity,
-            PinnedApps=source.PinnedApps.ToList()
+            PinnedApps=source.PinnedApps?.ToList()??new List<string>()
         };
     internal static void Apply(DeskSpaceProfileV85 profile,WidgetSettingsV3 target)
     {
@@ -80,8 +80,9 @@ internal static class DeskSpaceWorkspaceProfilesV85
         target.CenterMode=profile.CenterMode;
         target.ShowWeather=profile.ShowWeather;
         target.WeatherCity=profile.WeatherCity;
+        target.PinnedApps ??= new List<string>();
         target.PinnedApps.Clear();
-        foreach(var app in profile.PinnedApps.Where(File.Exists)
+        foreach(var app in (profile.PinnedApps??new List<string>()).Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase).Take(40))
             target.PinnedApps.Add(app);
         target.Save();

@@ -38,11 +38,14 @@ foreach($token in @(
  'Current.Style=="Material"',
  'DeskSpaceAppearanceV148.Mix',
  'System.Windows.Shapes.Path',
- 'new[]{"Donut toolbar","Theme","Presets","General"}',
+ 'new[]{"Donut toolbar","Theme","Displays","Presets","General"}',
  'The existing DeskSpace general settings remain intact',
  'internal static bool IsDarkFor(DeskSpaceAppearanceV148 appearance)',
  'DeskSpaceAppearanceV148.IsDarkFor(draft)',
- 'pinnedDraft.AddRange(settings.PinnedApps);',
+ 'DeskSpaceMultiMonitorV151.Configure(showEveryMonitorDraft);',
+ 'private void DisplaysPage()',
+ 'DeskSpaceSettingsDiagnosticsV151.Report',
+ 'pinnedDraft.AddRange(settings.PinnedApps??new List<string>());',
  'pinned.ItemsSource=pinnedDraft;',
  'foreach(var app in pinnedDraft)settings.PinnedApps.Add(app);')){
  if(!$studio.Contains($token)){throw "R148 visual studio feature missing: $token"}
