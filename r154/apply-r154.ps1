@@ -111,6 +111,30 @@ Swap "$r/DeskSpaceMonitorFenceV153.cs" @'
         DeskSpaceNativeClipV154.Apply(source.Handle,screen.Value);
 '@ 'native clipping even at first show'
 
+# Attach the exact same native hook to TWO actual WPF Windows in the smoke
+# runner, using independent synthetic monitor rectangles. This exercises
+# native WM_WINDOWPOSCHANGING on Width/Height expansion, not pure maths.
+$testing=@'
+    private static readonly Dictionary<Window,Registration> TestWindows=new();
+    internal static void TrackWindowInAreaForTest(Window window,Rectangle work)
+    {
+        if(PresentationSource.FromVisual(window) is not HwndSource source)
+            throw new InvalidOperationException("R154 live HWND not shown");
+        if(TestWindows.Remove(window,out var previous))previous.Uninstall();
+        Func<Rectangle?> assigned=()=>work;
+        var registration=new Registration(source,assigned);
+        TestWindows[window]=registration;
+        window.Closed+=(_,_)=>{
+            if(TestWindows.Remove(window,out var live))live.Uninstall();
+        };
+        ClampNow(source,assigned);
+    }
+
+'@
+Swap "$r/DeskSpaceMonitorFenceV153.cs" '    // A simulated monitor edge exercised against a REAL native WPF HWND.' (
+    $testing.Replace($crlf,$lf)+'    // A simulated monitor edge exercised against a REAL native WPF HWND.'
+) 'real two-window native test harness'
+
 # Upgrade WPF smoke with a real WPF expanded Window and real Popup in a
 # physically available display split into two simulated monitor rectangles.
 $smoke='r36/UiSmoke/Program.cs'
