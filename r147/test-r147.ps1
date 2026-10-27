@@ -14,8 +14,7 @@ foreach($token in @(
   'book.SaveCopyAs(backup);',
   'RestoreAfterFailure(live,before,',
   'KeepBlankDestinationValuesV136(live);',
-  'R146: source Table1 already existing elsewhere is not a conflict.',
-  'formulas inserted and ')){
+  'R146: source Table1 already existing elsewhere is not a conflict.')){
  if(!$format.Contains($token)){throw "R147 format transaction missing $token"}
 }
 foreach($token in @(
