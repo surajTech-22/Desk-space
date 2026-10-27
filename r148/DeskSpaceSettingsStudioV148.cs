@@ -170,6 +170,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     private readonly ListBox pinned=new(){Height=230,MinWidth=270};
     private readonly Canvas donut=new(){Width=290,Height=290};
     private string current="Donut toolbar";
+    private bool showEveryMonitorDraft;
     private static DeskSpaceSettingsStudioV148? open;
     private static readonly string[] Modules={
         "Search","Calendar","Calculator","Clock","Weather","Settings",
@@ -184,6 +185,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     {
         settings=prefs;refresh=redraw;general=showGeneral;
         pinnedDraft.AddRange(settings.PinnedApps);
+        showEveryMonitorDraft=DeskSpaceMultiMonitorV151.Enabled;
         var source=DeskSpaceAppearanceV148.Current;
         draft=new(){Style=source.Style,Mode=source.Mode,Accent=source.Accent,
             Scale=source.Scale,Opacity=source.Opacity,Softness=source.Softness};
@@ -196,7 +198,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         var nav=new StackPanel{Background=Brushes.White,Margin=new Thickness(0)};
         nav.Children.Add(new TextBlock{Text="DeskSpace",FontSize=23,FontWeight=FontWeights.Bold,
             Foreground=new SolidColorBrush(Color.FromRgb(23,45,78)),Margin=new Thickness(18,18,8,25)});
-        foreach(var name in new[]{"Donut toolbar","Theme","Presets","General"})
+        foreach(var name in new[]{"Donut toolbar","Theme","Displays","Presets","General"})
         {
             var selection=name;
             var b=Button(selection,()=>Navigate(selection));
@@ -273,6 +275,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
                 Foreground=new SolidColorBrush(Color.FromRgb(30,42,73))});
             if(page=="Donut toolbar")DonutPage();
             else if(page=="Theme")ThemePage();
+            else if(page=="Displays")DisplaysPage();
             else if(page=="Presets")PresetsPage();
             else GeneralPage();
         }
@@ -385,6 +388,38 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             }catch(Exception ex){DeskSpaceSettingsDiagnosticsV151.Report(label,ex);}
         };
         stack.Children.Add(text);stack.Children.Add(slider);return stack;
+    }
+    private void DisplaysPage()
+    {
+        body.Children.Add(new TextBlock{
+            Text="Show the DeskSpace donut on one monitor or on every connected "+
+                "monitor of this Windows computer. All widgets use the same "+
+                "saved information and Excel mappings.",
+            TextWrapping=TextWrapping.Wrap,Foreground=Brushes.Gray});
+        body.Children.Add(Caption("Widget display mode"));
+        body.Children.Add(Button(
+            (showEveryMonitorDraft?"○ ":"● ")+"Only my current monitor",
+            ()=>{showEveryMonitorDraft=false;Navigate("Displays");}));
+        body.Children.Add(Button(
+            (showEveryMonitorDraft?"● ":"○ ")+"Every connected monitor",
+            ()=>{showEveryMonitorDraft=true;Navigate("Displays");}));
+        var monitors=System.Windows.Forms.Screen.AllScreens;
+        body.Children.Add(Caption("Connected displays ("+monitors.Length+")"));
+        foreach(var screen in monitors)
+        {
+            body.Children.Add(new TextBlock{
+                Text=(screen.Primary?"Primary · ":"Display · ")+
+                    screen.DeviceName+" — "+screen.Bounds.Width+" × "+
+                    screen.Bounds.Height,
+                Margin=new Thickness(0,3,0,6),
+                TextWrapping=TextWrapping.Wrap});
+        }
+        body.Children.Add(new TextBlock{
+            Text="Click Apply changes to save. DeskSpace automatically reconciles "+
+                "monitors when screens connect or disconnect. The main donut and "+
+                "the Windows auto-updater stay under a single host.",
+            Margin=new Thickness(0,12,0,8),Foreground=Brushes.Gray,
+            TextWrapping=TextWrapping.Wrap});
     }
     private void PresetsPage()
     {
@@ -533,8 +568,9 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             foreach(var app in pinnedDraft)settings.PinnedApps.Add(app);
             settings.Save();
             DeskSpaceAppearanceV148.Save(draft);
+            DeskSpaceMultiMonitorV151.Configure(showEveryMonitorDraft);
             refresh();
-            status.Text="Saved. Widget colours, size, opacity and pinned applications updated.";
+            status.Text="Saved. Appearance, pinned applications and monitor preferences updated.";
         }
         catch(Exception ex){status.Text="Could not save settings: "+ex.Message;}
     }
