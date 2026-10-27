@@ -1551,15 +1551,15 @@ jobs:
         shell: pwsh
         run: |
           $source=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
-          $lines=$source -split "\`n"
+          $lines=$source -split "`n"
           for($i=0;$i -lt $lines.Length;$i++){
-            if($lines[$i] -match 'class WidgetShellWindow|WidgetShellWindow\\(|class WidgetHostLauncher|EnsureRunning\\(|new WidgetShellWindow|WidgetHostLauncher|void BuildCompact\\(|void RefreshAppearanceV148\\(|public.*Widget|private.*Widget|Closing \\+=' -and $lines[$i].Length -lt 250){
+            if($lines[$i] -match 'class WidgetShellWindow|WidgetShellWindow\(|class WidgetHostLauncher|EnsureRunning\(|new WidgetShellWindow|WidgetHostLauncher|void BuildCompact\(|void RefreshAppearanceV148\(|public.*Widget|private.*Widget|Closing \+=' -and $lines[$i].Length -lt 250){
               $a=[Math]::Max(0,$i-2);$z=[Math]::Min($lines.Length-1,$i+7)
               Write-Host ("SOURCE AT "+$i+" "+($lines[$a..$z] -join ' | '))
             }
           }
           $main=Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml.cs' -Raw
-          $m=$main -split "\`n"
+          $m=$main -split "`n"
           for($i=0;$i -lt $m.Length;$i++){
             if($m[$i] -match 'WidgetSettings_Click|WidgetHostLauncher|WidgetOptionsWindow' -and $m[$i].Length -lt 250){
               $a=[Math]::Max(0,$i-2);$z=[Math]::Min($m.Length-1,$i+6)
