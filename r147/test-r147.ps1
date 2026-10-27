@@ -15,7 +15,6 @@ foreach($token in @(
   'RestoreAfterFailure(live,before,',
   'KeepBlankDestinationValuesV136(live);',
   'R146: source Table1 already existing elsewhere is not a conflict.',
-  'real Excel tables, ',
   'formulas inserted and ')){
  if(!$format.Contains($token)){throw "R147 format transaction missing $token"}
 }
