@@ -10,7 +10,7 @@ function Swap([string]$path,[string]$before,[string]$after,[string]$why)
   $old=$before.Replace($crlf,$lf)
   $new=$after.Replace($crlf,$lf)
   $count=([regex]::Matches($content,[regex]::Escape($old))).Count
-  if($count -ne 1){throw "R153 $why: expected one anchor; found $count"}
+  if($count -ne 1){throw "R153 ${why}: expected one anchor; found $count"}
   [IO.File]::WriteAllText($path,$content.Replace($old,$new),
       [Text.UTF8Encoding]::new($false))
 }
