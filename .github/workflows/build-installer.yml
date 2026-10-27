@@ -1533,6 +1533,12 @@ jobs:
           ./r146/apply-r146.ps1
           ./r146/test-r146.ps1
 
+      - name: R147 one combined formats and formulas paste transaction
+        shell: pwsh
+        run: |
+          ./r147/apply-r147.ps1
+          ./r147/test-r147.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
