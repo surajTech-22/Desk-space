@@ -34,6 +34,7 @@ on:
       - fix/r150-settings-staged-pins-preview
       - fix/r151-settings-crash-multimonitor
       - fix/r152-monitor-boundary-fence
+      - fix/r154-independent-widgets-screen-clip
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1566,6 +1567,12 @@ jobs:
         run: |
           ./r153/apply-r153.ps1
           ./r153/test-r153.ps1
+
+      - name: R154 independent shared-workspace widgets and live expansion HWND screen fence
+        shell: pwsh
+        run: |
+          ./r154/apply-r154.ps1
+          ./r154/test-r154.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
