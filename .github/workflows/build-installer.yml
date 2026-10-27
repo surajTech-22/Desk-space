@@ -1558,6 +1558,19 @@ jobs:
             foreach($i in $hits | Select-Object -First 75){
               Write-Host ("LINE {0}: {1}" -f ($i+1),$lines[$i])
             }
+            if($path -like '*WidgetHost.cs'){
+              $ranges=@(@(1,49),@(150,172),@(985,1035),@(1024,1085),@(1268,1362))
+              $match=for($i=0;$i -lt $lines.Count;$i++){
+                if($lines[$i] -match 'class WidgetOptionsWindow'){ $i }
+              }
+              foreach($i in $match){$ranges+=,@([math]::Max(1,$i-4),[math]::Min($lines.Count,$i+180))}
+              foreach($r in $ranges){
+                Write-Host ("R148 DETAIL $path : {0}-{1}" -f $r[0],$r[1])
+                for($i=$r[0]-1;$i -lt [math]::Min($lines.Count,$r[1]);$i++){
+                  Write-Host ("SRC {0}: {1}" -f ($i+1),$lines[$i])
+                }
+              }
+            }
           }
           throw 'R148 SOURCE INSPECTION ONLY — not a release'
 
