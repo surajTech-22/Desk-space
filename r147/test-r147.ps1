@@ -20,7 +20,6 @@ foreach($token in @(
  if(!$format.Contains($token)){throw "R147 format transaction missing $token"}
 }
 foreach($token in @(
- 'Apply saved formats AND formulas',
  'Formats & formulas applied',
  'PasteFormatV130Async(template)',
  'No separate paste needed.',

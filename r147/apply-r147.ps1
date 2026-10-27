@@ -184,11 +184,6 @@ Swap $wheel @'
         Position();shelf.IsOpen=true;
 '@ 'remove separate donut formula button and tell user about combined action'
 
-Swap $wheel @'
-                "Apply saved format/formulas '"+entry.Name+"'?\n\n"+
-'@ @'
-                "Apply saved formats AND formulas '"+entry.Name+"'?\n\n"+
-'@ 'correct single donut confirmation'
 
 Swap $wheel @'
             Status("Format mapping applied",result);
