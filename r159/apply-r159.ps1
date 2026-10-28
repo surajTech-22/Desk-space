@@ -83,18 +83,26 @@ Swap @'
 '@ 'keep choice centered when widget morphs/moves'
 
 Swap @'
-        var files=e.Data.GetData(DataFormats.FileDrop) as string[];
-        if(files?.Length>0)_=StageFilesAsync(files);
+    private void Receive(object sender,DragEventArgs e)
+    {
 '@ @'
-        var files=e.Data.GetData(DataFormats.FileDrop) as string[];
-        if(files?.Length>0 && !busy && pendingFolderDrop==null)
+    private void Receive(object sender,DragEventArgs e)
+    {
+        // Folder drops are intercepted BEFORE the existing file-drop route.
+        // File-only drops continue through the unchanged original handler.
+        if(e.Data.GetDataPresent(DataFormats.FileDrop))
         {
-            // Only FOLDERS dropped into the donut/Deck need an action.
-            // Normal dropped files keep the existing direct-hold behavior.
-            if(files.Any(Directory.Exists))ShowFolderChoice(files);
-            else _=StageFilesAsync(files);
+            var dropped=e.Data.GetData(DataFormats.FileDrop) as string[];
+            if(dropped?.Any(Directory.Exists)==true)
+            {
+                e.Effects=DragDropEffects.Copy;
+                e.Handled=true;
+                if(!busy&&pendingFolderDrop==null)
+                    ShowFolderChoice(dropped);
+                return;
+            }
         }
-'@ 'route folder drops to choice and regular files to prior path'
+'@ 'route folders into ZIP/Copy chooser before standard file handler'
 
 Swap @'
     private void ImportFromClipboard()
