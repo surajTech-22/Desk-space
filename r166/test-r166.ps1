@@ -2,7 +2,7 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
 $tray=[IO.File]::ReadAllText("$root/DeskSpaceTrayRecoveryV166.cs")
-$host=[IO.File]::ReadAllText("$root/WidgetHost.cs")
+$hostCode=[IO.File]::ReadAllText("$root/WidgetHost.cs")
 $smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 foreach($token in @(
   'RegisterWindowMessage("TaskbarCreated")',
@@ -17,7 +17,7 @@ foreach($token in @(
 foreach($token in @(
   'DeskSpaceTrayRecoveryV166.Watch(this,tray)',
   '!DeskSpaceMultiMonitorV151.IsSatellite(this)'
-)){if(!$host.Contains($token)){throw "R166 primary-only integration missing: $token"}}
+)){if(!$hostCode.Contains($token)){throw "R166 primary-only integration missing: $token"}}
 foreach($token in @(
   'TestTrayRecoveryV166();',
   'private static void TestTrayRecoveryV166()',
