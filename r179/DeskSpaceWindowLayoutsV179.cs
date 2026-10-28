@@ -60,7 +60,7 @@ internal static class DeskSpaceWindowLayoutsV179
     private sealed record Candidate(IntPtr Handle,string Process,
         string Hash,string Monitor,Rectangle Bounds);
 
-    internal static bool ValidName(string name)=>name.Length is >=1 and <=40 &&
+    internal static bool ValidName(string? name)=>name is {Length: >=1 and <=40} &&
         name.All(c=>char.IsLetterOrDigit(c)||c==' '||c=='-'||c=='_') &&
         name==name.Trim();
     private static string TitleHash(string title)
@@ -160,8 +160,8 @@ internal static class DeskSpaceWindowLayoutsV179
             if(file.Length>1024*1024)return new();
             var result=JsonSerializer.Deserialize<List<Profile>>(
                 File.ReadAllText(Storage))??new();
-            return result.Where(p=>ValidName(p.Name)&&
-                p.Windows.Count<=32).Take(12).ToList();
+            return result.Where(p=>p!=null&&ValidName(p.Name)&&
+                p.Windows!=null&&p.Windows.Count<=32).Take(12).ToList();
         }
         catch(Exception ex)when(ex is IOException or UnauthorizedAccessException
             or JsonException or ArgumentException)
@@ -198,11 +198,12 @@ internal static class DeskSpaceWindowLayoutsV179
         {
             // Never arbitrarily select an unrelated window when the title
             // has changed; only restore exact anonymized title matches.
-            var matches=candidates.Where(c=>!consumed.Contains(c.Handle) &&
+            var matches=candidates.Where(c=>
                 c.Process.Equals(saved.Process,StringComparison.OrdinalIgnoreCase) &&
                 c.Hash==saved.TitleHash).ToArray();
-            if(saved.Instance>=matches.Length){skipped++;continue;}
+            if(saved.Instance<0 || saved.Instance>=matches.Length){skipped++;continue;}
             var c=matches[saved.Instance];
+            if(consumed.Contains(c.Handle)){skipped++;continue;}
             consumed.Add(c.Handle);
             var screen=screens.FirstOrDefault(s=>
                 s.DeviceName==saved.Monitor)??Forms.Screen.PrimaryScreen;
@@ -252,6 +253,11 @@ internal static class DeskSpaceWindowLayoutsV179
             try
             {
                 var profile=Capture(name.Text);
+                if(Load().Any(p=>p.Name.Equals(profile.Name,
+                    StringComparison.OrdinalIgnoreCase)) &&
+                   MessageBox.Show("Replace the existing profile "+profile.Name+"?",
+                        "DeskSpace window layouts",MessageBoxButton.YesNo,
+                        MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
                 if(profile.Windows.Count==0)
                 {
                     status.Text="No eligible visible application windows.";
@@ -296,7 +302,7 @@ internal static class DeskSpaceWindowLayoutsV179
             Title="DeskSpace · Window layouts",
             Width=485,Height=370,MinWidth=395,MinHeight=330,
             ShowInTaskbar=true,
-            Background=new SolidColorBrush(Color.FromRgb(24,33,60)),
+            Background=new SolidColorBrush(System.Windows.Media.Color.FromRgb(24,33,60)),
             Content=new ScrollViewer{Content=layout,
                 VerticalScrollBarVisibility=ScrollBarVisibility.Auto},
             WindowStartupLocation=WindowStartupLocation.CenterScreen};
