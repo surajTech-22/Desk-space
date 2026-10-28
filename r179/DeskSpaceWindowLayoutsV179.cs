@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
+using Rectangle=System.Drawing.Rectangle;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
