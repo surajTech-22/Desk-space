@@ -47,7 +47,9 @@ internal static class DeskSpaceMonitorSessionsV154
         int x,int y,int width,int height,uint flags);
     [DllImport("user32.dll")]
     private static extern IntPtr GetWindow(IntPtr hwnd,uint command);
-    [DllImport("user32.dll")]
+    // GetCurrentThreadId belongs to KERNEL32, not USER32. A wrong DLL
+    // caused EntryPointNotFoundException and killed the widget/tray host.
+    [DllImport("kernel32.dll", ExactSpelling=true)]
     private static extern uint GetCurrentThreadId();
     private delegate bool EnumThreadProc(IntPtr hwnd,IntPtr lparam);
     [DllImport("user32.dll")]
@@ -71,7 +73,15 @@ internal static class DeskSpaceMonitorSessionsV154
         // tracked popup and widget HWNDs already have synchronous WPF/Win32 hooks.
         var guard=new DispatcherTimer(DispatcherPriority.Background,widget.Dispatcher)
             {Interval=TimeSpan.FromMilliseconds(250)};
-        guard.Tick+=(_,_)=>{if(widget.IsVisible)GuardOwnedWindows(widget);};
+        guard.Tick+=(_,_)=>{
+            if(!widget.IsVisible)return;
+            try{GuardOwnedWindows(widget);}
+            catch(Exception ex)
+            {
+                // A monitor guard must never terminate the whole UI/tray process.
+                System.Diagnostics.Debug.WriteLine("DeskSpace monitor guard: "+ex);
+            }
+        };
         session.Guard=guard;
         guard.Start();
         widget.Closed+=(_,_)=>{
