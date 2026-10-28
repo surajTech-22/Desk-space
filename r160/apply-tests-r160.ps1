@@ -62,8 +62,10 @@ $test=@'
                 BindingFlags.NonPublic|BindingFlags.Instance)!;
             var overlay=shelfType.GetField("folderAdorner",
                 BindingFlags.NonPublic|BindingFlags.Instance)!;
-            var paths=(System.Collections.Generic.IEnumerable<string>)
-                shelfType.GetProperty("ActivePaths")!.GetValue(null)!;
+            // ActivePaths returns a fresh snapshot on each call. Never
+            // capture an initial empty array and poll it after async staging.
+            Func<string[]> HeldPaths=()=>((System.Collections.Generic.IEnumerable<string>)
+                shelfType.GetProperty("ActivePaths")!.GetValue(null)!).ToArray();
             var choice=adornerType.GetMethod("ChoiceAt",
                 BindingFlags.NonPublic|BindingFlags.Static)!;
             var diameter=new Size(116,116);
@@ -113,10 +115,10 @@ $test=@'
             using(var file=File.Create(picture))encoder.Save(file);
             Assert(File.Exists(picture),
                 "R160 screenshot of actual drag-over circular choice must exist");
-            Assert(!paths.Any(),
+            Assert(!HeldPaths().Any(),
                 "R160 drag-hover must never stage a file before mouse release");
             hide.Invoke(a,null);
-            Assert(overlay.GetValue(a)==null&&!paths.Any(),
+            Assert(overlay.GetValue(a)==null&&!HeldPaths().Any(),
                 "R160 drag cancel must restore the donut without staging files");
 
             void PumpUntil(Func<bool> ready)
@@ -136,8 +138,8 @@ $test=@'
             // Simulate drop on right half: Copy without ZIP.
             show.Invoke(a,new object[]{new[]{source}});
             commit.Invoke(a,new object[]{false});
-            PumpUntil(()=>paths.Count()==1);
-            var copied=paths.Single();
+            PumpUntil(()=>HeldPaths().Length==1);
+            var copied=HeldPaths().Single();
             Assert(Directory.Exists(copied)&&
                    File.Exists(Path.Combine(copied,"Nested","data.csv")),
                 "R160 Copy must keep folder intact and uncompressed");
@@ -151,8 +153,8 @@ $test=@'
             // Simulate drop on left half: ZIP and hold a single .zip file.
             show.Invoke(a,new object[]{new[]{source}});
             commit.Invoke(a,new object[]{true});
-            PumpUntil(()=>paths.Count()==1);
-            var staged=paths.Single();
+            PumpUntil(()=>HeldPaths().Length==1);
+            var staged=HeldPaths().Single();
             Assert(File.Exists(staged)&&
                    staged.EndsWith(root+".zip",StringComparison.OrdinalIgnoreCase),
                 "R160 ZIP must stage one archive, not the folder");
