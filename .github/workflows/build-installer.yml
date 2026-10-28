@@ -1652,6 +1652,19 @@ jobs:
           ./r165/apply-tests-r165.ps1
           ./r165/test-r165.ps1
 
+      - name: R166 restore primary tray after Explorer restart with live WPF test
+        shell: pwsh
+        run: |
+          ./r166/apply-r166.ps1
+          ./r166/apply-tests-r166.ps1
+          ./r166/test-r166.ps1
+
+      - name: R167 coalesced monitor guard with existing dual-HWND acceptance
+        shell: pwsh
+        run: |
+          ./r167/apply-r167.ps1
+          ./r167/test-r167.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
