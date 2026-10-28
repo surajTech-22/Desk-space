@@ -1691,6 +1691,12 @@ jobs:
           ./r172/apply-r172.ps1
           ./r172/test-r172.ps1
 
+      - name: R173 diagnose copy after async yield and replace blocking modal failure
+        shell: pwsh
+        run: |
+          ./r173/apply-r173.ps1
+          ./r173/test-r173.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
