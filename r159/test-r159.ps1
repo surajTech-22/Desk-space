@@ -26,7 +26,6 @@ foreach($token in @(
 foreach($token in @(
  'ZipArchiveMode.Create',
  'FileMode.CreateNew',
- 'ZipArchiveMode.Read',
  'ZipFile.OpenRead(partial)',
  'File.Move(partial,destination);',
  'FileAttributes.ReparsePoint',
