@@ -1766,8 +1766,26 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- 'r36/UiSmoke/visual-evidence'
-          if($LASTEXITCODE -ne 0){throw 'R41 WPF UI and clipboard smoke failed'}
+          # Bound native WPF smoke. A hung window, lock, or tray regression
+          # must not hold the Windows runner for the entire 35-minute job.
+          $out=Join-Path $env:RUNNER_TEMP 'deskspace-r41-wpf.stdout.txt'
+          $err=Join-Path $env:RUNNER_TEMP 'deskspace-r41-wpf.stderr.txt'
+          $proc=Start-Process -FilePath 'dotnet' -ArgumentList @(
+            'run','--project','r36/UiSmoke/UiSmoke.csproj','-c','Release',
+            '--','r36/UiSmoke/visual-evidence') -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          $done=$false
+          for($i=0;$i -lt 16;$i++){
+            if($proc.WaitForExit(15000)){$done=$true;break}
+            $last=Get-Content -LiteralPath $out -Tail 2 -ErrorAction SilentlyContinue
+            Write-Host ('WPF still running: '+($last -join ' | '))
+          }
+          if(-not $done){
+            try{Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue}catch{}
+          }
+          if(Test-Path $out){Get-Content -LiteralPath $out}
+          if(Test-Path $err){Get-Content -LiteralPath $err}
+          if(-not $done){throw 'R41 WPF smoke timeout after four minutes; inspect last checkpoint'}
+          if($proc.ExitCode -ne 0){throw 'R41 WPF UI and clipboard smoke failed'}
           $screens=Get-ChildItem 'r36/UiSmoke/visual-evidence' -Filter '*.png'
           if($screens.Count -lt 6){throw 'R36 WPF screenshot evidence incomplete'}
           foreach($image in $screens){
