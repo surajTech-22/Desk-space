@@ -1679,6 +1679,12 @@ jobs:
           ./r170/apply-r170.ps1
           ./r170/test-r170.ps1
 
+      - name: R171 instrument and isolate the real WPF folder-drop regression
+        shell: pwsh
+        run: |
+          ./r171/apply-r171.ps1
+          ./r171/test-r171.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1775,6 +1781,23 @@ jobs:
           }
           dotnet run --project 'r111/LiveExcelAcceptance/LiveExcelAcceptance.csproj' -c Release --no-build -- $candidates[0].FullName
           if($LASTEXITCODE -ne 0){throw 'R111 REAL EXCEL ACCEPTANCE FAILED. Do not publish.'}
+
+      - name: R171 isolated native WPF Copy/ZIP preflight with bounded diagnostics
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $out=Join-Path $env:RUNNER_TEMP 'r171-r160.stdout.log'
+          $err=Join-Path $env:RUNNER_TEMP 'r171-r160.stderr.log'
+          $proc=Start-Process -FilePath 'dotnet' -ArgumentList @(
+            'run','--no-build','--project','r36/UiSmoke/UiSmoke.csproj',
+            '-c','Release','--','--r160-only') -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err
+          $done=$proc.WaitForExit(45000)
+          if(-not $done){try{Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue}catch{}}
+          if(Test-Path $out){Get-Content -LiteralPath $out}
+          if(Test-Path $err){Get-Content -LiteralPath $err}
+          if(-not $done){throw 'R171 isolated R160 WPF hung: inspect last stage checkpoint'}
+          if($proc.ExitCode -ne 0){throw 'R171 isolated native R160 WPF smoke failed'}
+          Write-Host 'R171 passed: Copy and ZIP WPF interactions complete without waiting for entire suite.'
 
       - name: R41 WPF test Excel, scroll and weather scenes
         shell: pwsh
