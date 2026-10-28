@@ -98,7 +98,7 @@ internal static class DeskSpaceComponentHealthV175
     {
         var result=new List<Status>();
         int screens=0;
-        try{screens=Forms.Screen.AllScreens.Length;}catch(Forms.InvalidEnumArgumentException){}
+        try{screens=Forms.Screen.AllScreens.Length;}catch(System.ComponentModel.InvalidEnumArgumentException){}
         catch(System.ComponentModel.Win32Exception){}
         result.Add(new("Displays",screens>0?screens+" connected":"Display state unavailable"));
         result.Add(new("This widget",widget.IsLoaded?
