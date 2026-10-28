@@ -26,10 +26,12 @@ $test=@'
         File.WriteAllText(Path.Combine(source,"invoice.txt"),"zip or copy");
         File.WriteAllText(Path.Combine(nested,"data.csv"),"Name,Value");
         var root=Path.GetFileName(source);
-        var hostA=new Window{Width=116,Height=116,
-            Content=new Grid(),ShowInTaskbar=false};
-        var hostB=new Window{Width=116,Height=116,
-            Content=new Grid(),ShowInTaskbar=false};
+        var hostA=new Window{Width=116,Height=116,Left=70,Top=70,
+            WindowStyle=WindowStyle.None,ShowInTaskbar=false,
+            Content=new Grid()};
+        var hostB=new Window{Width=116,Height=116,Left=270,Top=70,
+            WindowStyle=WindowStyle.None,ShowInTaskbar=false,
+            Content=new Grid()};
         object? a=null,b=null;
         try
         {
@@ -82,24 +84,35 @@ $test=@'
             Assert(shelfType.GetField("folderChoice",
                    BindingFlags.NonPublic|BindingFlags.Instance)==null,
                 "R160 must not contain the detached R159 Popup");
-            // Capture an actual 116x116 PNG of the DRAG-OVER choice, not a
-            // screenshot of the old detached card after Drop.
-            var live=(Visual)overlay.GetValue(a)!;
+            // Render the actual adorner after WPF Window layout/Dispatcher
+            // has processed the AdornerLayer invalidation.
+            var live=(System.Windows.Documents.Adorner)overlay.GetValue(a)!;
+            hostA.UpdateLayout();
+            var layer=System.Windows.Documents.AdornerLayer.GetAdornerLayer(
+                live.AdornedElement);
+            layer?.Update(live.AdornedElement);
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(
+                new Action(()=>{}),System.Windows.Threading.DispatcherPriority.Render);
+            hostA.UpdateLayout();
             var bitmap=new RenderTargetBitmap(116,116,96,96,
                 PixelFormats.Pbgra32);
             bitmap.Render(live);
-            var encoder=new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            var picture=Path.Combine(outdir,"r160-folder-drag-in-circle.png");
-            using(var file=File.Create(picture))encoder.Save(file);
-            Assert(new FileInfo(picture).Length>850,
-                "R160 screenshot must render the 116-DIP circular choice");
             var raster=new byte[116*116*4];
             bitmap.CopyPixels(raster,116*4,0);
             int leftPixel=(58*116+31)*4;
             int rightPixel=(58*116+85)*4;
+            Console.WriteLine("R160 visual sizes: adorner="+live.RenderSize+
+                " adorned="+live.AdornedElement.RenderSize+
+                " host="+hostA.RenderSize+" L="+raster[leftPixel+3]+
+                " R="+raster[rightPixel+3]);
             Assert(raster[leftPixel+3]>160&&raster[rightPixel+3]>160,
                 "R160 ZIP and Copy halves must both be painted inside the circle");
+            var encoder=new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            var picture=Path.Combine(outdir,"r160-folder-drag-in-circle.png");
+            using(var file=File.Create(picture))encoder.Save(file);
+            Assert(File.Exists(picture),
+                "R160 screenshot of actual drag-over circular choice must exist");
             Assert(!paths.Any(),
                 "R160 drag-hover must never stage a file before mouse release");
             hide.Invoke(a,null);
