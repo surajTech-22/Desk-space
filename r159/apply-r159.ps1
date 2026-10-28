@@ -83,13 +83,6 @@ Swap @'
 '@ 'keep choice centered when widget morphs/moves'
 
 Swap @'
-        e.Effects=busy?DragDropEffects.None:DragDropEffects.Copy;
-'@ @'
-        e.Effects=busy||pendingFolderDrop!=null?
-            DragDropEffects.None:DragDropEffects.Copy;
-'@ 'prevent re-entry while choosing a folder action'
-
-Swap @'
         var files=e.Data.GetData(DataFormats.FileDrop) as string[];
         if(files?.Length>0)_=StageFilesAsync(files);
 '@ @'
