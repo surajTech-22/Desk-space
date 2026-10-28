@@ -71,6 +71,7 @@ Swap @'
             Child=card
         };
         DeskSpaceMonitorFenceV153.TrackPopup(host,folderChoice);
+        host.IsVisibleChanged+=FolderChoiceVisible;
     }
 '@ 'add centered ZIP and Copy choice on the owning circle'
 
@@ -80,18 +81,6 @@ Swap @'
         if(folderChoice.IsOpen)PositionFolderChoice();
         if(!popup.IsOpen)return;
 '@ 'keep choice centered when widget morphs/moves'
-
-Swap @'
-    private void Visible(object sender,DependencyPropertyChangedEventArgs e)
-    {if(disposed)return;popup.IsOpen=(bool)e.NewValue&&held.Count>0;}
-'@ @'
-    private void Visible(object sender,DependencyPropertyChangedEventArgs e)
-    {
-        if(disposed)return;
-        popup.IsOpen=(bool)e.NewValue&&held.Count>0;
-        if(!(bool)e.NewValue)HideFolderChoice();
-    }
-'@ 'dismiss temporary choice when its owner is hidden'
 
 Swap @'
         e.Effects=busy?DragDropEffects.None:DragDropEffects.Copy;
@@ -117,6 +106,10 @@ Swap @'
 Swap @'
     private void ImportFromClipboard()
 '@ @'
+    private void FolderChoiceVisible(object sender,DependencyPropertyChangedEventArgs e)
+    {
+        if(!(bool)e.NewValue)HideFolderChoice();
+    }
     private void PositionFolderChoice()
     {
         // The prompt appears over the current circle, not on another screen.
@@ -195,6 +188,7 @@ Swap @'
         host.PreviewDragOver-=DragOver;
 '@ @'
         HideFolderChoice();
+        host.IsVisibleChanged-=FolderChoiceVisible;
         popup.IsOpen=false;
         host.PreviewDragOver-=DragOver;
 '@ 'per-widget prompt closes without touching the shared held files'
