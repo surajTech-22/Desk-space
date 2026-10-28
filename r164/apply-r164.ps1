@@ -52,13 +52,21 @@ Swap @'
         {
 '@ 'show one shared Deck cancel and measured progress'
 
-Swap @'
-                await Task.Run(()=>{
-                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    if(File.Exists(source))File.Copy(source,destination,false);
-                    else CopyFolder(source,destination);
-                });
-'@ @'
+# Only replace the one background staging COPY inside StageFilesAsync.
+# A previous Desk release changed the body, so an exact historical
+# whitespace/file-copy anchor was too brittle; retain all surrounding guards.
+$start=$s.IndexOf('    private async Task StageFilesAsync(',[StringComparison]::Ordinal)
+$end=$s.IndexOf('    private void ClearAll()', $start,[StringComparison]::Ordinal)
+if($start -lt 0 -or $end -le $start){throw 'R164 source method boundaries missing'}
+$method=$s.Substring($start,$end-$start)
+$pattern='(?s)await\s+Task\.Run\(\s*\(\s*\)\s*=>\s*\{.*?\}\s*\)\s*;'
+$matches=@([regex]::Matches($method,$pattern) | Where-Object {
+    $_.Value.Contains('CopyFolder') -or $_.Value.Contains('File.Copy')
+})
+if($matches.Count -ne 1){
+    throw "R164 expected one background folder/file Copy block; found $($matches.Count). Source excerpt: $($method.Substring(0,[Math]::Min($method.Length,1600)))"
+}
+$copyReplacement=@'
                 using var cancellation=new CancellationTokenSource();
                 copyCancellation=cancellation;
                 copyInProgress=true;
@@ -101,7 +109,12 @@ Swap @'
                         RefreshViews();
                     }
                 }
-'@ 'replace blocking Copy with streamed partial-then-rename worker'
+'@
+$target=$matches[0]
+$s=$s.Substring(0,$start+$target.Index)+$copyReplacement.Replace($crlf,$lf)+
+    $s.Substring($start+$target.Index+$target.Length)
+Write-Host 'R164: located one staging Copy inside StageFilesAsync without changing existing guards.'
+
 
 Swap @'
         catch(Exception ex)
