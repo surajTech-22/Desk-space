@@ -8,13 +8,11 @@ $s=[IO.File]::ReadAllText($p).Replace($crlf,$lf)
 $old='            attachedShelf.Enable();'
 $new=@'
             attachedShelf.Enable();
-            // Restore the EXISTING primary tray icon after Explorer restarts.
-            // This does not show the widget or create a second monitor icon.
-            IDisposable? primaryTrayRecovery=null;
-            Loaded+=(_,_)=>{
-                if(!DeskSpaceMultiMonitorV151.IsSatellite(this))
-                    primaryTrayRecovery ??= DeskSpaceTrayRecoveryV166.Watch(this,tray);
-            };
+            // Attach to the existing primary icon when the widget's
+            // startup handler enables the Deck; this is already on Loaded.
+            // Keep a single tray icon, regardless of monitor count.
+            if(!DeskSpaceMultiMonitorV151.IsSatellite(this))
+                _=DeskSpaceTrayRecoveryV166.Watch(this,tray);
 '@.Replace($crlf,$lf).TrimEnd()
 $count=([regex]::Matches($s,[regex]::Escape($old))).Count
 if($count -ne 1){throw "R166 primary host insertion requires 1 anchor, found $count"}
