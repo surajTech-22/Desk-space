@@ -38,6 +38,7 @@ on:
       - fix/r155-shared-held-files-deck
       - fix/r156-startup-kernel32-entrypoint
       - fix/r157-monitor-aware-submenus
+      - fix/r158-isolated-monitor-input-info-count
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1588,6 +1589,12 @@ jobs:
         run: |
           ./r157/apply-r157.ps1
           ./r157/test-r157.ps1
+
+      - name: R158 verify isolated per-widget native input and Information hidden counts
+        shell: pwsh
+        run: |
+          ./r158/apply-r158.ps1
+          ./r158/test-r158.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
