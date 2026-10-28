@@ -1724,6 +1724,13 @@ jobs:
           ./r178/apply-tests-r178.ps1
           ./r178/test-r178.ps1
 
+      - name: R179 native safe window-layout profiles with per-monitor WPF regression
+        shell: pwsh
+        run: |
+          ./r179/apply-r179.ps1
+          ./r179/apply-tests-r179.ps1
+          ./r179/test-r179.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
