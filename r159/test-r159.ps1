@@ -13,12 +13,13 @@ foreach($token in @(
  'DeskSpaceMonitorFenceV153.TrackPopup(host,folderChoice);',
  'private void ShowFolderChoice(string[] incoming)',
  'private void CommitFolderDrop(bool zipFolders)',
+ 'private async Task CommitFolderDropAsync(string[] paths,bool zipFolders)',
+ 'DeskSpaceFolderZipV159.CreateFromFolder(source,zipPath)',
+ 'await StageFilesAsync(new[]{zipPath});'
  'private void HideFolderChoice()',
  'if(dropped?.Any(Directory.Exists)==true)',
  'ShowFolderChoice(dropped);',
  'private void Receive(object sender,DragEventArgs e)',
- 'DeskSpaceFolderZipV159.CreateFromFolder(source,destination);',
- 'private async Task StageFilesAsync(string[] files,bool zipFolders=false)',
  'private static readonly List<Held> held=new();',
  'RefreshViews();'
 )){
