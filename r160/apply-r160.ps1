@@ -175,5 +175,10 @@ $methods=@'
 '@
 $s=$s.Substring(0,$start)+$methods.Replace($crlf,$lf).TrimEnd()+$lf+$s.Substring($end)
 
+$checkLines=$s.Split($lf)
+Write-Host "R160 COMPILED_DECK_LINES 274-310"
+for($lineNo=274;$lineNo -le [Math]::Min(310,$checkLines.Length);$lineNo++){
+    Write-Host ('{0,4}: {1}' -f $lineNo,$checkLines[$lineNo-1])
+}
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R160: folder ZIP and Copy are in-donut adorner wedges shown on DRAG OVER, chosen on DROP. No detached Popup or after-drop dialog.'
