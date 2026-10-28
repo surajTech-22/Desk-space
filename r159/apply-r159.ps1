@@ -72,6 +72,7 @@ Swap @'
         };
         DeskSpaceMonitorFenceV153.TrackPopup(host,folderChoice);
         host.IsVisibleChanged+=FolderChoiceVisible;
+        host.Closed+=(_,_)=>HideFolderChoice();
     }
 '@ 'add centered ZIP and Copy choice on the owning circle'
 
@@ -187,16 +188,6 @@ Swap @'
     }
     private void ImportFromClipboard()
 '@ 'choice cancel, presentation and option handler'
-
-Swap @'
-        popup.IsOpen=false;
-        host.PreviewDragOver-=DragOver;
-'@ @'
-        HideFolderChoice();
-        host.IsVisibleChanged-=FolderChoiceVisible;
-        popup.IsOpen=false;
-        host.PreviewDragOver-=DragOver;
-'@ 'per-widget prompt closes without touching the shared held files'
 
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R159: folder drops show ZIP or Copy over the owning circle; regular files unchanged, shared Deck unchanged.'
