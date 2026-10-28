@@ -12,7 +12,7 @@ foreach($required in @(
  'lastCopyError=ex.GetType().Name;',
  'lastCopyError=null;',
  'Original preserved.',
- 'if(held.Count==0 && !busy && lastCopyError==null)'
+ 'popup.IsOpen=host.IsVisible;'
 )){
  if(!$s.Contains($required)){throw "R173 integration missing: $required"}
 }
