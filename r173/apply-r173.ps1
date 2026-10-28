@@ -98,11 +98,9 @@ Swap @'
                 Text="Copy could not finish ("+lastCopyError+"). Original preserved.",
                 Foreground=Brushes.Orange,FontSize=11,TextWrapping=TextWrapping.Wrap,
                 Margin=new Thickness(5,2,5,6)});
+            popup.IsOpen=host.IsVisible;
+            return; // error row remains visible even with an empty shelf
         }
 '@ 'nonmodal shared Deck error row'
-Swap '        if(held.Count==0 && !busy){popup.IsOpen=false;return;}' @'
-        if(held.Count==0 && !busy && lastCopyError==null){
-            popup.IsOpen=false;return;}
-'@ 'keep nonmodal error visible if no staged files'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R173: WPF Copy checkpoint trace, no modal popup on failure, shared Deck error, and original-file preservation.'
