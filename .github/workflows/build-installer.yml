@@ -46,6 +46,7 @@ on:
       - feat/r163-searchable-zip-preview
       - feat/r164-cancellable-deck-copy
       - feat/r165-crash-safe-copy-recovery
+      - feat/r175-component-health-and-clipboard-events
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1701,6 +1702,13 @@ jobs:
         shell: pwsh
         run: |
           ./r174/test-r174.ps1
+
+      - name: R175 local component health and event-driven privacy-safe clipboard signal
+        shell: pwsh
+        run: |
+          ./r175/apply-r175.ps1
+          ./r175/apply-tests-r175.ps1
+          ./r175/test-r175.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
