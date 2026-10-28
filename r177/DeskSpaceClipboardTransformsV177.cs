@@ -60,7 +60,11 @@ internal static class DeskSpaceClipboardTransformsV177
             !url.StartsWith(parsed.Scheme+"://",StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Markdown link requires one HTTP(S) URL.");
         var target=parsed.AbsoluteUri.Replace("(","%28").Replace(")","%29");
-        return "["+MarkdownLiteral(parsed.Host)+"]("+target+")";
+        // Host characters are URL-validated; keep ordinary dots and hyphens
+        // readable in Markdown link labels. Escape only bracket delimiters.
+        var label=parsed.Host.Replace("\\","\\\\")
+            .Replace("[","\\[").Replace("]","\\]");
+        return "["+label+"]("+target+")";
     }
     private static string Extension(string mode)=>mode switch
     {
