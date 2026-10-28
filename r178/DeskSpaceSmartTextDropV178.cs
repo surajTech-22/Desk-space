@@ -140,7 +140,7 @@ internal sealed class DeskSpaceSmartTextAdornerV178 : Adorner
             (Left:true,Label:web?"Open":"Save"),
             (Left:false,Label:"Copy")})
         {
-            var fill=new SolidColorBrush(pair.Left==hoverLeft?
+            var fill=new SolidColorBrush(hoverLeft.HasValue && pair.Left==hoverLeft.Value?
                 Color.FromRgb(82,112,195):
                 (pair.Left?Color.FromRgb(52,75,145):
                     Color.FromRgb(67,86,159)));
