@@ -73,8 +73,10 @@ permissions:
 # can remain in GitHub's teardown state and must not block new safety fixes.
 # Only the CURRENT branch head is allowed to publish a stable release.
 concurrency:
-  group: deskspace-installer-${{ github.ref }}-${{ github.sha }}
-  cancel-in-progress: false
+  group: deskspace-installer-${{ github.ref }}
+  # Only obsolete feature-branch checks can be cancelled; never interrupt
+  # the active stable/tester release branch midway through publication.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/r42-excel-mapping-editor' }}
 
 jobs:
   build:
