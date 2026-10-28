@@ -48,6 +48,21 @@ foreach($token in @('TestIndependentMonitorsV154();',
  'R154 collapsing primary must not relocate secondary instance')){
  if(!$ui.Contains($token)){throw "R154 real expansion smoke missing: $token"}
 }
+# R156: guard against repeating the fatal v1.5.870 startup/tray crash.
+# The Windows API GetCurrentThreadId is exported by KERNEL32, not USER32.
+if(!$session.Contains('[DllImport("kernel32.dll", ExactSpelling=true)]'+[Environment]::NewLine+
+    '    private static extern uint GetCurrentThreadId();') -and
+   !$session.Contains('[DllImport("kernel32.dll", ExactSpelling=true)]'+[string][char]10+
+    '    private static extern uint GetCurrentThreadId();')){
+    throw 'R156: GetCurrentThreadId must be imported from kernel32.dll'
+}
+if(!$session.Contains('catch(Exception ex)') -or
+   !$session.Contains('DeskSpace monitor guard: ')){
+    throw 'R156: monitor timer must not terminate tray/widget process'
+}
+if(!$ui.Contains('R156 GetCurrentThreadId must resolve from kernel32 without crashing')){
+    throw 'R156: real native entry point WPF smoke regression must execute'
+}
 if($session.Contains('settings.PinnedApps.Clear()') -or
    $session.Contains('Application.Current.Shutdown()')){
  throw 'R154 must not modify common user data or shut down app'
