@@ -1778,7 +1778,7 @@ jobs:
           # must not hold the Windows runner for the entire 35-minute job.
           # Validate child --widget-host entry returns immediately rather
           # than recursively launching the complete WPF smoke executable.
-          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release --no-build -- --widget-host
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- --widget-host
           if($LASTEXITCODE -ne 0){throw 'R169 UI smoke child spawn guard failed'}
           $out=Join-Path $env:RUNNER_TEMP 'deskspace-r41-wpf.stdout.txt'
           $err=Join-Path $env:RUNNER_TEMP 'deskspace-r41-wpf.stderr.txt'
