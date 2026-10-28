@@ -11,7 +11,9 @@ function One([string]$old,[string]$new,[string]$description)
  $script:s=$script:s.Replace($old,$new)
 }
 One '            TestInterruptedCopyRecoveryV165();' @'
+            Console.WriteLine("R168 BEGIN: interrupted copy recovery");
             TestInterruptedCopyRecoveryV165();
+            Console.WriteLine("R168 BEGIN: native tray recovery");
             TestTrayRecoveryV166();
 '@ 'tray test entry point'
 $method=@'
