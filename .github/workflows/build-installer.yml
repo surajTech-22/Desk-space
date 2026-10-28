@@ -1665,6 +1665,12 @@ jobs:
           ./r167/apply-r167.ps1
           ./r167/test-r167.ps1
 
+      - name: R169 prevent recursive UI smoke child widget-host processes
+        shell: pwsh
+        run: |
+          ./r169/apply-r169.ps1
+          ./r169/test-r169.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1768,6 +1774,10 @@ jobs:
           $ErrorActionPreference='Stop'
           # Bound native WPF smoke. A hung window, lock, or tray regression
           # must not hold the Windows runner for the entire 35-minute job.
+          # Validate child --widget-host entry returns immediately rather
+          # than recursively launching the complete WPF smoke executable.
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release --no-build -- --widget-host
+          if($LASTEXITCODE -ne 0){throw 'R169 UI smoke child spawn guard failed'}
           $out=Join-Path $env:RUNNER_TEMP 'deskspace-r41-wpf.stdout.txt'
           $err=Join-Path $env:RUNNER_TEMP 'deskspace-r41-wpf.stderr.txt'
           $proc=Start-Process -FilePath 'dotnet' -ArgumentList @(
