@@ -1697,6 +1697,11 @@ jobs:
           ./r173/apply-r173.ps1
           ./r173/test-r173.ps1
 
+      - name: R174 verify staging marker accepts app-owned paths without cross-user access
+        shell: pwsh
+        run: |
+          ./r174/test-r174.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
