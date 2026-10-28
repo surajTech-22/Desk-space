@@ -45,7 +45,18 @@ internal static class DeskSpaceInterruptedCopyV165
             ??throw new IOException("Invalid temporary copy destination.");
         var session=Path.GetDirectoryName(item)
             ??throw new IOException("Invalid Desk staging session.");
-        if(!IsGuid(Path.GetFileName(item))||!IsGuid(Path.GetFileName(session)))
+        // Earlier DeskSpace staging versions can use an app-owned session
+        // folder whose basename is not a GUID. The parent directory is
+        // private to DeskSpace regardless of that historical name. Verify
+        // ownership, not a guessed count of GUID directory components.
+        var shelf=Path.GetFullPath(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "DeskSpace","TemporaryShelf"));
+        var normalLayout=IsGuid(Path.GetFileName(item))&&
+            IsGuid(Path.GetFileName(session));
+        var ownedLayout=item.StartsWith(
+            shelf+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase);
+        if(!normalLayout&&!ownedLayout)
             throw new IOException("Refusing a non-DeskSpace temporary copy destination.");
         Directory.CreateDirectory(item);
         string marker=Path.Combine(item,MarkerName);
