@@ -1621,9 +1621,12 @@ jobs:
           ./r161/apply-tests-r161.ps1
           ./r161/test-r161.ps1
 
-      - name: R162 inspect final assembled Deck copy and ZIP routing
+      - name: R162 cancel ZIP with progress and preserve shared source tracking
         shell: pwsh
-        run: ./r162/inspect-r162.ps1
+        run: |
+          ./r162/apply-r162.ps1
+          ./r162/apply-tests-r162.ps1
+          ./r162/test-r162.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
