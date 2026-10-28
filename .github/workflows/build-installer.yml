@@ -1685,6 +1685,12 @@ jobs:
           ./r171/apply-r171.ps1
           ./r171/test-r171.ps1
 
+      - name: R172 prevent folder-drop freeze, perform exclusive copy lease IO off WPF thread
+        shell: pwsh
+        run: |
+          ./r172/apply-r172.ps1
+          ./r172/test-r172.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
