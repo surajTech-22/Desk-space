@@ -33,7 +33,7 @@ $replacement=@'
 '@
 $s=$s.Substring(0,$start)+$replacement.Replace($crlf,$lf).TrimEnd()+$s.Substring($end)
 
-Swap '        if(folderChoice.IsOpen)PositionFolderChoice();'+$lf '' 'no detached-choice positioning on widget movement'
+Swap '        if(folderChoice.IsOpen)PositionFolderChoice();' '' 'no detached-choice positioning on widget movement'
 
 Swap @'
     private void DragOver(object sender,DragEventArgs e)
