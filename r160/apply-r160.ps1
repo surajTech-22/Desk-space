@@ -137,6 +137,9 @@ $methods=@'
         {
             // Default WPF Window template normally has an AdornerLayer.
             // Provide one locally if a customized host template omits it.
+            // Detach before reparenting; otherwise WPF throws because the
+            // existing content already has a logical/visual parent.
+            host.Content=null;
             var decorator=new System.Windows.Documents.AdornerDecorator{Child=content};
             host.Content=decorator;
             layer=decorator.AdornerLayer;
