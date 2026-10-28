@@ -1628,6 +1628,13 @@ jobs:
           ./r162/apply-tests-r162.ps1
           ./r162/test-r162.ps1
 
+      - name: R163 searchable read-only ZIP preview and WPF acceptance
+        shell: pwsh
+        run: |
+          ./r163/apply-r163.ps1
+          ./r163/apply-tests-r163.ps1
+          ./r163/test-r163.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
