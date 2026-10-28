@@ -44,6 +44,7 @@ on:
       - feat/r161-diagnostics-archive-preview-foundation
       - feat/r162-cancellable-zip-and-shared-origin
       - feat/r163-searchable-zip-preview
+      - feat/r164-cancellable-deck-copy
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1635,6 +1636,13 @@ jobs:
           ./r163/apply-r163.ps1
           ./r163/apply-tests-r163.ps1
           ./r163/test-r163.ps1
+
+      - name: R164 cancellable shared Deck Copy, safe partial cleanup and WPF smoke
+        shell: pwsh
+        run: |
+          ./r164/apply-r164.ps1
+          ./r164/apply-tests-r164.ps1
+          ./r164/test-r164.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
