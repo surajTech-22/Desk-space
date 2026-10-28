@@ -140,49 +140,53 @@ Swap @'
         var paths=pendingFolderDrop;
         HideFolderChoice();
         if(disposed||paths==null||paths.Length==0)return;
-        _=StageFilesAsync(paths,zipFolders);
+        _=CommitFolderDropAsync(paths,zipFolders);
+    }
+    private async Task CommitFolderDropAsync(string[] paths,bool zipFolders)
+    {
+        if(!zipFolders)
+        {
+            // Copy uses the existing folder holding path unchanged.
+            await StageFilesAsync(paths);
+            return;
+        }
+        foreach(var source in paths)
+        {
+            // An ordinary file in a mixed drop is still held as a file.
+            if(!Directory.Exists(source))
+            {
+                await StageFilesAsync(new[]{source});
+                continue;
+            }
+            var temporary=Path.Combine(Path.GetTempPath(),
+                "DeskSpaceFolderZip",Guid.NewGuid().ToString("N"));
+            var zipPath=Path.Combine(temporary,DeskSpaceFolderZipV159.ZipName(source));
+            try
+            {
+                // Block other drop operations while ZIP creation is underway.
+                // StageFilesAsync then performs its existing shared-Deck copy.
+                busy=true;
+                RefreshViews();
+                await Task.Run(()=>DeskSpaceFolderZipV159.CreateFromFolder(source,zipPath));
+                busy=false;
+                RefreshViews();
+                await StageFilesAsync(new[]{zipPath});
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show("Could not ZIP the folder: "+ex.Message,
+                    "DeskSpace folder ZIP",MessageBoxButton.OK,MessageBoxImage.Warning);
+            }
+            finally
+            {
+                if(busy){busy=false;RefreshViews();}
+                try{if(Directory.Exists(temporary))Directory.Delete(temporary,true);}
+                catch(IOException){}catch(UnauthorizedAccessException){}
+            }
+        }
     }
     private void ImportFromClipboard()
 '@ 'choice cancel, presentation and option handler'
-
-Swap @'
-    private async Task StageFilesAsync(string[] files)
-'@ @'
-    private async Task StageFilesAsync(string[] files,bool zipFolders=false)
-'@ 'folder ZIP option is passed into existing shared stage routine'
-
-Swap @'
-                var destination=Path.Combine(staging,id,Path.GetFileName(source.TrimEnd(
-                    Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar)));
-                await Task.Run(()=>{
-                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    if(File.Exists(source))File.Copy(source,destination,false);
-                    else CopyFolder(source,destination);
-                });
-'@ @'
-                var folder=Directory.Exists(source);
-                var targetName=folder&&zipFolders?
-                    DeskSpaceFolderZipV159.ZipName(source):
-                    Path.GetFileName(source.TrimEnd(
-                        Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
-                var destination=Path.Combine(staging,id,targetName);
-                try
-                {
-                    await Task.Run(()=>{
-                        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                        if(folder&&zipFolders)
-                            DeskSpaceFolderZipV159.CreateFromFolder(source,destination);
-                        else if(File.Exists(source))
-                            File.Copy(source,destination,false);
-                        else CopyFolder(source,destination);
-                    });
-                }
-                catch
-                {
-                    DeletePath(destination); // never retain partial archives
-                    throw;
-                }
-'@ 'ZIP creates one file; Copy stages the folder directly'
 
 Swap @'
         popup.IsOpen=false;
