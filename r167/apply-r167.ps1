@@ -7,7 +7,7 @@ function Swap([string]$before,[string]$after,[string]$purpose)
 {
  $before=$before.Replace($crlf,$lf);$after=$after.Replace($crlf,$lf)
  $count=([regex]::Matches($script:s,[regex]::Escape($before))).Count
- if($count -ne 1){throw "R167 $purpose: expected 1 anchor, found $count"}
+ if($count -ne 1){throw "R167 ${purpose}: expected 1 anchor, found $count"}
  $script:s=$script:s.Replace($before,$after)
 }
 
