@@ -1673,6 +1673,12 @@ jobs:
           ./r169/apply-r169.ps1
           ./r169/test-r169.ps1
 
+      - name: R170 bounded WPF folder Copy/ZIP acceptance pump and progress diagnostics
+        shell: pwsh
+        run: |
+          ./r170/apply-r170.ps1
+          ./r170/test-r170.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
