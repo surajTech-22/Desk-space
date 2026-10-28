@@ -1710,6 +1710,13 @@ jobs:
           ./r175/apply-tests-r175.ps1
           ./r175/test-r175.ps1
 
+      - name: R177 on-demand Markdown JSON and plain-text clipboard conversion acceptance
+        shell: pwsh
+        run: |
+          ./r177/apply-r177.ps1
+          ./r177/apply-tests-r177.ps1
+          ./r177/test-r177.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
