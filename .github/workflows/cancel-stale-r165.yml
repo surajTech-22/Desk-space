@@ -1,0 +1,36 @@
+name: Cancel obsolete R165 feature-branch verification
+on:
+  push:
+    branches:
+      - feat/r165-crash-safe-copy-recovery
+permissions:
+  actions: write
+jobs:
+  cancel-obsolete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Release runner capacity by stopping only older R165 Windows builds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/feat/r165-crash-safe-copy-recovery" --jq '.object.sha')
+          if [[ "$latest" != "$GITHUB_SHA" ]]; then
+            echo "This cleanup is from an obsolete SHA; leave newer builds untouched."
+            exit 0
+          fi
+          url="repos/${GITHUB_REPOSITORY}/actions/runs?branch=feat%2Fr165-crash-safe-copy-recovery&per_page=100"
+          gh api "$url" | jq -r --arg sha "$GITHUB_SHA" '
+            .workflow_runs[] |
+            select(.name == "DeskSpace Windows Installer") |
+            select(.head_sha != $sha) |
+            select(.status == "queued" or .status == "in_progress") | .id
+          ' | while read -r id; do
+            if [[ "$id" =~ ^[0-9]+$ ]]; then
+              echo "Cancel obsolete R165 Windows run $id"
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/cancel" || true
+            fi
+          done
+          echo "Current R165 SHA ${GITHUB_SHA} retained; main release jobs untouched."
