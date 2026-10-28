@@ -41,6 +41,7 @@ on:
       - fix/r158-isolated-monitor-input-info-count
       - feat/r159-folder-drop-zip-or-copy
       - fix/r160-folder-choice-inside-donut
+      - feat/r161-diagnostics-archive-preview-foundation
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1611,6 +1612,13 @@ jobs:
           ./r160/apply-r160.ps1
           ./r160/apply-tests-r160.ps1
           ./r160/test-r160.ps1
+
+      - name: R161 safe support diagnostics ZIP, read-only archive preview and Deck dedup
+        shell: pwsh
+        run: |
+          ./r161/apply-r161.ps1
+          ./r161/apply-tests-r161.ps1
+          ./r161/test-r161.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
