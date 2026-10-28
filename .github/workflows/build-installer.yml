@@ -1789,7 +1789,7 @@ jobs:
           $out=Join-Path $env:RUNNER_TEMP 'r171-r160.stdout.log'
           $err=Join-Path $env:RUNNER_TEMP 'r171-r160.stderr.log'
           $proc=Start-Process -FilePath 'dotnet' -ArgumentList @(
-            'run','--no-build','--project','r36/UiSmoke/UiSmoke.csproj',
+            'run','--project','r36/UiSmoke/UiSmoke.csproj',
             '-c','Release','--','--r160-only') -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err
           $done=$proc.WaitForExit(45000)
           if(-not $done){try{Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue}catch{}}
