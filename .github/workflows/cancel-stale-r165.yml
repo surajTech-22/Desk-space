@@ -16,6 +16,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          latest=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/feat/r165-crash-safe-copy-recovery" --jq '.object.sha')
+          if [[ "$latest" != "$GITHUB_SHA" ]]; then
+            echo "This cleanup is from an obsolete SHA; leave newer builds untouched."
+            exit 0
+          fi
           url="repos/${GITHUB_REPOSITORY}/actions/runs?branch=feat%2Fr165-crash-safe-copy-recovery&per_page=100"
           gh api "$url" | jq -r --arg sha "$GITHUB_SHA" '
             .workflow_runs[] |
