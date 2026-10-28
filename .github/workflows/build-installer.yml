@@ -36,6 +36,7 @@ on:
       - fix/r152-monitor-boundary-fence
       - fix/r154-independent-widgets-screen-clip
       - fix/r155-shared-held-files-deck
+      - fix/r156-startup-kernel32-entrypoint
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover

@@ -155,6 +155,15 @@ Swap $smoke @'
 $test=@'
     private static void TestIndependentMonitorsV154()
     {
+        // R156 regression: Windows must resolve the actual P/Invoke used by
+        // the recurring monitor guard. Source-only checks previously missed
+        // the fatal USER32 EntryPointNotFoundException.
+        var guard=Product.GetType("DeskSpace.DeskSpaceMonitorSessionsV154",true)!;
+        var thread=guard.GetMethod("GetCurrentThreadId",
+            BindingFlags.NonPublic|BindingFlags.Static)!;
+        var nativeThread=(uint)thread.Invoke(null,null)!;
+        Assert(nativeThread!=0,
+            "R156 GetCurrentThreadId must resolve from kernel32 without crashing");
         var fence=Product.GetType("DeskSpace.DeskSpaceMonitorFenceV153",true)!;
         var testHook=fence.GetMethod("TrackWindowInAreaForTest",
             BindingFlags.Static|BindingFlags.NonPublic)!;
