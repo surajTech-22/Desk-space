@@ -39,6 +39,42 @@ ReplaceOnce $info @'
 '@ 'reserve room between item text and radial divider counter'
 ReplaceOnce $info '            Canvas.SetLeft(label,x-39);' '            Canvas.SetLeft(label,x-31);' 'center narrower label on saved wedge'
 
+# Per-HWND and per-screen mouse input routing; only shared application DATA
+# may cross two monitor widgets, never their input gesture/toggle state.
+Copy-Item -LiteralPath 'r158/DeskSpaceMonitorInputV158.cs' -Destination "$root/DeskSpaceMonitorInputV158.cs" -Force
+$widget="$root/WidgetHost.cs"
+ReplaceOnce $widget @'
+    private void OnShortcutRightMouseDown(object sender,MouseButtonEventArgs e)
+    {
+        if(activeModule!=null)return;
+'@ @'
+    private void OnShortcutRightMouseDown(object sender,MouseButtonEventArgs e)
+    {
+        // Ignore right clicks whose physical HWND belongs to the other widget.
+        if(!DeskSpaceMonitorInputV158.OwnsRightClick(this))return;
+        if(activeModule!=null)return;
+'@ 'right click belongs to this window only'
+ReplaceOnce $widget @'
+    private void SampleMainWheel()
+    {
+'@ @'
+    private void SampleMainWheel()
+    {
+        if(!DeskSpaceMonitorInputV158.IsPointerOnAssignedMonitor(this))return;
+'@ 'main wheel polling remains local to one assigned monitor'
+ReplaceOnce $info @'
+    private void PollPointer()
+    {
+'@ @'
+    private void PollPointer()
+    {
+        if(!DeskSpaceMonitorInputV158.IsPointerOnAssignedMonitor(owner))
+        {
+            newHoverTimer.Stop();
+            return;
+        }
+'@ 'Information hover polling cannot process cursor on other display'
+
 # Real WPF regression for the exact screenshot state: six saved collections,
 # four visible data wedges, and permanent + New at the end.
 $smoke='r36/UiSmoke/Program.cs'
@@ -95,5 +131,55 @@ $test=@'
 
 '@
 ReplaceOnce $smoke $method ($test.Replace($crlf,$lf)+$method) 'six-item WPF regression method'
+
+$call='            TestInformationSixSavedV158();'
+ReplaceOnce $smoke $call ($call+$lf+'            TestMonitorInputIsolationV158();') 'two-widget mouse-routing regression caller'
+$test=@'
+    private static void TestMonitorInputIsolationV158()
+    {
+        var input=Product.GetType("DeskSpace.DeskSpaceMonitorInputV158",true)!;
+        var accepts=input.GetMethod("Allows",
+            BindingFlags.Static|BindingFlags.NonPublic)!;
+        bool Allows(System.Drawing.Rectangle owner,System.Drawing.Rectangle screen,
+            System.Drawing.Point pointer,IntPtr actual,IntPtr window)=>
+            (bool)accepts.Invoke(null,new object[]{owner,screen,pointer,actual,window})!;
+        var left=new System.Drawing.Rectangle(0,0,1920,1040);
+        var right=new System.Drawing.Rectangle(1920,0,1600,900);
+        var windowA=new System.Drawing.Rectangle(80,80,420,420);
+        var windowB=new System.Drawing.Rectangle(2010,70,420,420);
+        IntPtr a=new IntPtr(101),b=new IntPtr(202);
+        Assert(Allows(windowA,left,new System.Drawing.Point(120,140),a,a),
+            "R158 primary must accept its own right-click HWND");
+        Assert(!Allows(windowB,right,new System.Drawing.Point(120,140),a,b),
+            "R158 secondary must ignore right-click on primary screen");
+        Assert(Allows(windowB,right,new System.Drawing.Point(2050,140),b,b),
+            "R158 secondary must accept its own right-click");
+        Assert(!Allows(windowB,right,new System.Drawing.Point(2050,140),a,b),
+            "R158 overlapping WPF widgets must reject other native HWND");
+        Assert(!Allows(windowA,left,new System.Drawing.Point(2050,140),a,a),
+            "R158 main widget must ignore a right-click on second monitor");
+        var negative=new System.Drawing.Rectangle(-1600,-200,1600,900);
+        Assert(Allows(new System.Drawing.Rectangle(-400,100,300,300),negative,
+            new System.Drawing.Point(-300,160),b,b),
+            "R158 monitor to left of primary must keep native negative coordinates");
+        // Also resolve the Win32 cursor API under a real WPF native window.
+        var physical=System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
+        var host=new Window{Left=physical.Left+55,Top=physical.Top+55,
+            Width=130,Height=130,ShowInTaskbar=false};
+        try
+        {
+            host.Show();
+            input.GetMethod("IsPointerOnAssignedMonitor",
+                BindingFlags.Static|BindingFlags.NonPublic)!
+                .Invoke(null,new object[]{host});
+        }
+        finally {host.Close();}
+        Console.WriteLine("R158 PASS: input ownership isolated across two widget HWNDs, "+
+            "both monitor directions, wrong root and real WPF Win32 cursor API.");
+    }
+
+'@
+ReplaceOnce $smoke $method ($test.Replace($crlf,$lf)+$method) 'two-widget input WPF regression method'
+
 
 Write-Host 'R158 fixed Information hidden-count placement and label clearance.'
