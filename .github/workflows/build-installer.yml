@@ -37,6 +37,7 @@ on:
       - fix/r154-independent-widgets-screen-clip
       - fix/r155-shared-held-files-deck
       - fix/r156-startup-kernel32-entrypoint
+      - fix/r157-monitor-aware-submenus
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1581,6 +1582,12 @@ jobs:
         run: |
           ./r155/apply-r155.ps1
           ./r155/test-r155.ps1
+
+      - name: R157 fit submenu arcs to secondary monitor and bind all widget popups
+        shell: pwsh
+        run: |
+          ./r157/apply-r157.ps1
+          ./r157/test-r157.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh

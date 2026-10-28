@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
+using Forms=System.Windows.Forms;
 using System.Windows.Media;
 
 namespace DeskSpace;
@@ -73,20 +76,48 @@ internal static class DeskSpaceSubArcGeometryV48
         return DeskSpaceDonutGeometryV43.PopupOffset(owner,CX,CY,
             bounds.Left-margin,bounds.Top-margin);
     }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect { public int Left,Top,Right,Bottom; }
+    [DllImport("user32.dll",ExactSpelling=true)]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hwnd,out NativeRect rect);
+
+    // All screen-fit calculations must use NATIVE PIXELS on the ASSIGNED
+    // monitor. SystemParameters.WorkArea only describes the primary screen:
+    // with two displays it steers Excel's nested arcs to the wrong edge,
+    // where subsequent native popup clipping visibly cuts them apart.
+    internal static Rect MonitorWorkArea(Window owner)
+    {
+        var handle=new WindowInteropHelper(owner).Handle;
+        var screen=owner is WidgetShellWindow widget
+            ? DeskSpaceMonitorFenceV152.BoundScreen(widget)
+            : null;
+        screen ??= handle!=IntPtr.Zero
+            ? Forms.Screen.FromHandle(handle)
+            : Forms.Screen.PrimaryScreen;
+        var area=(screen??Forms.Screen.AllScreens[0]).WorkingArea;
+        return new Rect(area.Left,area.Top,area.Width,area.Height);
+    }
+
     internal static double FitAngle(Window owner,int depth,
         double preferred,double half)
     {
-        double scale=DeskSpaceDonutGeometryV43.Scale(owner);
-        double w=owner.ActualWidth>0?owner.ActualWidth:owner.Width;
-        double h=owner.ActualHeight>0?owner.ActualHeight:owner.Height;
-        Rect work=SystemParameters.WorkArea;
-        double ox=owner.Left+w/2,oy=owner.Top+h/2;
-        if(!double.IsFinite(ox)||!double.IsFinite(oy))
-        {
-            ox=work.Left+work.Width/2;
-            oy=work.Top+work.Height/2;
-        }
-        return FitAngleAt(depth,preferred,half,new Point(ox,oy),work,scale);
+        Rect work=MonitorWorkArea(owner);
+        var handle=new WindowInteropHelper(owner).Handle;
+        // The WPF owner measures 420 DIPs, while Win32 GetWindowRect and
+        // Screen.WorkingArea are physical pixels (different per-monitor DPI).
+        double dpiX=PresentationSource.FromVisual(owner)?
+            .CompositionTarget?.TransformToDevice.M11??1.0;
+        double dpiY=PresentationSource.FromVisual(owner)?
+            .CompositionTarget?.TransformToDevice.M22??1.0;
+        double scale=DeskSpaceDonutGeometryV43.Scale(owner)*
+            Math.Max(dpiX,dpiY);
+        Point centre=new(work.Left+work.Width/2,work.Top+work.Height/2);
+        if(handle!=IntPtr.Zero&&GetWindowRect(handle,out var rect)&&
+           rect.Right>rect.Left&&rect.Bottom>rect.Top)
+            centre=new Point((rect.Left+rect.Right)/2.0,
+                (rect.Top+rect.Bottom)/2.0);
+        return FitAngleAt(depth,preferred,half,centre,work,scale);
     }
     // Testable screen-edge policy. Every sample along the visible arc is
     // checked, including cardinal extrema between the two endpoints.

@@ -53,6 +53,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         canvas.MouseWheel+=Wheel;
         arc=new Popup{PlacementTarget=owner,Placement=PlacementMode.Relative,
             AllowsTransparency=true,StaysOpen=true,Child=canvas};
+        DeskSpaceMonitorFenceV153.TrackPopup(owner,arc);
         owner.LocationChanged+=Moved;owner.SizeChanged+=Resized;
     }
     private static bool IsLaunchable(string p)

@@ -61,6 +61,8 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             AllowsTransparency=true,PopupAnimation=PopupAnimation.Fade,
             Child=panel
         };
+        // Held-file popup belongs to the physical display hosting this widget.
+        DeskSpaceMonitorFenceV153.TrackPopup(host,popup);
     }
     public void Enable(){if(!disposed)Render();}
     private void Position(object? sender,EventArgs e)
