@@ -7,7 +7,7 @@ function One([string]$old,[string]$new,[string]$description)
 {
  $old=$old.Replace($crlf,$lf);$new=$new.Replace($crlf,$lf)
  $count=([regex]::Matches($script:s,[regex]::Escape($old))).Count
- if($count -ne 1){throw "R166/R167 WPF $description: expected one anchor, found $count"}
+ if($count -ne 1){throw "R166/R167 WPF ${description}: expected one anchor, found $count"}
  $script:s=$script:s.Replace($old,$new)
 }
 One '            TestInterruptedCopyRecoveryV165();' @'
