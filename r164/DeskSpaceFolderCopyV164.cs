@@ -71,7 +71,10 @@ internal static class DeskSpaceFolderCopyV164
             }
             cancellation.ThrowIfCancellationRequested();
             checked{completed++;}
-            onProgress?.Invoke(written,totalBytes,completed,totalFiles);
+            // Large folders can contain tens of thousands of tiny files.
+            // Throttle dispatcher updates while preserving cancellation checks.
+            if(completed<=3||completed%25==0||completed==totalFiles)
+                onProgress?.Invoke(written,totalBytes,completed,totalFiles);
         }
 
         try
@@ -105,6 +108,8 @@ internal static class DeskSpaceFolderCopyV164
                     }
                 }
             }
+            cancellation.ThrowIfCancellationRequested();
+            onProgress?.Invoke(written,totalBytes,completed,totalFiles);
             cancellation.ThrowIfCancellationRequested();
             if(folder)Directory.Move(partial,destination);
             else File.Move(partial,destination);
