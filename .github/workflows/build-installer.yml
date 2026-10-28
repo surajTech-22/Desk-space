@@ -45,6 +45,7 @@ on:
       - feat/r162-cancellable-zip-and-shared-origin
       - feat/r163-searchable-zip-preview
       - feat/r164-cancellable-deck-copy
+      - feat/r165-crash-safe-copy-recovery
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1643,6 +1644,13 @@ jobs:
           ./r164/apply-r164.ps1
           ./r164/apply-tests-r164.ps1
           ./r164/test-r164.ps1
+
+      - name: R165 crash-safe Deck copy cleanup, exclusive locks and WPF regression
+        shell: pwsh
+        run: |
+          ./r165/apply-r165.ps1
+          ./r165/apply-tests-r165.ps1
+          ./r165/test-r165.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
