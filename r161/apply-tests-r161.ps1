@@ -46,7 +46,7 @@ $method=@'
                 zipText.Contains("2 entries"),
                 "R161 ZIP preview must list actual file names without extraction");
             Assert((string)summary.Invoke(null,
-                new object[]{source,18})!=="Not a ZIP archive.",
+                new object[]{source,18})! == "Not a ZIP archive.",
                 "R161 non-ZIP files must not be parsed as archives");
             Assert(!Directory.Exists(Path.Combine(outdir,"folder")),
                 "R161 read-only preview must never extract into current directory");
