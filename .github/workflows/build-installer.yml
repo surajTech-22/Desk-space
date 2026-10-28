@@ -1732,6 +1732,12 @@ jobs:
           [IO.File]::WriteAllText($cs,$code,[Text.UTF8Encoding]::new($false))
           Write-Host "Release version assigned: $version"
 
+      - name: R176 generate and verify exact post-patch source-build provenance
+        shell: pwsh
+        run: |
+          ./r176/write-source-manifest.ps1
+          ./r176/verify-source-manifest.ps1
+
       - name: Verify upgrade version and automatic updater linkage
         shell: pwsh
         run: |
@@ -1858,6 +1864,14 @@ jobs:
             if($image.Length -lt 2500){throw "R36 empty screenshot: $($image.Name)"}
           }
           Write-Host "R38 captured $($screens.Count) authentic WPF render comparisons."
+
+      - name: Upload reproducible R176 source provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R176-Source-Provenance
+          path: build-provenance/source-manifest.json
+          retention-days: 14
+          if-no-files-found: error
 
       - name: Upload R36 WPF visual verification images
         uses: actions/upload-artifact@v4
