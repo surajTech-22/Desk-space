@@ -40,6 +40,7 @@ on:
       - fix/r157-monitor-aware-submenus
       - fix/r158-isolated-monitor-input-info-count
       - feat/r159-folder-drop-zip-or-copy
+      - fix/r160-folder-choice-inside-donut
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1603,6 +1604,13 @@ jobs:
           ./r159/apply-r159.ps1
           ./r159/apply-tests-r159.ps1
           ./r159/test-r159.ps1
+
+      - name: R160 drag-hover ZIP or Copy in-circle instead of detached popup
+        shell: pwsh
+        run: |
+          ./r160/apply-r160.ps1
+          ./r160/apply-tests-r160.ps1
+          ./r160/test-r160.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
