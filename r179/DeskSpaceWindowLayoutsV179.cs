@@ -33,6 +33,7 @@ internal static class DeskSpaceWindowLayoutsV179
     private const uint SWP_NOZORDER=0x0004;
     private const uint SWP_NOACTIVATE=0x0010;
     private const uint SWP_NOOWNERZORDER=0x0200;
+    private const uint SWP_ASYNCWINDOWPOS=0x4000; // avoid blocked foreign UI thread
     private delegate bool EnumWindowsCallback(IntPtr hwnd,IntPtr unused);
     [DllImport("user32.dll")] private static extern bool EnumWindows(
         EnumWindowsCallback callback,IntPtr unused);
@@ -213,7 +214,8 @@ internal static class DeskSpaceWindowLayoutsV179
                 var rect=RestoreBounds(saved,screen.WorkingArea);
                 if(SetWindowPos(c.Handle,IntPtr.Zero,rect.Left,rect.Top,
                     rect.Width,rect.Height,
-                    SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOOWNERZORDER))
+                    SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOOWNERZORDER|
+                    SWP_ASYNCWINDOWPOS))
                     restored++;
                 else skipped++;
             }
