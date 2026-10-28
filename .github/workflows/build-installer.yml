@@ -1717,6 +1717,13 @@ jobs:
           ./r177/apply-tests-r177.ps1
           ./r177/test-r177.ps1
 
+      - name: R178 in-widget Smart Drop text and URL acceptance (no file route regression)
+        shell: pwsh
+        run: |
+          ./r178/apply-r178.ps1
+          ./r178/apply-tests-r178.ps1
+          ./r178/test-r178.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
