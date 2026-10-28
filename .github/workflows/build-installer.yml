@@ -42,6 +42,7 @@ on:
       - feat/r159-folder-drop-zip-or-copy
       - fix/r160-folder-choice-inside-donut
       - feat/r161-diagnostics-archive-preview-foundation
+      - feat/r162-cancellable-zip-and-shared-origin
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -1619,6 +1620,13 @@ jobs:
           ./r161/apply-r161.ps1
           ./r161/apply-tests-r161.ps1
           ./r161/test-r161.ps1
+
+      - name: R162 cancel ZIP with progress and preserve shared source tracking
+        shell: pwsh
+        run: |
+          ./r162/apply-r162.ps1
+          ./r162/apply-tests-r162.ps1
+          ./r162/test-r162.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
