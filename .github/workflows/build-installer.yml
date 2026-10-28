@@ -43,6 +43,7 @@ on:
       - fix/r160-folder-choice-inside-donut
       - feat/r161-diagnostics-archive-preview-foundation
       - feat/r162-cancellable-zip-and-shared-origin
+      - feat/r163-searchable-zip-preview
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
