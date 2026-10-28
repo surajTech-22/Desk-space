@@ -39,7 +39,11 @@ One '            commit.Invoke(a,new object[]{false});' @'
             commit.Invoke(a,new object[]{false});
             Console.WriteLine("R171 stage B: Copy action returned");
 '@ 'copy invocation checkpoints'
-One '            PumpUntil(()=>HeldPaths().Length==1);' @'
+One @'
+            Console.WriteLine("R171 stage B: Copy action returned");
+            PumpUntil(()=>HeldPaths().Length==1);
+'@ @'
+            Console.WriteLine("R171 stage B: Copy action returned");
             Console.WriteLine("R171 stage C: before Copy-held wait");
             PumpUntil(()=>HeldPaths().Length==1);
             Console.WriteLine("R171 stage D: Copy-held wait returned");
