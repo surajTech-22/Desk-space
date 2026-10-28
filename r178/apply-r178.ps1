@@ -147,10 +147,10 @@ One @'
         if(layer==null)
 '@ @'
         System.Windows.Documents.AdornerLayer? layer=null;
-        if(content is System.Windows.Documents.AdornerDecorator decorator &&
-           decorator.Child is UIElement inner)
+        if(content is System.Windows.Documents.AdornerDecorator priorDecorator &&
+           priorDecorator.Child is UIElement inner)
         {
-            layer=decorator.AdornerLayer;
+            layer=priorDecorator.AdornerLayer;
             content=inner;
         }
         layer??=System.Windows.Documents.AdornerLayer.GetAdornerLayer(content);
