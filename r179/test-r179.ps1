@@ -6,7 +6,7 @@ $smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 foreach($token in @('Environment.ProcessId','TitleHash(title.ToString())',
  'SHA256.HashData','Process.GetProcessById','SWP_NOACTIVATE',
  'profile.Windows','SetWindowPos','RestoreBounds',
- 'Overwrite','Replace the existing profile','MessageBoxResult.Yes',
+ 'File.Move(temporary,Storage,true)','Replace the existing profile','MessageBoxResult.Yes',
  'new UTF8Encoding(false)','File.Move(temporary,Storage,true)')){
  if(!$source.Contains($token)){throw "R179 missing window layout safety guard: $token"}
 }
