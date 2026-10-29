@@ -92,7 +92,7 @@ jobs:
       - name: Checkout DeskSpace
         uses: actions/checkout@v4
 
-      - name: Preflight R180–R190 PowerShell syntax before expensive Windows build
+      - name: Preflight R180–R191 PowerShell syntax before expensive Windows build
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -111,7 +111,8 @@ jobs:
             'r187/test-r187.ps1','r187/verify-both-notify-stable-r187.ps1',
             'r188/apply-r188.ps1','r188/apply-tests-r188.ps1','r188/test-r188.ps1',
             'r189/apply-r189.ps1','r189/apply-tests-r189.ps1','r189/test-r189.ps1',
-            'r190/apply-r190.ps1','r190/apply-tests-r190.ps1','r190/test-r190.ps1'
+            'r190/apply-r190.ps1','r190/apply-tests-r190.ps1','r190/test-r190.ps1',
+            'r191/apply-r191.ps1','r191/apply-tests-r191.ps1','r191/test-r191.ps1'
           )){
             $tokens=$null;$parseErrors=$null
             [System.Management.Automation.Language.Parser]::ParseFile(
@@ -120,7 +121,7 @@ jobs:
               throw ("Unsafe PowerShell syntax in "+$script+": "+($parseErrors -join '; '))
             }
           }
-          Write-Host 'R180–R190 PowerShell syntax preflight PASS.'
+          Write-Host 'R180–R191 PowerShell syntax preflight PASS.'
 
       - name: Reconstruct and verify original DeskSpace R1 sources
         shell: pwsh
@@ -1832,6 +1833,13 @@ jobs:
           ./r190/apply-r190.ps1
           ./r190/apply-tests-r190.ps1
           ./r190/test-r190.ps1
+
+      - name: R191 stage verified updates and retry safely after Workspace exits
+        shell: pwsh
+        run: |
+          ./r191/apply-r191.ps1
+          ./r191/apply-tests-r191.ps1
+          ./r191/test-r191.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
