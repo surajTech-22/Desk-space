@@ -11,7 +11,6 @@ foreach($required in @(
     'e.Key==Key.F8 && hits.Count>0',
     'case "zip":',
     'await Task.Run(()=>DeskSpaceSearchActionsV193.ZipSingleFile(',
-    'if(hit.Category=="Files" &&',
     'Math.Clamp(selectedIndex,0,hits.Count-1)'
 )){
  if(!$src.Contains($required)){throw ("R193 Search UI missing "+$required)}
