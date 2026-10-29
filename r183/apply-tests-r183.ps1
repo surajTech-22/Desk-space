@@ -58,7 +58,7 @@ $method=@'
             var rows=((System.Collections.IEnumerable)snapshot.Invoke(
                 null,new object[]{widget,false})!).Cast<object>().ToArray();
             Assert(rows.Any(x=>
-                (string)x.GetType().GetProperty("Name")!.GetValue(x)!==
+                (string)x.GetType().GetProperty("Name")!.GetValue(x)! ==
                     "Startup recovery"),
                 "R183 recovery state must be visible in local component status");
         }
