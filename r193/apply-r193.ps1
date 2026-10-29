@@ -77,7 +77,7 @@ Once @'
                  System.Windows.Automation.AutomationProperties.SetName(
                      item,hit.Category+": "+hit.Name);
                  System.Windows.Automation.AutomationProperties.SetHelpText(
-                     item,"Use Search Up/Down arrows and Enter to open; hover for actions.");
+                     item,"Use Search Up/Down arrows and Enter to open; F8 ZIP for ordinary files.");
 '@ 'accessible result row semantics'
 Once @'
             below.Visibility=Visibility.Visible;SetSize();
@@ -98,6 +98,14 @@ Once @'
                  selectedIndex=DeskSpaceSearchActionsV193.NextIndex(
                      list.Children.Count,selectedIndex,step);
                  HighlightSearchResult();
+                 e.Handled=true;
+                 return;
+             }
+             if(e.Key==Key.F8 && hits.Count>0 &&
+                DeskSpaceSearchActionsV193.CanZip(
+                    hits[Math.Clamp(selectedIndex,0,hits.Count-1)].OpenTarget))
+             {
+                 Do(hits[Math.Clamp(selectedIndex,0,hits.Count-1)],"zip");
                  e.Handled=true;
                  return;
              }
