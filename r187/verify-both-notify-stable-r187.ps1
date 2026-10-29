@@ -63,10 +63,10 @@ foreach($choice in @(
         }
     }
     foreach($exe in @('DeskSpace_Setup.exe','Update.exe')){
-        $matches=@($release.assets|Where-Object {$_.name -eq $exe})
-        if($matches.Count -ne 1 -or
-           $matches[0].digest -ne ('sha256:'+$localDigests[$exe]) -or
-           [long]$matches[0].size -ne (Get-Item -LiteralPath (Join-Path 'release' $exe)).Length){
+        $assetMatches=@($release.assets|Where-Object {$_.name -eq $exe})
+        if($assetMatches.Count -ne 1 -or
+           $assetMatches[0].digest -ne ('sha256:'+$localDigests[$exe]) -or
+           [long]$assetMatches[0].size -ne (Get-Item -LiteralPath (Join-Path 'release' $exe)).Length){
             throw ('R187 '+$choice.Channel+' release binary checksum/size mismatch '+$exe)
         }
     }
