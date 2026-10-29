@@ -26,30 +26,30 @@ internal static class DeskSpaceContentDuplicatesV186
             Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar)+
             Path.DirectorySeparatorChar;
 
-    private static bool InShelf(string path)
+    private static bool InShelf(string path,string root)
     {
         try
         {
             string full=Path.GetFullPath(path);
-            return full.StartsWith(Shelf,StringComparison.OrdinalIgnoreCase);
+            return full.StartsWith(root,StringComparison.OrdinalIgnoreCase);
         }
         catch(Exception e) when(e is ArgumentException or NotSupportedException
             or PathTooLongException){return false;}
     }
 
-    private static bool IsSafeEntry(string path)
+    private static bool IsSafeEntry(string path,string root)
     {
-        if(!InShelf(path))return false;
+        if(!InShelf(path,root))return false;
         try
         {
             // Check ALL path components between staging root and candidate.
             // In particular never traverse a junction/Windows symlink.
-            string root=Shelf.TrimEnd(Path.DirectorySeparatorChar);
+            string basePath=root.TrimEnd(Path.DirectorySeparatorChar);
             string full=Path.GetFullPath(path);
-            string relative=Path.GetRelativePath(root,full);
+            string relative=Path.GetRelativePath(basePath,full);
             if(relative=="." || relative.StartsWith("..",StringComparison.Ordinal))
                 return false;
-            string parent=root;
+            string parent=basePath;
             foreach(var segment in relative.Split(Path.DirectorySeparatorChar))
             {
                 if(segment.Length==0 || segment=="." || segment=="..")
@@ -93,8 +93,8 @@ internal static class DeskSpaceContentDuplicatesV186
         return hasher.GetHashAndReset();
     }
 
-    private static byte[] FingerprintFolder(string folder,ref long remaining,
-        CancellationToken ct)
+    private static byte[] FingerprintFolder(string folder,string root,
+        ref long remaining,CancellationToken ct)
     {
         var stack=new Stack<string>();
         var entries=new List<(string Path,string Relative,bool Folder)>();
@@ -103,12 +103,12 @@ internal static class DeskSpaceContentDuplicatesV186
         {
             ct.ThrowIfCancellationRequested();
             var dir=stack.Pop();
-            if(!IsSafeEntry(dir))
+            if(!IsSafeEntry(dir,root))
                 throw new InvalidDataException("Folder contains an unsafe link.");
             foreach(var entry in Directory.EnumerateFileSystemEntries(dir))
             {
                 ct.ThrowIfCancellationRequested();
-                if(!IsSafeEntry(entry))
+                if(!IsSafeEntry(entry,root))
                     throw new InvalidDataException("Folder contains an unsafe link.");
                 var rel=Path.GetRelativePath(folder,entry);
                 bool directory=Directory.Exists(entry);
@@ -148,6 +148,15 @@ internal static class DeskSpaceContentDuplicatesV186
     }
 
     internal static Result Check(IEnumerable<string> stagedPaths,
+        CancellationToken cancellation)=>CheckCore(stagedPaths,Shelf,cancellation);
+
+    // Only for filesystem regression fixtures in Downloads, not wired to UI.
+    internal static Result CheckTestFixtures(IEnumerable<string> paths,
+        string root,CancellationToken ct)=>CheckCore(paths,
+            Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar)+
+            Path.DirectorySeparatorChar,ct);
+
+    private static Result CheckCore(IEnumerable<string> stagedPaths,string root,
         CancellationToken cancellation)
     {
         if(stagedPaths==null)throw new ArgumentNullException(nameof(stagedPaths));
@@ -161,13 +170,13 @@ internal static class DeskSpaceContentDuplicatesV186
             cancellation.ThrowIfCancellationRequested();
             if(i>=MaxItems){skipped++;continue;}
             var path=unique[i];
-            if(!IsSafeEntry(path)){skipped++;continue;}
+            if(!IsSafeEntry(path,root)){skipped++;continue;}
             try
             {
                 bool folder=Directory.Exists(path);
                 if(!folder && !File.Exists(path)){skipped++;continue;}
                 byte[] digest=folder
-                    ?FingerprintFolder(path,ref remaining,cancellation)
+                    ?FingerprintFolder(path,root,ref remaining,cancellation)
                     :FingerprintFile(path,ref remaining,cancellation);
                 string kind=folder?"Folder":"File";
                 string key=kind+":"+Convert.ToHexString(digest);
