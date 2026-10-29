@@ -60,12 +60,23 @@ Once @'
                         break;
                     case "folder":
 '@ 'ZIP action is explicit and asynchronous'
-Once '                if(hit.Category=="Files"||hit.Category=="Applications")' @'
+# The original Search buttons have been reorganized by multiple preceding
+# patches. Prefer the existing docked action row when it is still available,
+# but never block keyboard F8 or a verified release over a cosmetic chip.
+$chipAnchor='                DockPanel.SetDock(chips,Dock.Right);layout.Children.Add(chips);'
+if($s.Contains($chipAnchor))
+{
+    $chip=@'
                 if(hit.Category=="Files" &&
                     DeskSpaceSearchActionsV193.CanZip(hit.OpenTarget))
-                    chips.Children.Add(Chip("ZIP","Save a ZIP of this file",hit,"zip"));
-                if(hit.Category=="Files"||hit.Category=="Applications")
-'@ 'file-only ZIP smart action'
+                    chips.Children.Add(Chip("ZIP","Save ZIP of selected file",hit,"zip"));
+'@.Replace($crlf,$lf)
+    $s=$s.Replace($chipAnchor,$chip+$lf+$chipAnchor)
+}
+else
+{
+    Write-Host 'R193: Search row has a newer layout; F8 keyboard ZIP remains available.'
+}
 Once @'
                 layout.Children.Add(text);item.Child=layout;
 '@ @'
