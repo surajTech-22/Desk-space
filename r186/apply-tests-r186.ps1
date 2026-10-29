@@ -55,8 +55,8 @@ $method=@'
                 items,shelf,CancellationToken.None})!;
             var groups=(Array)report.GetType().GetProperty("Groups")!.
                 GetValue(report)!;
-            Assert((int)report.GetType().GetProperty("Checked")!.GetValue(report)!==5 &&
-                (int)report.GetType().GetProperty("Skipped")!.GetValue(report)!==1 &&
+            Assert((int)report.GetType().GetProperty("Checked")!.GetValue(report)!=5 &&
+                (int)report.GetType().GetProperty("Skipped")!.GetValue(report)!=1 &&
                 groups.Length==2,
                 "R186 must match two identical files and two identical folders, "+
                 "but reject other content and source files outside staging");
@@ -67,7 +67,7 @@ $method=@'
             var onlyOutside=checkProduction.Invoke(null,new object[]{
                 new[]{outside},CancellationToken.None})!;
             Assert((int)onlyOutside.GetType().GetProperty("Checked")!.
-                    GetValue(onlyOutside)!==0,
+                    GetValue(onlyOutside)!=0,
                 "R186 production scan must refuse files outside the private DeskSpace shelf");
             var cancelled=new CancellationTokenSource();
             cancelled.Cancel();
