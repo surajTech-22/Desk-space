@@ -29,7 +29,7 @@ internal static class DeskSpacePostInstallReceiptV185
             Version.TryParse(version,out var actual) && actual==requested;
     }
 
-    internal static void Ready(Window owner)
+    internal static void Ready(WidgetShellWindow owner)
     {
         if(!owner.IsLoaded || DeskSpaceMultiMonitorV151.IsSatellite(owner))
             return;
