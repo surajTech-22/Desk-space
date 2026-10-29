@@ -1731,6 +1731,12 @@ jobs:
           ./r179/apply-tests-r179.ps1
           ./r179/test-r179.ps1
 
+      - name: R180 portable, validated window layout import export and delete
+        shell: pwsh
+        run: |
+          ./r180/apply-r180.ps1
+          ./r180/apply-tests-r180.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
