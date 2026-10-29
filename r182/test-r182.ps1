@@ -18,7 +18,7 @@ $readOnly=$app.Substring($methodStart,$methodEnd-$methodStart)
 foreach($forbidden in @('SetWindowPos(','.Activate(','.Show(','.Start(')){
     if($readOnly.Contains($forbidden)){throw "R182 preview may change external state: $forbidden"}
 }
-if(!(Select-String 'r36/UiSmoke/Program.cs' 'TestRestorePreviewV182();' -SimpleMatch -Quiet)){
+if(!(Select-String -Path 'r36/UiSmoke/Program.cs' -Pattern 'TestRestorePreviewV182();' -SimpleMatch -Quiet)){
     throw 'R182 WPF test missing'
 }
 Write-Host 'R182 PASS: preview contains no native move, activation, launch or Show call.'
