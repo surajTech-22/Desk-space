@@ -1737,6 +1737,13 @@ jobs:
           ./r180/apply-r180.ps1
           ./r180/apply-tests-r180.ps1
 
+      - name: R181 guard malformed window layouts and preserve monitor boundaries
+        shell: pwsh
+        run: |
+          ./r181/apply-r181.ps1
+          ./r181/apply-tests-r181.ps1
+          ./r181/test-r181.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
