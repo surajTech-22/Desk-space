@@ -90,5 +90,13 @@ for($n=1;$n -le 4;$n++){
         if($n -lt 4){Start-Sleep -Seconds (2*$n)}
     }
 }
-if(!$delivered){throw 'R187 stable release exists, but immediate stable event failed; periodic fallback remains.'}
-Write-Host ('R187 PASS: stable and tester '+$version+' verified from identical commit and installer; both channel events delivered.')
+if(!$delivered){
+    # A transient external notification outage must not invalidate either
+    # verified release or interfere with future safe automatic checks.
+    Write-Warning 'R187 stable GitHub Release PUBLISHED but instant ntfy notification FAILED; the authenticated periodic stable update check remains.'
+    'Stable: GitHub Release published; push notification NOT DELIVERED (periodic fallback available).' |
+        Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+}else{
+    Write-Host ('R187 stable release event PASS: v'+$version)
+}
+Write-Host ('R187 PASS: stable and tester '+$version+' published, identical commit and verified installer SHA256; notification result explicitly reported.')
