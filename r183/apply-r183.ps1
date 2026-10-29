@@ -34,6 +34,11 @@ Swap "$root/DeskSpaceComponentHealthV175.cs" @'
         result.Add(new("Startup recovery",DeskSpaceStartupRecoveryV183.Status));
 '@ 'read-only recovery state in health dashboard'
 Swap "$root/DeskSpaceComponentHealthV175.cs" @'
+        var controls=new StackPanel{Orientation=Orientation.Horizontal,
+'@ @'
+        var controls=new WrapPanel{Orientation=Orientation.Horizontal,
+'@ 'wrap recovery controls in small panel'
+Swap "$root/DeskSpaceComponentHealthV175.cs" @'
         controls.Children.Add(export);
 '@ @'
         controls.Children.Add(export);
