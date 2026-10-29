@@ -25,7 +25,7 @@ $test=@'
             "{\"Name\":\"Office\",\"Windows\":[null]}",
             "{\"Name\":\"Office\",\"Windows\":null}",
             "{\"Name\":\"Office\",\"Windows\":[{\"Process\":null,\"TitleHash\":\""+
-                hash+"\",\"Instance\":0,\"Monitor\":\"DISPLAY\",\"X\":0,\"Y\":0,\"W\":.5,\"H\":.5}]}",
+                hash+"\",\"Instance\":0,\"Monitor\":\"DISPLAY\",\"X\":0,\"Y\":0,\"W\":0.5,\"H\":0.5}]}",
             "{\"Name\":\"Office\",\"Windows\":[{\"Process\":\"notepad\",\"TitleHash\":null,\"Instance\":0,\"Monitor\":\"DISPLAY\",\"X\":0,\"Y\":0,\"W\":0.5,\"H\":0.5}]}",
             "{\"Name\":\"Office\",\"Windows\":[{\"Process\":\"notepad\",\"TitleHash\":\""+
                 hash+"\",\"Instance\":0,\"Monitor\":null,\"X\":0,\"Y\":0,\"W\":0.5,\"H\":0.5}]}"
