@@ -61,30 +61,30 @@ Once @'
                     case "folder":
 '@ 'ZIP action is explicit and asynchronous'
 Once @'
-                 if(File.Exists(hit.OpenTarget))
+                if(File.Exists(hit.OpenTarget))
                      chips.Children.Add(Chip("▤","Copy file",hit,"file"));
 '@ @'
-                 if(File.Exists(hit.OpenTarget))
+                if(File.Exists(hit.OpenTarget))
                      chips.Children.Add(Chip("▤","Copy file",hit,"file"));
-                 if(hit.Category=="Files" &&
+                if(hit.Category=="Files" &&
                     DeskSpaceSearchActionsV193.CanZip(hit.OpenTarget))
-                     chips.Children.Add(Chip("ZIP","Save a ZIP of this file",hit,"zip"));
+                    chips.Children.Add(Chip("ZIP","Save a ZIP of this file",hit,"zip"));
 '@ 'file-only ZIP smart action'
 Once @'
-                 layout.Children.Add(text);item.Child=layout;
+                layout.Children.Add(text);item.Child=layout;
 '@ @'
-                 layout.Children.Add(text);item.Child=layout;
+                layout.Children.Add(text);item.Child=layout;
                  System.Windows.Automation.AutomationProperties.SetName(
                      item,hit.Category+": "+hit.Name);
                  System.Windows.Automation.AutomationProperties.SetHelpText(
                      item,"Use Search Up/Down arrows and Enter to open; hover for actions.");
 '@ 'accessible result row semantics'
 Once @'
-             below.Visibility=Visibility.Visible;SetSize();
+            below.Visibility=Visibility.Visible;SetSize();
          }
          field.KeyDown+=(_,e)=>{
 '@ @'
-             below.Visibility=Visibility.Visible;SetSize();
+            below.Visibility=Visibility.Visible;SetSize();
              selectedIndex=0;
              HighlightSearchResult();
          }
@@ -103,7 +103,7 @@ Once @'
              }
 '@ 'arrow and page navigation'
 Once @'
-             else if(e.Key==Key.Enter && hits.Count>0){Do(hits[0],"open");e.Handled=true;}
+            else if(e.Key==Key.Enter && hits.Count>0){Do(hits[0],"open");e.Handled=true;}
 '@ @'
              else if(e.Key==Key.Enter && hits.Count>0){
                  Do(hits[Math.Clamp(selectedIndex,0,hits.Count-1)],"open");
