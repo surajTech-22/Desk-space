@@ -60,15 +60,11 @@ Once @'
                         break;
                     case "folder":
 '@ 'ZIP action is explicit and asynchronous'
-Once @'
-                if(File.Exists(hit.OpenTarget))
-                    chips.Children.Add(Chip("▤","Copy file",hit,"file"));
-'@ @'
-                if(File.Exists(hit.OpenTarget))
-                    chips.Children.Add(Chip("▤","Copy file",hit,"file"));
+Once '                if(hit.Category=="Files"||hit.Category=="Applications")' @'
                 if(hit.Category=="Files" &&
                     DeskSpaceSearchActionsV193.CanZip(hit.OpenTarget))
                     chips.Children.Add(Chip("ZIP","Save a ZIP of this file",hit,"zip"));
+                if(hit.Category=="Files"||hit.Category=="Applications")
 '@ 'file-only ZIP smart action'
 Once @'
                 layout.Children.Add(text);item.Child=layout;
