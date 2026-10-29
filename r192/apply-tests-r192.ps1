@@ -50,11 +50,17 @@ $method=@'
         Assert(!Add(new SearchHit{Category="Files",Name="report",
             OpenTarget=@"d:\OTHER\REPORT.txt",Location="Duplicate Windows Search"}),
             "R192 case insensitive Windows/fallback duplicate must not consume a row");
-        Add(new SearchHit{Category="Applications",Name="Office",
-            OpenTarget=@"C:\Apps\Office.exe"});
-        Add(new SearchHit{Category="Applications",Name="office",
-            OpenTarget=@"C:\Start\Office.lnk"});
-        var all=Result();
+        var appCollector=Activator.CreateInstance(collectorType,
+            BindingFlags.NonPublic|BindingFlags.Instance,null,
+            new object[]{"office"},null)!;
+        add.Invoke(appCollector,new object[]{
+            new SearchHit{Category="Applications",Name="Office",
+                OpenTarget=@"C:\Apps\Office.exe"}});
+        add.Invoke(appCollector,new object[]{
+            new SearchHit{Category="Applications",Name="office",
+                OpenTarget=@"C:\Start\Office.lnk"}});
+        var all=((System.Collections.IEnumerable)finish.Invoke(
+            appCollector,new object[]{160})!).Cast<SearchHit>().ToList();
         Assert(all.Count(x=>x.Category=="Applications" &&
             x.Name.Equals("Office",StringComparison.OrdinalIgnoreCase))==1 &&
             all.Single(x=>x.Category=="Applications" &&
