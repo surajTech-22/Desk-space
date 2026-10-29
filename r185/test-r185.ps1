@@ -11,7 +11,7 @@ foreach($token in @(
   'receipt.Transaction -eq $txn',
   'receipt.Version -eq $version',
   "did not acknowledge primary WPF Loaded",
-  'no reparse-point',
+  'refuses reparse-point installation roots',
   'verified-manifest.json',
   'New-Object System.Threading.Mutex',
   'Local\DeskSpace-UpdateSupervisor-V185'
