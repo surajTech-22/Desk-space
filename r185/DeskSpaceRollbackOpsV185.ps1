@@ -47,7 +47,7 @@ function Get-R185Inventory([string]$folder) {
     if(-not (Test-Path -LiteralPath (Join-Path $full 'DeskSpace.exe') -PathType Leaf)){
         throw 'R185 missing original DeskSpace executable'
     }
-    return ,$files
+    return $files
 }
 function Save-R185Snapshot([string]$install,[string]$snapshot) {
     $full=Assert-R185InstallScope $install
@@ -67,6 +67,10 @@ function Save-R185Snapshot([string]$install,[string]$snapshot) {
     }
     $count=@(Get-ChildItem -LiteralPath $snapshot -Force -Recurse -File).Count
     if($count -ne $inventory.Count){throw 'R185 snapshot file count differs'}
+    $manifest=Join-Path (Split-Path -Parent $snapshot) 'verified-manifest.json'
+    $record=@($inventory|Select-Object Path,Size,Sha)|ConvertTo-Json -Depth 5
+    [IO.File]::WriteAllText($manifest,$record,[Text.UTF8Encoding]::new($false))
+
     return $inventory.Count
 }
 function Restore-R185Snapshot([string]$install,[string]$snapshot,[string]$quarantine) {
@@ -75,9 +79,15 @@ function Restore-R185Snapshot([string]$install,[string]$snapshot,[string]$quaran
     if(!(Test-Path -LiteralPath (Join-Path $snapshot 'DeskSpace.exe') -PathType Leaf)){
         throw 'R185 validated prior installation snapshot is missing'
     }
+    $manifest=Join-Path (Split-Path -Parent $snapshot) 'verified-manifest.json'
+    if(!(Test-Path -LiteralPath $manifest -PathType Leaf)){
+        throw 'R185 missing previous snapshot SHA-256 manifest'
+    }
     $prior=@(Get-ChildItem -LiteralPath $snapshot -Recurse -Force -File)
     $snapshotRoot=$snapshot.TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
     if($prior.Count -eq 0){throw 'R185 empty rollback snapshot'}
+    $records=@(Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json)
+    if($prior.Count -ne $records.Count){throw 'R185 snapshot file count differs from verified manifest'}
     $oldHash=@{}
     foreach($item in $prior){
         if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){
@@ -85,6 +95,16 @@ function Restore-R185Snapshot([string]$install,[string]$snapshot,[string]$quaran
         }
         $relative=$item.FullName.Substring($snapshotRoot.Length)
         $oldHash[$relative]=(Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash
+    }
+    foreach($record in $records){
+        $relative=[string]$record.Path
+        if([string]::IsNullOrWhiteSpace($relative) -or
+           [IO.Path]::IsPathRooted($relative) -or
+           $relative.Split([char]'\',[char]'/') -contains '..' -or
+           !$oldHash.ContainsKey($relative) -or
+           $oldHash[$relative] -ne [string]$record.Sha){
+            throw 'R185 backup was changed after verification; refusing rollback'
+        }
     }
     if(Test-Path -LiteralPath $install){
         [void](Assert-R185InstallScope $install)
