@@ -99,6 +99,51 @@ Once @'
                 tag,checksum,"tester");
             stage="Start verified installation supervisor";
 '@ 'tester stage release only after SHA and metadata validation'
+# Serialize staging between independent Workspace and widget-host processes.
+# Reuse a file only after validating it AGAIN against official release hash.
+Once @'
+                var stableInstaller=Path.Combine(stableFolder,"DeskSpace_Setup.exe");
+                DeskSpaceUpdateProgress.Publish("Downloading",0);
+'@ @'
+                var stableInstaller=Path.Combine(stableFolder,"DeskSpace_Setup.exe");
+                using var stableLockV191=await DeskSpaceVerifiedUpdateQueueV191.AcquireStageLockAsync(
+                    Path.Combine(Local,"Updates"),stableTimeout.Token);
+                DeskSpaceUpdateProgress.Publish("Downloading",0);
+'@ 'stable cross-process staging lock'
+Once @'
+                await Download(StableAssetV131(stableTag,
+                    "DeskSpace_Setup.exe"),stableInstaller,stableTimeout.Token);
+'@ @'
+                bool stableCachedV191=false;
+                if(File.Exists(stableInstaller))
+                {
+                    try{Verify(stableInstaller,sha,null);stableCachedV191=true;}
+                    catch(InvalidDataException){}
+                }
+                if(!stableCachedV191)
+                    await Download(StableAssetV131(stableTag,
+                        "DeskSpace_Setup.exe"),stableInstaller,stableTimeout.Token);
+'@ 'stable checksum-verified reuse'
+Once @'
+            var installer=Path.Combine(folder,"DeskSpace_Setup.exe");
+            DeskSpaceUpdateProgress.Publish("Downloading",0);
+'@ @'
+            var installer=Path.Combine(folder,"DeskSpace_Setup.exe");
+            using var testerLockV191=await DeskSpaceVerifiedUpdateQueueV191.AcquireStageLockAsync(
+                Path.Combine(Local,"Updates"),timeout.Token);
+            DeskSpaceUpdateProgress.Publish("Downloading",0);
+'@ 'tester cross-process staging lock'
+Once @'
+            await Download(setup,installer,timeout.Token);
+'@ @'
+            bool testerCachedV191=false;
+            if(File.Exists(installer))
+            {
+                try{Verify(installer,checksum,root);testerCachedV191=true;}
+                catch(InvalidDataException){}
+            }
+            if(!testerCachedV191)await Download(setup,installer,timeout.Token);
+'@ 'tester checksum and metadata verified reuse'
 # The verified installer is now staged, so use accurate instructions instead
 # of the old 'close and check again' message.
 Once @'
