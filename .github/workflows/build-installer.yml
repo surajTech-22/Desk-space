@@ -92,7 +92,7 @@ jobs:
       - name: Checkout DeskSpace
         uses: actions/checkout@v4
 
-      - name: Preflight R180–R187 PowerShell syntax before expensive Windows build
+      - name: Preflight R180–R188 PowerShell syntax before expensive Windows build
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -108,7 +108,8 @@ jobs:
             'r185/apply-r185.ps1','r185/apply-tests-r185.ps1',
             'r185/test-r185.ps1','r186/apply-r186.ps1',
             'r186/apply-tests-r186.ps1','r186/test-r186.ps1',
-            'r187/test-r187.ps1','r187/verify-both-notify-stable-r187.ps1'
+            'r187/test-r187.ps1','r187/verify-both-notify-stable-r187.ps1',
+            'r188/apply-r188.ps1','r188/apply-tests-r188.ps1','r188/test-r188.ps1'
           )){
             $tokens=$null;$parseErrors=$null
             [System.Management.Automation.Language.Parser]::ParseFile(
@@ -117,7 +118,7 @@ jobs:
               throw ("Unsafe PowerShell syntax in "+$script+": "+($parseErrors -join '; '))
             }
           }
-          Write-Host 'R180–R187 PowerShell syntax preflight PASS.'
+          Write-Host 'R180–R188 PowerShell syntax preflight PASS.'
 
       - name: Reconstruct and verify original DeskSpace R1 sources
         shell: pwsh
@@ -1808,6 +1809,13 @@ jobs:
         shell: pwsh
         run: |
           ./r187/test-r187.ps1
+
+      - name: R188 prevent update shutdown while another DeskSpace instance is running
+        shell: pwsh
+        run: |
+          ./r188/apply-r188.ps1
+          ./r188/apply-tests-r188.ps1
+          ./r188/test-r188.ps1
 
       - name: Assign monotonic build version to installer and app
         shell: pwsh
