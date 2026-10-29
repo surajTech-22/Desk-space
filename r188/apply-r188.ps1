@@ -50,16 +50,12 @@ One @'
             var setup=FindAsset(root,"DeskSpace_Setup.exe");
 '@ 'pre-download safe deferral'
 One @'
-            Verify(installer,checksum,root);
-            DeskSpaceUpdateProgress.Publish("Restarting",100);
             await StartSupervisor(installer,folder,tag);
 '@ @'
-            Verify(installer,checksum,root);
-            // Recheck after download: an additional Workspace window may
-            // have opened while ~60 MB was transferred. Keep the verified
-            // cache for later; the usual timer will retry without disruption.
+            // Recheck at the final supervisor handoff: another Workspace
+            // window may have opened while the installer downloaded.
+            // Defer without shutting down any processes or losing data.
             if(DeferForOpenDeskSpace(owner,automatic))return;
-            DeskSpaceUpdateProgress.Publish("Restarting",100);
             await StartSupervisor(installer,folder,tag);
 '@ 'immediate pre-shutdown race defense'
 [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
