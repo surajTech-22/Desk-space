@@ -50,6 +50,11 @@ for($n=1;$n -le 4;$n++){
     }
 }
 if(!$received){
-    throw 'Tester release was published, but instant event delivery failed; existing periodic tester fallback remains.'
+    # Relay health is independent of a fully SHA256-verified GitHub Release.
+    # Do not prevent the same verified build from publishing on Stable.
+    Write-Warning 'R184 tester release PUBLISHED but instant ntfy notification FAILED; normal tester update checks remain available.'
+    'Tester: GitHub Release published; push notification NOT DELIVERED (periodic fallback available).' |
+        Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+}else{
+    Write-Host ('R184 tester-only release notification PASS: '+$tag)
 }
-Write-Host ('R184 tester-only release notification PASS: '+$tag)
