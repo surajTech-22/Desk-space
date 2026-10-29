@@ -71,7 +71,7 @@ $method=@'
             var onlyOutside=checkProduction.Invoke(null,new object[]{
                 new[]{outside},System.Threading.CancellationToken.None})!;
             Assert((int)onlyOutside.GetType().GetProperty("Checked")!.
-                    GetValue(onlyOutside)!=0,
+                    GetValue(onlyOutside)==0,
                 "R186 production scan must refuse files outside the private DeskSpace shelf");
             var cancelled=new System.Threading.CancellationTokenSource();
             cancelled.Cancel();
