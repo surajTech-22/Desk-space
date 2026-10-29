@@ -83,6 +83,8 @@ function Restore-R185Snapshot([string]$install,[string]$snapshot,[string]$quaran
     if(!(Test-Path -LiteralPath $manifest -PathType Leaf)){
         throw 'R185 missing previous snapshot SHA-256 manifest'
     }
+    $reparse=@(Get-ChildItem -LiteralPath $snapshot -Recurse -Force | Where-Object {($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0})
+    if($reparse.Count -gt 0){throw 'R185 snapshot contains a symlink or junction'}
     $prior=@(Get-ChildItem -LiteralPath $snapshot -Recurse -Force -File)
     $snapshotRoot=$snapshot.TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
     if($prior.Count -eq 0){throw 'R185 empty rollback snapshot'}
@@ -100,7 +102,7 @@ function Restore-R185Snapshot([string]$install,[string]$snapshot,[string]$quaran
         $relative=[string]$record.Path
         if([string]::IsNullOrWhiteSpace($relative) -or
            [IO.Path]::IsPathRooted($relative) -or
-           $relative.Split([char]'\',[char]'/') -contains '..' -or
+           ($relative -split '[\\/]') -contains '..' -or
            !$oldHash.ContainsKey($relative) -or
            $oldHash[$relative] -ne [string]$record.Sha){
             throw 'R185 backup was changed after verification; refusing rollback'
