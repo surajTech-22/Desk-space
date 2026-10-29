@@ -6,7 +6,7 @@ $s=[IO.File]::ReadAllText($p).Replace($crlf,$nl)
 function Swap([string]$before,[string]$after,[string]$why){
  $before=$before.Replace($crlf,$nl);$after=$after.Replace($crlf,$nl)
  $n=([regex]::Matches($script:s,[regex]::Escape($before))).Count
- if($n -ne 1){throw "R180 $why: expected one anchor, got $n"}
+ if($n -ne 1){throw "R180 ${why}: expected one anchor, got $n"}
  $script:s=$script:s.Replace($before,$after)
 }
 $methods=@'
