@@ -23,7 +23,7 @@ foreach($token in @(
     'DateTime.UtcNow-lastBusyNoticeUtc>=TimeSpan.FromMinutes(45)',
     'if(!automatic)',
     'if(DeferForOpenDeskSpace(owner,automatic))return;',
-    'timer=new DispatcherTimer{Interval=TimeSpan.FromMinutes(5)};',
+    'timer=new DispatcherTimer{Interval=TimeSpan.FromMinutes(1)};',
     'Log("R188 update deferred:',
     'StartSupervisor(installer,folder,tag)',
     'Verify(installer,checksum,root)'
@@ -57,4 +57,4 @@ foreach($token in @(
 )){
  if(!$native.Contains($token)){throw "R188 native regression missing: $token"}
 }
-Write-Host 'R188 PASS: two non-destructive update deferral gates, five-minute retry, throttled status and native peer isolation tests.'
+Write-Host 'R188 PASS: two non-destructive update deferral gates, existing one-minute fallback, throttled status and native peer isolation tests.'
