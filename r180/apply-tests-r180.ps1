@@ -26,7 +26,7 @@ $method=@'
             !json.Contains("Customer invoice"),
             "R180 portable JSON must include layout coordinates only");
         var loaded=import.Invoke(null,new object[]{json})!;
-        Assert((string)profile.GetProperty("Name")!.GetValue(loaded)!="Office",
+        Assert((string)profile.GetProperty("Name")!.GetValue(loaded)=="Office",
             "R180 portable profile roundtrip must preserve name");
         foreach(var invalid in new[]{"{}",new string('X',131073),
             "{\"Name\":\"bad/path\",\"Windows\":[]}"})
