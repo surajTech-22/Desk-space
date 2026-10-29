@@ -1744,6 +1744,13 @@ jobs:
           ./r181/apply-tests-r181.ps1
           ./r181/test-r181.ps1
 
+      - name: R182 show read-only native restore preview and missing-device decisions
+        shell: pwsh
+        run: |
+          ./r182/apply-r182.ps1
+          ./r182/apply-tests-r182.ps1
+          ./r182/test-r182.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
