@@ -8,6 +8,7 @@ foreach($required in @(
     'System.Windows.Automation.AutomationProperties.SetName(',
     'e.Key==Key.Down||e.Key==Key.Up',
     'e.Key==Key.PageDown||e.Key==Key.PageUp',
+    'e.Key==Key.F8 && hits.Count>0',
     'case "zip":',
     'await Task.Run(()=>DeskSpaceSearchActionsV193.ZipSingleFile(',
     'if(hit.Category=="Files" &&',
