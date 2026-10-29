@@ -9,7 +9,7 @@ function One([string]$a,[string]$b,[string]$label)
 {
   $a=$a.Replace($crlf,$nl);$b=$b.Replace($crlf,$nl)
   $n=([regex]::Matches($script:s,[regex]::Escape($a))).Count
-  if($n -ne 1){throw "R188 $label: expected exactly one anchor, found $n"}
+  if($n -ne 1){throw "R188 ${label}: expected exactly one anchor, found $n"}
   $script:s=$script:s.Replace($a,$b)
 }
 One @'
