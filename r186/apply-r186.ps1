@@ -13,6 +13,14 @@ function One([string]$from,[string]$to,[string]$label)
  $script:s=$script:s.Replace($from,$to)
 }
 One @'
+            Text="On-demand local checks only. No clipboard, Excel, search, "+
+                "account or saved-content data is read or uploaded.",
+'@ @'
+            Text="Status checks do not inspect clipboard, Excel or passwords. "+
+                "Optional duplicate scan reads only staged Deck copies when clicked; "+
+                "fingerprints remain local and no files are changed.",
+'@ 'explain explicitly requested staged-content read'
+One @'
         controls.Children.Add(export);
 '@ @'
         controls.Children.Add(export);
