@@ -80,15 +80,29 @@ internal static class DeskSpaceMonitorDockV190
 
     internal static void Attach(Window owner,Popup popup,Border border)
     {
-        if(border.Child is not StackPanel contents)
-            throw new InvalidOperationException("R190 requires the existing dock list");
-        border.Child=null;
-        var scroll=new ScrollViewer{
-            Content=contents,
-            VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,
-            CanContentScroll=true};
-        border.Child=scroll;
+        // Existing Deck generations use different content containers:
+        // some place StackPanel directly in Border, newer versions already
+        // wrap or group it. Preserve that FULL subtree and any event handlers.
+        if(border.Child is null)
+            throw new InvalidOperationException("R190 cannot attach to an empty Deck");
+        ScrollViewer scroll;
+        if(border.Child is ScrollViewer existingScroll)
+        {
+            scroll=existingScroll;
+            scroll.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;
+            scroll.HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled;
+        }
+        else
+        {
+            var contents=border.Child;
+            border.Child=null;
+            scroll=new ScrollViewer{
+                Content=contents,
+                VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,
+                CanContentScroll=true};
+            border.Child=scroll;
+        }
         // Recalculate available height and width on this widget's monitor;
         // never use the primary monitor's WPF or pixel scale for satellites.
         void AdjustBounds()
