@@ -29,6 +29,36 @@ Once @'
             if(list.Children[selectedIndex] is FrameworkElement chosen)
                 chosen.BringIntoView();
         }
+        // Hook PreviewKeyDown at the Search input. Result-row templates
+        // change across versions; this keeps keyboard actions independent.
+        System.Windows.Automation.AutomationProperties.SetName(field,
+            "DeskSpace Search. Up/Down choose a result, Enter opens, F8 ZIP.");
+        field.TextChanged+=(_,_)=>selectedIndex=0;
+        field.PreviewKeyDown+=(_,e)=>{
+            if(hits.Count<=0)return;
+            if(e.Key==Key.Down||e.Key==Key.Up||
+               e.Key==Key.PageDown||e.Key==Key.PageUp)
+            {
+                int step=e.Key==Key.Down?1:e.Key==Key.Up?-1:
+                    e.Key==Key.PageDown?7:-7;
+                selectedIndex=DeskSpaceSearchActionsV193.NextIndex(
+                    list.Children.Count,selectedIndex,step);
+                HighlightSearchResult();
+                e.Handled=true;
+            }
+            else if(e.Key==Key.Enter)
+            {
+                Do(hits[Math.Clamp(selectedIndex,0,hits.Count-1)],"open");
+                e.Handled=true;
+            }
+            else if(e.Key==Key.F8 &&
+                DeskSpaceSearchActionsV193.CanZip(
+                    hits[Math.Clamp(selectedIndex,0,hits.Count-1)].OpenTarget))
+            {
+                Do(hits[Math.Clamp(selectedIndex,0,hits.Count-1)],"zip");
+                e.Handled=true;
+            }
+        };
 '@ 'accessible selected row highlight'
 Once @'
         void Do(SearchHit hit,string operation)
@@ -77,53 +107,5 @@ else
 {
     Write-Host 'R193: Search row has a newer layout; F8 keyboard ZIP remains available.'
 }
-Once @'
-                layout.Children.Add(text);item.Child=layout;
-'@ @'
-                layout.Children.Add(text);item.Child=layout;
-                 System.Windows.Automation.AutomationProperties.SetName(
-                     item,hit.Category+": "+hit.Name);
-                 System.Windows.Automation.AutomationProperties.SetHelpText(
-                     item,"Use Search Up/Down arrows and Enter to open; F8 ZIP for ordinary files.");
-'@ 'accessible result row semantics'
-Once @'
-            below.Visibility=Visibility.Visible;SetSize();
-        }
-        field.KeyDown+=(_,e)=>{
-'@ @'
-            below.Visibility=Visibility.Visible;SetSize();
-             selectedIndex=0;
-             HighlightSearchResult();
-        }
-        field.KeyDown+=(_,e)=>{
-             if(hits.Count>0 &&
-                (e.Key==Key.Down||e.Key==Key.Up||
-                 e.Key==Key.PageDown||e.Key==Key.PageUp))
-             {
-                 int step=e.Key==Key.Down?1:e.Key==Key.Up?-1:
-                     e.Key==Key.PageDown?7:-7;
-                 selectedIndex=DeskSpaceSearchActionsV193.NextIndex(
-                     list.Children.Count,selectedIndex,step);
-                 HighlightSearchResult();
-                 e.Handled=true;
-                 return;
-             }
-             if(e.Key==Key.F8 && hits.Count>0 &&
-                DeskSpaceSearchActionsV193.CanZip(
-                    hits[Math.Clamp(selectedIndex,0,hits.Count-1)].OpenTarget))
-             {
-                 Do(hits[Math.Clamp(selectedIndex,0,hits.Count-1)],"zip");
-                 e.Handled=true;
-                 return;
-             }
-'@ 'arrow and page navigation'
-Once @'
-            else if(e.Key==Key.Enter && hits.Count>0){Do(hits[0],"open");e.Handled=true;}
-'@ @'
-             else if(e.Key==Key.Enter && hits.Count>0){
-                 Do(hits[Math.Clamp(selectedIndex,0,hits.Count-1)],"open");
-                 e.Handled=true;
-             }
-'@ 'Enter launches keyboard-selected result'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R193: keyboard navigable search results, accessible labels and explicit asynchronous ZIP action without mutating original file.'
