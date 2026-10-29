@@ -60,7 +60,7 @@ foreach($needle in @('TestPerCellFormattingV105()',
   if(!$ui.Contains($needle)){throw "R105 WPF smoke missing $needle"}
 }
 if(!$flow.Contains('Publish verified Stable channel automatic release') -or
-   !$flow.Contains('Publish R104 opt-in tester prerelease') -or
+   !$flow.Contains('Publish SHA-256 verified opt-in tester prerelease') -or
    !$flow.Contains('Apply R105 complete cell styles')){
  throw 'R105 both update channels must be gated by Windows build and WPF smoke tests'
 }
