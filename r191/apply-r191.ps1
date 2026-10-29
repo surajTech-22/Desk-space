@@ -99,6 +99,15 @@ Once @'
                 tag,checksum,"tester");
             stage="Start verified installation supervisor";
 '@ 'tester stage release only after SHA and metadata validation'
+# The verified installer is now staged, so use accurate instructions instead
+# of the old 'close and check again' message.
+Once @'
+                "Close other DeskSpace windows normally and check again. "+
+                "Your current widget and unsaved work will not be closed.",
+'@ @'
+                "Save work and close the other Workspace normally. "+
+                "The verified update will retry automatically; your saved data is retained.",
+'@ 'accurate staged update guidance'
 # Retain R188's final gate and R185's supervisor validation unchanged.
 # Confirm no other branch replaces this exact post-download guard.
 if(([regex]::Matches($s,[regex]::Escape(
