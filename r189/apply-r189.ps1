@@ -24,9 +24,9 @@ One @'
             if(!File.Exists(path))throw new FileNotFoundException();
 '@ 'folder preview before FileInfo'
 One @'
-            if(Images.Contains(extension) && info.Length<=40*1024*1024)
+            else if(Images.Contains(extension) && info.Length<=40*1024*1024)
 '@ @'
-            if(DeskSpaceDocumentMetadataV189.Supports(extension))
+            else if(DeskSpaceDocumentMetadataV189.Supports(extension))
             {
                 panel.Children.Add(DeskSpaceDocumentMetadataV189.Create(path));
             }
