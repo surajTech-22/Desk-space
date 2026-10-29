@@ -6,7 +6,7 @@ $s=[IO.File]::ReadAllText($p).Replace($crlf,$lf)
 function Once([string]$from,[string]$to,[string]$why){
     $from=$from.Replace($crlf,$lf);$to=$to.Replace($crlf,$lf)
     $count=([regex]::Matches($script:s,[regex]::Escape($from))).Count
-    if($count -ne 1){throw "R191 $why: expected one anchor, got $count"}
+    if($count -ne 1){throw "R191 ${why}: expected one anchor, got $count"}
     $script:s=$script:s.Replace($from,$to)
 }
 Once '            TestSafeUpdateDeferralV188();' @'
