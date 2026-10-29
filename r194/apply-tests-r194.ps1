@@ -38,9 +38,9 @@ $method=@'
             var rows=((System.Collections.IEnumerable)snapshot.Invoke(
                 null,new object[]{window,true})!).Cast<object>().ToArray();
             Assert(rows.Any(x=>(string)x.GetType().GetProperty("Name")!
-                .GetValue(x)!=="File search") &&
+                .GetValue(x)! =="File search") &&
                 rows.Any(x=>(string)x.GetType().GetProperty("Name")!
-                .GetValue(x)!=="Process resources"),
+                .GetValue(x)! =="Process resources"),
                 "R194 actual WPF health panel must expose search and memory statuses");
         }
         finally{window.Close();}
