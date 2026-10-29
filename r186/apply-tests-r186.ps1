@@ -55,8 +55,12 @@ $method=@'
                 items,shelf,System.Threading.CancellationToken.None})!;
             var groups=(Array)report.GetType().GetProperty("Groups")!.
                 GetValue(report)!;
-            Assert((int)report.GetType().GetProperty("Checked")!.GetValue(report)!=5 &&
-                (int)report.GetType().GetProperty("Skipped")!.GetValue(report)!=1 &&
+            Console.WriteLine("R186 staged duplicate counts: scanned="+
+                report.GetType().GetProperty("Checked")!.GetValue(report)+
+                " skipped="+report.GetType().GetProperty("Skipped")!.
+                    GetValue(report)+" groups="+groups.Length);
+            Assert((int)report.GetType().GetProperty("Checked")!.GetValue(report)==5 &&
+                (int)report.GetType().GetProperty("Skipped")!.GetValue(report)==1 &&
                 groups.Length==2,
                 "R186 must match two identical files and two identical folders, "+
                 "but reject other content and source files outside staging");
