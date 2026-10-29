@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DeskSpace;
 
@@ -43,6 +45,29 @@ internal static class DeskSpaceVerifiedUpdateQueueV191
         lock(Sync)
         {
             if(ReferenceEquals(pending,candidate))pending=null;
+        }
+    }
+
+    // A shared short-lived file lock prevents two Workspace/widget-host
+    // processes from simultaneously truncating the same 60 MB installer.
+    // It is outside version folders and never touches the user's data.
+    internal static async Task<FileStream> AcquireStageLockAsync(
+        string updateRoot,CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(updateRoot);
+        var marker=Path.Combine(updateRoot,".stage-r191.lock");
+        while(true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                return new FileStream(marker,FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,FileShare.None);
+            }
+            catch(IOException)
+            {
+                await Task.Delay(350,cancellationToken);
+            }
         }
     }
 
