@@ -62,10 +62,10 @@ Once @'
 '@ 'ZIP action is explicit and asynchronous'
 Once @'
                 if(File.Exists(hit.OpenTarget))
-                     chips.Children.Add(Chip("▤","Copy file",hit,"file"));
+                    chips.Children.Add(Chip("▤","Copy file",hit,"file"));
 '@ @'
                 if(File.Exists(hit.OpenTarget))
-                     chips.Children.Add(Chip("▤","Copy file",hit,"file"));
+                    chips.Children.Add(Chip("▤","Copy file",hit,"file"));
                 if(hit.Category=="Files" &&
                     DeskSpaceSearchActionsV193.CanZip(hit.OpenTarget))
                     chips.Children.Add(Chip("ZIP","Save a ZIP of this file",hit,"zip"));
@@ -81,14 +81,14 @@ Once @'
 '@ 'accessible result row semantics'
 Once @'
             below.Visibility=Visibility.Visible;SetSize();
-         }
-         field.KeyDown+=(_,e)=>{
+        }
+        field.KeyDown+=(_,e)=>{
 '@ @'
             below.Visibility=Visibility.Visible;SetSize();
              selectedIndex=0;
              HighlightSearchResult();
-         }
-         field.KeyDown+=(_,e)=>{
+        }
+        field.KeyDown+=(_,e)=>{
              if(hits.Count>0 &&
                 (e.Key==Key.Down||e.Key==Key.Up||
                  e.Key==Key.PageDown||e.Key==Key.PageUp))
