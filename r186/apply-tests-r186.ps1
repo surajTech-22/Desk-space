@@ -52,7 +52,7 @@ $method=@'
             File.WriteAllText(outside,"source should not be accessed");
             var items=new[]{a,b,changed,folder1,folder2,outside};
             var report=check.Invoke(null,new object[]{
-                items,shelf,CancellationToken.None})!;
+                items,shelf,System.Threading.CancellationToken.None})!;
             var groups=(Array)report.GetType().GetProperty("Groups")!.
                 GetValue(report)!;
             Assert((int)report.GetType().GetProperty("Checked")!.GetValue(report)!=5 &&
@@ -65,11 +65,11 @@ $method=@'
             Assert(kinds.Contains("File")&&kinds.Contains("Folder"),
                 "R186 content fingerprints must distinguish files and folder trees");
             var onlyOutside=checkProduction.Invoke(null,new object[]{
-                new[]{outside},CancellationToken.None})!;
+                new[]{outside},System.Threading.CancellationToken.None})!;
             Assert((int)onlyOutside.GetType().GetProperty("Checked")!.
                     GetValue(onlyOutside)!=0,
                 "R186 production scan must refuse files outside the private DeskSpace shelf");
-            var cancelled=new CancellationTokenSource();
+            var cancelled=new System.Threading.CancellationTokenSource();
             cancelled.Cancel();
             bool aborts=false;
             try{check.Invoke(null,new object[]{
