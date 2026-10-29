@@ -100,6 +100,26 @@ $test=@'
         try
         {
             one.Show();two.Show();
+            // The advanced real Deck already contains a ScrollViewer on
+            // some generations. Never discard/reparent its content.
+            var savedList=new StackPanel();
+            var oldScroll=new ScrollViewer{Content=savedList};
+            var oldFrame=new Border{Child=oldScroll};
+            var reusePopup=new System.Windows.Controls.Primitives.Popup{
+                PlacementTarget=one,Child=oldFrame};
+            attach.Invoke(null,new object[]{one,reusePopup,oldFrame});
+            Assert(ReferenceEquals(oldFrame.Child,oldScroll)&&
+                ReferenceEquals(oldScroll.Content,savedList),
+                "R190 existing advanced Deck scroll controls must not be replaced");
+            // Grouped Decks contain a Grid rather than a bare StackPanel.
+            var advanced=new Grid();
+            var advancedFrame=new Border{Child=advanced};
+            var advancedPopup=new System.Windows.Controls.Primitives.Popup{
+                PlacementTarget=two,Child=advancedFrame};
+            attach.Invoke(null,new object[]{two,advancedPopup,advancedFrame});
+            Assert(advancedFrame.Child is ScrollViewer wrapper &&
+                ReferenceEquals(wrapper.Content,advanced),
+                "R190 grouped advanced Deck must preserve its complete visual tree");
             popupA=Build(one,out var scrollA);
             popupB=Build(two,out var scrollB);
             Assert(!ReferenceEquals(scrollA,scrollB),
