@@ -30,7 +30,7 @@ foreach($required in @(
 foreach($required in @(
  'DeskSpaceZipProgressWindowV206.Show(host,cancellation)',
  'DeskSpaceFolderZipV206.Create(',
- 'catch(System.OperationCanceledException)',
+ 'catch(OperationCanceledException)',
  'await StageFilesAsync(new[]{zipPath});'
 )){
  if(!$deck.Contains($required)){throw ("R206 live Deck path missing "+$required)}
