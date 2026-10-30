@@ -79,7 +79,7 @@ $methods=@'
         string Convert(string text,string mode)=>(string)transform.Invoke(
             null,new object[]{text,mode})!;
         string json=Convert("{\"count\":2,\"list\":[1,2]}","Format JSON");
-        Assert(json.Contains(Environment.NewLine) &&
+        Assert(json.Contains('\n') &&
             json.Contains("\"count\": 2"),
             "R198 JSON formatter must preserve valid data with indentation");
         string csv=Convert("Name,Value\r\n\"A,B\",\"C\"\"D\"\r\nQ,2",
