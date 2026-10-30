@@ -93,7 +93,7 @@ Swap $updater @'
             if(!free)
             {
                 Log("R227 active supervisor already owns installer; retaining this widget.");
-                return;
+                throw new InvalidOperationException("R227 supervised installation already running; no second handoff.");
             }
         }
         var ps=Path.Combine(folder,"CompleteDeskSpaceUpdate."+
