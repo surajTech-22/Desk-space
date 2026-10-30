@@ -47,9 +47,11 @@ internal static class DeskSpaceFeatureNavigationV200
         Allowed.Contains(destination,StringComparer.Ordinal);
     private static string Argument(string destination)=>destination switch
     {
-        "FEATURES"=>"--features",
-        "NOTES"=>"--notes",
-        "REMINDERS"=>"--reminders",
+        // Reuse the pre-existing switch that launches Workspace rather than
+        // another widget host; the second fixed switch chooses the destination.
+        "FEATURES"=>"--excel-mapping --features",
+        "NOTES"=>"--excel-mapping --notes",
+        "REMINDERS"=>"--excel-mapping --reminders",
         _=>throw new ArgumentOutOfRangeException(nameof(destination))
     };
 
