@@ -18,6 +18,8 @@ New-Item -ItemType Directory -Force -Path $root|Out-Null
 $childScript=Join-Path $root 'synthetic-wpf.ps1'
 $ready=Join-Path $root 'ready.txt'
 $allow=Join-Path $root 'saved-work.txt'
+$closing=Join-Path $root 'closing.txt'
+$closed=Join-Path $root 'closed.txt'
 $child=$null
 try{
     $childSource=@'
@@ -30,10 +32,17 @@ $window.Height=130
 $window.Title='R230 isolated unsaved-work verification'
 $window.ShowInTaskbar=$false
 $window.WindowStyle=[System.Windows.WindowStyle]::ToolWindow
+# Strong script-scope paths are important: routed WPF event scriptblocks
+# can run after the original parameter binding scope has changed.
+$script:CloseAllowed=$Allow
+$script:AttemptFile=Join-Path (Split-Path -Parent $Ready) 'closing.txt'
+$script:ClosedFile=Join-Path (Split-Path -Parent $Ready) 'closed.txt'
 $window.Add_Closing({
     param($sender,$e)
-    if(!(Test-Path -LiteralPath $Allow)){$e.Cancel=$true}
+    [IO.File]::AppendAllText($script:AttemptFile,'attempt;')
+    if(![IO.File]::Exists($script:CloseAllowed)){$e.Cancel=$true}
 })
+$window.Add_Closed({[IO.File]::WriteAllText($script:ClosedFile,'closed')})
 $window.Add_Loaded({[IO.File]::WriteAllText($Ready,'ready')})
 [void]$window.ShowDialog()
 '@
@@ -52,7 +61,12 @@ $window.Add_Loaded({[IO.File]::WriteAllText($Ready,'ready')})
     if([int]$sent -lt 1){throw 'R230 real WM_CLOSE not delivered to synthetic WPF process'}
     Start-Sleep -Milliseconds 850
     $child.Refresh()
-    if($child.HasExited){throw 'R230 ignored WPF unsaved-work Closing cancellation'}
+    if(!(Test-Path -LiteralPath $closing)){
+        throw 'R230 first native WM_CLOSE failed to invoke WPF Closing'
+    }
+    if((Test-Path -LiteralPath $closed) -or $child.HasExited){
+        throw 'R230 ignored WPF unsaved-work Closing cancellation'
+    }
     [IO.File]::WriteAllText($allow,'saved')
     $sent=Request-R230NativeClose ([int[]]@($child.Id))
     if([int]$sent -lt 1){throw 'R230 second WM_CLOSE not delivered'}
