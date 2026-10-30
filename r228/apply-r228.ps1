@@ -102,22 +102,16 @@ Swap $dock @'
         popup.PlacementTarget=owner;
         popup.Placement=PlacementMode.Custom;
 '@ 'each Deck has independent drag-to-place state'
-Swap $dock @'
-            var result=Calculate(ownerBounds,screen,
-                (int)Math.Ceiling(popupSize.Width*sx),
-                (int)Math.Ceiling(popupSize.Height*sy));
-'@ @'
-            var result=Calculate(ownerBounds,screen,
-                (int)Math.Ceiling(popupSize.Width*sx),
-                (int)Math.Ceiling(popupSize.Height*sy));
-            // Monitor-local user Deck offset, never a virtual-desktop or
-            // global/static offset. Clamp the whole physical popup so it
-            // cannot wrap over another monitor when monitors have mixed DPI.
+Swap $dock '            var relative=new System.Windows.Point(' @'
+            // Monitor-local Deck offset stays on the originating display.
+            // It is never copied to the second widget's independently
+            // persisted Deck position, even with mixed-DPI desktop origins.
             var width=result.Width;var height=result.Height;
             var deckX=Math.Clamp(result.X+shift.X,screen.Left,
                 Math.Max(screen.Left,screen.Right-width));
             var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,
                 Math.Max(screen.Top,screen.Bottom-height));
+            var relative=new System.Windows.Point(
 '@ 'bound monitor-specific Deck position'
 Swap $dock @'
                 (result.X-ownerBounds.Left)/sx,
