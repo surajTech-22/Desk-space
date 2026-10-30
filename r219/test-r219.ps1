@@ -8,7 +8,7 @@ foreach($needle in @(
  'NormalizeOfficialChecksumV219(string checksum)',
  'DeskSpace_Setup\.exe',
  'RegexOptions.CultureInvariant|RegexOptions.IgnoreCase',
- 'var normalized=NormalizeOfficialChecksumV219(checksum);',
+ 'string normalized=NormalizeOfficialChecksumV219(checksum);',
  'new Candidate(installer,folder,tag,normalized,channel)',
  'CryptographicOperations.FixedTimeEquals',
  'SHA256.HashData(data)',
