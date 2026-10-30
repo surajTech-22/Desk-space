@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
-$host=[IO.File]::ReadAllText("$root/WidgetHost.cs")
+$widgetSource=[IO.File]::ReadAllText("$root/WidgetHost.cs")
 $palette=[IO.File]::ReadAllText("$root/DeskSpaceActionPaletteV197.cs")
 $clip=[IO.File]::ReadAllText("$root/DeskSpaceClipboardTransformsV177.cs")
 $transforms=[IO.File]::ReadAllText("$root/DeskSpaceTextConversionsV198.cs")
@@ -12,7 +12,7 @@ foreach($token in @(
  'this.PreviewKeyDown+=(_,e)=>{',
  'System.Windows.Input.ModifierKeys.Control'
 )){
- if(!$host.Contains($token)){throw ("R197 host integration missing "+$token)}
+ if(!$widgetSource.Contains($token)){throw ("R197 host integration missing "+$token)}
 }
 foreach($token in @(
  'internal static IReadOnlyList<Command> Filter(',
