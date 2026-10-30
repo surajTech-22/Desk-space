@@ -8,7 +8,7 @@
       "id": "source-migration",
       "description": "Authoritative source tree replacing versioned reconstruction",
       "status": "pending",
-      "evidence": ""
+      "evidence": "R221 produces a deterministic fully patched WPF source archive with every allowed file SHA-256, embedded/external manifest, ZIP SHA-256, tamper rejection and independent Windows rebuild. This is a verified CI artifact; moving the authoritative source into git and deleting historical reconstruction are still pending."
     },
     {
       "id": "dual-monitor-real",

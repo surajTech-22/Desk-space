@@ -139,6 +139,37 @@ jobs:
           dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.r201/evidence' '--r201-only'
           if($LASTEXITCODE -ne 0){throw 'Native WPF tests failed'}
 
+      - name: R221 freeze verified consolidated patched WPF sources
+        shell: pwsh
+        run: |
+          ./r221/package-single-source.ps1
+          ./r221/test-r221.ps1
+
+      - name: R221 independently rebuild unpacked source with no patch scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $source='r221/output/DeskSpace-R221-Source.zip'
+          $target=Join-Path $env:RUNNER_TEMP ('deskspace-r221-rebuild-'+[guid]::NewGuid().ToString('N'))
+          try {
+            [IO.Compression.ZipFile]::ExtractToDirectory($source,$target,$false)
+            dotnet build (Join-Path $target 'DeskSpace/DeskSpace.csproj') -c Release --nologo -p:ContinuousIntegrationBuild=true
+            if($LASTEXITCODE -ne 0){throw 'R221 independent canonical source build failed'}
+          } finally {
+            if(Test-Path $target){Remove-Item -LiteralPath $target -Recurse -Force}
+          }
+
+      - name: Upload verified consolidated source (NON-RELEASE build evidence)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R221-Consolidated-Verified-Source
+          path: |
+            r221/output/DeskSpace-R221-Source.zip
+            r221/output/DeskSpace-R221-Source.sha256.txt
+            r221/output/DeskSpace-R221-Source.manifest.json
+          retention-days: 28
+
       - name: Upload validation evidence only (NO release assets)
         if: always()
         uses: actions/upload-artifact@v4
