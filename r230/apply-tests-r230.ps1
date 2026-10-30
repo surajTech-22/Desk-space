@@ -29,6 +29,9 @@ $method=@'
         var close=type.GetMethod("TryCloseWindows",f)!;
         bool Try(params Window[] windows)=>
             (bool)close.Invoke(null,new object[]{windows})!;
+        var ordered=type.GetMethod("TryCloseInOrder",f)!;
+        bool TryOrder(Window primary,params Window[] windows)=>
+            (bool)ordered.Invoke(null,new object[]{windows,primary})!;
         var main=new Window{Width=120,Height=100,
             ShowInTaskbar=false,WindowStyle=WindowStyle.None};
         var widget=new Window{Width=90,Height=80,
@@ -39,12 +42,12 @@ $method=@'
         try
         {
             main.Show();widget.Show();
-            bool accepted=Try(main,widget);
-            Assert(!accepted && widget.IsVisible,
-                "R230 must honour an unsaved-work Close cancellation and leave the app alive");
+            bool accepted=TryOrder(main,main,widget);
+            Assert(!accepted && widget.IsVisible && main.IsVisible,
+                "R232 main WPF window must survive when a secondary vetoes unsaved-work close");
             cancel=false;
-            Assert(Try(widget),
-                "R230 all windows must close after saved-work veto is cleared");
+            Assert(TryOrder(main,main,widget),
+                "R232 close children then main only after every WPF window permits exit");
             var third=new Window{Width=75,Height=75,
                 ShowInTaskbar=false,WindowStyle=WindowStyle.None};
             third.Show();
