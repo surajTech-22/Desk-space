@@ -12,16 +12,31 @@ function Swap([string]$path,[string]$old,[string]$new,[string]$label)
  [IO.File]::WriteAllText($path,$s.Replace($old,$new),[Text.UTF8Encoding]::new($false))
 }
 $mon="$root/DeskSpaceMultiMonitorV151.cs"
-Swap $mon '                else PlaceIfOffscreen(replica,screen);' @'
+Swap $mon '                else DeskSpaceMonitorFenceV152.ClampNow(replica);' @'
                 else
                 {
-                    // Never reapply a shared WPF startup location to an
-                    // existing satellite: it yanked a user-positioned widget
-                    // toward the physical seam on every reconciliation.
-                    // Use the owning display's native fence instead.
-                    DeskSpaceMonitorFenceV152.ClampNow(replica);
+                    // Existing independent secondary positions must never
+                    // be rewritten during an ordinary 45-second recovery
+                    // pass. Correct only if Windows has moved the HWND to
+                    // another physical device; normal movement is handled
+                    // by the per-window native HWND fence.
+                    var hwnd=new WindowInteropHelper(replica).Handle;
+                    if(hwnd!=IntPtr.Zero && !string.Equals(
+                        Forms.Screen.FromHandle(hwnd).DeviceName,
+                        screen.DeviceName,StringComparison.OrdinalIgnoreCase))
+                        DeskSpaceMonitorFenceV152.ClampNow(replica);
                 }
-'@ 'no repeated magnetic secondary placements'
+'@ 'avoid 45-second periodic magnetic secondary repositioning'
+Swap $mon '            DeskSpaceMonitorFenceV152.ClampNow(primary);' @'
+            // Do not re-clamp a user-positioned primary every recovery tick.
+            // Its HWND fence already prevents real monitor escapes, and
+            // this relocation is needed only after a topology change.
+            var primaryHwnd=new WindowInteropHelper(primary).Handle;
+            if(primaryHwnd!=IntPtr.Zero && !string.Equals(
+                Forms.Screen.FromHandle(primaryHwnd).DeviceName,
+                original.DeviceName,StringComparison.OrdinalIgnoreCase))
+                DeskSpaceMonitorFenceV152.ClampNow(primary);
+'@ 'preserve primary independent position on ordinary reconcile'
 $dock="$root/DeskSpaceMonitorDockV190.cs"
 Swap $dock @'
         popup.PlacementTarget=owner;
