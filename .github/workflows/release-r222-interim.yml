@@ -74,6 +74,18 @@ jobs:
           if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj')){
               throw 'DeskSpace original model tests not restored'
           }
+          # R222 application targets Windows SDK 19041. The original R1
+          # test project defaults to Windows 7 and cannot project-reference
+          # the newly verified app. Update the TEST TARGET only.
+          $testProject='DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj'
+          $tests=[IO.File]::ReadAllText($testProject)
+          $targetPattern='<TargetFramework>net8\.0-windows(?:[0-9.]+)?</TargetFramework>'
+          if(([regex]::Matches($tests,$targetPattern)).Count -ne 1){
+              throw 'Cannot align original test target with verified Windows app'
+          }
+          $tests=[regex]::Replace($tests,$targetPattern,
+              '<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>')
+          [IO.File]::WriteAllText($testProject,$tests,[Text.UTF8Encoding]::new($false))
           Remove-Item -LiteralPath 'DeskSpace_Windows_R1/DeskSpace' -Recurse -Force
           Expand-Archive '.release-r222/source/DeskSpace-R221-Source.zip' -DestinationPath '.release-r222/latest'
           Move-Item '.release-r222/latest/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace'
