@@ -58,7 +58,7 @@ internal static class DeskSpaceProfilePortabilityV201
         return models;
     }
 
-    private static void Validate(DeskSpaceProfileV85 item)
+    internal static void Validate(DeskSpaceProfileV85 item)
     {
         if(item.Name==null || item.Name.Length<1 || item.Name.Length>48 ||
            item.Name.Any(char.IsControl) ||
