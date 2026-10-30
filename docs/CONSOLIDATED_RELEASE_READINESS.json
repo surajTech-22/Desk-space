@@ -14,13 +14,13 @@
       "id": "dual-monitor-real",
       "description": "Physical mixed-DPI dual-monitor testing, monitor attach/detach",
       "status": "pending",
-      "evidence": ""
+      "evidence": "R214 synthetic tests for negative virtual-desktop origin, different monitor work areas, disconnected/reconnected device names, and dock confinement. Physical two-monitor attach/detach and screenshot acceptance remain required."
     },
     {
       "id": "monitor-input",
       "description": "Independent per-monitor right-click/hover/focus containment",
       "status": "pending",
-      "evidence": ""
+      "evidence": "Partial R214: the original monitor assignment survives temporary disconnect; native HWND-bound satellites are shown once after placement; topology reconnect actively re-clamps. Synthetic negative-origin and dock geometry acceptance included in Windows CI. Real mixed-DPI monitors and physical hover/right-click validation still pending."
     },
     {
       "id": "update-full-rollback",
