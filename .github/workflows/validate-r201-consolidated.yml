@@ -57,14 +57,17 @@ jobs:
           ./r203/apply-r203.ps1
           ./r205/apply-r205.ps1
           ./r206/apply-r206.ps1
+          ./r207/apply-r207.ps1
           ./r201/apply-tests-r201-r202.ps1
           ./r203/apply-tests-r203.ps1
           ./r205/apply-tests-r205.ps1
           ./r206/apply-tests-r206.ps1
+          ./r207/apply-tests-r207.ps1
           ./r201/test-r201-r202.ps1
           ./r203/test-r203.ps1
           ./r205/test-r205.ps1
           ./r206/test-r206.ps1
+          ./r207/test-r207.ps1
 
       - name: Assert the single-release gate blocks unverified remaining work
         shell: pwsh
@@ -86,7 +89,7 @@ jobs:
           dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
           if($LASTEXITCODE -ne 0){throw 'Consolidated WPF compilation failed'}
 
-      - name: Run isolated native WPF R201-R206 acceptance (no release)
+      - name: Run isolated native WPF R201-R207 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
