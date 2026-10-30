@@ -11,8 +11,8 @@ function Swap([string]$path,[string]$old,[string]$new,[string]$reason)
  if($count -ne 1){throw ("R225 "+$reason+" expected one anchor, found "+$count)}
  [IO.File]::WriteAllText($path,$s.Replace($old,$new),[Text.UTF8Encoding]::new($false))
 }
-$host="$root/WidgetHost.cs"
-Swap $host @'
+$hostPathV225="$root/WidgetHost.cs"
+Swap $hostPathV225 @'
         if(name=="Search")
         {
             var limits=ModuleArea();
@@ -31,7 +31,7 @@ Swap $host @'
             surface=activeSearch.Create();
         }
 '@ 'expand Search bar'
-Swap $host @'
+Swap $hostPathV225 @'
         PositionModuleFromCircle(restoreLeft,restoreTop,CompactDiameter,CompactDiameter);
         Content=surface;
 '@ @'
@@ -42,12 +42,12 @@ Swap $host @'
         PositionModuleFromCircle(restoreLeft,restoreTop,CompactDiameter,CompactDiameter);
         Content=surface;
 '@ 'suppress own Deck during Search'
-Swap $host @'
+Swap $hostPathV225 @'
                 Width=Math.Min(ModuleArea().Width,height<=58?CompactDiameter:336);
 '@ @'
         Width=DeskSpaceSearchDeckLayoutV225.SearchWidth(ModuleArea().Width);
 '@ 'keep Search readable on empty and populated results'
-Swap $host @'
+Swap $hostPathV225 @'
         var search=activeSearch;activeSearch=null;
         var inline=activeInline;activeInline=null;
 '@ @'
@@ -56,7 +56,7 @@ Swap $host @'
         // Return to the normal shared Deck state after the original circle
         // has been restored, not during the Search-to-donut animation.
 '@ 'document module cleanup'
-Swap $host @'
+Swap $hostPathV225 @'
         KeepOnVisibleDesktop();
         BuildCompact();SavePosition();UpdateCenter();
         Dispatcher.BeginInvoke(new Action(ResumeMediaMode),
