@@ -3,6 +3,24 @@ Set-StrictMode -Version Latest
 $p='r36/UiSmoke/Program.cs'
 $lf=[string][char]10;$crlf=[string][char]13+$lf
 $s=[IO.File]::ReadAllText($p).Replace($crlf,$lf)
+$nativeMode=@'
+        try
+        {
+            if(args.Length>1 && args[1]=="--r201-only")
+            {
+                TestPortableProfilesV201();
+                TestManualVaultSuggestionsV202();
+                TestWorkflowDryRunV203();
+                Console.WriteLine("R201-R203 isolated native WPF acceptance PASS.");
+                app.Shutdown();
+                return 0;
+            }
+'@.Replace($crlf,$lf)
+$modeAnchor='        try'+$lf+'        {'+$lf+'            TestWeather();'
+if(([regex]::Matches($s,[regex]::Escape($modeAnchor))).Count -ne 1){
+ throw 'R201 isolated native entry anchor missing'
+}
+$s=$s.Replace($modeAnchor,$nativeMode+'            TestWeather();')
 $old='            TestSubArcScreenFit();'
 if(([regex]::Matches($s,[regex]::Escape($old))).Count -ne 1){
  throw 'R201 native test invocation anchor missing'
