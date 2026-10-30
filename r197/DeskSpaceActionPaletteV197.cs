@@ -136,7 +136,7 @@ internal static class DeskSpaceActionPaletteV197
             list.Items.Clear();
             foreach(var command in matching)
             {
-                var box=new StackPanel{Margin=new Thickness(4,5)};
+                var box=new StackPanel{Margin=new Thickness(4,5,4,5)};
                 box.Children.Add(new TextBlock{
                     Text=command.Name,FontSize=14,FontWeight=FontWeights.SemiBold});
                 box.Children.Add(new TextBlock{
