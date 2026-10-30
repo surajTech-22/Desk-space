@@ -10,17 +10,17 @@ $method=@'
         var view=Product.GetType("DeskSpace.DeskSpaceWorkflowDryRunV203",true)!;
         var preview=view.GetMethod("Preview",BindingFlags.NonPublic|
             BindingFlags.Static)!;
-        var model=new DeskSpaceWorkflowTemplateV84
-        {
-            Name="Synthetic Review",
-            Action="Open URL",
-            Target="https://example.com/report?token=secret",
-            Condition="None",
-            Additional=new List<DeskSpaceActionStep>
-            {
-                new(){Action="Open URL",Target="https://example.org/next"}
-            }
-        };
+        var modelType=Product.GetType("DeskSpace.DeskSpaceWorkflowTemplateV84",true)!;
+        var model=Activator.CreateInstance(modelType,true)!;
+        void Set(string name,object value)=>
+            modelType.GetProperty(name)!.SetValue(model,value);
+        Set("Name","Synthetic Review");
+        Set("Action","Open URL");
+        Set("Target","https://example.com/report?token=secret");
+        Set("Condition","None");
+        Set("Additional",new List<DeskSpaceActionStep>{
+            new(){Action="Open URL",Target="https://example.org/next"}
+        });
         var result=preview.Invoke(null,new object[]{model})!;
         var type=result.GetType();
         bool Accepted(object value)=>(bool)type.GetProperty("Accepted")!.GetValue(value)!;
@@ -30,7 +30,7 @@ $method=@'
             string.Join("\n",Steps(result)).Contains("example.com") &&
             !string.Join("\n",Steps(result)).Contains("token=secret"),
             "R203 approved workflow preview must show hosts, not private URL queries");
-        model.Action="unapproved powershell";
+        Set("Action","unapproved powershell");
         Assert(!Accepted(preview.Invoke(null,new object[]{model})!),
             "R203 must reject unsupported workflow actions and never execute");
         Assert(view.GetMethod("Create",BindingFlags.NonPublic|
