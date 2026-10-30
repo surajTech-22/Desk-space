@@ -8,9 +8,13 @@ foreach($needle in @(
  'DeskSpaceDpiBoundsV195.CleanScale(sy)',
  'DeskSpaceDpiBoundsV195.Pixels(popupSize.Width,sx,screen.Width)',
  'DeskSpaceDpiBoundsV195.Pixels(popupSize.Height,sy,screen.Height)',
- 'DeskSpaceMonitorFenceV153'
+ 'ScrollViewer'
 )){
  if(!$src.Contains($needle)){throw ("R195 dock missing "+$needle)}
+}
+$deck=[IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs')
+if(!$deck.Contains('DeskSpaceMonitorFenceV153.TrackPopup(host,popup);')){
+ throw 'R195 must retain existing Win32 dock monitor fence'
 }
 if(([regex]::Matches($src,[regex]::Escape('DeskSpaceDpiBoundsV195.CleanScale(sx)'))).Count -ne 2){
  throw 'R195 two independent WPF popup paths must use current monitor DPI'
