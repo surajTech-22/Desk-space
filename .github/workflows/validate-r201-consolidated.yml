@@ -1,0 +1,77 @@
+name: Validate consolidated DeskSpace bundle (no release)
+on:
+  push:
+    branches:
+      - feat/r201-consolidated-roadmap-bundle
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - name: Checkout feature implementation
+        uses: actions/checkout@v4
+
+      - name: Install Windows .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Retrieve last verified v1.5.1093 canonical app sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force '.r201/received' | Out-Null
+          gh run download 41002762293 -R surajTech-22/Desk-space -n DeskSpace-R195-Canonical-WPF-Source -D '.r201/received'
+          if($LASTEXITCODE -ne 0){throw 'Cannot fetch verified R200 source snapshot'}
+          $a=@(Get-ChildItem '.r201/received' -Recurse -File -Filter DeskSpace-Canonical-Source.zip)
+          $hash=@(Get-ChildItem '.r201/received' -Recurse -File -Filter DeskSpace-Canonical-Source.sha256.txt)
+          if($a.Count -ne 1 -or $hash.Count -ne 1){throw 'Canonical source ZIP or SHA256 receipt missing'}
+          $expected=((Get-Content -Raw $hash[0].FullName).Trim() -split '\s+')[0]
+          $actual=(Get-FileHash $a[0].FullName -Algorithm SHA256).Hash
+          if(!$actual.Equals($expected,[StringComparison]::OrdinalIgnoreCase)){throw 'Source ZIP hash mismatch'}
+          Expand-Archive -LiteralPath $a[0].FullName -DestinationPath '.r201/unpacked'
+          if(!(Test-Path '.r201/unpacked/DeskSpace/DeskSpace.csproj')){throw 'Verified WPF project missing from source ZIP'}
+          New-Item -ItemType Directory 'DeskSpace_Windows_R1' -Force | Out-Null
+          Move-Item '.r201/unpacked/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace'
+          Write-Host 'R201-R202 PASS: verified 1.5.1093 canonical sources staged without touching releases.'
+
+      - name: Apply profile and vault changes, strictly check patch anchors
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r201/apply-r201.ps1
+          ./r202/apply-r202.ps1
+          ./r201/apply-tests-r201-r202.ps1
+          ./r201/test-r201-r202.ps1
+
+      - name: Compile amended WPF application from canonical source
+        shell: pwsh
+        run: |
+          dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'Consolidated WPF compilation failed'}
+
+      - name: Run native WPF plus R201-R202 privacy and import smoke
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.r201/evidence'
+          if($LASTEXITCODE -ne 0){throw 'Native WPF tests failed'}
+
+      - name: Upload validation evidence only (NO release assets)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R201-R202-Validation-Only
+          path: |
+            .r201/evidence/*.png
+          if-no-files-found: ignore
+          retention-days: 10
