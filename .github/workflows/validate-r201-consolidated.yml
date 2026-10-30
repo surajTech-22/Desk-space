@@ -5,6 +5,10 @@ on:
       - feat/r201-consolidated-roadmap-bundle
   workflow_dispatch:
 
+concurrency:
+  group: deskspace-r201-consolidated-validation
+  cancel-in-progress: true
+
 permissions:
   contents: read
   actions: read
