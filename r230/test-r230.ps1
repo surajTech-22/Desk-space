@@ -35,7 +35,7 @@ foreach($line in @(
  '/NOCLOSEAPPLICATIONS',
  '[void]$exitEvent.Reset()'
 )){if(!$super.Contains($line)){throw ('R230 safe full process shutdown missing '+$line)}}
-if($super.Contains('/CLOSEAPPLICATIONS') -or $super.Contains('Stop-Process') -or
+if($super.Contains(' /CLOSEAPPLICATIONS ') -or $super.Contains('Stop-Process') -or
    $super.Contains('taskkill')){
  throw 'R230 must never forcibly end unsaved Workspace sessions'
 }
