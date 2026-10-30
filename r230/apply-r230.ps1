@@ -107,7 +107,7 @@ function New-R230ExitEvent([string]$executable) {
 function Request-R230NativeClose([int[]]$processIds) {
     if($processIds.Count -eq 0){return 0}
     if(!('DeskSpaceR230.NativeClose' -as [type])){
-        Add-Type -TypeDefinition @'
+        Add-Type -TypeDefinition @"
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -132,7 +132,7 @@ namespace DeskSpaceR230 {
     }
   }
 }
-'@
+"@
     }
     return [DeskSpaceR230.NativeClose]::Request($processIds)
 }
