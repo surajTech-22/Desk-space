@@ -79,7 +79,7 @@ $method=@'
                 installer,folder,tag,published,"stable"});
             var queued=peek.Invoke(null,new object[]{"stable"});
             Assert(queued!=null &&
-                (string)queued.GetType().GetProperty("Sha256")!.GetValue(queued)!==
+                (string)queued.GetType().GetProperty("Sha256")!.GetValue(queued)! ==
                 actual,
                 "R219 queue must save canonical bare SHA256 after official filename record");
             Assert((bool)still.Invoke(null,new object[]{queued!})!,
