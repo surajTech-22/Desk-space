@@ -50,8 +50,11 @@ jobs:
           $ErrorActionPreference='Stop'
           ./r201/apply-r201.ps1
           ./r202/apply-r202.ps1
+          ./r203/apply-r203.ps1
           ./r201/apply-tests-r201-r202.ps1
+          ./r203/apply-tests-r203.ps1
           ./r201/test-r201-r202.ps1
+          ./r203/test-r203.ps1
 
       - name: Compile amended WPF application from canonical source
         shell: pwsh
@@ -59,11 +62,11 @@ jobs:
           dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
           if($LASTEXITCODE -ne 0){throw 'Consolidated WPF compilation failed'}
 
-      - name: Run native WPF plus R201-R202 privacy and import smoke
+      - name: Run isolated native WPF R201-R203 privacy, import and workflow smoke
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
-          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.r201/evidence'
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.r201/evidence' '--r201-only'
           if($LASTEXITCODE -ne 0){throw 'Native WPF tests failed'}
 
       - name: Upload validation evidence only (NO release assets)
