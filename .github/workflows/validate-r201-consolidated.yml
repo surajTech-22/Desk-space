@@ -98,6 +98,11 @@ jobs:
           }
           if(!$blocked){throw 'R204 regression: unverified roadmap would be publishable'}
 
+      - name: Verify full-install rollback using synthetic files only (R213)
+        shell: pwsh
+        run: |
+          ./r213/test-r213.ps1
+
       - name: Compile amended WPF application from canonical source
         shell: pwsh
         run: |
