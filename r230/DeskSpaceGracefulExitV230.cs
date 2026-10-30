@@ -58,19 +58,27 @@ internal static class DeskSpaceGracefulExitV230
 
     // Testable using real WPF Closing/Closed events. A veto must leave the
     // application running; never use Process.Kill or Environment.Exit.
-    internal static bool TryCloseWindows(Window[] windows)
+    internal static bool TryCloseWindows(Window[] windows)=>
+        TryCloseInOrder(windows,Application.Current?.MainWindow);
+
+    // Closing the process main window first can trigger ShutdownMode's
+    // automatic shutdown BEFORE secondary windows get their chance to
+    // reject exit over unsaved work. Close children first; stop at the
+    // first veto; close the process main window strictly LAST.
+    internal static bool TryCloseInOrder(Window[] windows,Window? main)
     {
-        bool allClosed=true;
-        foreach(var window in windows)
+        var ordered=windows.Where(w=>!ReferenceEquals(w,main))
+            .Concat(windows.Where(w=>ReferenceEquals(w,main))).ToArray();
+        foreach(var window in ordered)
         {
             bool closed=false;
             EventHandler handler=(_,_)=>closed=true;
             window.Closed+=handler;
             try{window.Close();}
-            catch(InvalidOperationException){allClosed=false;}
+            catch(InvalidOperationException){return false;}
             finally{window.Closed-=handler;}
-            if(!closed)allClosed=false;
+            if(!closed)return false;
         }
-        return allClosed;
+        return true;
     }
 }
