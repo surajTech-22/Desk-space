@@ -76,6 +76,7 @@ jobs:
           ./r227/apply-r227.ps1
           ./r228/apply-r228.ps1
           ./r229/apply-r229.ps1
+          ./r230/apply-r230.ps1
           ./r201/apply-tests-r201-r202.ps1
           ./r203/apply-tests-r203.ps1
           ./r205/apply-tests-r205.ps1
@@ -98,6 +99,7 @@ jobs:
           ./r226/apply-tests-r226.ps1
           ./r227/apply-tests-r227.ps1
           ./r228/apply-tests-r228.ps1
+          ./r230/apply-tests-r230.ps1
           ./r201/test-r201-r202.ps1
           ./r203/test-r203.ps1
           ./r205/test-r205.ps1
@@ -121,6 +123,7 @@ jobs:
           ./r227/test-r227.ps1
           ./r228/test-r228.ps1
           ./r229/test-r229.ps1
+          ./r230/test-r230.ps1
 
       - name: Validate legacy updater checksum compatibility on synthetic installer
         shell: pwsh
@@ -157,7 +160,7 @@ jobs:
           dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
           if($LASTEXITCODE -ne 0){throw 'Consolidated WPF compilation failed'}
 
-      - name: Run isolated native WPF R201-R229 acceptance (no release)
+      - name: Run isolated native WPF R201-R230 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
