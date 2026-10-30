@@ -3,8 +3,8 @@ Set-StrictMode -Version Latest
 $p='DeskSpace_Windows_R1/DeskSpace/DeskSpacePublicUpdaterV44.cs'
 $s=[IO.File]::ReadAllText($p)
 $guard='if(DeferForOpenDeskSpace(owner,automatic))return;'
-if(([regex]::Matches($s,[regex]::Escape($guard))).Count -ne 2){
- throw 'R229 both Stable/Tester final install peer checks must remain unchanged'
+if(([regex]::Matches($s,[regex]::Escape($guard))).Count -ne 0){
+ throw 'R230 all-process graceful close must replace old installed-peer deferrals'
 }
 foreach($part in @(
  'DeskSpaceVerifiedUpdateQueueV191.Stage(stableInstaller,',
@@ -20,7 +20,7 @@ foreach($part in @(
  'catch(Exception error) when(error is InvalidOperationException or IOException)',
  'DeskSpaceAtomicInstallerV222.StageFromStreamAsync(',
  'throw new InvalidOperationException("R227 supervised installation already running;',
- 'Application.Current.Shutdown();'
+ 'R230 supervisor launched; awaiting coordinated normal shutdown.'
 )){
  if(!$s.Contains($part)){throw ('R229 guarded update staging feature missing '+$part)}
 }
