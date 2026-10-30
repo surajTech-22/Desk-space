@@ -102,6 +102,11 @@ jobs:
           ./r218/test-r218.ps1
           ./r219/test-r219.ps1
 
+      - name: Validate legacy updater checksum compatibility on synthetic installer
+        shell: pwsh
+        run: |
+          ./r220/test-r220.ps1
+
       - name: Assert the single-release gate blocks unverified remaining work
         shell: pwsh
         run: |

@@ -2001,6 +2001,12 @@ jobs:
         shell: pwsh
         run: ./BUILD_DESKSPACE_SETUP.ps1
 
+      - name: R220 ensure published SHA-256 works with existing R191 updaters
+        shell: pwsh
+        run: |
+          ./r220/normalize-release-checksum.ps1 -OutputDirectory 'release'
+          ./r220/test-r220.ps1
+
       - name: R111 live Office Excel integration acceptance on current compiled DeskSpace
         if: github.event_name == 'workflow_dispatch' && inputs.live_excel_acceptance && github.ref == 'refs/heads/fix/r106-excel-structure-capture'
         shell: pwsh
