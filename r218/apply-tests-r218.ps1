@@ -30,7 +30,7 @@ $method=@'
             "R218 right primary-edge preview must open left");
         Assert(Right(100,230,0,1440,480),
             "R218 primary left-edge preview must open right");
-        Assert(!Right(-900,-650,-1920,0,600),
+        Assert(!Right(-900,-650,-1920,0,1400),
             "R218 when no side fully fits, choose side with more free space");
         Assert(Right(0,120,0,1440,650),
             "R218 scaled preview must use its physical-pixel width");
