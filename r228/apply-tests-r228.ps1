@@ -23,7 +23,7 @@ $method=@'
             BindingFlags.Static|BindingFlags.NonPublic)!;
         var input=Activator.CreateInstance(offset,7000,-8000)!;
         var output=clamp.Invoke(null,new[]{input,(object)4096})!;
-        Assert((int)offset.GetProperty("X")!.GetValue(output)!==4096 &&
+        Assert((int)offset.GetProperty("X")!.GetValue(output)! ==4096 &&
             (int)offset.GetProperty("Y")!.GetValue(output)! == -4096,
             "R228 Deck drag offsets must be bounded in native physical pixels");
         var read=type.GetMethod("Read",
