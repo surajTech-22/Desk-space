@@ -53,7 +53,7 @@ internal static class DeskSpacePdfPreviewV217
             {
                 var info=new FileInfo(path);
                 if(!info.Exists||!Allowed(info.Length) ||
-                   (info.Attributes&FileAttributes.ReparsePoint)!=0)
+                   (info.Attributes&System.IO.FileAttributes.ReparsePoint)!=0)
                 {
                     status.Text="PDF preview unavailable: file absent, linked or larger than 32 MiB.";
                     return;
