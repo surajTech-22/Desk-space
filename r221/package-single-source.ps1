@@ -79,12 +79,12 @@ try{
                 $member=$zip.CreateEntry($item.path,[IO.Compression.CompressionLevel]::Optimal)
                 $member.LastWriteTime=[DateTimeOffset]::new(
                     1980,1,1,0,0,0,[TimeSpan]::Zero)
-                $input=[IO.File]::OpenRead($item.from)
+                $sourceStream=[IO.File]::OpenRead($item.from)
                 try{
-                    $output=$member.Open()
-                    try{$input.CopyTo($output)}
-                    finally{$output.Dispose()}
-                }finally{$input.Dispose()}
+                    $entryStream=$member.Open()
+                    try{$sourceStream.CopyTo($entryStream)}
+                    finally{$entryStream.Dispose()}
+                }finally{$sourceStream.Dispose()}
             }
             $m=$zip.CreateEntry('manifest.json',[IO.Compression.CompressionLevel]::Optimal)
             $m.LastWriteTime=[DateTimeOffset]::new(1980,1,1,0,0,0,[TimeSpan]::Zero)
