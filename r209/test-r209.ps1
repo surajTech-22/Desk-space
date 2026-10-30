@@ -2,7 +2,7 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
 $policy=[IO.File]::ReadAllText("$root/DeskSpaceReducedMotionV209.cs")
-$host=[IO.File]::ReadAllText("$root/WidgetHost.cs")
+$widgetCode=[IO.File]::ReadAllText("$root/WidgetHost.cs")
 $sub=[IO.File]::ReadAllText("$root/DeskSpaceSubDonutStandardV62.cs")
 $smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 foreach($needle in @(
@@ -21,7 +21,7 @@ foreach($needle in @(
  'DeskSpaceReducedMotionV209.Reset(surface);',
  'DeskSpaceReducedMotionV209.Reset(immediate);'
 )){
- if(!$host.Contains($needle)){throw ("R209 host animation guard missing "+$needle)}
+ if(!$widgetCode.Contains($needle)){throw ("R209 host animation guard missing "+$needle)}
 }
 if(!$sub.Contains('DeskSpaceReducedMotionV209.Reset(canvas)')){
  throw 'R209 Information/Excel child-ring animation must obey OS motion preference'
