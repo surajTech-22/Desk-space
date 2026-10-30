@@ -130,8 +130,6 @@ jobs:
           ./r220/test-r220.ps1
           ./r213/test-r213.ps1
           ./r227/test-supervisor-r227.ps1
-          ./r228/test-r228.ps1
-          ./r229/test-r229.ps1
           foreach($script in @(
             'r201/apply-tests-r201-r202.ps1',
             'r203/apply-tests-r203.ps1',
@@ -156,6 +154,9 @@ jobs:
             'r227/apply-tests-r227.ps1',
             'r228/apply-tests-r228.ps1'
           )){ & $script }
+          # R228 native test registration is complete at this point.
+          ./r228/test-r228.ps1
+          ./r229/test-r229.ps1
           New-Item -ItemType Directory -Force '.release-r229/evidence'|Out-Null
           dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.release-r229/evidence' '--r201-only'
           if($LASTEXITCODE -ne 0){throw 'Interim release native WPF/updater tests failed'}
