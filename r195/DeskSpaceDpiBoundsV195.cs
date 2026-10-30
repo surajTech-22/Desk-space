@@ -17,8 +17,10 @@ internal static class DeskSpaceDpiBoundsV195
     {
         int max=Math.Max(1,workPixels);
         if(!double.IsFinite(dips)||dips<=0)return 1;
-        double native=dips*CleanScale(scale);
+        double dpi=CleanScale(scale);
+        if(dips>=max/dpi)return max; // avoid overflow before multiplication
+        double native=dips*dpi;
         if(!double.IsFinite(native)||native<=0)return 1;
-        return native>=max?max:Math.Clamp((int)Math.Ceiling(native),1,max);
+        return Math.Clamp((int)Math.Ceiling(native),1,max);
     }
 }
