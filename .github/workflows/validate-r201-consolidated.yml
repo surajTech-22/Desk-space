@@ -73,6 +73,7 @@ jobs:
           ./r224/apply-r224.ps1
           ./r225/apply-r225.ps1
           ./r226/apply-r226.ps1
+          ./r227/apply-r227.ps1
           ./r201/apply-tests-r201-r202.ps1
           ./r203/apply-tests-r203.ps1
           ./r205/apply-tests-r205.ps1
@@ -93,6 +94,7 @@ jobs:
           ./r224/apply-tests-r224.ps1
           ./r225/apply-tests-r225.ps1
           ./r226/apply-tests-r226.ps1
+          ./r227/apply-tests-r227.ps1
           ./r201/test-r201-r202.ps1
           ./r203/test-r203.ps1
           ./r205/test-r205.ps1
@@ -113,6 +115,7 @@ jobs:
           ./r224/test-r224.ps1
           ./r225/test-r225.ps1
           ./r226/test-r226.ps1
+          ./r227/test-r227.ps1
 
       - name: Validate legacy updater checksum compatibility on synthetic installer
         shell: pwsh
@@ -133,6 +136,11 @@ jobs:
           }
           if(!$blocked){throw 'R204 regression: unverified roadmap would be publishable'}
 
+      - name: R227 test real supervisor mutex contention without installation
+        shell: pwsh
+        run: |
+          ./r227/test-supervisor-r227.ps1
+
       - name: Verify full-install rollback using synthetic files only (R213)
         shell: pwsh
         run: |
@@ -144,7 +152,7 @@ jobs:
           dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
           if($LASTEXITCODE -ne 0){throw 'Consolidated WPF compilation failed'}
 
-      - name: Run isolated native WPF R201-R226 acceptance (no release)
+      - name: Run isolated native WPF R201-R227 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
