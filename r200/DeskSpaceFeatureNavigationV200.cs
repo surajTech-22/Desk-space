@@ -15,7 +15,7 @@ namespace DeskSpace;
 // fixed protocol verbs; never execute a path or command received via IPC.
 public partial class MainWindow
 {
-    private void ShowFeatureDestinationV200(string destination)
+    internal void ShowFeatureDestinationV200(string destination)
     {
         if(!Dispatcher.CheckAccess())
         {
