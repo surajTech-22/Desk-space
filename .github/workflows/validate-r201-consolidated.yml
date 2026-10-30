@@ -63,6 +63,20 @@ jobs:
           ./r203/test-r203.ps1
           ./r205/test-r205.ps1
 
+      - name: Assert the single-release gate blocks unverified remaining work
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $blocked=$false
+          try { ./r204/require-consolidated-ready.ps1 }
+          catch {
+            if($_.Exception.Message -like '*SINGLE-RELEASE GATE*') {
+              $blocked=$true
+              Write-Host 'R204 PASS: partial implementation explicitly blocked from publication.'
+            } else { throw }
+          }
+          if(!$blocked){throw 'R204 regression: unverified roadmap would be publishable'}
+
       - name: Compile amended WPF application from canonical source
         shell: pwsh
         run: |
