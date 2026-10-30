@@ -125,7 +125,8 @@ internal static class DeskSpaceActionPaletteV197
             Margin=new Thickness(2,8,0,0)};
         DockPanel.SetDock(status,Dock.Bottom);root.Children.Add(status);
         var list=new ListBox{BorderThickness=new Thickness(0),
-            Background=Brushes.White,KeyboardNavigation.TabNavigation=KeyboardNavigationMode.Continue};
+            Background=Brushes.White};
+        KeyboardNavigation.SetTabNavigation(list,KeyboardNavigationMode.Continue);
         AutomationProperties.SetName(list,"Available DeskSpace actions");
         root.Children.Add(list);
 
