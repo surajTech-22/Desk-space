@@ -20,7 +20,7 @@
       "id": "monitor-input",
       "description": "Independent per-monitor right-click/hover/focus containment",
       "status": "pending",
-      "evidence": "Partial R214: the original monitor assignment survives temporary disconnect; native HWND-bound satellites are shown once after placement; topology reconnect actively re-clamps. Synthetic negative-origin and dock geometry acceptance included in Windows CI. Real mixed-DPI monitors and physical hover/right-click validation still pending. R226 dev-only: remove zero-count Deck header clutter, cap title TextBlock width and ellipsize rather than extending across monitor seams; synthetic WPF acceptance pending."
+      "evidence": "Partial R214: the original monitor assignment survives temporary disconnect; native HWND-bound satellites are shown once after placement; topology reconnect actively re-clamps. Synthetic negative-origin and dock geometry acceptance included in Windows CI. Real mixed-DPI monitors and physical hover/right-click validation still pending. R226 dev-only: remove zero-count Deck header clutter, cap title TextBlock width and ellipsize rather than extending across monitor seams; synthetic WPF acceptance pending. R228: existing satellites no longer re-place themselves at monitor edges during reconciliation; per-monitor Deck drag offset saved independently and bounded to owner display, shared held files preserved. Windows acceptance pending."
     },
     {
       "id": "update-full-rollback",
