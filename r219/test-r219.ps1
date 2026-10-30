@@ -28,7 +28,7 @@ foreach($needle in @(
  'if(DeferForOpenDeskSpace(owner,automatic))return;'
 )){if(!$u.Contains($needle)){throw ('R219 both-channel verification/handoff missing '+$needle)}}
 if(!$t.Contains('TestUpdateChecksumStagingV219();') -or
-   !$t.Contains('DeskSpace_Setup.exe\\r\\n')){
+   !$t.Contains('string published=actual.ToLowerInvariant()')){
  throw 'R219 native reproducer for published checksum format missing'
 }
 Write-Host 'R219 STATIC PASS: one strict official SHA256 parser, both channels stage, PE/hash protection retained.'
