@@ -27,12 +27,12 @@ $method=@'
         var installer=Path.Combine(root,"DeskSpace_Setup.exe");
         var original=System.Text.Encoding.UTF8.GetBytes("pre-existing verified installer");
         File.WriteAllBytes(installer,original);
-        async Task Stage(byte[] bytes,System.Threading.CancellationToken token)
+        async System.Threading.Tasks.Task Stage(byte[] bytes,System.Threading.CancellationToken token)
         {
             using var input=new MemoryStream(bytes,writable:false);
             try
             {
-                var task=(Task)stage.Invoke(null,new object[]{input,installer,token})!;
+                var task=(System.Threading.Tasks.Task)stage.Invoke(null,new object[]{input,installer,token})!;
                 await task;
             }
             catch(TargetInvocationException e)when(e.InnerException!=null)
