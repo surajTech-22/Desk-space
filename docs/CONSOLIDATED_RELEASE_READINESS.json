@@ -14,7 +14,7 @@
       "id": "dual-monitor-real",
       "description": "Physical mixed-DPI dual-monitor testing, monitor attach/detach",
       "status": "pending",
-      "evidence": "R214 synthetic tests for negative virtual-desktop origin, different monitor work areas, disconnected/reconnected device names, and dock confinement. Physical two-monitor attach/detach and screenshot acceptance remain required."
+      "evidence": "R214 synthetic tests for negative virtual-desktop origin, different monitor work areas, disconnected/reconnected device names, and dock confinement. Physical two-monitor attach/detach and screenshot acceptance remain required. R225: screenshot regression: Search opens full usable width on its own monitor, action/close columns no longer collide, its own Deck popup is suspended without clearing held files or changing preferences and restored on exit. Windows CI pending."
     },
     {
       "id": "monitor-input",
