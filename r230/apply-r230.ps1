@@ -126,7 +126,6 @@ namespace DeskSpaceR230 {
     [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr h,uint msg,IntPtr w,IntPtr l);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]
     private static extern int GetClassName(IntPtr h,StringBuilder name,int max);
-    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr h,uint command);
     public static int Request(int[] pids) {
       var ids=new HashSet<uint>();
       foreach(var value in pids)ids.Add((uint)value);
@@ -134,7 +133,7 @@ namespace DeskSpaceR230 {
       Callback callback=(h,d)=>{
         uint pid=0;
         GetWindowThreadProcessId(h,out pid);
-        if(!ids.Contains(pid) || GetWindow(h,4)!=IntPtr.Zero)return true;
+        if(!ids.Contains(pid))return true;
         // Never send WM_CLOSE to a PowerShell console, native dialog or
         // unrelated UI in the same process: those could bypass WPF Closing
         // and discard unsaved work. Target only DeskSpace's own WPF HWNDs.
