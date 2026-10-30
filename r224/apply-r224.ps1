@@ -2,7 +2,7 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
 $receipt="$root/DeskSpacePostInstallReceiptV185.cs"
-$host="$root/WidgetHost.cs"
+$hostFile="$root/WidgetHost.cs"
 $lf=[string][char]10;$crlf=[string][char]13+$lf
 function Swap([string]$path,[string]$before,[string]$after,[string]$label)
 {
@@ -44,7 +44,7 @@ Swap $receipt @'
 
     internal static void Ready(WidgetShellWindow owner)
 '@ 'deferred receipt'
-Swap $host @'
+Swap $hostFile @'
             DeskSpacePostInstallReceiptV185.Ready(this);
 '@ @'
             // A sustained healthy WPF host must acknowledge the installer,
