@@ -44,18 +44,7 @@ internal static class DeskSpaceGracefulExitV230
             lastAttempt=DateTime.UtcNow;
             // WPF's actual Close/Closing lifecycle saves Workspace state and
             // permits a window to veto exit. This does NOT call Environment.Exit.
-            bool rejected=false;
-            foreach(var window in Application.Current.Windows.Cast<Window>().ToArray())
-            {
-                bool closed=false;
-                EventHandler closedEvent=(_,_)=>closed=true;
-                window.Closed+=closedEvent;
-                try{window.Close();}
-                catch(InvalidOperationException){rejected=true;}
-                finally{window.Closed-=closedEvent;}
-                if(!closed)rejected=true;
-            }
-            if(!rejected)
+            if(TryCloseWindows(Application.Current.Windows.Cast<Window>().ToArray()))
             {
                 timer.Stop();
                 Application.Current.Shutdown();
@@ -65,5 +54,23 @@ internal static class DeskSpaceGracefulExitV230
         };
         listener=timer;
         timer.Start();
+    }
+
+    // Testable using real WPF Closing/Closed events. A veto must leave the
+    // application running; never use Process.Kill or Environment.Exit.
+    internal static bool TryCloseWindows(Window[] windows)
+    {
+        bool allClosed=true;
+        foreach(var window in windows)
+        {
+            bool closed=false;
+            EventHandler handler=(_,_)=>closed=true;
+            window.Closed+=handler;
+            try{window.Close();}
+            catch(InvalidOperationException){allClosed=false;}
+            finally{window.Closed-=handler;}
+            if(!closed)allClosed=false;
+        }
+        return allClosed;
     }
 }
