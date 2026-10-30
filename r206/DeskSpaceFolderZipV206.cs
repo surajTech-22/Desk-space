@@ -42,15 +42,13 @@ internal static class DeskSpaceFolderZipV206
         var pending=new Stack<(string Full,string Relative,int Depth)>();
         pending.Push((root,DeskSpaceFolderZipV159.FolderName(root)+"/",0));
         long totalBytes=0;
-        int scanned=0;
+        int scanned=1; // include root before bounded traversal
         while(pending.Count>0)
         {
             cancel.ThrowIfCancellationRequested();
             var current=pending.Pop();
             if(current.Depth>24)throw new InvalidDataException(
                 "Folder nesting exceeds safe ZIP limit.");
-            if(++scanned>MaxEntries)throw new InvalidDataException(
-                "Folder has more than 4,096 entries.");
             if((File.GetAttributes(current.Full)&FileAttributes.ReparsePoint)!=0)
                 continue;
             directories.Add((current.Full,current.Relative));
@@ -73,6 +71,10 @@ internal static class DeskSpaceFolderZipV206
                 cancel.ThrowIfCancellationRequested();
                 var info=new DirectoryInfo(path);
                 if((info.Attributes&FileAttributes.ReparsePoint)!=0)continue;
+                // Bound the stack DURING enumeration, not after visiting
+                // a huge sibling list that could exhaust memory.
+                if(++scanned>MaxEntries)throw new InvalidDataException(
+                    "Folder has more than 4,096 entries.");
                 pending.Push((path,current.Relative+info.Name+"/",current.Depth+1));
             }
         }
