@@ -46,6 +46,7 @@ on:
       - feat/r163-searchable-zip-preview
       - feat/r164-cancellable-deck-copy
       - feat/r165-crash-safe-copy-recovery
+      - feat/r175-component-health-and-clipboard-events
       - fix/r153-popup-monitor-containment
       - fix/r113-running-windows-side-only
       - fix/r114-excel-capture-and-runningapps-hover
@@ -90,6 +91,47 @@ jobs:
     steps:
       - name: Checkout DeskSpace
         uses: actions/checkout@v4
+
+      - name: Preflight R180–R200 PowerShell syntax before expensive Windows build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($script in @(
+            'r180/apply-r180.ps1','r180/apply-tests-r180.ps1',
+            'r181/apply-r181.ps1','r181/apply-tests-r181.ps1',
+            'r181/test-r181.ps1','r182/apply-r182.ps1',
+            'r182/apply-tests-r182.ps1','r182/test-r182.ps1',
+            'r183/apply-r183.ps1','r183/apply-tests-r183.ps1',
+            'r183/test-r183.ps1','r184/publish-tester-event-r184.ps1',
+            'r185/DeskSpaceRollbackOpsV185.ps1',
+            'r185/DeskSpaceUpdateSupervisorV185.ps1',
+            'r185/apply-r185.ps1','r185/apply-tests-r185.ps1',
+            'r185/test-r185.ps1','r186/apply-r186.ps1',
+            'r186/apply-tests-r186.ps1','r186/test-r186.ps1',
+            'r187/test-r187.ps1','r187/verify-both-notify-stable-r187.ps1',
+            'r188/apply-r188.ps1','r188/apply-tests-r188.ps1','r188/test-r188.ps1',
+            'r189/apply-r189.ps1','r189/apply-tests-r189.ps1','r189/test-r189.ps1',
+            'r190/apply-r190.ps1','r190/apply-tests-r190.ps1','r190/test-r190.ps1',
+            'r191/apply-r191.ps1','r191/apply-tests-r191.ps1','r191/test-r191.ps1',
+            'r192/apply-r192.ps1','r192/apply-tests-r192.ps1',
+            'r193/apply-r193.ps1','r193/apply-tests-r193.ps1','r193/test-r193.ps1',
+            'r194/apply-r194.ps1','r194/apply-tests-r194.ps1','r194/test-r194.ps1',
+            'r195/apply-r195.ps1','r195/apply-tests-r195.ps1','r195/test-r195.ps1',
+            'r195/package-canonical-source.ps1',
+            'r196/build-canonical-source.ps1','r196/test-r196.ps1',
+            'r197/apply-r197.ps1','r197/apply-tests-r197-r198.ps1','r197/test-r197-r198.ps1',
+            'r198/apply-r198.ps1',
+            'r199/apply-r199.ps1','r199/apply-tests-r199.ps1','r199/test-r199.ps1',
+            'r200/apply-r200.ps1','r200/apply-tests-r200.ps1','r200/test-r200.ps1'
+          )){
+            $tokens=$null;$parseErrors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $script,[ref]$tokens,[ref]$parseErrors) | Out-Null
+            if($parseErrors.Count -gt 0){
+              throw ("Unsafe PowerShell syntax in "+$script+": "+($parseErrors -join '; '))
+            }
+          }
+          Write-Host 'R180–R200 PowerShell syntax preflight PASS.'
 
       - name: Reconstruct and verify original DeskSpace R1 sources
         shell: pwsh
@@ -1702,6 +1744,162 @@ jobs:
         run: |
           ./r174/test-r174.ps1
 
+      - name: R175 local component health and event-driven privacy-safe clipboard signal
+        shell: pwsh
+        run: |
+          ./r175/apply-r175.ps1
+          ./r175/apply-tests-r175.ps1
+          ./r175/test-r175.ps1
+
+      - name: R177 on-demand Markdown JSON and plain-text clipboard conversion acceptance
+        shell: pwsh
+        run: |
+          ./r177/apply-r177.ps1
+          ./r177/apply-tests-r177.ps1
+          ./r177/test-r177.ps1
+
+      - name: R178 in-widget Smart Drop text and URL acceptance (no file route regression)
+        shell: pwsh
+        run: |
+          ./r178/apply-r178.ps1
+          ./r178/apply-tests-r178.ps1
+          ./r178/test-r178.ps1
+
+      - name: R179 native safe window-layout profiles with per-monitor WPF regression
+        shell: pwsh
+        run: |
+          ./r179/apply-r179.ps1
+          ./r179/apply-tests-r179.ps1
+          ./r179/test-r179.ps1
+
+      - name: R180 portable, validated window layout import export and delete
+        shell: pwsh
+        run: |
+          ./r180/apply-r180.ps1
+          ./r180/apply-tests-r180.ps1
+
+      - name: R181 guard malformed window layouts and preserve monitor boundaries
+        shell: pwsh
+        run: |
+          ./r181/apply-r181.ps1
+          ./r181/apply-tests-r181.ps1
+          ./r181/test-r181.ps1
+
+      - name: R182 show read-only native restore preview and missing-device decisions
+        shell: pwsh
+        run: |
+          ./r182/apply-r182.ps1
+          ./r182/apply-tests-r182.ps1
+          ./r182/test-r182.ps1
+
+      - name: R183 safe crash-loop startup recovery and primary tray availability
+        shell: pwsh
+        run: |
+          ./r183/apply-r183.ps1
+          ./r183/apply-tests-r183.ps1
+          ./r183/test-r183.ps1
+
+      - name: R185 safe full-install recovery and post-install WPF-ready receipt
+        shell: pwsh
+        run: |
+          ./r185/apply-r185.ps1
+          ./r185/apply-tests-r185.ps1
+          ./r185/test-r185.ps1
+          $tokens=$null;$errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdateSupervisor.ps1',
+            [ref]$tokens,[ref]$errors)|Out-Null
+          if($errors.Count -gt 0){throw "R185 bundled updater syntax invalid: $($errors -join '; ')"}
+
+      - name: R186 safe on-demand staged-file SHA-256 duplicate finder
+        shell: pwsh
+        run: |
+          ./r186/apply-r186.ps1
+          ./r186/apply-tests-r186.ps1
+          ./r186/test-r186.ps1
+
+      - name: R187 require both update channels and SHA-256 release provenance
+        shell: pwsh
+        run: |
+          ./r187/test-r187.ps1
+
+      - name: R188 prevent update shutdown while another DeskSpace instance is running
+        shell: pwsh
+        run: |
+          ./r188/apply-r188.ps1
+          ./r188/apply-tests-r188.ps1
+          ./r188/test-r188.ps1
+
+      - name: R189 read-only Office WAV and folder Deck previews
+        shell: pwsh
+        run: |
+          ./r189/apply-r189.ps1
+          ./r189/apply-tests-r189.ps1
+          ./r189/test-r189.ps1
+
+      - name: R190 monitor-owned scrollable dock on every display
+        shell: pwsh
+        run: |
+          ./r190/apply-r190.ps1
+          ./r190/apply-tests-r190.ps1
+          ./r190/test-r190.ps1
+
+      - name: R191 stage verified updates and retry safely after Workspace exits
+        shell: pwsh
+        run: |
+          ./r191/apply-r191.ps1
+          ./r191/apply-tests-r191.ps1
+          ./r191/test-r191.ps1
+
+      - name: R192 relevant, bounded and deduplicated all-drive search
+        shell: pwsh
+        run: |
+          ./r192/apply-r192.ps1
+          ./r192/apply-tests-r192.ps1
+
+      - name: R193 keyboard-accessible Search and safe file ZIP smart action
+        shell: pwsh
+        run: |
+          ./r193/apply-r193.ps1
+          ./r193/apply-tests-r193.ps1
+          ./r193/test-r193.ps1
+
+      - name: R194 on-demand resource and real Search index health
+        shell: pwsh
+        run: |
+          ./r194/apply-r194.ps1
+          ./r194/apply-tests-r194.ps1
+          ./r194/test-r194.ps1
+
+      - name: R195 bound independent dock DPI and native mixed-display test
+        shell: pwsh
+        run: |
+          ./r195/apply-r195.ps1
+          ./r195/apply-tests-r195.ps1
+          ./r195/test-r195.ps1
+
+      - name: R197-R198 unified Action Palette and secure text conversions
+        shell: pwsh
+        run: |
+          ./r197/apply-r197.ps1
+          ./r198/apply-r198.ps1
+          ./r197/apply-tests-r197-r198.ps1
+          ./r197/test-r197-r198.ps1
+
+      - name: R199 visible Features tab in Workspace and Action access from donut Search
+        shell: pwsh
+        run: |
+          ./r199/apply-r199.ps1
+          ./r199/apply-tests-r199.ps1
+          ./r199/test-r199.ps1
+
+      - name: R200 feature navigation between widget and Workspace process
+        shell: pwsh
+        run: |
+          ./r200/apply-r200.ps1
+          ./r200/apply-tests-r200.ps1
+          ./r200/test-r200.ps1
+
       - name: Assign monotonic build version to installer and app
         shell: pwsh
         run: |
@@ -1723,6 +1921,22 @@ jobs:
           $code = $code.Replace($before, 'private static readonly Version InstalledVersion = new(1, 5, ' + $number + ');')
           [IO.File]::WriteAllText($cs,$code,[Text.UTF8Encoding]::new($false))
           Write-Host "Release version assigned: $version"
+
+      - name: R176 generate and verify exact post-patch source-build provenance
+        shell: pwsh
+        run: |
+          ./r176/write-source-manifest.ps1
+          ./r176/verify-source-manifest.ps1
+
+      - name: R195 archive verified post-patch canonical application sources
+        shell: pwsh
+        run: |
+          ./r195/package-canonical-source.ps1
+
+      - name: R196 enforce standalone canonical source provenance and build isolation
+        shell: pwsh
+        run: |
+          ./r196/test-r196.ps1
 
       - name: Verify upgrade version and automatic updater linkage
         shell: pwsh
@@ -1757,6 +1971,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: R196 independently compile verified source archive (no patch chain)
+        shell: pwsh
+        run: |
+          ./r196/build-canonical-source.ps1
 
       - name: Install Inno Setup on GitHub build runner
         shell: pwsh
@@ -1850,6 +2069,24 @@ jobs:
             if($image.Length -lt 2500){throw "R36 empty screenshot: $($image.Name)"}
           }
           Write-Host "R38 captured $($screens.Count) authentic WPF render comparisons."
+
+      - name: Upload reproducible R176 source provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R176-Source-Provenance
+          path: build-provenance/source-manifest.json
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload R195 canonical post-patch source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R195-Canonical-WPF-Source
+          path: |
+            build-provenance/DeskSpace-Canonical-Source.zip
+            build-provenance/DeskSpace-Canonical-Source.sha256.txt
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Upload R36 WPF visual verification images
         uses: actions/upload-artifact@v4
@@ -1968,14 +2205,19 @@ jobs:
           Write-Host 'Both Windows executables and checksum files are ready for GitHub Releases.'
 
 
-      - name: Publish R104 opt-in tester prerelease
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'workflow_dispatch' && inputs.channel == 'tester' && github.ref == 'refs/heads/r42-excel-mapping-editor')
+      - name: Publish SHA-256 verified opt-in tester prerelease
+        if: (github.event_name == 'push' && (github.ref == 'refs/heads/r42-excel-mapping-editor' || github.ref == 'refs/heads/feat/r175-component-health-and-clipboard-events')) || (github.event_name == 'workflow_dispatch' && inputs.channel == 'tester' && github.ref == 'refs/heads/r42-excel-mapping-editor')
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $currentHead=(gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/r42-excel-mapping-editor" --jq '.object.sha').Trim()
+          # Publish tester from this exact build; R187 also publishes the matching
+          # stable tag only after the same CI gates and checksum verification.
+          $releaseBranch=if($env:GITHUB_REF -eq 'refs/heads/feat/r175-component-health-and-clipboard-events'){
+            'feat/r175-component-health-and-clipboard-events'
+          } else { 'r42-excel-mapping-editor' }
+          $currentHead=(gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/$releaseBranch" --jq '.object.sha').Trim()
           if($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentHead)){
             throw 'Cannot verify current R42 branch head'
           }
@@ -2026,16 +2268,27 @@ jobs:
           if(-not $published){throw 'Automatic stable release publication failed after retries'}
           Write-Host "Verified tester release: $tag"
 
+      - name: R184 notify opted-in tester clients after verified prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/r175-component-health-and-clipboard-events'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./r184/publish-tester-event-r184.ps1
+
       - name: Publish verified Stable channel automatic release
-        # Every branch push publishes BOTH Stable and Tester only after
-        # compilation, real WPF rendering tests and installer hash checks.
-        if: (github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor')
+        # R187 explicitly promotes the SAME fully verified feature-branch build
+        # to stable and tester on push. Previous R42 stable delivery remains.
+        if: (github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'push' && (github.ref == 'refs/heads/r42-excel-mapping-editor' || github.ref == 'refs/heads/feat/r175-component-health-and-clipboard-events'))
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $currentHead=(gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/r42-excel-mapping-editor" --jq '.object.sha').Trim()
+          $releaseBranch=if($env:GITHUB_REF -eq 'refs/heads/feat/r175-component-health-and-clipboard-events'){
+            'feat/r175-component-health-and-clipboard-events'
+          } else { 'r42-excel-mapping-editor' }
+          $currentHead=(gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/$releaseBranch" --jq '.object.sha').Trim()
           if($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentHead)){
             throw 'Cannot verify current R42 branch head'
           }
@@ -2068,7 +2321,7 @@ jobs:
           # a verified build on a temporary backend failure.
           $published=$false
           for($attempt=1;$attempt -le 4;$attempt++){
-            gh release create $tag $exe $checksum $update $updateChecksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace R42 automatic update $version" --notes "Approved DeskSpace stable-channel release from commit $env:GITHUB_SHA. Windows build, actual V36 widget and main Workspace WPF smoke tests, installer validation, and SHA-256 verification passed. Installs through the existing supervised updater."
+            gh release create $tag $exe $checksum $update $updateChecksum --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DeskSpace verified stable automatic update $version" --notes "DeskSpace stable-channel release from commit $env:GITHUB_SHA; exact same checked build as tester-v$version. Windows .NET/WPF native smoke, installer and SHA-256 verification passed. Physical two-monitor, live Excel and installed-PC rollback acceptance are not independently verified by CI. Installs through the existing supervised updater with R185 program-folder recovery."
             if($LASTEXITCODE -eq 0){$published=$true;break}
             gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
             if($LASTEXITCODE -eq 0){
@@ -2085,6 +2338,14 @@ jobs:
           }
           if(-not $published){throw 'Automatic stable release publication failed after retries'}
           Write-Host "Verified stable release: $tag"
+
+      - name: R187 verify both release hashes and notify stable clients
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/r175-component-health-and-clipboard-events'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./r187/verify-both-notify-stable-r187.ps1
 
       - name: R133 notify active Stable and Tester clients immediately after publication
         if: (github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/r42-excel-mapping-editor') || (github.event_name == 'push' && github.ref == 'refs/heads/r42-excel-mapping-editor')
