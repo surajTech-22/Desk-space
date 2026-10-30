@@ -28,7 +28,7 @@ foreach($required in @(
  if(!$ui.Contains($required)){throw ("R206 progress UI check missing "+$required)}
 }
 foreach($required in @(
- 'DeskSpaceZipProgressWindowV206.Show(host,cancelZip)',
+ 'DeskSpaceZipProgressWindowV206.Show(host,cancellation)',
  'DeskSpaceFolderZipV206.Create(',
  'catch(System.OperationCanceledException)',
  'await StageFilesAsync(new[]{zipPath});'
