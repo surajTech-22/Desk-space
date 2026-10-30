@@ -111,19 +111,33 @@ function Request-R230NativeClose([int[]]$processIds) {
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 namespace DeskSpaceR230 {
   public static class NativeClose {
     private delegate bool Callback(IntPtr h,IntPtr data);
     [DllImport("user32.dll")] private static extern bool EnumWindows(Callback c,IntPtr d);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
     [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr h,uint msg,IntPtr w,IntPtr l);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr h,StringBuilder name,int max);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr h,uint command);
     public static int Request(int[] pids) {
       var ids=new HashSet<uint>();
       foreach(var value in pids)ids.Add((uint)value);
       int count=0;
       Callback callback=(h,d)=>{
         GetWindowThreadProcessId(h,out uint pid);
-        if(ids.Contains(pid) && PostMessage(h,0x0010,IntPtr.Zero,IntPtr.Zero))count++;
+        if(!ids.Contains(pid) || GetWindow(h,4)!=IntPtr.Zero)return true;
+        // Never send WM_CLOSE to a PowerShell console, native dialog or
+        // unrelated UI in the same process: those could bypass WPF Closing
+        // and discard unsaved work. Target only DeskSpace's own WPF HWNDs.
+        var classname=new StringBuilder(260);
+        if(GetClassName(h,classname,classname.Capacity)<=0)return true;
+        var type=classname.ToString();
+        if(!type.StartsWith("HwndWrapper[",StringComparison.Ordinal) &&
+           !type.StartsWith("WindowsForms10.Window.",StringComparison.Ordinal))
+           return true;
+        if(PostMessage(h,0x0010,IntPtr.Zero,IntPtr.Zero))count++;
         return true;
       };
       EnumWindows(callback,IntPtr.Zero);
