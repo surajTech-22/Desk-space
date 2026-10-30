@@ -1,0 +1,188 @@
+{
+  "schema": "deskspace-single-consolidated-release-v1",
+  "baseline": "v1.5.1093",
+  "policy": "no release until every required checkpoint has verified evidence",
+  "release_status": "not-ready",
+  "checks": [
+    {
+      "id": "source-migration",
+      "description": "Authoritative source tree replacing versioned reconstruction",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "dual-monitor-real",
+      "description": "Physical mixed-DPI dual-monitor testing, monitor attach/detach",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "monitor-input",
+      "description": "Independent per-monitor right-click/hover/focus containment",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "update-full-rollback",
+      "description": "Full-install rollback with heartbeat and data preservation",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "startup-recovery",
+      "description": "Sleep/resume, startup crash loop, tray and component recovery",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "perf-budget",
+      "description": "CPU/RAM/GPU/performance budget and event-based refresh",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "signed-release",
+      "description": "Code-signing and integrity/publisher verification policy",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "smartdrop-progress",
+      "description": "Cancellable ZIP/copy progress, interruption recovery",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "duplicate-fingerprints",
+      "description": "Content hash deduplication and safe replace/keep-both",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "smartdrop-actions",
+      "description": "Document/image/URL-specific Smart Drop actions",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "file-previews",
+      "description": "Safe type-aware preview for PDF/Office/audio/code",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "clipboard-security",
+      "description": "Clipboard conversion, privacy filter, optional OCR",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "search-provider",
+      "description": "Context ranking, health and optional Everything IPC",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "apps-recent-files",
+      "description": "Window previews, grouped windows, recent-document actions",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "excel-suggestions",
+      "description": "Live exact-signature Excel suggestions in Deck",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "excel-transactions",
+      "description": "Excel undo journal, formula/table/format readback",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "excel-office-tests",
+      "description": "Three real workbooks with native Office acceptance",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "vault-encryption",
+      "description": "Protected credentials, no raw secret diagnostics or auto-fill",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "vault-context",
+      "description": "Explicit exact-origin, unlock-gated suggestions, real UI review",
+      "status": "implemented",
+      "evidence": ""
+    },
+    {
+      "id": "reminders-actions",
+      "description": "Actionable notifications, snooze, recurrence history",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "media-deck",
+      "description": "Media playback, mute, close in shared Deck",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "settings-ui",
+      "description": "Safe and consistent settings navigation/preview",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "window-layouts",
+      "description": "Window restore across monitors with mixed-DPI acceptance",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "workflow-preview",
+      "description": "Read-only workflow preflight and redacted target previews",
+      "status": "implemented",
+      "evidence": ""
+    },
+    {
+      "id": "workflow-builder",
+      "description": "No-code workflow permissions, logging, undo and safeguards",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "donut-accessibility",
+      "description": "Keyboard-only donut, focus, high contrast and screen readers",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "profile-transfer",
+      "description": "Strict profile export/import without overwriting user data",
+      "status": "implemented",
+      "evidence": ""
+    },
+    {
+      "id": "features-access",
+      "description": "Main Workspace and widget features discoverable and usable",
+      "status": "verified",
+      "evidence": "v1.5.1093 Windows CI, device acceptance still required where relevant"
+    },
+    {
+      "id": "diagnostics-health",
+      "description": "On-demand status, privacy-safe ZIP and signal health",
+      "status": "verified",
+      "evidence": "v1.5.1093 Windows CI, device acceptance still required where relevant"
+    },
+    {
+      "id": "update-channels",
+      "description": "Stable and Tester same-hash release/notification contract",
+      "status": "verified",
+      "evidence": "v1.5.1093 Windows CI, device acceptance still required where relevant"
+    }
+  ]
+}
