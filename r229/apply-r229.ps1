@@ -11,56 +11,72 @@ function Swap([string]$a,[string]$b,[string]$why)
  $script:s=$script:s.Replace($a,$b)
 }
 Swap @'
-            if(DeferForOpenDeskSpace(owner,automatic))return;
-            var setup=FindAsset(root,"DeskSpace_Setup.exe");
+            DeskSpaceVerifiedUpdateQueueV191.Clear(pending);
+            Log("R191 verified staged "+pending.Tag+" is now safe to hand off.");
+            DeskSpaceUpdateProgress.Publish("Restarting",100);
+            await StartSupervisor(pending.Installer,pending.Folder,pending.Tag);
+            return true;
 '@ @'
-            // R229: a second DeskSpace Workspace may contain unsaved work.
-            // Never stop downloading just because it is open. Download and
-            // cryptographically verify FIRST, then defer only the install.
-            var setup=FindAsset(root,"DeskSpace_Setup.exe");
-'@ 'download occurs before deferred exit'
+            // Do not discard the verified candidate BEFORE the supervisor
+            // has accepted the handoff. Another DeskSpace instance may win
+            // its install mutex or the process launcher may temporarily
+            // refuse; retry on the existing automatic timer, not another
+            // network download or repeated notification.
+            Log("R229 verified cached "+pending.Tag+" attempting safe supervisor handoff.");
+            DeskSpaceUpdateProgress.Publish("Restarting",100);
+            try
+            {
+                await StartSupervisor(pending.Installer,pending.Folder,pending.Tag);
+                DeskSpaceVerifiedUpdateQueueV191.Clear(pending);
+                return true;
+            }
+            catch(Exception error) when(error is InvalidOperationException or IOException)
+            {
+                Log("R229 verified update retained for retry after normal exit: "+
+                    error.GetType().Name);
+                DeskSpaceUpdateProgress.Clear();
+                return true;
+            }
+'@ 'retain verified candidate if supervisor handoff temporarily blocked'
 Swap @'
-            await Download(setup,installer,timeout.Token);
-            DeskSpaceUpdateProgress.Publish("Verifying",100);
-            Verify(installer,checksum,root);
+                if(File.Exists(stableInstaller))
+                {
+                    try{Verify(stableInstaller,sha,null);stableCachedV191=true;}
+                    catch(InvalidDataException){}
+                }
 '@ @'
-            // An earlier attempt may already have a complete verified setup,
-            // because the user kept another Workspace window open. Reuse
-            // it ONLY after fresh official SHA256 + GitHub metadata checks.
-            // Do not repeatedly transfer sixty megabytes every auto check.
-            bool cachedVerified=false;
+                if(File.Exists(stableInstaller))
+                {
+                    try{Verify(stableInstaller,sha,null);stableCachedV191=true;}
+                    catch(Exception error) when(error is InvalidDataException or
+                        IOException or UnauthorizedAccessException)
+                    {
+                        Log("R229 stable cached installer invalid/inaccessible; revalidate by fresh download.");
+                    }
+                }
+'@ 'stable verified-cache recovery from interrupted or locked installer'
+Swap @'
             if(File.Exists(installer))
             {
-                try
-                {
-                    Verify(installer,checksum,root);
-                    cachedVerified=true;
-                    Log("R229 verified installer cache reused; no redownload.");
-                }
-                catch(Exception error) when(error is IOException or
-                    UnauthorizedAccessException or InvalidDataException)
-                {
-                    Log("R229 outdated/incomplete installer cache will be redownloaded.");
-                }
+                try{Verify(installer,checksum,root);testerCachedV191=true;}
+                catch(InvalidDataException){}
             }
-            if(!cachedVerified)
-                await Download(setup,installer,timeout.Token);
-            DeskSpaceUpdateProgress.Publish("Verifying",100);
-            Verify(installer,checksum,root);
-'@ 'verified cache prevents repeat downloads'
-Swap @'
-            if(DeferForOpenDeskSpace(owner,automatic))return;
-            await StartSupervisor(installer,folder,tag);
 '@ @'
-            // Never terminate a Workspace containing unsaved work. Keep
-            // freshly downloaded/verified installer bytes for the next
-            // automatic check after the user closes other windows normally.
-            if(DeferForOpenDeskSpace(owner,automatic))
+            if(File.Exists(installer))
             {
-                Log("R229 verified update ready; installation deferred until other DeskSpace windows exit normally.");
-                return;
+                try{Verify(installer,checksum,root);testerCachedV191=true;}
+                catch(Exception error) when(error is InvalidDataException or
+                    IOException or UnauthorizedAccessException)
+                {
+                    Log("R229 tester cached installer invalid/inaccessible; revalidate by fresh download.");
+                }
             }
-            await StartSupervisor(installer,folder,tag);
-'@ 'install only after normal peer shutdown'
+'@ 'tester verified-cache recovery from interrupted or locked installer'
+# Preserve both final safe-install gates (stable and tester). R191 ALREADY
+# stages downloads before these checks, and R227 protects the one supervisor.
+if(([regex]::Matches($s,[regex]::Escape(
+    'if(DeferForOpenDeskSpace(owner,automatic))return;'))).Count -ne 2){
+ throw 'R229 both final safe peer-exit gates must remain after verified staging'
+}
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
-Write-Host 'R229: always download and verify before workspace deferral; safe cached SHA256 reuse avoids redownload; preserve normal shutdown and supervised install.'
+Write-Host 'R229: retain SHA-verified staged update after transient supervisor contention, allow safe cache recovery and retry installation only following normal Workspace exit.'
