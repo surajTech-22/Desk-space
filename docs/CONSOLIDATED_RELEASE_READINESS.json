@@ -50,13 +50,13 @@
       "id": "smartdrop-progress",
       "description": "Cancellable ZIP/copy progress, interruption recovery",
       "status": "implemented",
-      "evidence": "Existing R162/R164/R165 ZIP/copy cancellation, partial cleanup, and progress; R206 bounded ZIP byte progress/Cancel UI with native Windows CI run 41013178784. R210 streams SHA-256 digests and verifies each decompressed ZIP payload before atomic Deck staging (CI acceptance pending). Physical UI acceptance and post-R206 hardening rerun remain required."
+      "evidence": "Existing R162/R164/R165 ZIP/copy cancellation, partial cleanup, and progress; R206 bounded ZIP byte progress/Cancel UI with native Windows CI run 41013178784. R210 streams SHA-256 digests and verifies decompressed ZIP payloads before atomic Deck staging (Windows CI 41020682223 PASS). Physical UI acceptance and post-R206 hardening rerun remain required."
     },
     {
       "id": "duplicate-fingerprints",
       "description": "Content hash deduplication and safe replace/keep-both",
       "status": "pending",
-      "evidence": ""
+      "evidence": "Partial R211: opt-in user-drop SHA-256 file duplicate detection with Keep both/Skip inline decision. No auto-replacement, folder fingerprinting or final physical device acceptance yet; Windows CI pending."
     },
     {
       "id": "smartdrop-actions",
