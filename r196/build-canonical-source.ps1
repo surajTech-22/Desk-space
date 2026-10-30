@@ -75,6 +75,10 @@ try{
   if($checks -ne [int]$m.source_file_count){
     throw 'R196 source manifest count mismatch'
   }
+  $embeddedSupervisor=Join-Path $root 'DeskSpace/DeskSpaceUpdateSupervisor.ps1'
+  if(!(Test-Path -LiteralPath $embeddedSupervisor -PathType Leaf)){
+    throw 'R196 missing embedded installer supervisor resource in canonical archive'
+  }
   $project=Join-Path $root 'DeskSpace/DeskSpace.csproj'
   if(!(Test-Path -LiteralPath $project)){
       throw 'R196 independent WPF project missing'
