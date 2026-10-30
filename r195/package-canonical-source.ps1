@@ -8,11 +8,14 @@ $repo=(Get-Location).Path
 $src=Join-Path $repo 'DeskSpace_Windows_R1/DeskSpace'
 $provenance=Join-Path $repo 'build-provenance/source-manifest.json'
 $manifest=Get-Content -LiteralPath $provenance -Raw | ConvertFrom-Json
-$allow=@('.cs','.xaml','.csproj','.resx','.config','.ico','.png','.json','.xml','.svg','.txt')
+$allow=@('.cs','.xaml','.csproj','.resx','.config','.ico','.png','.json','.xml','.svg','.txt','.ps1','.psm1')
 $files=@(Get-ChildItem -LiteralPath $src -Recurse -File -Force |
   Where-Object { $_.Extension.ToLowerInvariant() -in $allow -and
     $_.FullName -notmatch '[\\/](?:bin|obj|\.git|packages)[\\/]' } |
   Sort-Object FullName)
+if(!(@($files | Where-Object {$_.Name -eq 'DeskSpaceUpdateSupervisor.ps1'}).Count -eq 1)){
+ throw 'R195 canonical sources must include embedded update supervisor PowerShell resource'
+}
 if($files.Count -lt [int]$manifest.source_file_count){
   throw 'R195 source snapshot is missing declared source files'
 }
