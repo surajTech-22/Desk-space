@@ -99,8 +99,14 @@ function Get-R230InstalledPeers([string]$executable) {
 }
 function New-R230ExitEvent([string]$executable) {
     $full=[IO.Path]::GetFullPath($executable).TrimEnd('\','/').ToUpperInvariant()
-    $sha=[Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($full))
-    $eventName='Local\DeskSpace-UpdateExit-V230-'+[Convert]::ToHexString($sha).Substring(0,24)
+    # Windows PowerShell 5.1 runs on .NET Framework: HashData() and
+    # Convert.ToHexString() do not exist there. Match the .NET 8 WPF hash
+    # using framework-compatible APIs.
+    $sha256=[Security.Cryptography.SHA256]::Create()
+    try{$sha=$sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($full))}
+    finally{$sha256.Dispose()}
+    $hex=[BitConverter]::ToString($sha).Replace('-','')
+    $eventName='Local\DeskSpace-UpdateExit-V230-'+$hex.Substring(0,24)
     return [Threading.EventWaitHandle]::new(
         $false,[Threading.EventResetMode]::ManualReset,$eventName)
 }
@@ -126,7 +132,8 @@ namespace DeskSpaceR230 {
       foreach(var value in pids)ids.Add((uint)value);
       int count=0;
       Callback callback=(h,d)=>{
-        GetWindowThreadProcessId(h,out uint pid);
+        uint pid=0;
+        GetWindowThreadProcessId(h,out pid);
         if(!ids.Contains(pid) || GetWindow(h,4)!=IntPtr.Zero)return true;
         // Never send WM_CLOSE to a PowerShell console, native dialog or
         // unrelated UI in the same process: those could bypass WPF Closing
