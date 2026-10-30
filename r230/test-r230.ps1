@@ -35,8 +35,8 @@ foreach($line in @(
  '/NOCLOSEAPPLICATIONS',
  '[void]$exitEvent.Reset()'
 )){if(!$super.Contains($line)){throw ('R230 safe full process shutdown missing '+$line)}}
-if($super.Contains(' /CLOSEAPPLICATIONS ') -or $super.Contains('Stop-Process') -or
-   $super.Contains('taskkill')){
+if($super -match '(?m)^\s*(?:Stop-Process|taskkill)(?:\.exe)?\b' -or
+   $super -match '(?<!NO)/CLOSEAPPLICATIONS(?=\s)'){
  throw 'R230 must never forcibly end unsaved Workspace sessions'
 }
 if($update.Contains('if(DeferForOpenDeskSpace(owner,automatic))return;') -or
