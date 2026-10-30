@@ -16,7 +16,7 @@ internal sealed class DeskSpaceZipProgressWindowV206
     private readonly CancellationTokenSource cancel;
     private bool finished;
 
-    private DeskSpaceZipProgressWindow(Window owner,CancellationTokenSource source)
+    private DeskSpaceZipProgressWindowV206(Window owner,CancellationTokenSource source)
     {
         cancel=source;
         window=new Window
