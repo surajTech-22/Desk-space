@@ -49,8 +49,8 @@
     {
       "id": "smartdrop-progress",
       "description": "Cancellable ZIP/copy progress, interruption recovery",
-      "status": "pending",
-      "evidence": ""
+      "status": "implemented",
+      "evidence": "Existing R162/R164/R165 ZIP/copy cancellation, partial cleanup, and progress; R206 bounded ZIP byte progress/Cancel UI with native Windows CI run 41013178784. Physical UI acceptance and post-R206 hardening rerun remain required."
     },
     {
       "id": "duplicate-fingerprints",
