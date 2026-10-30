@@ -40,7 +40,7 @@ jobs:
              throw 'R231 canonical source was not successfully validated'
           }
           New-Item -ItemType Directory -Force '.release-r231/source'|Out-Null
-          gh run download 41082726256 -R $repo -n DeskSpace-R221-Consolidated-Verified-Source -D '.release-r231/source'
+          gh run download 41082726256 -R $repo -n DeskSpace-R231-Native-Verified-Source -D '.release-r231/source'
           if($LASTEXITCODE -ne 0){throw 'Cannot retrieve verified R222 source'}
           & ./r221/verify-single-source.ps1 -ArchivePath '.release-r231/source/DeskSpace-R221-Source.zip' -ManifestPath '.release-r231/source/DeskSpace-R221-Source.manifest.json' -ReceiptPath '.release-r231/source/DeskSpace-R221-Source.sha256.txt'
           $m=Get-Content '.release-r231/source/DeskSpace-R221-Source.manifest.json' -Raw|ConvertFrom-Json
