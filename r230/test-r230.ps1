@@ -13,7 +13,9 @@ foreach($line in @(
  'EventWaitHandle.OpenExisting(EventName(',
  'internal static bool TryCloseWindows(Window[] windows)',
  'window.Close();',
- 'if(!closed)allClosed=false;',
+ 'if(!closed)return false;',
+ 'TryCloseInOrder(windows,Application.Current?.MainWindow);',
+ 'Concat(windows.Where(w=>ReferenceEquals(w,main)))',
  'if(TryCloseWindows(Application.Current.Windows.Cast<Window>().ToArray()))',
  'Application.Current.Shutdown();'
 )){if(!$app.Contains($line)){throw ('R230 WPF respectful full close missing '+$line)}}
