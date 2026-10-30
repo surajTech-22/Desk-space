@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
-$host=[IO.File]::ReadAllText("$root/WidgetHost.cs")
+$hostSourceV225=[IO.File]::ReadAllText("$root/WidgetHost.cs")
 $search=[IO.File]::ReadAllText("$root/DeskSpaceSearchV11.cs")
 $deck=[IO.File]::ReadAllText("$root/DeskSpaceDropShelfV15.cs")
 $model=[IO.File]::ReadAllText("$root/DeskSpaceSearchDeckLayoutV225.cs")
@@ -12,9 +12,9 @@ foreach($part in @(
  'attachedShelf?.SetSearchActiveV225(name=="Search");',
  'attachedShelf?.SetSearchActiveV225(false);'
 )){
- if(!$host.Contains($part)){throw ("R225 Search lifecycle not connected: "+$part)}
+ if(!$hostSourceV225.Contains($part)){throw ("R225 Search lifecycle not connected: "+$part)}
 }
-if($host.Contains('Width=Math.Min(limits.Width,CompactDiameter);Height=48;')){
+if($hostSourceV225.Contains('Width=Math.Min(limits.Width,CompactDiameter);Height=48;')){
  throw 'R225 Search still shrinks to tiny circle diameter'
 }
 if(!$search.Contains('GridLength(42)') -or
