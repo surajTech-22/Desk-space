@@ -33,7 +33,7 @@ foreach($part in @(
  'R227 active supervisor already owns installer',
  'throw new InvalidOperationException("R227 supervised installation already running;',
  'CompleteDeskSpaceUpdate.',
- 'Application.Current.Shutdown();'
+ 'R230 supervisor launched; awaiting coordinated normal shutdown.'
 )){
  if(!$u.Contains($part)){throw ("R227 updater install mutex gate missing "+$part)}
 }
