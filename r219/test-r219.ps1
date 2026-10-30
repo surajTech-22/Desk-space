@@ -25,7 +25,7 @@ foreach($needle in @(
  'Verify(installer,checksum,root);',
  'DeskSpaceVerifiedUpdateQueueV191.Stage(installer,folder,',
  'await StartSupervisor(installer,folder,tag);',
- 'if(DeferForOpenDeskSpace(owner,automatic))return;'
+ 'R230 verified installer ready; independent supervisor will request normal exit of all DeskSpace windows.'
 )){if(!$u.Contains($needle)){throw ('R219 both-channel verification/handoff missing '+$needle)}}
 if(!$t.Contains('TestUpdateChecksumStagingV219();') -or
    !$t.Contains('string published=actual.ToLowerInvariant()')){
