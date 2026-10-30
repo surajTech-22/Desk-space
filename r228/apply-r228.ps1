@@ -53,7 +53,11 @@ Swap $dock @'
                 DeskSpaceMonitorFenceV152.BoundScreen(widget)?.DeviceName ??
                 Forms.Screen.FromHandle(new WindowInteropHelper(owner).Handle).DeviceName;
         }
-        var shift=DeskSpaceDeckOffsetV228.Read(Device());
+        // At constructor time a satellite has not yet been attached to its
+        // native monitor session. Reading here silently copied monitor one's
+        // Deck offset into BOTH widgets.
+        DeskSpaceDeckOffsetV228.Offset shift=new(0,0);
+        bool positionLoaded=false;
         bool dragging=false;
         System.Drawing.Point startCursor=default;
         DeskSpaceDeckOffsetV228.Offset startOffset=new(0,0);
@@ -63,7 +67,21 @@ Swap $dock @'
             // placement callback again, without relocating the OTHER Deck.
             popup.HorizontalOffset=popup.HorizontalOffset==0?0.001:0;
         }
+        void LoadPosition()
+        {
+            if(positionLoaded)return;
+            // Do not guess the primary display before a satellite has its
+            // permanent physical screen assignment.
+            if(owner is WidgetShellWindow widget &&
+                DeskSpaceMonitorSessionsV154.Device(widget)==null)return;
+            shift=DeskSpaceDeckOffsetV228.Read(Device());
+            positionLoaded=true;
+            Reposition();
+        }
+        owner.Loaded+=(_,_)=>LoadPosition();
+        popup.Opened+=(_,_)=>LoadPosition();
         border.PreviewMouseLeftButtonDown+=(_,e)=>{
+            LoadPosition();
             if(e.GetPosition(border).Y>34)return;
             var child=e.OriginalSource as DependencyObject;
             while(child!=null)
