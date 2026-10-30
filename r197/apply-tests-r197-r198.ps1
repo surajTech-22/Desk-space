@@ -53,6 +53,7 @@ $methods=@'
                 null,new object[]{owner,true})!;
             try
             {
+                palette.Show(); // realize WPF visuals before UI Automation-tree checks
                 Assert(palette.Owner==owner && palette.Title=="DeskSpace actions",
                     "R197 command palette must be owned by the current widget");
                 var inputs=Walk(palette).OfType<System.Windows.Controls.TextBox>().ToArray();
