@@ -92,7 +92,7 @@ jobs:
       - name: Checkout DeskSpace
         uses: actions/checkout@v4
 
-      - name: Preflight R180–R195 PowerShell syntax before expensive Windows build
+      - name: Preflight R180–R196 PowerShell syntax before expensive Windows build
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -117,7 +117,8 @@ jobs:
             'r193/apply-r193.ps1','r193/apply-tests-r193.ps1','r193/test-r193.ps1',
             'r194/apply-r194.ps1','r194/apply-tests-r194.ps1','r194/test-r194.ps1',
             'r195/apply-r195.ps1','r195/apply-tests-r195.ps1','r195/test-r195.ps1',
-            'r195/package-canonical-source.ps1'
+            'r195/package-canonical-source.ps1',
+            'r196/build-canonical-source.ps1','r196/test-r196.ps1'
           )){
             $tokens=$null;$parseErrors=$null
             [System.Management.Automation.Language.Parser]::ParseFile(
@@ -126,7 +127,7 @@ jobs:
               throw ("Unsafe PowerShell syntax in "+$script+": "+($parseErrors -join '; '))
             }
           }
-          Write-Host 'R180–R195 PowerShell syntax preflight PASS.'
+          Write-Host 'R180–R196 PowerShell syntax preflight PASS.'
 
       - name: Reconstruct and verify original DeskSpace R1 sources
         shell: pwsh
@@ -1906,6 +1907,11 @@ jobs:
         run: |
           ./r195/package-canonical-source.ps1
 
+      - name: R196 enforce standalone canonical source provenance and build isolation
+        shell: pwsh
+        run: |
+          ./r196/test-r196.ps1
+
       - name: Verify upgrade version and automatic updater linkage
         shell: pwsh
         run: |
@@ -1939,6 +1945,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: R196 independently compile verified source archive (no patch chain)
+        shell: pwsh
+        run: |
+          ./r196/build-canonical-source.ps1
 
       - name: Install Inno Setup on GitHub build runner
         shell: pwsh
