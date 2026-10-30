@@ -68,7 +68,7 @@
       "id": "file-previews",
       "description": "Safe type-aware preview for PDF/Office/audio/code",
       "status": "pending",
-      "evidence": ""
+      "evidence": "Partial R217: native Windows PDF page rendering on user-initiated preview, next/previous up to 100 pages, 32 MiB bound, no extraction/writes. Existing R189 Office package and WAV metadata, R161/R163 ZIP previews retained. Windows CI and real PDF rendering/device acceptance pending; richer document/audio/code preview still required."
     },
     {
       "id": "clipboard-security",
