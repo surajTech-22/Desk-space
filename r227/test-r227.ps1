@@ -9,7 +9,7 @@ $t=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 foreach($part in @(
  'R227 active supervisor owns install lock; duplicate exits without relaunch.',
  'if(!$ownsMutex){',
- 'if($ownsMutex){',
+ 'if($ownsMutex -and !$exitBlocked){',
  'R227 installed widget did not produce matching receipt',
  'R185 verified full-install snapshot',
  'Restore-R185Snapshot $install $snapshot $quarantine'
