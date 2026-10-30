@@ -158,7 +158,7 @@
       "id": "donut-accessibility",
       "description": "Keyboard-only donut, focus, high contrast and screen readers",
       "status": "pending",
-      "evidence": "Partial: R207 per-widget root donut arrow/Enter/Escape keyboard navigation and WPF automation names; R208 root/high-contrast system color routing. Windows CI 41015091790 passed. Nested arcs, screen-reader physical acceptance, reduced-motion and full-focus audit remain pending."
+      "evidence": "Partial: R207 per-widget root donut arrow/Enter/Escape keyboard navigation and WPF automation names; R208 root/high-contrast system color routing. Windows CI 41015091790 passed. Nested arcs, screen-reader physical acceptance, reduced-motion and full-focus audit remain pending. R209 respects Windows client-area/menu animation and high-contrast preferences in widget module morph and nested Information/Excel transitions; native Windows CI 41019555192 PASS with 0 compiler errors. Full screen-reader and all child-arc keyboard acceptance remains outstanding."
     },
     {
       "id": "profile-transfer",
