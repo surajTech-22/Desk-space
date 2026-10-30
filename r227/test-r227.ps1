@@ -16,7 +16,7 @@ foreach($part in @(
 )){
  if(!$s.Contains($part)){throw ("R227 safe supervisor missing "+$part)}
 }
-if($s.Contains("if(!$ownsMutex){throw 'R185 another supervised install is active'}")){
+if($s.Contains('if(!$ownsMutex){throw ''R185 another supervised install is active''}')){
  throw 'R227 mutex loser must not enter failure catch/relaunch'
 }
 foreach($part in @('DeskSpaceReleaseAttemptV227.ShouldDispatch(tag)',
