@@ -137,7 +137,8 @@ jobs:
             'r219/apply-tests-r219.ps1',
             'r222/apply-tests-r222.ps1'
           )){ & $script }
-          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '--r201-only'
+          New-Item -ItemType Directory -Force '.release-r222/evidence'|Out-Null
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.release-r222/evidence' '--r201-only'
           if($LASTEXITCODE -ne 0){throw 'Interim release native WPF/updater tests failed'}
       - name: Install Inno Setup
         shell: pwsh
