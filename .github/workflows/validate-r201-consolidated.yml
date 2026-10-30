@@ -152,7 +152,7 @@ jobs:
       - name: R230 real Win32 WPF close with unsaved-work cancellation
         shell: pwsh
         run: |
-          ./r230/test-native-close-r230.ps1
+          ./r232/test-native-close-r232.ps1
 
       - name: Verify full-install rollback using synthetic files only (R213)
         shell: pwsh
