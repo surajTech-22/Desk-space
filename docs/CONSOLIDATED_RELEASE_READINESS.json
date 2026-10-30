@@ -158,7 +158,7 @@
       "id": "donut-accessibility",
       "description": "Keyboard-only donut, focus, high contrast and screen readers",
       "status": "pending",
-      "evidence": ""
+      "evidence": "Partial: R207 explicit per-widget root donut keyboard mode, twelve-sector arrow navigation, WPF automation names and focus lifecycle; Windows CI run 41014498818 passed. Nested arc keyboard traversal, screen-reader/high-contrast physical acceptance and full accessibility audit still outstanding."
     },
     {
       "id": "profile-transfer",
