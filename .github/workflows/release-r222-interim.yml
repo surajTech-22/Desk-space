@@ -1,9 +1,6 @@
 name: DeskSpace R222 interim release — both update channels
 on:
-  push:
-    branches: [feat/r201-consolidated-roadmap-bundle]
-    paths:
-      - .github/workflows/release-r222-interim.yml
+  # v1.5.1096 already published; require deliberate manual invocation for later runs.
   workflow_dispatch:
 
 permissions:
@@ -210,7 +207,7 @@ jobs:
               }
               if($LASTEXITCODE -ne 0){throw "Failed to publish $tag"}
           }
-          foreach($tag in @('tester-v'+$version,'v'+$version)){
+          foreach($tag in @("tester-v$version","v$version")){
               $release=((gh api "repos/$repo/releases/tags/$tag")|Out-String)|ConvertFrom-Json
               if($LASTEXITCODE -ne 0 -or $release.target_commitish -ne $env:GITHUB_SHA){
                   throw "Published release target SHA mismatch for $tag"
