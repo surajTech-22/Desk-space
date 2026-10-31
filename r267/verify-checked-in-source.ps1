@@ -33,12 +33,13 @@ foreach($file in $actual){
  if(($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){
   throw 'R267 canonical source symbolic links are forbidden'
  }
- $relative=[IO.Path]::GetRelativePath($base,$file.FullName).Replace('\\','/')
+ $relative=[IO.Path]::GetRelativePath($base,$file.FullName).Replace([IO.Path]::DirectorySeparatorChar,[char]'/')
  if(!$map.TryAdd('DeskSpace/'+$relative,$file.FullName)){
   throw 'R267 canonical source contains case-conflicting file names'
  }
 }
 foreach($item in $record.source_files){
+ $path=''
  if(!$map.TryGetValue([string]$item.path,[ref]$path)){
   throw ('R267 canonical source does not contain expected file: '+$item.path)
  }
