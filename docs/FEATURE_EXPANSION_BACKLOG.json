@@ -72,8 +72,9 @@
       "id": "UPD-05",
       "priority": "P0",
       "title": "Signing and artifact provenance",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R250 strict prepublication Authenticode and pinned source-commit/provenance policy; CI synthetic unsigned/tampered rejection, no signing certificate or positive trusted release yet."
     },
     {
       "id": "EXCEL-01",
