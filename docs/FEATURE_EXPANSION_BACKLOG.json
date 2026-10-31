@@ -207,8 +207,9 @@
       "id": "FILE-01",
       "priority": "P2",
       "title": "Safe file transforms and batch rename preview",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R244 local one-folder duplicate-file SHA-256 inspector with bounded and cancellable no-write scans; full file transforms/batch rename still pending."
     },
     {
       "id": "WORK-01",
