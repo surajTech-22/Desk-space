@@ -27,9 +27,11 @@ Swap '    private static List<Profile> Load()' @'
     private static List<Profile> Load()
 '@ 'read-only projection of running windows and connected monitors'
 Swap @'
+        int restored=0,skipped=0;
         foreach(var saved in profile.Windows)
         {
 '@ @'
+        int restored=0,skipped=0;
         foreach(var saved in profile.Windows)
         {
             // Guard before any later fallback: never rehome a window from a
