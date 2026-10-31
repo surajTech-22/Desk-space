@@ -1361,6 +1361,24 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 }));
             });
         var activeMedia=DeskSpaceMediaV18.ActiveV123;
+        if(activeMedia?.DeckDismissedV272==true)
+        {
+            // Close removes transport buttons; only an explicit click
+            // restores them for the same track. Keep a compact affordance
+            // instead of forcing the user to wait for a new song to begin.
+            var restore=new Button{
+                Content="♫  Show media controls",
+                ToolTip="Restore the closed Media Player controls without playing music",
+                FontSize=11,Padding=new Thickness(8,4,8,4),
+                Margin=new Thickness(4,3,4,3)
+            };
+            System.Windows.Automation.AutomationProperties.SetName(
+                restore,"Restore media Deck controls");
+            restore.Click+=(_,_)=>{
+                if(activeMedia.RestoreDeckV272())Render();
+            };
+            list.Children.Add(restore);
+        }
         if(activeMedia?.DeckVisibleV123==true)
         {
             var mediaPanel=new StackPanel{Margin=new Thickness(3,3,3,5)};
