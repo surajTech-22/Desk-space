@@ -76,6 +76,12 @@ internal static class DeskSpaceActionPaletteV197
             case "notes":
                 _=DeskSpaceFeatureNavigationV200.OpenAsync(owner,"NOTES");
                 break;
+            case "quicknote":
+                var main=Application.Current.Windows.OfType<MainWindow>()
+                    .FirstOrDefault(w=>w.IsVisible);
+                if(main!=null)main.ShowQuickNoteV270();
+                else _=DeskSpaceFeatureNavigationV200.OpenAsync(owner,"NOTES");
+                break;
             case "status":
                 DeskSpaceComponentHealthV175.Show(owner,trayVisible);
                 break;
