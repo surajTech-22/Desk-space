@@ -15,19 +15,12 @@ Swap @'
     private string[]? pendingFolderDrop;
 '@ @'
     private string[]? pendingFolderDrop;
-    private Button? zipHoverV256,copyHoverV256;
     private DeskSpaceFolderPreDropV256.Choice choiceV256;
     private System.Windows.Threading.DispatcherTimer? expiryV256;
     private DateTime lastDragV256;
 '@ 'choice and scoped idle cleanup'
 '
 '
-Swap @'
-        actions.Children.Add(zip);
-'@ @'
-        zipHoverV256=zip;copyHoverV256=copyFolder;
-        actions.Children.Add(zip);
-'@ 'visual selection buttons'
 Swap @'
         DeskSpaceMonitorFenceV153.TrackPopup(host,folderChoice);
         host.IsVisibleChanged+=FolderChoiceVisible;
@@ -66,6 +59,19 @@ Swap @'
             or IOException or UnauthorizedAccessException or ArgumentException)
         { return null; }
     }
+    private Button? FindChoiceV256(string caption)
+    {
+        if(folderChoice.Child is Border border &&
+           border.Child is StackPanel panel)
+        {
+            foreach(var group in panel.Children.OfType<StackPanel>())
+                foreach(var button in group.Children.OfType<Button>())
+                    if(string.Equals(button.Content?.ToString(),caption,
+                        StringComparison.OrdinalIgnoreCase))
+                        return button;
+        }
+        return null;
+    }
     private static bool OverV256(Button? button,DragEventArgs e)
     {
         if(button==null||button.ActualWidth<=0||button.ActualHeight<=0)
@@ -76,11 +82,13 @@ Swap @'
     private void MarkV256(DeskSpaceFolderPreDropV256.Choice choice)
     {
         choiceV256=choice;
-        if(zipHoverV256!=null)
-            zipHoverV256.Background=choice==DeskSpaceFolderPreDropV256.Choice.Zip?
+        var zip=FindChoiceV256("ZIP");
+        var copy=FindChoiceV256("Copy");
+        if(zip!=null)
+            zip.Background=choice==DeskSpaceFolderPreDropV256.Choice.Zip?
                 Brushes.LightSkyBlue:SystemColors.ControlBrush;
-        if(copyHoverV256!=null)
-            copyHoverV256.Background=choice==DeskSpaceFolderPreDropV256.Choice.Copy?
+        if(copy!=null)
+            copy.Background=choice==DeskSpaceFolderPreDropV256.Choice.Copy?
                 Brushes.LightSkyBlue:SystemColors.ControlBrush;
     }
     private void PreEnterV256(object sender,DragEventArgs e)
@@ -99,7 +107,7 @@ Swap @'
         if(pendingFolderDrop==null)ShowFolderChoice(paths);
         lastDragV256=DateTime.UtcNow;
         MarkV256(DeskSpaceFolderPreDropV256.Hover(
-            OverV256(zipHoverV256,e),OverV256(copyHoverV256,e)));
+            OverV256(FindChoiceV256("ZIP"),e),OverV256(FindChoiceV256("Copy"),e)));
         e.Effects=DragDropEffects.Copy;
         e.Handled=true;
     }
