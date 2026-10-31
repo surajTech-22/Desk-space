@@ -86,7 +86,7 @@
       "id": "apps-recent-files",
       "description": "Window previews, grouped windows, recent-document actions",
       "status": "pending",
-      "evidence": "Partial R218: stationary-hover running-window preview now chooses native screen-relative popup side with owner-monitor DPI rather than primary-monitor SystemParameters.WorkArea. Existing pinned recent-document actions retained. Windows synthetic geometry CI pending and real physical mixed-DPI acceptance still outstanding."
+      "evidence": "Partial R218: stationary-hover running-window preview now chooses native screen-relative popup side with owner-monitor DPI rather than primary-monitor SystemParameters.WorkArea. Existing pinned recent-document actions retained. Windows synthetic geometry CI pending and real physical mixed-DPI acceptance still outstanding. R261 running app groups multiwindow-first and deterministic per-window ordering (distinct HWND, cap 24). Real Windows hover/focus, cross-monitor previews, and recent-document acceptance still pending."
     },
     {
       "id": "excel-suggestions",
