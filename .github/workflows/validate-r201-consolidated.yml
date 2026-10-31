@@ -106,6 +106,7 @@ jobs:
           ./r230/apply-tests-r230.ps1
           ./r231/apply-tests-r231.ps1
           ./r233/apply-tests-r233.ps1
+          ./r236/apply-tests-r236.ps1
           ./r201/test-r201-r202.ps1
           ./r203/test-r203.ps1
           ./r205/test-r205.ps1
@@ -134,6 +135,7 @@ jobs:
           ./r233/test-r233.ps1
           ./r234/test-r234.ps1
           ./r235/test-r235.ps1
+          ./r236/test-r236.ps1
 
       - name: Validate legacy updater checksum compatibility on synthetic installer
         shell: pwsh
@@ -175,7 +177,12 @@ jobs:
           dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
           if($LASTEXITCODE -ne 0){throw 'Consolidated WPF compilation failed'}
 
-      - name: Run isolated native WPF R201-R235 acceptance (no release)
+      - name: Record actual GitHub runner monitors (separate from synthetic topology)
+        shell: pwsh
+        run: |
+          ./r236/record-runner-displays-r236.ps1
+
+      - name: Run isolated native WPF R201-R236 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
@@ -220,5 +227,6 @@ jobs:
           name: DeskSpace-R201-R202-Validation-Only
           path: |
             .r201/evidence/*.png
+            .r201/evidence/*.json
           if-no-files-found: ignore
           retention-days: 10
