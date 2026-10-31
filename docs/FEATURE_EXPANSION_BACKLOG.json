@@ -149,7 +149,7 @@
       "title": "Safe PDF Office ZIP WAV image and text previews",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R217 existing PDF, R189 office metadata, R240 text/code read-only preview; WPF CI and real-device acceptance pending."
+      "evidence": "R217 PDF + prior Office metadata, R240 text/code, R241 Word DOCX on-demand bounded preview; CI and real-device acceptance pending."
     },
     {
       "id": "DECK-06",
