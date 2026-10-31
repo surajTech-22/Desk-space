@@ -4,27 +4,22 @@ $deck=[IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV
 $service=[IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceFolderPreDropV256.cs')
 $smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 foreach($needle in @(
- 'card.PreviewDragEnter+=PreEnterV256;',
- 'card.PreviewDragOver+=PreOverV256;',
- 'card.PreviewDrop+=PreDropV256;',
- 'host.PreviewDragEnter+=PreEnterV256;',
- 'host.PreviewDragOver+=PreOverV256;',
- 'host.PreviewDrop+=PreDropV256;',
- 'DeskSpaceFolderPreDropV256.Hover(',
+ 'host.PreviewDragEnter+=FolderDragEnter;',
+ 'host.PreviewDrop+=Receive;',
+ 'folderAdorner?.Hover(point);',
+ 'DeskSpaceFolderDragAdornerV160.ChoiceAt(',
+ 'hoverChoiceV256=hovered.HasValue?',
  'DeskSpaceFolderPreDropV256.Authorized(',
- 'if(approved)CommitFolderDrop(zip);',
- 'TimeSpan.FromSeconds(12)',
+ 'if(!busy && approved)',
+ 'hoverChoiceV256=DeskSpaceFolderPreDropV256.Choice.None;',
  'TestFolderPreDropV256();'
 )){
  if(!$deck.Contains($needle) -and !$service.Contains($needle) -and !$smoke.Contains($needle)){
-  throw ('R256 missing native pre-drop safety '+$needle)
+  throw ('R256 missing native adorner pre-drop authorization '+$needle)
  }
 }
-if(!$deck.Contains('if(FolderFilesV256(e)!=null)') -or
-   !$deck.Contains('e.Effects=DragDropEffects.None;')){
- throw 'R256 original Drop handler must block post-drop choices'
+if($deck.Contains('card.PreviewDragOver+=PreOverV256;') -or
+   $deck.Contains('folderChoice.Child is Border')){
+ throw 'R256 must never replace the existing in-circle adorner with a Popup'
 }
-if(!$deck.Contains('expiryV256?.Stop();')){
- throw 'R256 must clear abandoned drag selection and timer'
-}
-Write-Host 'R256 STATIC PASS: ZIP/Copy pre-drop hover, popup and widget HWND handlers, exact-source authorization.'
+Write-Host 'R256 STATIC PASS: existing in-circle pre-drop ZIP/Copy adorner authorizes only matched prior hover and drop.'
