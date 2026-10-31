@@ -1,0 +1,7 @@
+# R265 — fail-closed Deck position persistence on both monitors
+
+R235 protected the per-monitor Deck offset map with a storage-scoped Windows mutex. However, a timed-out mutex, corrupt saved map (R238), access denial, or failed file move would throw directly in the Deck's WPF mouse-up/lost-capture/context-menu handler. On a user's running widget this could trigger an unhandled UI exception. The two-second synchronous mutex wait could also freeze the widget during an ordinary drag.
+
+R265 keeps the serialized, atomic, preserve-existing-map save path unchanged, but bounds mutex contention to 250 ms and guards all three **user-invoked** persistence call sites. A failed save does not alter the other monitor's saved offset or the current Deck's in-memory position; moving/resetting the Deck again can retry. Only the exception type is sent to diagnostic tracing—never monitor IDs, file names, paths, credentials, or offset values. Unexpected programming exceptions remain visible for diagnosis.
+
+Native Windows tests cover successful exact-once callbacks, synthetic I/O/mutex-busy, corrupt-data and access-denied failures, and rejection of unexpected programming exceptions. Full Windows compilation, WPF smoke, and consolidated release gate remain mandatory. Real concurrent physical two-monitor drag testing and installed-PC acceptance are still pending; do not publish Stable/Tester on this change alone.
