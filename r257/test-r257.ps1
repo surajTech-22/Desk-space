@@ -19,8 +19,9 @@ foreach($needle in @(
   throw 'R257 preview safety is missing: '+$needle
  }
 }
-if($layout.Contains('s.DeviceName==saved.Monitor)??Forms.Screen.PrimaryScreen')){
- throw 'R257 must not silently move a disconnected-monitor window to primary'
+if(!$layout.Contains('if(!screens.Any(screen=>string.Equals(screen.DeviceName,') -or
+   !$layout.Contains('saved.Monitor,StringComparison.OrdinalIgnoreCase)))')){
+ throw 'R257 must skip disconnected original monitor before any fallback'
 }
 foreach($forbidden in @('Process.Start(', 'SetWindowPos(', 'File.WriteAll',
  'Clipboard.', 'HttpClient', 'Task.Run(', 'DispatcherTimer')){
