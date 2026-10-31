@@ -23,12 +23,10 @@ Swap @'
 '
 '
 Swap @'
-        zip.Click+=(_,_)=>CommitFolderDrop(true);
-        copyFolder.Click+=(_,_)=>CommitFolderDrop(false);
+        actions.Children.Add(zip);
 '@ @'
-        zip.Click+=(_,_)=>CommitFolderDrop(true);
-        copyFolder.Click+=(_,_)=>CommitFolderDrop(false);
         zipHoverV256=zip;copyHoverV256=copyFolder;
+        actions.Children.Add(zip);
 '@ 'visual selection buttons'
 Swap @'
         DeskSpaceMonitorFenceV153.TrackPopup(host,folderChoice);
