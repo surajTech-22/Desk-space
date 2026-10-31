@@ -103,8 +103,8 @@ $method=@'
             "R236 monitor identity fallback or case handling is unsafe");
         var a=Activator.CreateInstance(offsetType,9000,-9000)!;
         var bounded=clampOffset.Invoke(null,new object[]{a,4096})!;
-        Assert((int)offsetType.GetProperty("X")!.GetValue(bounded)!==4096 &&
-               (int)offsetType.GetProperty("Y")!.GetValue(bounded)!== -4096,
+        Assert((int)offsetType.GetProperty("X")!.GetValue(bounded)! == 4096 &&
+               (int)offsetType.GetProperty("Y")!.GetValue(bounded)! == -4096,
             "R236 independent Deck native offsets must remain bounded");
         Console.WriteLine("R236 PASS: "+covered+
             " synthetic monitor/DPI scenarios, both sides of seam, stacked and negative coordinates, "+
