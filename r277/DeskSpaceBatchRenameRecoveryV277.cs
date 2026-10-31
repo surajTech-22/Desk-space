@@ -281,6 +281,45 @@ internal static class DeskSpaceBatchRenameRecoveryV277
         return result;
     }
 
+    // Explicitly accept the fully completed rename and remove its journal.
+    // This does NOT touch the renamed files; partial/interrupted batches
+    // must be recovered first, never silently accepted.
+    internal static DeskSpaceBatchRenameTransactionV275.Outcome Keep(
+        string folder,CancellationToken cancel)
+    {
+        var failure=new DeskSpaceBatchRenameTransactionV275.Outcome(
+            false,"Only a fully completed reviewed batch can be kept.",0,null);
+        string root;
+        try{root=Canonical(folder);}
+        catch(Exception ex) when(ex is ArgumentException or NotSupportedException
+            or PathTooLongException){return failure;}
+        using var gate=Lock(root);
+        bool acquired=false;
+        try
+        {
+            try{acquired=gate.WaitOne(TimeSpan.FromSeconds(5));}
+            catch(AbandonedMutexException){acquired=true;}
+            if(!acquired)return failure with{Message="Another batch is in progress."};
+            cancel.ThrowIfCancellationRequested();
+            var state=Inspect(root);
+            if(!state.Found||!state.CanRecover||state.Renamed==0||
+               state.Untouched!=0)
+                return failure with{Message="Recovery is not fully complete "+
+                    "or files have changed. Review the batch again."};
+            Clear(root);
+            return new(true,"Kept "+state.Renamed+
+                " renamed files; local undo record cleared.",0,null);
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
+            or InvalidDataException or ArgumentException or
+            OperationCanceledException or System.Security.SecurityException)
+        {
+            return failure with{Message="Could not clear the recovery record ("+
+                ex.GetType().Name+"). Filenames were left unchanged."};
+        }
+        finally{if(acquired)gate.ReleaseMutex();}
+    }
+
     // Explicit user-approved recovery after selecting a folder. Can undo
     // a batch interrupted midway through APPLY or UNDO, or clear a durable
     // record if every file already has its original name.
