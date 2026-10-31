@@ -1,0 +1,11 @@
+# R280 — P1 Smart Context in the existing shared Deck
+
+The 31 October 2026 plan identifies Smart Context Deck as the most promising new core workflow. Before R280 the application already had (1) a separate R237 opt-in application-category suggestion window and (2) R263 read-only Excel signature suggestions inside the Deck, but the general category suggestions were **not available in the Deck**.
+
+R280 adds an opt-in **Smart Context** section directly inside each existing `DeskSpaceDropShelfV15` popup. Click **Start** to install a single per-process `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` listener; all active widget views see the same local session state. It recognizes a coarse process category using the existing R237 classification (`Excel`, `Files`, `Documents`, `Presentations`, `Browser`, `Media`), never titles or opened documents. The session starts **off** and collects nothing until explicitly opted in. A **Stop** button unhooks and clears the session. The final Deck window closing also unhooks and clears state. No file or settings persistence is added, and categories or event counts are not retained across restart.
+
+A fixed whitelist of user-clicked tool launchers is provided per category. Excel opens the existing Excel mapping workspace or clipboard conversions; Files offers palette Search or read-only file preview; Documents and Presentations offer conversions and notes/palette; Browser offers notes and palette. The Deck displays the existing privacy-audit summary. Nothing pastes to Excel, executes scripts, records passwords/URLs or scans content automatically. The per-monitor popup positioning and shared held-file data are unaffected.
+
+Native Windows regression inspects the actual WPF Deck section, checks default-Off opt-in, explicit Stop and audit after a user click, confirms existing process-category classifier and fixed action whitelist, and blocks unknown commands. Running Windows in an environment that disallows accessibility hooks must fail closed.
+
+**Not yet released:** Real multi-display app switching, workbooks and application focus/privacy acceptance are required before Stable/Tester distribution. The existing R237 panel remains for compatibility, but no longer needs to be used to access category suggestions via the Deck.
