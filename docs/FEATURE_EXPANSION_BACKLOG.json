@@ -33,8 +33,9 @@
       "id": "MON-04",
       "priority": "P0",
       "title": "Sleep/resume and reconnect recovery",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R247 event-driven Windows PowerModes.Resume; three bounded delayed topology reconciliations, teardown guard, no settings/Deck overwrite. Native CI and real sleep/reconnect acceptance pending."
     },
     {
       "id": "UPD-01",
