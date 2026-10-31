@@ -74,7 +74,7 @@
       "id": "clipboard-security",
       "description": "Clipboard conversion, privacy filter, optional OCR",
       "status": "pending",
-      "evidence": ""
+      "evidence": " R245 adds explicit Clear local preview in Clipboard conversions; clears local input/output, prevents Copy/Save until another manual read, never accesses Windows Clipboard in clear action. Native UI/real device acceptance pending; opt-in clipboard history/security policy not complete."
     },
     {
       "id": "search-provider",
