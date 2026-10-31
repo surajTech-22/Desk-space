@@ -152,23 +152,17 @@ Swap @'
 '@ 'preview hover, consent and idle recovery'
 Swap @'
         pendingFolderDrop=valid;
-        PositionFolderChoice();
-        folderChoice.IsOpen=host.IsVisible;
 '@ @'
         pendingFolderDrop=valid;
         MarkV256(DeskSpaceFolderPreDropV256.Choice.None);
-        PositionFolderChoice();
-        folderChoice.IsOpen=host.IsVisible;
         WatchDragV256();
 '@ 'only while active drag'
 Swap @'
         pendingFolderDrop=null;
-        folderChoice.IsOpen=false;
 '@ @'
         pendingFolderDrop=null;
         MarkV256(DeskSpaceFolderPreDropV256.Choice.None);
         expiryV256?.Stop();
-        folderChoice.IsOpen=false;
 '@ 'clear consent after drag'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R256: folder ZIP/Copy option shown during native drag; only preselected choice commits on drop.'
