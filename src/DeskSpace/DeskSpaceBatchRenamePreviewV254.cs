@@ -149,6 +149,11 @@ internal static class DeskSpaceBatchRenamePreviewV254
         var restore=new Button{
             Content="Recover reviewed batch",Padding=new Thickness(9,6,9,6),
             Margin=new Thickness(0,0,8,8),IsEnabled=false};
+        var keep=new Button{
+            Content="Keep renamed files",Padding=new Thickness(9,6,9,6),
+            Margin=new Thickness(0,0,8,8),IsEnabled=false};
+        AutomationProperties.SetName(keep,
+            "Accept completed rename and discard durable undo record");
         AutomationProperties.SetName(recovery,
             "Select folder to inspect interrupted rename");
         AutomationProperties.SetName(restore,
@@ -161,6 +166,7 @@ internal static class DeskSpaceBatchRenamePreviewV254
         choices.Children.Add(cancel);
         choices.Children.Add(recovery);
         choices.Children.Add(restore);
+        choices.Children.Add(keep);
         var rows=new StackPanel();
         content.Children.Add(inspect);content.Children.Add(choices);
         content.Children.Add(status);content.Children.Add(rows);
@@ -194,6 +200,23 @@ internal static class DeskSpaceBatchRenamePreviewV254
             recovery.IsEnabled=!value&&undoReceipt==null;
             restore.IsEnabled=!value&&undoReceipt==null&&
                 recoveryReview?.CanRecover==true;
+            keep.IsEnabled=!value&&(undoReceipt!=null ||
+                (recoveryReview?.CanRecover==true &&
+                 recoveryReview.Renamed>0 && recoveryReview.Untouched==0));
+        }
+        bool SameReview(DeskSpaceBatchRenameRecoveryV277.Review a,
+            DeskSpaceBatchRenameRecoveryV277.Review b)
+        {
+            var first=a.Undo?.Moves;
+            var second=b.Undo?.Moves;
+            return a.CanRecover&&b.CanRecover &&
+                a.Renamed==b.Renamed && a.Untouched==b.Untouched &&
+                first!=null && second!=null &&
+                first.Count==second.Count &&
+                first.Zip(second,(x,y)=>
+                    x.Before==y.Before && x.After==y.After &&
+                    x.Length==y.Length &&
+                    x.LastWriteUtc==y.LastWriteUtc).All(match=>match);
         }
         cancel.Click+=(_,_)=>{
             running?.Cancel();
@@ -341,9 +364,7 @@ internal static class DeskSpaceBatchRenamePreviewV254
                recoveryReview?.CanRecover!=true)return;
             var target=recoveryFolder;
             var latest=DeskSpaceBatchRenameRecoveryV277.Inspect(target);
-            if(!latest.CanRecover||
-               latest.Renamed!=recoveryReview.Renamed ||
-               latest.Untouched!=recoveryReview.Untouched)
+            if(!SameReview(latest,recoveryReview))
             {
                 status.Text="Recovery state changed. Review previous batch again.";
                 recoveryReview=null;
@@ -375,6 +396,54 @@ internal static class DeskSpaceBatchRenamePreviewV254
                 status.Text="Recovery stopped ("+ex.GetType().Name+
                     "). Recheck the folder before retrying.";
                 recoveryReview=null;
+            }
+            finally{running=null;Busy(false);}
+        };
+        keep.Click+=async (_,_)=>{
+            if(working)return;
+            var folder=undoReceipt?.Folder??recoveryFolder;
+            if(string.IsNullOrWhiteSpace(folder))return;
+            var review=DeskSpaceBatchRenameRecoveryV277.Inspect(folder);
+            if(!review.CanRecover || review.Renamed==0 ||
+               review.Untouched!=0 ||
+               (recoveryReview!=null &&
+                !SameReview(review,recoveryReview)))
+            {
+                status.Text="Cannot keep this batch: files or recovery state "+
+                    "changed. Review again before accepting.";
+                recoveryReview=null;
+                Busy(false);
+                return;
+            }
+            if(MessageBox.Show(window,
+                "Keep all "+review.Renamed+" renamed files permanently? "+
+                "This removes the saved undo/recovery record but does not "+
+                "move, delete or change any file. This cannot be undone "+
+                "through DeskSpace after confirmation.",
+                "Accept renamed filenames",MessageBoxButton.YesNo,
+                MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;
+            using var cancellation=new CancellationTokenSource();
+            running=cancellation;
+            Busy(true);
+            try
+            {
+                var result=await Task.Run(()=>
+                    DeskSpaceBatchRenameRecoveryV277.Keep(
+                        folder,cancellation.Token));
+                status.Text=result.Message;
+                if(result.Success)
+                {
+                    undoReceipt=null;
+                    recoveryReview=null;
+                    prepared=null;
+                    rows.Children.Clear();
+                }
+            }
+            catch(Exception ex) when(ex is IOException or
+                UnauthorizedAccessException or OperationCanceledException)
+            {
+                status.Text="Could not accept batch ("+ex.GetType().Name+
+                    "). Recovery record retained.";
             }
             finally{running=null;Busy(false);}
         };
