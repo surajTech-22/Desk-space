@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 $p='r36/UiSmoke/Program.cs'
 $lf=[string][char]10;$crlf=[string][char]13+$lf
 $s=[IO.File]::ReadAllText($p).Replace($crlf,$lf)
-$a='                TestExcelSuggestionRevalidationV263();'
+$a='                TestExcelSuggestionRecheckV263();'
 if(([regex]::Matches($s,[regex]::Escape($a))).Count -ne 1){
  throw 'R264 test invocation missing R263 anchor'
 }
