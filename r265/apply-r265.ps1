@@ -25,8 +25,7 @@ crossProcess.WaitOne(TimeSpan.FromMilliseconds(250));
 Swap "$root/DeskSpaceMonitorDockV190.cs" @'
 DeskSpaceDeckOffsetV228.Save(Device(),shift);
 '@ @'
-DeskSpaceDeckSaveGuardV265.TrySave(() =>
-                DeskSpaceDeckOffsetV228.Save(Device(),shift));
+DeskSpaceDeckSaveGuardV265.TrySave(() => DeskSpaceDeckOffsetV228.Save(Device(),shift));
 '@ 3 'protect both drag completion paths and this-monitor-only reset'
 # R235's historical static regression must now expect the intentionally
 # shortened bounded wait. Preserve its other mutex/atomic-file assertions.
