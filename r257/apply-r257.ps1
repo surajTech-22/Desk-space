@@ -65,11 +65,13 @@ Swap @'
 '@ 'inline preview model; do not persist window titles or file paths'
 Swap @'
                 Save(profile);Refresh();
+                pick.SelectedItem=profile.Name;
 '@ @'
                 Save(profile);Refresh();
                 previewedProfileV257=null;
                 previewProofV257=null;
                 previewRowsV257.Children.Clear();
+                pick.SelectedItem=profile.Name;
 '@ 'invalidate prior preview after capture replaces profile'
 Swap @'
         var restore=new Button{Content="Restore selected",
