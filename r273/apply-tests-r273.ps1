@@ -44,7 +44,12 @@ $method=@'
             var window=(Window)create.Invoke(null,new object[]{new Window()})!;
             try
             {
-                var buttons=Walk(window.Content as DependencyObject).OfType<Button>()
+                // WPF VisualTreeHelper cannot traverse a ScrollViewer's
+                // templated content before the test window is shown. Inspect
+                // its constructed logical controls directly, without popups.
+                var root=(StackPanel)((ScrollViewer)window.Content).Content;
+                var commands=root.Children.OfType<WrapPanel>().Single();
+                var buttons=commands.Children.OfType<Button>()
                     .Select(x=>x.Content?.ToString()??"").ToArray();
                 Assert(buttons.Contains("Choose file")&&
                     buttons.Contains("Choose folder")&&
