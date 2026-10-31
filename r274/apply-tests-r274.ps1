@@ -49,8 +49,11 @@ $method=@'
             new object[]{new Window()})!;
         try
         {
-            var labels=Walk(window.Content as DependencyObject)
-                .OfType<Button>()
+            // Unshown WPF windows have no materialized visual tree.
+            // Test real logical controls already built inside the content.
+            var root=(StackPanel)((ScrollViewer)window.Content).Content;
+            var labels=root.Children.OfType<StackPanel>()
+                .SelectMany(group=>group.Children.OfType<Button>())
                 .Select(button=>button.Content?.ToString()??"").ToArray();
             Assert(labels.Contains("Read clipboard (on demand)")&&
                 labels.Contains("Clear local preview")&&
