@@ -38,18 +38,42 @@ foreach($file in $actual){
   throw 'R267 canonical source contains case-conflicting file names'
  }
 }
+# Git on Windows can normalize CRLF/LF during commit/checkout, even
+# when the byte-verified artifact is identical before staging. Compare
+# canonical TEXT by exact characters after newline normalization only.
+# Every generated source member must still match its original SHA256.
+$generated=[IO.Path]::GetFullPath('DeskSpace_Windows_R1/DeskSpace')
+$textExt=@('.cs','.xaml','.csproj','.ps1','.psm1','.json',
+ '.xml','.svg','.txt','.resx','.config','.props','.targets','.manifest')
+$normalized=0
 foreach($item in $record.source_files){
  $path=''
  if(!$map.TryGetValue([string]$item.path,[ref]$path)){
   throw ('R267 canonical source does not contain expected file: '+$item.path)
  }
- if((Get-Item -LiteralPath $path).Length -ne [long]$item.bytes){
-  throw ('R267 canonical source byte size differs from generated: '+$item.path)
+ $relative=([string]$item.path).Substring('DeskSpace/'.Length)
+ $original=Join-Path $generated ($relative.Replace('/',[IO.Path]::DirectorySeparatorChar))
+ if(!(Test-Path -LiteralPath $original -PathType Leaf)){
+  throw ('R267 missing rebuilt reference source: '+$item.path)
  }
- if(![string]::Equals((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash,
-    [string]$item.sha256,[StringComparison]::OrdinalIgnoreCase)){
-  throw ('R267 canonical source content diverged from regenerated: '+$item.path)
+ if((Get-Item -LiteralPath $original).Length -ne [long]$item.bytes -or
+    ![string]::Equals((Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash,
+        [string]$item.sha256,[StringComparison]::OrdinalIgnoreCase)){
+  throw ('R267 rebuilt source does not match SHA-256 manifest: '+$item.path)
  }
+ $currentHash=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+ if([string]::Equals($currentHash,[string]$item.sha256,
+     [StringComparison]::OrdinalIgnoreCase)){continue}
+ if([IO.Path]::GetExtension($path).ToLowerInvariant() -notin $textExt){
+  throw ('R267 non-text canonical source differs in bytes: '+$item.path)
+ }
+ $current=[IO.File]::ReadAllText($path).Replace("`r`n","`n")
+ $reference=[IO.File]::ReadAllText($original).Replace("`r`n","`n")
+ if(![string]::Equals($current,$reference,[StringComparison]::Ordinal)){
+  throw ('R267 checked-in source differs beyond newline representation: '+$item.path)
+ }
+ $normalized++
 }
-Write-Host ('R267 PASS: checked-in canonical project exactly equals '+
- $record.file_count+' independently regenerated, SHA-256 verified source files.')
+Write-Host ('R267 PASS: '+$record.file_count+
+ ' checked-in files reproduce SHA-verified source (newline-only Git conversion in '+
+ $normalized+' text files); non-text assets byte-for-byte unchanged.')
