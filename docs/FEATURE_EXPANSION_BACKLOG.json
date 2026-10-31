@@ -193,8 +193,9 @@
       "id": "CLIP-01",
       "priority": "P2",
       "title": "Opt-in clipboard snippets and conversions",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "Existing on-demand transforms plus R245 local clear; no background history, opt-in retention or privacy exclusions yet."
     },
     {
       "id": "OCR-01",
