@@ -62,7 +62,7 @@
       "id": "smartdrop-actions",
       "description": "Document/image/URL-specific Smart Drop actions",
       "status": "pending",
-      "evidence": ""
+      "evidence": " R244: user-selected, bounded read-only local SHA-256 duplicate inspector under Features. Native tests/real-device acceptance pending; document/image URL Smart Drop and batch operations remain pending."
     },
     {
       "id": "file-previews",
