@@ -27,14 +27,19 @@ Swap '    private static List<Profile> Load()' @'
     private static List<Profile> Load()
 '@ 'read-only projection of running windows and connected monitors'
 Swap @'
-            var screen=screens.FirstOrDefault(s=>
-                s.DeviceName==saved.Monitor)??Forms.Screen.PrimaryScreen;
+        foreach(var saved in profile.Windows)
+        {
 '@ @'
-            // Never silently rehome a saved window to another display.
-            // That could pull another monitor's window across the seam.
-            var screen=screens.FirstOrDefault(s=>
-                string.Equals(s.DeviceName,saved.Monitor,
-                    StringComparison.OrdinalIgnoreCase));
+        foreach(var saved in profile.Windows)
+        {
+            // Guard before any later fallback: never rehome a window from a
+            // disconnected saved monitor onto a different display.
+            if(!screens.Any(screen=>string.Equals(screen.DeviceName,
+                    saved.Monitor,StringComparison.OrdinalIgnoreCase)))
+            {
+                skipped++;
+                continue;
+            }
 '@ 'strict monitor identity on actual restore'
 Swap @'
         var status=new TextBlock{
