@@ -28,4 +28,12 @@ DeskSpaceDeckOffsetV228.Save(Device(),shift);
 DeskSpaceDeckSaveGuardV265.TrySave(() =>
                 DeskSpaceDeckOffsetV228.Save(Device(),shift));
 '@ 3 'protect both drag completion paths and this-monitor-only reset'
+# R235's historical static regression must now expect the intentionally
+# shortened bounded wait. Preserve its other mutex/atomic-file assertions.
+Swap 'r235/test-r235.ps1' @'
+crossProcess.WaitOne(TimeSpan.FromSeconds(2));
+'@ @'
+crossProcess.WaitOne(TimeSpan.FromMilliseconds(250));
+'@ 1 'update prior mutex timeout regression'
+
 Write-Host 'R265: bounded cross-process save contention; WPF Deck drag/reset no longer crash on expected storage errors.'
