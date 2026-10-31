@@ -22,10 +22,8 @@ Swap @'
 '
 '
 Swap @'
-        DeskSpaceMonitorFenceV153.TrackPopup(host,folderChoice);
         host.IsVisibleChanged+=FolderChoiceVisible;
 '@ @'
-        DeskSpaceMonitorFenceV153.TrackPopup(host,folderChoice);
         // Popup has its own HWND. Listen on the owning widget AND popup,
         // before WPF dispatches the original Drop event.
         card.AllowDrop=true;
