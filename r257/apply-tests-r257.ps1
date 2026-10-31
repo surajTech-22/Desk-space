@@ -68,7 +68,7 @@ $method=@'
                 BindingFlags.NonPublic)!.Invoke(null,new object[]{owner})!;
             dialog.Show();dialog.UpdateLayout();
             var buttons=Walk(dialog).OfType<Button>().ToArray();
-            Assert(buttons.Any(x=>x.Content?.ToString()=="Preview selected")&&
+            Assert(buttons.Any(x=>x.Content?.ToString()=="Preview restore")&&
                 buttons.Any(x=>x.Content?.ToString()=="Restore selected"),
                 "R257 native Workspace has explicit preview and restore controls");
         }
