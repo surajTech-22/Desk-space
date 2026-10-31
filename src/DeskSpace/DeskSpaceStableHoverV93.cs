@@ -363,6 +363,33 @@ internal static class DeskSpaceStableHoverV93
         return new Point(x,direction==WindowDirectionV115.Up
             ?-popupHeight-6:targetHeight+6);
     }
+    internal static Button MakeStateButtonV279(
+        DeskSpaceRunningAppsV88.Entry window,bool minimize)
+    {
+        var button=new Button{
+            Content=minimize?"−":"□",
+            Width=21,MinWidth=21,Height=23,MinHeight=23,
+            FontSize=12,
+            Foreground=Brushes.LightSteelBlue,
+            Background=new SolidColorBrush(Color.FromRgb(45,61,94)),
+            BorderThickness=new Thickness(0),
+            Padding=new Thickness(0),
+            VerticalAlignment=VerticalAlignment.Center,
+            Margin=new Thickness(1,1,1,1),
+            ToolTip=minimize?"Minimize this window":"Restore this window"
+        };
+        System.Windows.Automation.AutomationProperties.SetName(button,
+            minimize?"Minimize selected application window":
+                "Restore selected application window");
+        button.Click+=(_,e)=>{
+            e.Handled=true;
+            // A stale or changed HWND is not a valid action target.
+            if(!DeskSpaceRunningAppsV88.RequestStateV279(window,minimize))
+                button.ToolTip="Window changed or closed. Refresh Running Apps.";
+        };
+        return button;
+    }
+
     internal static Button MakeCloseButton(DeskSpaceRunningAppsV88.Entry window)
     {
         var button=new Button{
@@ -662,6 +689,14 @@ internal static class DeskSpaceStableHoverV93
                 close.Click+=(_,_)=>PreserveHoverAfterClose();
                 DockPanel.SetDock(close,Dock.Right);
                 row.Children.Add(close);
+                // Explicit per-window state controls without another
+                // overlay or a duplicated Running Apps module.
+                var windowActions=new StackPanel{
+                    Orientation=Orientation.Horizontal};
+                windowActions.Children.Add(MakeStateButtonV279(selected,true));
+                windowActions.Children.Add(MakeStateButtonV279(selected,false));
+                DockPanel.SetDock(windowActions,Dock.Right);
+                row.Children.Add(windowActions);
                 var choice=new Button{
                     Content=selected.WindowTitle,FontSize=11,
                     Foreground=Brushes.White,
