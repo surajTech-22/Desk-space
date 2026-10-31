@@ -201,6 +201,9 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         host=window;
         Views.Add(this);
         active ??= this;
+        // One opt-in session feeds both monitor-local Deck views; display
+        // positions and UI state remain independent of shared context.
+        DeskSpaceSmartContextDeckV280.Changed+=ContextChangedV280;
         host.AllowDrop=true;
         host.PreviewDragOver+=DragOver;
         host.PreviewDrop+=Receive;
@@ -1164,6 +1167,11 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         mediaDeckStampV123=stamp;
         Render();
     }
+    private void ContextChangedV280()
+    {
+        if(!disposed)Render();
+    }
+
     private void Render()
     {
         if(disposed)return;
@@ -1422,6 +1430,10 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 Margin=new Thickness(2,3,2,4)
             });
         }
+        // Session-only Smart Context appears in THIS Deck and is shared
+        // by the monitor widgets without another monitoring panel.
+        list.Children.Add(DeskSpaceSmartContextDeckV280.CreatePanel(
+            host,ContextChangedV280));
         var suggestionGroup=DeskSpaceShelfGroupsV88.Add(list,
             "Excel paste suggestions",excelMatchesV122.Count,
             excelExpandedV122,()=>{
@@ -1576,6 +1588,8 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         if(disposed)return;
         disposed=true;
         Views.Remove(this);
+        DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
+        if(Views.Count==0)DeskSpaceSmartContextDeckV280.Stop();
         // The media player stays inside the Deck until the FINAL widget
         // goes away. Closing monitor 1 must not open an extra floating
         // player over monitor 2. Preserve other teardown hooks.
