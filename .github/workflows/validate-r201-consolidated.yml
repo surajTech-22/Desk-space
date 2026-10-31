@@ -228,19 +228,11 @@ jobs:
           ./r221/package-single-source.ps1
           ./r221/test-r221.ps1
 
-      - name: R221 independently rebuild unpacked source with no patch scripts
+      - name: R248 rebuild only verified canonical source ZIP, receipt and manifest
         shell: pwsh
         run: |
-          $ErrorActionPreference='Stop'
-          $source='r221/output/DeskSpace-R221-Source.zip'
-          $target=Join-Path $env:RUNNER_TEMP ('deskspace-r221-rebuild-'+[guid]::NewGuid().ToString('N'))
-          try {
-            [IO.Compression.ZipFile]::ExtractToDirectory($source,$target,$false)
-            dotnet build (Join-Path $target 'DeskSpace/DeskSpace.csproj') -c Release --nologo -p:ContinuousIntegrationBuild=true
-            if($LASTEXITCODE -ne 0){throw 'R221 independent canonical source build failed'}
-          } finally {
-            if(Test-Path $target){Remove-Item -LiteralPath $target -Recurse -Force}
-          }
+          ./r248/test-r248.ps1
+          ./r248/build-verified-source.ps1 -ArchivePath 'r221/output/DeskSpace-R221-Source.zip' -ManifestPath 'r221/output/DeskSpace-R221-Source.manifest.json' -ReceiptPath 'r221/output/DeskSpace-R221-Source.sha256.txt'
 
       - name: Upload verified consolidated source (NON-RELEASE build evidence)
         if: success()
