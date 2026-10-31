@@ -43,8 +43,8 @@ $method=@'
                Names("Browser").SequenceEqual(new[]{"notes","palette"}) &&
                Names("Media").SequenceEqual(new[]{"palette"}),
             "R280 context is off by default and suggestions are fixed category actions");
-        Assert((string)classify.Invoke(null,new object[]{"EXCEL"})!=="Excel" &&
-               (string)classify.Invoke(null,new object[]{"explorer"})!=="Files",
+        Assert((string)classify.Invoke(null,new object[]{"EXCEL"})=="Excel" &&
+               (string)classify.Invoke(null,new object[]{"explorer"})=="Files",
             "R280 reuses existing process-only category recognition");
         var owner=new Window{Title="R280 context smoke"};
         int refreshed=0;
