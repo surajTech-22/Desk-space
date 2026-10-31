@@ -98,7 +98,7 @@
       "id": "excel-transactions",
       "description": "Excel undo journal, formula/table/format readback",
       "status": "pending",
-      "evidence": " R242 added fail-closed full-range cell metadata checks (known storage types/occupancy for both source and destination) with native negative tests. No real Office/formula/format readback or transactional rollout verified."
+      "evidence": " R242 added fail-closed full-range cell metadata checks (known storage types/occupancy for both source and destination) with native negative tests. No real Office/formula/format readback or transactional rollout verified. R251 source R1C1 validator rejects all-missing, mismatched, oversized and invalid formula metadata before blank format/formula paste; real Office acceptance pending."
     },
     {
       "id": "excel-office-tests",
