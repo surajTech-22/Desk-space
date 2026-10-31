@@ -4,13 +4,13 @@ $layout=[IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceWindowLa
 $plan=[IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceWindowRestorePlanV257.cs')
 $smoke=[IO.File]::ReadAllText('r36/UiSmoke/Program.cs')
 foreach($needle in @(
- 'internal static DeskSpaceWindowRestorePlanV257.Plan Preview(Profile profile)',
+ 'internal static DeskSpaceWindowRestorePlanV257.Plan DetailedPreviewV257(Profile profile)',
  'DeskSpaceWindowRestorePlanV257.Build(profile.Windows,live,screens)',
- 'Content="Preview selected"',
- 'previewProofV257=ProofV257(plan)',
- 'Preview this profile before restoring',
- 'Windows or monitors changed. Preview again before restore.',
- 'previewedProfileV257=null;',
+ 'Content="Preview restore"',
+ 'proofV257=SignatureV257(profile,planV257)',
+ 'Preview the selected profile before restoring',
+ 'Windows or monitors changed. Preview again.',
+ 'previewedV257=null;',
  'Saved monitor disconnected',
  'new HashSet<int>()',
  'TestWindowRestorePreviewV257();'
@@ -19,9 +19,9 @@ foreach($needle in @(
   throw 'R257 preview safety is missing: '+$needle
  }
 }
-if(!$layout.Contains('if(!screens.Any(screen=>string.Equals(screen.DeviceName,') -or
-   !$layout.Contains('saved.Monitor,StringComparison.OrdinalIgnoreCase)))')){
- throw 'R257 must skip disconnected original monitor before any fallback'
+if(!$layout.Contains('if(screen==null){skipped++;continue;}') -or
+   !$layout.Contains('s.DeviceName.Equals(saved.Monitor,')){
+ throw 'R257 must retain existing exact-monitor restore skip without a primary fallback'
 }
 foreach($forbidden in @('Process.Start(', 'SetWindowPos(', 'File.WriteAll',
  'Clipboard.', 'HttpClient', 'Task.Run(', 'DispatcherTimer')){
