@@ -141,6 +141,9 @@ public partial class MainWindow
             ()=>DeskSpaceClipboardTransformsV177.Show(this));
 
         Section("Files");
+        Add("Preview file or folder",
+            "Choose a PDF, Word, ZIP, image, text file or folder for a safe read-only preview.",
+            ()=>DeskSpacePreviewChooserV273.Show(this));
         Add("Duplicate-file inspector",
             "Select one folder to find matching SHA-256 files, without deleting or moving anything.",
             ()=>DeskSpaceFileDuplicatesV244.Show(this));
