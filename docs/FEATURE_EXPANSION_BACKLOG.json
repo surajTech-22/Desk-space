@@ -186,8 +186,9 @@
       "id": "CTX-03",
       "priority": "P1",
       "title": "Context permission and privacy audit",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R258 category-only, opt-in foreground listener privacy audit, on Stop wipe session recommendation/category/count and reject pending WinEvent callback. Native Windows tests/real consent acceptance pending."
     },
     {
       "id": "SEARCH-01",
