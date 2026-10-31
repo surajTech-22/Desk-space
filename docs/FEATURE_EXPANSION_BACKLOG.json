@@ -257,8 +257,9 @@
       "id": "UI-01",
       "priority": "P1",
       "title": "Settings crash resilience and clear navigation",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R255 Features-initiated Settings/tool-launch error containment and secret-redacted status; standalone Widget Settings dialog, real installed Windows and full navigation accessibility still pending."
     },
     {
       "id": "UI-02",
