@@ -47,6 +47,9 @@ internal static class DeskSpaceActionPaletteV197
     {
         switch(command.Id)
         {
+            case "previewfile":
+                DeskSpacePreviewChooserV273.Show(owner);
+                break;
             case "universalsearch":
                 var search=new UniversalSearchWindow(
                     ()=>new WorkspaceStore().Load(),WidgetSettingsV3.Load());
