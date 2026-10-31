@@ -17,7 +17,8 @@ internal static class DeskSpaceClipboardTransformsV177
     internal const int MaxChars=262144;
     internal static readonly string[] Modes={
         "Plain text","Markdown literal","JSON string","JSON object","Markdown link",
-        "Format JSON","CSV to Markdown table","Unique lines"
+        "Format JSON","Minify JSON","CSV to Markdown table",
+        "Unique lines","Sort lines","Trim lines"
     };
     private static readonly Dictionary<Window,Window> Windows=new();
 
@@ -35,7 +36,9 @@ internal static class DeskSpaceClipboardTransformsV177
                 new Dictionary<string,string>{{"text",text}},
                 new JsonSerializerOptions{WriteIndented=true}),
             "Markdown link"=>MarkdownLink(text),
-            "Format JSON" or "CSV to Markdown table" or "Unique lines"=>
+            "Format JSON" or "Minify JSON" or
+            "CSV to Markdown table" or "Unique lines" or
+            "Sort lines" or "Trim lines"=>
                 DeskSpaceTextConversionsV198.Convert(text,mode),
             _=>throw new ArgumentOutOfRangeException(nameof(mode))
         };
@@ -71,7 +74,7 @@ internal static class DeskSpaceClipboardTransformsV177
     }
     private static string Extension(string mode)=>mode switch
     {
-        "JSON string" or "JSON object" or "Format JSON"=>".json",
+        "JSON string" or "JSON object" or "Format JSON" or "Minify JSON"=>".json",
         "Markdown literal" or "Markdown link" or "CSV to Markdown table"=>".md",
         _=>".txt"
     };
@@ -127,7 +130,13 @@ internal static class DeskSpaceClipboardTransformsV177
                 result.Text=output;copy.IsEnabled=true;save.IsEnabled=true;
                 status.Text="Preview ready. No clipboard or file changed.";
             }
-            catch(ArgumentException ex){status.Text=ex.Message;}
+            catch(Exception ex) when(ex is ArgumentException or
+                FormatException or JsonException)
+            {
+                // Malformed user-selected text is an ordinary validation
+                // outcome, not a reason for the entire UI to close.
+                status.Text="Cannot convert: "+ex.Message;
+            }
         }
         mode.SelectionChanged+=(_,_)=>Refresh();
         var read=new Button{Content="Read clipboard (on demand)",
@@ -195,7 +204,24 @@ internal static class DeskSpaceClipboardTransformsV177
             if(dialog.ShowDialog(window)!=true)return;
             try
             {
-                File.WriteAllText(dialog.FileName,output,new UTF8Encoding(false));
+                // An incomplete write must not truncate a previous export.
+                // Stage on the destination volume, then replace only after
+                // the user explicitly approved the SaveFileDialog.
+                var destination=dialog.FileName;
+                var directory=Path.GetDirectoryName(destination)!;
+                var temporary=Path.Combine(directory,
+                    ".deskspace-"+Guid.NewGuid().ToString("N")+".partial");
+                try
+                {
+                    File.WriteAllText(temporary,output,new UTF8Encoding(false));
+                    File.Move(temporary,destination,true);
+                }
+                finally
+                {
+                    try{if(File.Exists(temporary))File.Delete(temporary);}
+                    catch(IOException){}
+                    catch(UnauthorizedAccessException){}
+                }
                 status.Text="Saved by request.";
             }
             catch(Exception ex)when(ex is IOException or UnauthorizedAccessException)
