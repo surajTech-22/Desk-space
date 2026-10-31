@@ -223,8 +223,9 @@
       "id": "WORK-01",
       "priority": "P2",
       "title": "Workspace profile preview and consented restoration",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R179 explicit layout capture/restore plus R257 read-only per-window target preview, no silent monitor fallback, single-use rechecked consent; real physical monitors and installed profile acceptance remain."
     },
     {
       "id": "REM-01",
