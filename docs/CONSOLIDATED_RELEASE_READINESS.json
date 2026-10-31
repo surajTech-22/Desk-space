@@ -8,7 +8,7 @@
       "id": "source-migration",
       "description": "Authoritative source tree replacing versioned reconstruction",
       "status": "pending",
-      "evidence": "R221 produces a deterministic fully patched WPF source archive with every allowed file SHA-256, embedded/external manifest, ZIP SHA-256, tamper rejection and independent Windows rebuild. This is a verified CI artifact; moving the authoritative source into git and deleting historical reconstruction are still pending."
+      "evidence": "R221 produces a deterministic fully patched WPF source archive with every allowed file SHA-256, embedded/external manifest, ZIP SHA-256, tamper rejection and independent Windows rebuild. This is a verified CI artifact; moving the authoritative source into git and deleting historical reconstruction are still pending. R248 independent source archive verification/rebuild command added, migration of source into checked-in editable project remains pending."
     },
     {
       "id": "dual-monitor-real",
@@ -44,7 +44,7 @@
       "id": "signed-release",
       "description": "Code-signing and integrity/publisher verification policy",
       "status": "pending",
-      "evidence": ""
+      "evidence": " R249 synthetic same-SHA Stable/Tester guard; signing, trusted provenance and real dual-channel publishing still pending."
     },
     {
       "id": "smartdrop-progress",
