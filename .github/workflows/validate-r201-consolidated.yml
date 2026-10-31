@@ -296,6 +296,7 @@ jobs:
         shell: pwsh
         run: |
           ./r267/test-r267.ps1
+          ./r268/test-r268.ps1
           ./r267/verify-checked-in-source.ps1
           dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
           if($LASTEXITCODE -ne 0){throw 'R267 checked-in canonical project build failed'}
