@@ -12,10 +12,10 @@ function Swap([string]$before,[string]$after,[string]$why)
 }
 Swap @'
     internal static Offset Clamp(Offset shift,int max=4096)=>
-        new(Math.Clamp(shift.X,-max,max),Math.Clamp(shift.Y,-max));
+        new(Math.Clamp(shift.X,-max,max),Math.Clamp(shift.Y,-max,max));
 '@ @'
     internal static Offset Clamp(Offset shift,int max=4096)=>
-        new(Math.Clamp(shift.X,-max,max),Math.Clamp(shift.Y,-max));
+        new(Math.Clamp(shift.X,-max,max),Math.Clamp(shift.Y,-max,max));
 
     // Parses the entire existing saved Deck layout before any mutation.
     // Corrupt, oversized, duplicate-cased or invalid data must never be
