@@ -133,8 +133,9 @@
       "id": "DECK-02",
       "priority": "P1",
       "title": "Pinned apps recent document actions",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R262 explicit right click on existing pinned app sector opens on-demand per-app Windows Recent document choices (max 70 shortcuts scanned, 10 safe matches); exact OS association, allowlist and click-time revalidation; WPF native tests in CI, real Office/Windows Recent dual-monitor acceptance remains."
     },
     {
       "id": "DECK-03",
