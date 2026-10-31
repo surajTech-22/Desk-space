@@ -44,6 +44,16 @@ internal static class DeskSpaceActionPaletteV197
     {
         switch(command.Id)
         {
+            case "universalsearch":
+                var search=new UniversalSearchWindow(
+                    ()=>new WorkspaceStore().Load(),WidgetSettingsV3.Load());
+                if(owner.IsVisible)
+                {
+                    search.Owner=owner;
+                    search.WindowStartupLocation=WindowStartupLocation.CenterOwner;
+                }
+                search.Show();
+                break;
             case "searchhealth":
                 DeskSpaceSearchIndexHealthV260.Show(owner);
                 break;
