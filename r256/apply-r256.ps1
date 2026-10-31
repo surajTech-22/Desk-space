@@ -20,16 +20,8 @@ Swap @'
     private System.Windows.Threading.DispatcherTimer? expiryV256;
     private DateTime lastDragV256;
 '@ 'choice and scoped idle cleanup'
-Swap @'
-            Text="Dropped folder",FontSize=12,
-'@ @'
-            Text="Folder: ZIP or Copy before dropping",FontSize=12,
-'@ 'during-drag heading'
-Swap @'
-            Text="ZIP or copy the folder?",FontSize=11,
-'@ @'
-            Text="Hover an option, then release",FontSize=11,
-'@ 'during-drag hint'
+'
+'
 Swap @'
         zip.Click+=(_,_)=>CommitFolderDrop(true);
         copyFolder.Click+=(_,_)=>CommitFolderDrop(false);
