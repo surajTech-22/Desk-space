@@ -10,7 +10,7 @@ foreach($token in @(
  'gate.WaitOne(TimeSpan.FromSeconds(2))',
  'catch(AbandonedMutexException){acquired=true;}',
  'File.Move(temp,path,true);',
- 'throw new InvalidDataException("Monitor positions contain invalid or duplicate identities.");',
+ '"Monitor positions contain invalid or duplicate identities."',
  'internal static Position? Read(string device)=>ReadAt(FilePath,device);',
  'DeskSpaceMonitorPositionStoreV278.Save(',
  'DeskSpaceMonitorPositionStoreV278.Read(session.Device)',
