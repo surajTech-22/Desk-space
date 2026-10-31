@@ -26,7 +26,7 @@ $method=@'
         object[] Select(System.Collections.IList items)=>
             ((System.Collections.IEnumerable)filter.Invoke(null,
                 new object[]{"excel.exe",items})!).Cast<object>().ToArray();
-        var root=Path.Combine(outdir,"r262-pinned-recent");
+        var root=Path.GetFullPath(Path.Combine(outdir,"r262-pinned-recent"));
         Directory.CreateDirectory(root);
         try
         {
@@ -45,15 +45,6 @@ $method=@'
             Add(docs,blocked,DateTime.UtcNow,"excel.exe");
             Add(docs,other,DateTime.UtcNow,"AcroRd32.exe");
             var selected=Select(docs);
-            Console.WriteLine("R262 diagnostic synthetic candidate count="+
-                selected.Length+"; chosen="+
-                string.Join(", ",selected.Select(x=>x.GetType()
-                    .GetProperty("Path")!.GetValue(x)?.ToString()))+
-                "; safeExcel="+safe.Invoke(null,new object?[]{excel})+
-                "; sameHandler="+
-                Product.GetType("DeskSpace.DeskSpacePinnedRecentV122",true)!
-                    .GetMethod("SameExecutableV122",flags)!
-                    .Invoke(null,new object[]{"excel.exe","excel.exe"}));
             Assert(selected.Length==2 &&
                    (string)selected[0].GetType()
                      .GetProperty("Path")!.GetValue(selected[0])! == excel,
