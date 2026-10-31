@@ -36,6 +36,8 @@ internal static class DeskSpaceActionPaletteV197
         new("diagnostics","Export diagnostics","Save privacy-safe troubleshooting ZIP to Downloads","System",true),
         new("previewfile","Preview file or folder",
             "Choose a local file or folder and inspect it without opening an external app","Files"),
+        new("batchrename","Batch rename and recovery",
+            "Review, apply, undo or recover an interrupted batch rename","Files"),
         new("downloads","Open Downloads folder","Show the ordinary Windows Downloads folder","Files")
     };
     private static readonly Dictionary<Window,Window> Open=new();
@@ -47,6 +49,9 @@ internal static class DeskSpaceActionPaletteV197
     {
         switch(command.Id)
         {
+            case "batchrename":
+                DeskSpaceBatchRenamePreviewV254.Show(owner);
+                break;
             case "previewfile":
                 DeskSpacePreviewChooserV273.Show(owner);
                 break;
