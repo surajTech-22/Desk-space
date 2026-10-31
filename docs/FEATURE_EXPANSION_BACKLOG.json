@@ -76,8 +76,9 @@
       "id": "EXCEL-01",
       "priority": "P0",
       "title": "Entire-range no-partial paste guard",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R107 full rectangle occupancy gate now hardened by R242 to reject unknown, null and contradictory source/destination stored types before empty acceptance; CI and real Excel acceptance pending."
     },
     {
       "id": "EXCEL-02",
