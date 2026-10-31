@@ -258,8 +258,9 @@
       "id": "UI-02",
       "priority": "P1",
       "title": "Full keyboard and screen-reader accessibility",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R207 root donut key model + R199 Ctrl+K existing; R246 F1 help with 10 scoped verified shortcuts and accessible WPF close. Screen-reader/keyboard-only full flow still pending."
     },
     {
       "id": "PERF-01",
