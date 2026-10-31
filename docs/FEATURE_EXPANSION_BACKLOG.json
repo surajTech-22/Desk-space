@@ -125,8 +125,9 @@
       "id": "DECK-01",
       "priority": "P1",
       "title": "Window grouping and stationary-hover previews",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R261 true distinct-HWND multiwindow-first running apps Deck order, descending window count, alphabetical single-window fallback, stable grouped flyout order and 24-icon cap. Native Windows CI / mixed-DPI physical hover acceptance pending."
     },
     {
       "id": "DECK-02",
