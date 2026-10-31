@@ -80,6 +80,7 @@ jobs:
           ./r231/apply-r231.ps1
           ./r233/apply-r233.ps1
           ./r234/apply-r234.ps1
+          ./r235/apply-r235.ps1
           ./r201/apply-tests-r201-r202.ps1
           ./r203/apply-tests-r203.ps1
           ./r205/apply-tests-r205.ps1
@@ -132,6 +133,7 @@ jobs:
           ./r231/test-r231.ps1
           ./r233/test-r233.ps1
           ./r234/test-r234.ps1
+          ./r235/test-r235.ps1
 
       - name: Validate legacy updater checksum compatibility on synthetic installer
         shell: pwsh
@@ -173,7 +175,7 @@ jobs:
           dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
           if($LASTEXITCODE -ne 0){throw 'Consolidated WPF compilation failed'}
 
-      - name: Run isolated native WPF R201-R234 acceptance (no release)
+      - name: Run isolated native WPF R201-R235 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
