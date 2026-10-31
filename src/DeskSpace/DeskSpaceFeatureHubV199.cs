@@ -120,6 +120,14 @@ public partial class MainWindow
         Section("Find and use tools");
         Add("Action Palette","Find DeskSpace commands with type, arrow keys and Enter.",
             ()=>DeskSpaceActionPaletteV197.Show(this,false));
+        Add("Universal search",
+            "Search files, installed apps, settings, notes, reminders and calendar in one place.",
+            ()=>{
+                var window=new UniversalSearchWindow(()=>data,WidgetSettingsV3.Load()){
+                    Owner=this,WindowStartupLocation=WindowStartupLocation.CenterOwner
+                };
+                window.Show();
+            });
         Add("Keyboard shortcuts guide",
             "Press F1 in Workspace to view verified DeskSpace shortcuts and their scope.",
             ()=>DeskSpaceKeyboardHelpV246.Show(this));
