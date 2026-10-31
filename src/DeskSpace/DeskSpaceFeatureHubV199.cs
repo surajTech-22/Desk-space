@@ -148,8 +148,8 @@ public partial class MainWindow
             "Select one folder to find matching SHA-256 files, without deleting or moving anything.",
             ()=>DeskSpaceFileDuplicatesV244.Show(this));
 
-        Add("Batch rename preview",
-            "Preview prefix/suffix filename changes and collision errors. Never renames files.",
+        Add("Batch rename and recovery",
+            "Review and apply bounded filename changes, undo a batch, or safely recover after interruption.",
             ()=>DeskSpaceBatchRenamePreviewV254.Show(this));
 
         Section("Windows and workspace");
