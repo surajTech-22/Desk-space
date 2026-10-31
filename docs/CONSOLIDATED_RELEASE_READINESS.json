@@ -128,7 +128,7 @@
       "id": "media-deck",
       "description": "Media playback, mute, close in shared Deck",
       "status": "pending",
-      "evidence": ""
+      "evidence": " R243 correction for media integration when one of two monitor Decks closes; native two-instance test pending Windows CI. Full playback/music-session and device checks still outstanding."
     },
     {
       "id": "settings-ui",
