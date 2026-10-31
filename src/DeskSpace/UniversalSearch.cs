@@ -84,7 +84,8 @@ public sealed class UniversalSearchWindow : Window
     }
     private void CopyPath(SearchHit h)
     {
-        if(h.Category is "Files" or "Applications" && !string.IsNullOrWhiteSpace(h.OpenTarget))
+        if((h.Category is "Files" or "Applications") &&
+           !string.IsNullOrWhiteSpace(h.OpenTarget))
             Clipboard.SetText(h.OpenTarget);
     }
     private void CopyFile(SearchHit h)
