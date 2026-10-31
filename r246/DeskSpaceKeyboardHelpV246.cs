@@ -72,8 +72,10 @@ internal static class DeskSpaceKeyboardHelpV246
         var window=new Window{
             Title="DeskSpace — Keyboard shortcuts",
             Width=525,Height=580,MinWidth=395,MinHeight=320,
-            ShowInTaskbar=false,Owner=owner,
-            WindowStartupLocation=WindowStartupLocation.CenterOwner,
+            ShowInTaskbar=false,
+            Owner=owner.IsVisible?owner:null,
+            WindowStartupLocation=owner.IsVisible?
+                WindowStartupLocation.CenterOwner:WindowStartupLocation.CenterScreen,
             Background=Brushes.White,
             Content=new ScrollViewer{
                 Content=content,
