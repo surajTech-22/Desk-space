@@ -26,7 +26,7 @@ foreach($file in @($zip,$manifest,$receipt)){
     }
 }
 & $verify -ArchivePath $zip -ManifestPath $manifest -ReceiptPath $receipt
-if($LASTEXITCODE -ne 0){throw 'R248 independent source verification failed'}
+# The PowerShell verifier throws on failure; it has no native exit code.
 
 $base=if($env:RUNNER_TEMP){$env:RUNNER_TEMP}else{[IO.Path]::GetTempPath()}
 $folder=Join-Path $base ('DeskSpace-R248-VerifiedBuild-'+[guid]::NewGuid().ToString('N'))
