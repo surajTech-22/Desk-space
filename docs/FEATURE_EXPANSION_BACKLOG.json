@@ -88,8 +88,9 @@
       "id": "EXCEL-02",
       "priority": "P0",
       "title": "Formula, format, ListObject capture and readback",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R251 R1C1 formula source integrity guard in direct Excel preview and blank-target writes. Existing capture/R139-R141 readback retained; real Office workbooks and full formatting/table acceptance pending."
     },
     {
       "id": "EXCEL-03",
