@@ -44,7 +44,7 @@
       "id": "signed-release",
       "description": "Code-signing and integrity/publisher verification policy",
       "status": "pending",
-      "evidence": " R249 synthetic same-SHA Stable/Tester guard; signing, trusted provenance and real dual-channel publishing still pending."
+      "evidence": " R249 synthetic same-SHA Stable/Tester guard; signing, trusted provenance and real dual-channel publishing still pending. R250 strict Authenticode signer+commit+SHA provenance check and synthetic unsigned rejection; positive signed build/official attestation missing."
     },
     {
       "id": "smartdrop-progress",
