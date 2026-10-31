@@ -4,6 +4,10 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace DeskSpace;
@@ -180,6 +184,113 @@ internal static class DeskSpaceSmartContextDeckV280
             {Debug.WriteLine("Context Deck unhook: "+ex.GetType().Name);}
         }
         Changed?.Invoke();
+    }
+
+    // The active context appears INSIDE the existing Deck, not in another
+    // independent tool window. Actions are a fixed local whitelist and only
+    // launch following a real click; none writes Excel cells automatically.
+    internal static Border CreatePanel(Window owner,Action refresh)
+    {
+        var state=State;
+        var content=new StackPanel{Margin=new Thickness(8,6,8,7)};
+        var header=new DockPanel{LastChildFill=true};
+        var toggle=new Button{
+            Content=state.Listening?"Stop":"Start",
+            Padding=new Thickness(7,3,7,3),
+            MinWidth=48,Margin=new Thickness(5,0,0,0),
+            ToolTip=state.Listening?
+                "Stop listening and erase this session's context":
+                "Start process-category foreground listener; session only"};
+        AutomationProperties.SetName(toggle,state.Listening?
+            "Stop Smart Context Deck monitoring":
+            "Start Smart Context Deck monitoring");
+        DockPanel.SetDock(toggle,Dock.Right);
+        header.Children.Add(toggle);
+        header.Children.Add(new TextBlock{
+            Text=state.Listening?"Smart Context · "+state.Category:
+                "Smart Context · Off",
+            FontWeight=FontWeights.SemiBold,FontSize=11,
+            Foreground=Brushes.White,VerticalAlignment=VerticalAlignment.Center
+        });
+        content.Children.Add(header);
+        var status=new TextBlock{
+            Text=state.Listening?
+                "Suggestions are local, read-only recommendations. "+
+                "Choose any action explicitly.":
+                "Opt in to suggestions based only on the active app category.",
+            FontSize=10,TextWrapping=TextWrapping.Wrap,
+            Foreground=Brushes.LightSteelBlue,
+            Margin=new Thickness(0,5,0,5)
+        };
+        content.Children.Add(status);
+        toggle.Click+=(_,_)=>{
+            if(state.Listening)Stop();
+            else if(!Start(owner.Dispatcher))
+            {
+                status.Text="Windows foreground listener unavailable. "+
+                    "No monitoring started.";
+                refresh();
+            }
+        };
+        if(state.Listening)
+        {
+            foreach(var suggestion in Actions(state.Category))
+            {
+                var entry=suggestion;
+                var button=new Button{
+                    Content=entry.Label,FontSize=11,
+                    Padding=new Thickness(6,5,6,5),
+                    Margin=new Thickness(0,2,0,2),
+                    HorizontalContentAlignment=HorizontalAlignment.Left,
+                    ToolTip="Open this DeskSpace tool only when clicked; "+
+                        "no automatic data access or paste"
+                };
+                AutomationProperties.SetName(button,
+                    "Smart Context suggestion: "+entry.Label);
+                button.Click+=(_,_)=>Open(owner,entry.Id);
+                content.Children.Add(button);
+            }
+            content.Children.Add(new TextBlock{
+                Text=Audit(state),FontSize=9,
+                TextWrapping=TextWrapping.Wrap,
+                Foreground=Brushes.LightSteelBlue,
+                Margin=new Thickness(0,5,0,0)
+            });
+        }
+        return new Border{
+            Child=content,
+            Background=new SolidColorBrush(Color.FromRgb(39,53,83)),
+            BorderBrush=new SolidColorBrush(Color.FromRgb(72,88,125)),
+            BorderThickness=new Thickness(1),
+            CornerRadius=new CornerRadius(7),
+            Margin=new Thickness(2,3,2,4)
+        };
+    }
+
+    internal static void Open(Window owner,string id)
+    {
+        switch(id)
+        {
+            case "excel":
+                _=DeskSpaceFeatureNavigationV200.OpenExcelAsync(owner);
+                break;
+            case "clipboard":
+                DeskSpaceClipboardTransformsV177.Show(owner);
+                break;
+            case "search":
+            case "palette":
+                DeskSpaceActionPaletteV197.Show(owner,false);
+                break;
+            case "preview":
+                DeskSpacePreviewChooserV273.Show(owner);
+                break;
+            case "notes":
+                _=DeskSpaceFeatureNavigationV200.OpenAsync(owner,"NOTES");
+                break;
+            default:
+                throw new ArgumentException(
+                    "Unknown context action. No operation performed.");
+        }
     }
 
     internal static string Audit(Snapshot state)=>
