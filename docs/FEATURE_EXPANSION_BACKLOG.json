@@ -156,8 +156,9 @@
       "id": "DECK-06",
       "priority": "P1",
       "title": "Media controls in shared Deck",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R123 existing media Deck controls, R243 patch corrects global DeckIntegration flag on individual monitor widget close; native Windows CI and physical hardware acceptance pending."
     },
     {
       "id": "CTX-01",
