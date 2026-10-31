@@ -25,11 +25,16 @@ foreach($token in @(
  'DeskSpaceBatchRenameRecoveryV277.Undo(',
  'DeskSpaceBatchRenameRecoveryV277.Recover(',
  'DeskSpaceBatchRenameRecoveryV277.Inspect(',
+ 'DeskSpaceBatchRenameRecoveryV277.Keep(',
+ 'internal static DeskSpaceBatchRenameTransactionV275.Outcome Keep(',
+ 'Content="Keep renamed files"',
+ 'if(!SameReview(latest,recoveryReview))',
  'Add("Batch rename and recovery"',
  'new("batchrename","Batch rename and recovery"',
  'case "batchrename":',
  'TestBatchRenameCrashJournalV277();',
- 'R277 both names occupied must block all recovery without overwrite'
+ 'R277 both names occupied must block all recovery without overwrite',
+ 'R277 explicit Keep must preserve renamed contents'
 )){
  if(!$source.Contains($token) -and !$ui.Contains($token) -and
     !$hub.Contains($token) -and !$palette.Contains($token) -and
