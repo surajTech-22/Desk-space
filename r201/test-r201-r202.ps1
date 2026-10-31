@@ -18,14 +18,27 @@ foreach($term in @(
 )){
  if(!$profile.Contains($term)){throw ("R201 missing profile safety gate "+$term)}
 }
+# R281 supersedes the original R201 import/write route. Checking for
+# old source fragments would wrongly require the lossy Load()-based writer.
+# The replacement MUST validate the existing file after a named OS lock,
+# preserve established names and make a recovery copy before atomic import.
+$strict=[IO.File]::ReadAllText("$root/DeskSpaceProfileStoreV281.cs")
 foreach($term in @(
- 'lock(Gate)',
- 'current.Count+fresh.Count>24',
- 'known.Contains(x.Name)',
- 'File.Copy(Filename,backup,false)',
- 'File.Move(temp,Filename,true)'
+ 'DeskSpaceProfileStoreV281.SaveAt(Filename,profile)',
+ 'DeskSpaceProfileStoreV281.ImportAt(Filename,incoming)'
 )){
- if(!$storage.Contains($term)){throw ("R201 missing atomic non-overwrite gate "+$term)}
+ if(!$storage.Contains($term)){throw ("R201/R281 profile writer not routed: "+$term)}
+}
+foreach($term in @(
+ 'var current=ReadForWrite(path);',
+ 'new Mutex(false,MutexName(path))',
+ 'rows.Count+fresh.Length>Limit',
+ 'rows.AddRange(fresh);',
+ 'File.Copy(path,backup,false);',
+ 'File.Move(temp,path,true);',
+ 'throw new InvalidDataException('
+)){
+ if(!$strict.Contains($term)){throw ("R201/R281 profile safety regression: "+$term)}
 }
 foreach($term in @(
  'uri.Scheme!=Uri.UriSchemeHttps',
