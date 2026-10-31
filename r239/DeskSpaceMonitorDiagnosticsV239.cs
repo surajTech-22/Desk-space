@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
+using Rectangle=System.Drawing.Rectangle;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
