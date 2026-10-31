@@ -64,7 +64,18 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
     internal static DeskSpaceMediaV18? ActiveV123 {get;private set;}
     internal static bool DeckIntegrationV123 {get;set;}
     private bool dismissedV123;
-    internal bool DeckVisibleV123=>visible&&!dismissedV123;
+    internal bool DeckVisibleV123=>visible&&!dismissedV123&&!disposed;
+    internal bool DeckDismissedV272=>visible&&dismissedV123&&!disposed;
+    // The Deck close button hides controls, not the underlying media.
+    // A deliberate Restore action can re-open them for the SAME track,
+    // without waiting for a new track or starting playback.
+    internal bool RestoreDeckV272()
+    {
+        if(disposed||!visible||!dismissedV123)return false;
+        dismissedV123=false;
+        VisibilityChanged?.Invoke(true);
+        return true;
+    }
     internal string DeckTitleV123=>title;
     internal string DeckArtistV123=>artist;
     internal bool DeckPlayingV123=>playing;
@@ -72,11 +83,16 @@ internal sealed class DeskSpaceMediaV18 : IDisposable
         playing+"|"+title+"|"+artist;
     internal void DeckCommandV123(string command)
     {
+        // A stale Deck button may still receive a queued WPF click after
+        // widget teardown. Reject it without controlling an old session.
+        if(disposed||!visible||dismissedV123)return;
         if(command=="mute")Volume(0xAD);
-        else _=Control(command);
+        else if(command is "previous" or "toggle" or "next" or "stop")
+            _=Control(command);
     }
     internal void DismissPanelV123()
     {
+        if(disposed||dismissedV123)return;
         dismissedV123=true;
         CloseBelow();
         VisibilityChanged?.Invoke(false);
