@@ -19,7 +19,7 @@ internal static class DeskSpaceDeckSaveGuardV265
             save();
             return true;
         }
-        catch(Exception error)when(error is IOException or
+        catch(Exception error)when(error is IOException or InvalidDataException or
             UnauthorizedAccessException or SecurityException or
             WaitHandleCannotBeOpenedException)
         {
