@@ -134,7 +134,7 @@
       "id": "settings-ui",
       "description": "Safe and consistent settings navigation/preview",
       "status": "pending",
-      "evidence": ""
+      "evidence": " R255 recoverable Features/Settings action guard with private-error redaction and Settings-tab link; full real Settings navigation acceptance still pending."
     },
     {
       "id": "window-layouts",
