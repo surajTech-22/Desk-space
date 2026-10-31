@@ -7,7 +7,7 @@ foreach($needle in @(
  'internal const int MaxFormulaChars=8192',
  "formula[0]!='='",
  'if(order.Any(x=>!DeskSpaceFormulaMetadataV251.Valid(',
- 'source.StoredType,source.FormulaR1C1))',
+ 'x.StoredType,x.FormulaR1C1))',
  'Captured formula metadata is incomplete',
  'TestExcelR1C1SourceIntegrityV251();'
 )){
