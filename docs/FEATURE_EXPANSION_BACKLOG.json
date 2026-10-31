@@ -272,8 +272,9 @@
       "id": "PERF-01",
       "priority": "P0",
       "title": "Event-driven background work and performance budgets",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R205 existing on-demand CPU/heap/handles and R253 private memory, handle, thread advisory thresholds; full sustained performance profiling and real hardware acceptance missing."
     },
     {
       "id": "TEST-01",
