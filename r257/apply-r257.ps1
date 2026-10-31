@@ -109,48 +109,6 @@ Swap @'
             Padding=new Thickness(9,6,9,6)};
 '@ 'visible non-mutating preview action'
 Swap @'
-            var profile=Load().FirstOrDefault(p=>p.Name==selected);
-            if(profile==null)return;
-            if(MessageBox.Show(
-                "Restore positions of up to "+profile.Windows.Count+
-'@ @'
-            var profile=Load().FirstOrDefault(p=>p.Name==selected);
-            if(profile==null)return;
-            // Require explicit current preview and reject any topology or
-            // matching-window changes since preview. No silent restore.
-            if(!string.Equals(previewedProfileV257,selected,
-                StringComparison.Ordinal) || previewProofV257==null)
-            {
-                status.Text="Preview this profile before restoring. No windows moved.";
-                return;
-            }
-            var current=Preview(profile);
-            if(!string.Equals(previewProofV257,ProofV257(current),
-                StringComparison.Ordinal))
-            {
-                previewedProfileV257=null;
-                previewProofV257=null;
-                status.Text="Windows or monitors changed. Preview again before restore.";
-                return;
-            }
-            if(current.Ready==0)
-            {
-                status.Text="No matching windows can be restored. Nothing changed.";
-                return;
-            }
-            if(MessageBox.Show(
-                "Restore positions of up to "+current.Ready+
-'@ 'require reviewed profile, live fingerprint and explicit consent'
-Swap @'
-            var (done,skipped)=Restore(profile);
-            status.Text="Restored "+done+" windows; skipped "+skipped+
-'@ @'
-            var (done,skipped)=Restore(profile);
-            previewedProfileV257=null;
-            previewProofV257=null;
-            status.Text="Restored "+done+" windows; skipped "+skipped+
-'@ 'clear single-use restoration consent'
-Swap @'
         buttons.Children.Add(capture);buttons.Children.Add(restore);
 '@ @'
         buttons.Children.Add(capture);
@@ -163,5 +121,39 @@ Swap @'
         layout.Children.Add(status);
         layout.Children.Add(previewRowsV257);
 '@ 'show redacted target/window details inside existing scroll panel'
+Swap @'
+        restore.Click+=(_,_)=>{
+'@ @'
+        restore.Click+=(_,_)=>{
+            // Require an exact, current preview before any original
+            // Yes/No restore confirmation or window-moving call.
+            if(pick.SelectedItem is not string reviewedV257 ||
+               !string.Equals(previewedProfileV257,reviewedV257,
+                   StringComparison.Ordinal) || previewProofV257==null)
+            {
+                status.Text="Preview this profile before restoring. No windows moved.";
+                return;
+            }
+            var currentProfileV257=Load().FirstOrDefault(p=>
+                p.Name==reviewedV257);
+            if(currentProfileV257==null)return;
+            var currentV257=Preview(currentProfileV257);
+            if(!string.Equals(previewProofV257,ProofV257(currentV257),
+                    StringComparison.Ordinal))
+            {
+                previewedProfileV257=null;
+                previewProofV257=null;
+                status.Text="Windows or monitors changed. Preview again before restore.";
+                return;
+            }
+            if(currentV257.Ready==0)
+            {
+                status.Text="No matching windows can be restored. Nothing changed.";
+                return;
+            }
+            // Single use even when the user cancels the native confirmation.
+            previewedProfileV257=null;
+            previewProofV257=null;
+'@ 'guard the original restore click action without relying on changed confirmation text'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R257: explicit non-destructive window layout preview, strict display identity, consented restore.'
