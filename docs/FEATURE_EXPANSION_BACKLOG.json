@@ -147,8 +147,9 @@
       "id": "DECK-04",
       "priority": "P1",
       "title": "Folder pre-drop Zip or Copy, cancellation, recovery",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R256 native PreviewDragEnter/Over/Drop on monitor-local widget and Popup, hover-selected ZIP/Copy before drop; existing bounded cancellable verified staging retained; real Explorer dual-monitor acceptance pending."
     },
     {
       "id": "DECK-05",
