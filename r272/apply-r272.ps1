@@ -6,7 +6,7 @@ function Swap([string]$path,[string]$old,[string]$new,[string]$why)
  $old=$old.Replace($crlf,$lf);$new=$new.Replace($crlf,$lf)
  $text=[IO.File]::ReadAllText($path).Replace($crlf,$lf)
  $count=([regex]::Matches($text,[regex]::Escape($old))).Count
- if($count -ne 1){throw "R272 $why: $count anchors"}
+ if($count -ne 1){throw "R272 ${why}: $count anchors"}
  [IO.File]::WriteAllText($path,$text.Replace($old,$new),
     [Text.UTF8Encoding]::new($false))
 }
