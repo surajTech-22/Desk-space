@@ -18,12 +18,6 @@ namespace DeskSpace;
 // coordinates belong to one session and must never overwrite another's.
 internal static class DeskSpaceMonitorSessionsV154
 {
-    private sealed class SavedPosition
-    {
-        public string Device {get;set;}="";
-        public int X {get;set;}
-        public int Y {get;set;}
-    }
     internal sealed class Session
     {
         public string Device="";
@@ -32,9 +26,6 @@ internal static class DeskSpaceMonitorSessionsV154
         public DispatcherTimer? Guard;
     }
     private static readonly Dictionary<WidgetShellWindow,Session> Sessions=new();
-    private static readonly object FileGate=new();
-    private static string Filename=>Path.Combine(WorkspaceStore.Root,
-        "widget-independent-displays-v154.json");
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect { public int L,T,R,B; }
@@ -163,49 +154,43 @@ internal static class DeskSpaceMonitorSessionsV154
 
     internal static bool SavePosition(WidgetShellWindow widget,bool expanded)
     {
-        if(!Sessions.TryGetValue(widget,out var s))return false;
+        if(!Sessions.TryGetValue(widget,out var session))return false;
         if(!expanded)
         {
             var hwnd=new WindowInteropHelper(widget).Handle;
-            if(hwnd!=IntPtr.Zero&&GetWindowRect(hwnd,out var rect))
+            if(hwnd!=IntPtr.Zero && GetWindowRect(hwnd,out var rect))
             {
-                var position=new SavedPosition{Device=s.Device,X=rect.L,Y=rect.T};
-                lock(FileGate)
+                // Persist this display only. A cross-process named mutex
+                // serializes saves from independently hosted widgets, and
+                // corrupt layouts are preserved rather than overwritten.
+                try
                 {
-                    try
-                    {
-                        var all=ReadAll();
-                        all.RemoveAll(p=>p.Device.Equals(s.Device,
-                            StringComparison.OrdinalIgnoreCase));
-                        all.Add(position);
-                        Directory.CreateDirectory(WorkspaceStore.Root);
-                        var tmp=Filename+"."+Guid.NewGuid().ToString("N")+".tmp";
-                        try
-                        {
-                            File.WriteAllText(tmp,JsonSerializer.Serialize(all));
-                            File.Move(tmp,Filename,true);
-                        }
-                        finally{if(File.Exists(tmp))File.Delete(tmp);}
-                    }
-                    catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
-                        or JsonException)
-                    {System.Diagnostics.Debug.WriteLine("DeskSpace monitor position: "+ex);}
+                    DeskSpaceMonitorPositionStoreV278.Save(
+                        session.Device,rect.L,rect.T);
+                }
+                catch(Exception ex) when(ex is IOException or
+                    UnauthorizedAccessException or InvalidDataException or
+                    ArgumentException or NotSupportedException or
+                    System.Security.SecurityException)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        "DeskSpace monitor position not overwritten: "+
+                        ex.GetType().Name);
                 }
             }
         }
-        // Secondary must never write the legacy primary widget position.
-        return !s.Primary;
+        // Secondary must never write the primary's legacy widget-v3.json.
+        return !session.Primary;
     }
 
     internal static void Restore(WidgetShellWindow widget)
     {
-        if(!Sessions.TryGetValue(widget,out var s))return;
+        if(!Sessions.TryGetValue(widget,out var session))return;
         var screen=Forms.Screen.AllScreens.FirstOrDefault(x=>x.DeviceName.Equals(
-            s.Device,StringComparison.OrdinalIgnoreCase));
+            session.Device,StringComparison.OrdinalIgnoreCase));
         if(screen==null)return;
-        SavedPosition? saved;
-        lock(FileGate){saved=ReadAll().FirstOrDefault(x=>x.Device.Equals(
-            s.Device,StringComparison.OrdinalIgnoreCase));}
+        // A missing/corrupt saved entry must NOT fall back to another screen.
+        var saved=DeskSpaceMonitorPositionStoreV278.Read(session.Device);
         if(saved==null)return;
         var hwnd=new WindowInteropHelper(widget).Handle;
         if(hwnd==IntPtr.Zero||!GetWindowRect(hwnd,out var rect))return;
@@ -214,22 +199,6 @@ internal static class DeskSpaceMonitorSessionsV154
         SetWindowPos(hwnd,IntPtr.Zero,fitted.X,fitted.Y,0,0,
             NoSize|NoZOrder|NoActivate);
         DeskSpaceMonitorFenceV152.ClampNow(widget);
-    }
-
-    private static List<SavedPosition> ReadAll()
-    {
-        try
-        {
-            return File.Exists(Filename)?
-                JsonSerializer.Deserialize<List<SavedPosition>>(
-                    File.ReadAllText(Filename))??new():new();
-        }
-        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
-            or JsonException)
-        {
-            System.Diagnostics.Debug.WriteLine("DeskSpace display layouts: "+ex);
-            return new();
-        }
     }
 
     // WPF creates several Popup HWNDs which are not always referenced by the
