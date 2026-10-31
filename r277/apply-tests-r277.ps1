@@ -54,6 +54,11 @@ $method=@'
         {
             Seed();
             var first=Apply(root,Plan(root));
+            Console.WriteLine("R277 initial outcome: "+
+                first.GetType().GetProperty("Message")!.GetValue(first)+
+                " / journal="+File.Exists(log)+
+                " / src-a="+File.Exists(Local("a.txt"))+
+                " / dst-a="+File.Exists(Local("R-a.txt")));
             Assert(Prop(first,"Success") && File.Exists(log) &&
                 File.Exists(Local("R-a.txt")) &&
                 File.Exists(Local("R-b.txt")),
