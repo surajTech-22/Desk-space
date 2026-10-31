@@ -45,7 +45,8 @@ $method=@'
             File.WriteAllText(First("a.txt"),"ALPHA");
             File.WriteAllText(First("b.txt"),"BETA");
             var plan=Plan(root);
-            Assert(Success(Apply(root,plan)) &&
+            var first=Apply(root,plan);
+            Assert(Success(first) &&
                 File.Exists(First("P-a.txt"))&&
                 File.Exists(First("P-b.txt"))&&
                 !File.Exists(First("a.txt")) &&
@@ -56,19 +57,9 @@ $method=@'
             var retry=Apply(root,plan);
             Assert(!Success(retry) && File.Exists(First("P-a.txt")),
                 "R275 consumed preview cannot be applied twice");
-            var receiptType=engine.GetNestedType("Receipt",BindingFlags.NonPublic)!;
-            var receipt=Activator.CreateInstance(receiptType,new object[]{
-                root,
-                (System.Collections.IReadOnlyList<object>)Array.Empty<object>()
-            });
-            // Inspect real Apply result and retrieve its exact immutable receipt.
-            // Original source plan cannot match post-rename state.
-            File.Move(First("P-a.txt"),First("a.txt"));
-            File.Move(First("P-b.txt"),First("b.txt"));
-            var result=Apply(root,Plan(root));
-            Assert(Success(result) && Receipt(result)!=null,
-                "R275 successful batch must return undo receipt");
-            Assert(Success(Undo(Receipt(result)!)) &&
+            Assert(Receipt(first)!=null,
+                "R275 successful batch must return an exact undo receipt");
+            Assert(Success(Undo(Receipt(first)!)) &&
                 File.ReadAllText(First("a.txt"))=="ALPHA" &&
                 File.ReadAllText(First("b.txt"))=="BETA" &&
                 !File.Exists(First("P-a.txt")),
