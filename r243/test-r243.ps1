@@ -9,7 +9,7 @@ foreach($needle in @(
  'private static readonly HashSet<DeskSpaceDropShelfV15> Views=new();'
 )){if(!$s.Contains($needle)){throw ("R243 shared media Deck lifecycle missing: "+$needle)}}
 if($s.Contains('DeskSpaceMediaV18.DeckIntegrationV123=false;'))
-{throw 'R243 another monitor's Deck still disabled by a per-widget Close'}
+{throw "R243 another monitor Deck still disabled by a per-widget Close"}
 if(!$t.Contains('TestTwoMonitorMediaOwnershipV243();'))
 {throw 'R243 missing native WPF second-monitor media lifecycle regression'}
 Write-Host 'R243 STATIC PASS: shared media integration persists until last independent monitor Deck closes.'
