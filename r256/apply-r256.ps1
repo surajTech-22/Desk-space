@@ -164,5 +164,13 @@ Swap @'
         MarkV256(DeskSpaceFolderPreDropV256.Choice.None);
         expiryV256?.Stop();
 '@ 'clear consent after drag'
+$lines=$s.Split($lf)
+Write-Host 'R256 existing Deck folder UI source context:'
+for($i=200;$i -lt [Math]::Min(275,$lines.Length);$i++){
+ Write-Host (('{0:D4}: ' -f ($i+1))+$lines[$i])
+}
+Write-Host 'R256 existing popup fields:'
+$lines | Where-Object {$_ -match '(?i)private.*(choice|popup|folder)' -or
+ $_ -match 'new Popup|var card|folderChoice'} | Select-Object -First 32 | ForEach-Object {Write-Host $_}
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R256: folder ZIP/Copy option shown during native drag; only preselected choice commits on drop.'
