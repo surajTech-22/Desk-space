@@ -169,6 +169,9 @@ public partial class MainWindow
             ()=>DeskSpaceWorkflowDryRunV203.Show(this));
         Add("Notes","Open the existing notes tab, when present.",
             ()=>SelectExistingFeatureTabV199("Notes"));
+        Add("Quick note",
+            "Write a new note or explicitly paste clipboard text, preview it, then save locally.",
+            ShowQuickNoteV270);
 
         Section("Information and privacy");
         Add("Find vault site labels",
