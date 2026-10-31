@@ -5,172 +5,60 @@ Copy-Item -LiteralPath 'r256/DeskSpaceFolderPreDropV256.cs' -Destination "$root/
 $p="$root/DeskSpaceDropShelfV15.cs"
 $lf=[string][char]10;$crlf=[string][char]13+$lf
 $s=[IO.File]::ReadAllText($p).Replace($crlf,$lf)
-function Swap([string]$old,[string]$new,[string]$why){
+function Swap([string]$old,[string]$new,[string]$why)
+{
  $old=$old.Replace($crlf,$lf);$new=$new.Replace($crlf,$lf)
  $n=([regex]::Matches($script:s,[regex]::Escape($old))).Count
- if($n -ne 1){throw ("R256 "+$why+" expected one anchor, got "+$n)}
+ if($n -ne 1){throw ("R256 "+$why+" expected exactly one anchor, got "+$n)}
  $script:s=$script:s.Replace($old,$new)
 }
+# The existing R160 choice is already an adorner ON THE CIRCLE, not a
+# Popup. Harden that existing path; never replace it with another HWND.
 Swap @'
     private string[]? pendingFolderDrop;
 '@ @'
     private string[]? pendingFolderDrop;
-    private DeskSpaceFolderPreDropV256.Choice choiceV256;
-    private System.Windows.Threading.DispatcherTimer? expiryV256;
-    private DateTime lastDragV256;
-'@ 'choice and scoped idle cleanup'
-'
-'
+    private DeskSpaceFolderPreDropV256.Choice hoverChoiceV256;
+'@ 'capture ZIP/Copy as user hovers existing adorner'
 Swap @'
-        host.IsVisibleChanged+=FolderChoiceVisible;
+                folderAdorner?.Hover(point);
 '@ @'
-        // Popup has its own HWND. Listen on the owning widget AND popup,
-        // before WPF dispatches the original Drop event.
-        card.AllowDrop=true;
-        card.PreviewDragEnter+=PreEnterV256;
-        card.PreviewDragOver+=PreOverV256;
-        card.PreviewDrop+=PreDropV256;
-        host.PreviewDragEnter+=PreEnterV256;
-        host.PreviewDragOver+=PreOverV256;
-        host.PreviewDrop+=PreDropV256;
-        host.IsVisibleChanged+=FolderChoiceVisible;
-'@ 'drag handlers before release'
+                folderAdorner?.Hover(point);
+                var hovered=DeskSpaceFolderDragAdornerV160.ChoiceAt(
+                    new Size(host.ActualWidth,host.ActualHeight),point);
+                hoverChoiceV256=hovered.HasValue?
+                    (hovered.Value?DeskSpaceFolderPreDropV256.Choice.Zip:
+                        DeskSpaceFolderPreDropV256.Choice.Copy):
+                    DeskSpaceFolderPreDropV256.Choice.None;
+'@ 'record selected half before release'
 Swap @'
-    private void Receive(object sender,DragEventArgs e)
-    {
+                var sources=pendingFolderDrop??dropped;
+                HideFolderChoice();
+                e.Effects=selected.HasValue?DragDropEffects.Copy:DragDropEffects.None;
+                e.Handled=true;
+                if(!busy&&selected is bool zip && sources.Length>0)
+                    _=CommitFolderDropAsync(sources,zip);
 '@ @'
-    private void Receive(object sender,DragEventArgs e)
-    {
-        // Ignore unapproved native folder drops; only PreviewDrop can
-        // commit a hover-selected action. No post-drop prompt is shown.
-        if(FolderFilesV256(e)!=null)
-        {
-            HideFolderChoice();
-            e.Effects=DragDropEffects.None;
-            e.Handled=true;
-            return;
-        }
-'@ 'remove post-drop chooser'
-Swap @'
-    private void FolderChoiceVisible(object sender,DependencyPropertyChangedEventArgs e)
-'@ @'
-    private static string[]? FolderFilesV256(DragEventArgs e)
-    {
-        try
-        {
-            if(!e.Data.GetDataPresent(DataFormats.FileDrop))return null;
-            var paths=e.Data.GetData(DataFormats.FileDrop) as string[];
-            return paths?.Any(Directory.Exists)==true?paths:null;
-        }
-        catch(Exception ex)when(ex is System.Runtime.InteropServices.COMException
-            or IOException or UnauthorizedAccessException or ArgumentException)
-        { return null; }
-    }
-    private Button? FindChoiceV256(string caption)
-    {
-        if(folderChoice.Child is Border border &&
-           border.Child is StackPanel panel)
-        {
-            foreach(var group in panel.Children.OfType<StackPanel>())
-                foreach(var button in group.Children.OfType<Button>())
-                    if(string.Equals(button.Content?.ToString(),caption,
-                        StringComparison.OrdinalIgnoreCase))
-                        return button;
-        }
-        return null;
-    }
-    private static bool OverV256(Button? button,DragEventArgs e)
-    {
-        if(button==null||button.ActualWidth<=0||button.ActualHeight<=0)
-            return false;
-        var p=e.GetPosition(button);
-        return p.X>=0&&p.Y>=0&&p.X<button.ActualWidth&&p.Y<button.ActualHeight;
-    }
-    private void MarkV256(DeskSpaceFolderPreDropV256.Choice choice)
-    {
-        choiceV256=choice;
-        var zip=FindChoiceV256("ZIP");
-        var copy=FindChoiceV256("Copy");
-        if(zip!=null)
-            zip.Background=choice==DeskSpaceFolderPreDropV256.Choice.Zip?
-                Brushes.LightSkyBlue:SystemColors.ControlBrush;
-        if(copy!=null)
-            copy.Background=choice==DeskSpaceFolderPreDropV256.Choice.Copy?
-                Brushes.LightSkyBlue:SystemColors.ControlBrush;
-    }
-    private void PreEnterV256(object sender,DragEventArgs e)
-    {
-        var paths=FolderFilesV256(e);
-        if(paths==null||busy)return;
-        if(pendingFolderDrop==null)ShowFolderChoice(paths);
-        lastDragV256=DateTime.UtcNow;
-        e.Effects=DragDropEffects.Copy;
-        e.Handled=true;
-    }
-    private void PreOverV256(object sender,DragEventArgs e)
-    {
-        var paths=FolderFilesV256(e);
-        if(paths==null||busy)return;
-        if(pendingFolderDrop==null)ShowFolderChoice(paths);
-        lastDragV256=DateTime.UtcNow;
-        MarkV256(DeskSpaceFolderPreDropV256.Hover(
-            OverV256(FindChoiceV256("ZIP"),e),OverV256(FindChoiceV256("Copy"),e)));
-        e.Effects=DragDropEffects.Copy;
-        e.Handled=true;
-    }
-    private void PreDropV256(object sender,DragEventArgs e)
-    {
-        var paths=FolderFilesV256(e);
-        if(paths==null)return;
-        bool approved=DeskSpaceFolderPreDropV256.Authorized(
-            choiceV256,pendingFolderDrop,paths);
-        bool zip=choiceV256==DeskSpaceFolderPreDropV256.Choice.Zip;
-        if(approved)CommitFolderDrop(zip);
-        else HideFolderChoice();
-        e.Effects=approved?DragDropEffects.Copy:DragDropEffects.None;
-        e.Handled=true;
-    }
-    private void WatchDragV256()
-    {
-        if(expiryV256==null)
-        {
-            expiryV256=new System.Windows.Threading.DispatcherTimer{
-                Interval=TimeSpan.FromSeconds(1)};
-            expiryV256.Tick+=(_,_)=>{
-                if(pendingFolderDrop==null){expiryV256?.Stop();return;}
-                // Explorer drag cancellation across popup HWNDs may omit
-                // DragLeave. Remove only abandoned consent, not held files.
-                if(DateTime.UtcNow-lastDragV256>TimeSpan.FromSeconds(12))
-                    HideFolderChoice();
-            };
-        }
-        lastDragV256=DateTime.UtcNow;
-        expiryV256.Start();
-    }
-
-    private void FolderChoiceVisible(object sender,DependencyPropertyChangedEventArgs e)
-'@ 'preview hover, consent and idle recovery'
-Swap @'
-        pendingFolderDrop=valid;
-'@ @'
-        pendingFolderDrop=valid;
-        MarkV256(DeskSpaceFolderPreDropV256.Choice.None);
-        WatchDragV256();
-'@ 'only while active drag'
+                // ZIP/Copy requires the same sources and same selected
+                // half during BOTH DragOver and Drop. No late prompt.
+                bool approved=DeskSpaceFolderPreDropV256.Authorized(
+                    hoverChoiceV256,pendingFolderDrop,dropped) &&
+                    selected.HasValue &&
+                    (selected.Value?
+                        hoverChoiceV256==DeskSpaceFolderPreDropV256.Choice.Zip:
+                        hoverChoiceV256==DeskSpaceFolderPreDropV256.Choice.Copy);
+                bool zip=hoverChoiceV256==DeskSpaceFolderPreDropV256.Choice.Zip;
+                HideFolderChoice();
+                e.Effects=approved?DragDropEffects.Copy:DragDropEffects.None;
+                e.Handled=true;
+                if(!busy && approved)
+                    _=CommitFolderDropAsync(dropped,zip);
+'@ 'require pre-drop adorner consent and matching paths'
 Swap @'
         pendingFolderDrop=null;
 '@ @'
         pendingFolderDrop=null;
-        MarkV256(DeskSpaceFolderPreDropV256.Choice.None);
-        expiryV256?.Stop();
-'@ 'clear consent after drag'
-$lines=$s.Split($lf)
-Write-Host 'R256 existing Deck folder UI source context:'
-for($i=200;$i -lt [Math]::Min(275,$lines.Length);$i++){
- Write-Host (('{0:D4}: ' -f ($i+1))+$lines[$i])
-}
-Write-Host 'R256 existing popup fields:'
-$lines | Where-Object {$_ -match '(?i)private.*(choice|popup|folder)' -or
- $_ -match 'new Popup|var card|folderChoice'} | Select-Object -First 32 | ForEach-Object {Write-Host $_}
+        hoverChoiceV256=DeskSpaceFolderPreDropV256.Choice.None;
+'@ 'clear consent when native drag leaves, ends or widget closes'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
-Write-Host 'R256: folder ZIP/Copy option shown during native drag; only preselected choice commits on drop.'
+Write-Host 'R256: existing in-circle R160 ZIP/Copy adorner now requires prior matching DragOver choice on Drop.'
