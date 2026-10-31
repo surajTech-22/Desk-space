@@ -14,26 +14,26 @@ function Swap([string]$from,[string]$to,[string]$why)
 }
 Swap @'
         var decision=DeskSpaceExcelFullRangeGateV107.Evaluate(from,to);
-        if(!decision.MayApply)problems.Add(decision.Explanation);
 '@ @'
         var decision=DeskSpaceExcelFullRangeGateV107.Evaluate(from,to);
-        if(!decision.MayApply)problems.Add(decision.Explanation);
-        // Reject a broken source template before any writing, even when the
-        // target is entirely blank and the legacy has-formula flag is false.
+        // Reject a broken source template even when the target is blank.
+        // Never rely on the old sourceFormula flag (all source formulas
+        // could be absent or contradictory).
         if(order.Any(x=>!DeskSpaceFormulaMetadataV251.Valid(
             x.StoredType,x.FormulaR1C1)))
             problems.Add("Captured formula metadata is incomplete, invalid or "+
                 "attached to a non-formula cell. Recapture source.");
 '@ 'reject every missing/mislabeled R1C1 formula at preview stage'
 Swap @'
-            if(string.IsNullOrWhiteSpace(source.FormulaR1C1))
-                throw new InvalidDataException(
-                    "A captured formula lacks an R1C1 expression.");
+    private static void PopulateBlankFormulas(Checked live)
+    {
 '@ @'
-            if(!DeskSpaceFormulaMetadataV251.Valid(
-                source.StoredType,source.FormulaR1C1))
-                throw new InvalidDataException(
-                    "A captured formula lacks a verified R1C1 expression.");
+    private static void PopulateBlankFormulas(Checked live)
+    {
+        if(live.Visual.Cells.Any(x=>!DeskSpaceFormulaMetadataV251.Valid(
+            x.StoredType,x.FormulaR1C1)))
+            throw new InvalidDataException(
+                "Captured formula metadata changed or was incomplete before write.");
 '@ 'repeat exact formula check before writing blank cells'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R251: fail-closed source R1C1 formula metadata before Excel format+formula writes.'
