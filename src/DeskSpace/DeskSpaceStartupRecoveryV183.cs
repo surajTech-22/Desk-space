@@ -8,9 +8,8 @@ using System.Windows.Threading;
 
 namespace DeskSpace;
 
-// Startup-only crash-loop recovery. This is NOT a complete crash watchdog:
-// crashes before the primary widget loads or after the startup grace period
-// require separate diagnostics. Never deletes or rewrites workspace data.
+// Startup-only crash-loop recovery, including failures before widget Loaded.
+// This is not a general runtime watchdog and never edits workspace data.
 // After three failed *short* starts within ten minutes, the next launch
 // retains one primary widget/tray but skips satellite widget creation.
 // Recovery is sticky until the user explicitly opts back in.
@@ -27,7 +26,7 @@ internal static class DeskSpaceStartupRecoveryV183
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DeskSpace","Recovery","startup-v1.json");
 
-    private static bool started,safeMode,tracking;
+    private static bool started,attached,safeMode,tracking;
     private static State? session;
     internal static bool SafeMode=>safeMode;
     internal static bool IsTracking=>tracking;
@@ -110,10 +109,11 @@ internal static class DeskSpaceStartupRecoveryV183
         }
     }
 
-    internal static void Start(Window owner)
+    // Called once by the primary widget-host process, after acquiring
+    // its single-instance mutex and BEFORE WidgetShellWindow construction.
+    // A crash in the constructor is now counted on the next launch.
+    internal static void BeginEarly()
     {
-        // Only the primary widget calls Start; satellite windows do not write
-        // another session or overwrite the primary crash-loop evidence.
         lock(Gate)
         {
             if(started)return;
@@ -121,7 +121,7 @@ internal static class DeskSpaceStartupRecoveryV183
             try
             {
                 session=NextStart(Read(),DateTime.UtcNow);
-                Persist(session); // fail open if the marker cannot be written
+                Persist(session);
                 tracking=true;
                 safeMode=session.SafeMode;
             }
@@ -132,6 +132,28 @@ internal static class DeskSpaceStartupRecoveryV183
                 Debug.WriteLine("DeskSpace startup recovery unavailable: "+
                     error.GetType().Name);
             }
+        }
+    }
+
+    internal static void MarkCleanExit()
+    {
+        // Never clear crash evidence for failed constructors or unrelated
+        // Workspace and secondary widget processes.
+        lock(Gate)
+        {
+            if(attached)MarkHealthy();
+        }
+    }
+
+    internal static void Start(Window owner)
+    {
+        // Called by the primary widget Loaded handler after BeginEarly.
+        // Secondary monitors must never create another recovery marker.
+        BeginEarly();
+        lock(Gate)
+        {
+            if(attached)return;
+            attached=true;
         }
         var grace=new DispatcherTimer(DispatcherPriority.Background,owner.Dispatcher)
             {Interval=HealthyAfter};
