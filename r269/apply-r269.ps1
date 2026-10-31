@@ -102,7 +102,8 @@ Swap @'
 '@ @'
     private void CopyPath(SearchHit h)
     {
-        if(h.Category is "Files" or "Applications" && !string.IsNullOrWhiteSpace(h.OpenTarget))
+        if((h.Category is "Files" or "Applications") &&
+           !string.IsNullOrWhiteSpace(h.OpenTarget))
             Clipboard.SetText(h.OpenTarget);
     }
 '@ 'copy true path only'
@@ -164,4 +165,68 @@ $new=@'
 '@.Replace($crlf,$lf)
 $s=$s.Substring(0,$start)+$new+$lf
 [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
+
+$aux="$root/DeskSpaceFeatureHubV199.cs"
+$auxText=[IO.File]::ReadAllText($aux).Replace($crlf,$lf)
+$original=$s
+$s=$auxText
+Swap @'
+        Add("Action Palette","Find DeskSpace commands with type, arrow keys and Enter.",
+            ()=>DeskSpaceActionPaletteV197.Show(this,false));
+'@ @'
+        Add("Action Palette","Find DeskSpace commands with type, arrow keys and Enter.",
+            ()=>DeskSpaceActionPaletteV197.Show(this,false));
+        Add("Universal search",
+            "Search files, installed apps, settings, notes, reminders and calendar in one place.",
+            ()=>{
+                var window=new UniversalSearchWindow(()=>data,WidgetSettingsV3.Load()){
+                    Owner=this,WindowStartupLocation=WindowStartupLocation.CenterOwner
+                };
+                window.Show();
+            });
+'@ 'R269 auxiliary DeskSpaceFeatureHubV199.cs'
+[IO.File]::WriteAllText($aux,$s,[Text.UTF8Encoding]::new($false))
+$s=$original
+
+$aux="$root/DeskSpaceActionPaletteV197.cs"
+$auxText=[IO.File]::ReadAllText($aux).Replace($crlf,$lf)
+$original=$s
+$s=$auxText
+Swap @'
+        new("searchhealth","Search index health",
+            "Review indexed name counts and optionally start local indexing","System"),
+'@ @'
+        new("universalsearch","Universal search",
+            "Find files across drives, installed apps, settings and DeskSpace content","Files"),
+        new("searchhealth","Search index health",
+            "Review indexed name counts and optionally start local indexing","System"),
+'@ 'R269 auxiliary DeskSpaceActionPaletteV197.cs'
+[IO.File]::WriteAllText($aux,$s,[Text.UTF8Encoding]::new($false))
+$s=$original
+
+$aux="$root/DeskSpaceActionPaletteV197.cs"
+$auxText=[IO.File]::ReadAllText($aux).Replace($crlf,$lf)
+$original=$s
+$s=$auxText
+Swap @'
+        switch(command.Id)
+        {
+            case "searchhealth":
+'@ @'
+        switch(command.Id)
+        {
+            case "universalsearch":
+                var search=new UniversalSearchWindow(
+                    ()=>new WorkspaceStore().Load(),WidgetSettingsV3.Load());
+                if(owner.IsVisible)
+                {
+                    search.Owner=owner;
+                    search.WindowStartupLocation=WindowStartupLocation.CenterOwner;
+                }
+                search.Show();
+                break;
+            case "searchhealth":
+'@ 'R269 auxiliary DeskSpaceActionPaletteV197.cs'
+[IO.File]::WriteAllText($aux,$s,[Text.UTF8Encoding]::new($false))
+$s=$original
 Write-Host 'R269: Workspace Search now uses progressive shared multi-drive index; no 350k-file rescan for each query, with cancel/stale-result protection.'
