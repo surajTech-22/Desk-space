@@ -140,7 +140,7 @@
       "id": "window-layouts",
       "description": "Window restore across monitors with mixed-DPI acceptance",
       "status": "pending",
-      "evidence": ""
+      "evidence": " R257 adds preview of planned application positions and skips disconnected saved display names rather than moving to primary; requires preview+recheck+Yes before changing positions. Native Windows and real two-monitor acceptance required."
     },
     {
       "id": "workflow-preview",
