@@ -225,20 +225,41 @@ internal static class DeskSpaceRunningAppsV88
         return windows.GroupBy(x=>x.Handle).Select(g=>g.First()).ToArray();
     }
 
+    // P1: stale HWNDs can be recycled between Deck refreshes. Every
+    // user-requested window action must revalidate the exact live title;
+    // a reused handle must never close/minimize an unrelated app.
+    internal static bool CanControlV279(Entry entry,bool exists,
+        string actualTitle)=>
+        entry.Handle!=IntPtr.Zero && exists &&
+        !string.IsNullOrWhiteSpace(entry.WindowTitle) &&
+        string.Equals(actualTitle,entry.WindowTitle,StringComparison.Ordinal);
+
+    internal static bool RequestStateV279(Entry entry,bool minimize)
+    {
+        if(!IsActiveWindow(entry.Handle) ||
+           !CanControlV279(entry,true,WindowText(entry.Handle)))return false;
+        // Send an ordinary window-state request. This never kills a
+        // process, opens a document, or changes another monitor's Deck.
+        ShowWindowAsync(entry.Handle,minimize?Minimise:Restore);
+        if(!minimize)SetForegroundWindow(entry.Handle);
+        lastSelectedWindow=minimize?IntPtr.Zero:entry.Handle;
+        return true;
+    }
+
     // Request only a normal window close: apps can prompt for unsaved work.
     // Never terminate the process, and never close a reused HWND whose title
     // no longer matches the originally enumerated window.
     internal static bool RequestClose(Entry entry)
     {
         if(!IsActiveWindow(entry.Handle) ||
-           !string.Equals(WindowText(entry.Handle),entry.WindowTitle,
-               StringComparison.Ordinal))return false;
+           !CanControlV279(entry,true,WindowText(entry.Handle)))return false;
         return PostMessage(entry.Handle,WmClose,IntPtr.Zero,IntPtr.Zero);
     }
 
     internal static void Focus(Entry entry)
     {
-        if(!IsActiveWindow(entry.Handle))return;
+        if(!IsActiveWindow(entry.Handle) ||
+           !CanControlV279(entry,true,WindowText(entry.Handle)))return;
         // Like a taskbar button: select to activate, select the same active
         // window again to minimise it. The last selection also covers cases
         // where the no-activate floating deck temporarily owns foreground.
