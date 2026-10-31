@@ -111,8 +111,9 @@
       "id": "EXCEL-05",
       "priority": "P1",
       "title": "Live Excel exact-signature non-destructive suggestions",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "Existing R122 Deck suggests verified foreground Excel mapping; R263 adds mandatory re-preview, exact current workbook/sheet/each target cell and source mapping before ApplyAsync. All changes after consent fail closed; native Windows/real Office acceptance pending."
     },
     {
       "id": "EXCEL-06",
