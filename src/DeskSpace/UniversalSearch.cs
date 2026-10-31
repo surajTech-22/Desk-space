@@ -26,51 +26,67 @@ public sealed class UniversalSearchWindow : Window
     private readonly TextBlock status=new(){Margin=new Thickness(13,0,13,7),Text="Type at least two characters to search files and applications."};
     private CancellationTokenSource? searchCancel;
     private readonly DispatcherTimer debounce=new(){Interval=TimeSpan.FromMilliseconds(350)};
-    private readonly string[] settingsUris={
-        "Display|ms-settings:display", "Sound|ms-settings:sound", "Bluetooth|ms-settings:bluetooth",
-        "Network and Internet|ms-settings:network", "Wi-Fi|ms-settings:network-wifi", "Apps|ms-settings:appsfeatures",
-        "Default applications|ms-settings:defaultapps", "Storage|ms-settings:storagesense",
-        "Windows Update|ms-settings:windowsupdate", "Accounts|ms-settings:yourinfo",
-        "Mouse|ms-settings:mousetouchpad", "Keyboard|ms-settings:typing",
-        "Notifications|ms-settings:notifications", "Privacy|ms-settings:privacy",
-        "Personalization|ms-settings:personalization", "Taskbar|ms-settings:taskbar",
-        "Power|ms-settings:powersleep", "Date and time|ms-settings:dateandtime"
-    };
+    private int requestSequence;
     public UniversalSearchWindow(Func<Workspace> workspace,WidgetSettingsV3 preferences)
     {
         this.workspace=workspace;this.preferences=preferences;
         Title="DeskSpace · Universal Search";Width=790;Height=570;Topmost=true;
         WindowStartupLocation=WindowStartupLocation.CenterScreen;
-        category.ItemsSource=new[]{"All","Files","Applications","Settings","Notes","Commands"};category.SelectedIndex=0;
+        category.ItemsSource=DeskSpaceUniversalSearchPolicyV269.Categories;category.SelectedIndex=0;
         var root=new DockPanel();var top=new StackPanel();
-        query.TextChanged+=(_,_)=>{debounce.Stop();debounce.Start();};
+        query.TextChanged+=(_,_)=>{requestSequence++;searchCancel?.Cancel();debounce.Stop();debounce.Start();};
         query.KeyDown+=(_,e)=>{if(e.Key==Key.Enter){Selected(Launch);e.Handled=true;}};
-        category.SelectionChanged+=(_,_)=>{debounce.Stop();debounce.Start();};
+        category.SelectionChanged+=(_,_)=>{requestSequence++;searchCancel?.Cancel();debounce.Stop();debounce.Start();};
         debounce.Tick+=(_,_)=>{debounce.Stop();_ = RunSearch();};
         top.Children.Add(new TextBlock{Text="Universal Search",FontWeight=FontWeights.Bold,FontSize=24,Margin=new Thickness(13,12,13,4)});
         top.Children.Add(query);top.Children.Add(category);top.Children.Add(status);
         var buttons=new WrapPanel{Margin=new Thickness(12,0,12,10)};
         Add("Open",Launch);Add("Open folder",OpenFolder);Add("Copy path",CopyPath);
         Add("Copy file",CopyFile);Add("Pin application",Pin);
+        var actions=new Button{Content="Commands",Padding=new Thickness(10,5,10,5),
+            ToolTip="Open the complete DeskSpace Action Palette",Margin=new Thickness(0,0,7,0)};
+        actions.Click+=(_,_)=>DeskSpaceActionPaletteV197.Show(this,false);
+        buttons.Children.Add(actions);
         top.Children.Add(buttons);
         DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);root.Children.Add(list);Content=root;
         list.MouseDoubleClick+=(_,_)=>Selected(Launch);Loaded+=(_,_)=>query.Focus();
-        Closed+=(_,_)=>{searchCancel?.Cancel();searchCancel?.Dispose();debounce.Stop();};
+        PreviewKeyDown+=(_,e)=>{
+            if(e.Key==Key.Escape){Close();e.Handled=true;}
+        };
+        Closed+=(_,_)=>{requestSequence++;searchCancel?.Cancel();searchCancel?.Dispose();debounce.Stop();};
         void Add(string label,Action<SearchHit> cb){var b=new Button{Content=label,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,7,0)};b.Click+=(_,_)=>Selected(cb);buttons.Children.Add(b);}
     }
     private void Selected(Action<SearchHit> act){if(list.SelectedItem is SearchHit hit)try{act(hit);}catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Search");}}
     private void Launch(SearchHit hit)
     {
-        if(hit.Category=="Notes") {Clipboard.SetText(hit.NoteText??"");MessageBox.Show("Note copied. Open DeskSpace to edit.");return;}
+        if(hit.Category is "Notes" or "Reminders" or "Calendar" or "Information")
+        {
+            if(hit.Category=="Information" &&
+               MessageBox.Show(this,"Copy this Information entry to the clipboard? "+
+                   "Its contents may be private.","DeskSpace Search",
+                   MessageBoxButton.YesNo,MessageBoxImage.Question)!=MessageBoxResult.Yes)
+                return;
+            Clipboard.SetText(hit.NoteText??hit.Name);
+            MessageBox.Show(this,"Selected DeskSpace entry copied by request. "+
+                "No file or app was launched.","DeskSpace Search");
+            return;
+        }
         if(!string.IsNullOrWhiteSpace(hit.OpenTarget))
             Process.Start(new ProcessStartInfo(hit.OpenTarget){UseShellExecute=true});
     }
     private void OpenFolder(SearchHit h)
     {
-        if(!File.Exists(h.OpenTarget))return;
-        Process.Start(new ProcessStartInfo("explorer.exe",$"/select,\"{h.OpenTarget}\""){UseShellExecute=true});
+        if(h.Category!="Files")return;
+        if(Directory.Exists(h.OpenTarget))
+            Process.Start(new ProcessStartInfo(h.OpenTarget){UseShellExecute=true});
+        else if(File.Exists(h.OpenTarget))
+            Process.Start(new ProcessStartInfo("explorer.exe",$"/select,\"{h.OpenTarget}\""){UseShellExecute=true});
     }
-    private void CopyPath(SearchHit h){Clipboard.SetText(string.IsNullOrWhiteSpace(h.Location)?h.OpenTarget:h.Location);}
+    private void CopyPath(SearchHit h)
+    {
+        if(h.Category is "Files" or "Applications" && !string.IsNullOrWhiteSpace(h.OpenTarget))
+            Clipboard.SetText(h.OpenTarget);
+    }
     private void CopyFile(SearchHit h)
     {
         if(!File.Exists(h.OpenTarget))return;
@@ -85,91 +101,50 @@ public sealed class UniversalSearchWindow : Window
     }
     private async Task RunSearch()
     {
-        searchCancel?.Cancel();searchCancel?.Dispose();searchCancel=new CancellationTokenSource();
+        searchCancel?.Cancel();
+        searchCancel?.Dispose();
+        searchCancel=new CancellationTokenSource();
         var token=searchCancel.Token;
-        var term=query.Text.Trim();var selected=category.SelectedItem as string??"All";
-        if(term.Length<2){list.ItemsSource=null;status.Text="Enter two or more characters to search.";return;}
-        status.Text="Searching accessible system files, apps, Windows settings and DeskSpace notes…";
-        var results=new List<SearchHit>();
-        if(selected=="All"||selected=="Settings")
+        int sequence=requestSequence;
+        var term=query.Text.Trim();
+        var selected=category.SelectedItem as string??"All";
+        if(term.Length<2)
         {
-            foreach(var entry in settingsUris){var parts=entry.Split('|');if(parts[0].Contains(term,StringComparison.OrdinalIgnoreCase))results.Add(new SearchHit{Category="Settings",Name=parts[0],Location="Windows Settings",OpenTarget=parts[1]});}
+            list.ItemsSource=null;
+            status.Text="Enter two or more characters to search.";
+            return;
         }
-        if(selected=="All"||selected=="Notes")
+        status.Text="Searching apps, Windows settings and indexed names across ready drives…";
+        // Capture Workspace only on the WPF thread; the single shared search
+        // index performs file/application discovery off the UI thread.
+        Workspace snapshot;
+        try{snapshot=workspace();}
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
         {
-            try{foreach(var note in workspace().Notes.Where(x=>x.Title.Contains(term,StringComparison.OrdinalIgnoreCase)||x.Content.Contains(term,StringComparison.OrdinalIgnoreCase)).Take(30))
-                results.Add(new SearchHit{Category="Notes",Name=note.Title,Location="DeskSpace note",NoteText=note.Content});}catch(IOException){}
+            status.Text="Workspace unavailable ("+ex.GetType().Name+").";
+            return;
         }
-        var fastResults=results.ToList();list.ItemsSource=fastResults;
         try
         {
-            var more=await Task.Run(()=>CollectSystemResults(term,selected,token),token);
-            if(token.IsCancellationRequested)return;
-            results.AddRange(more);
-            list.ItemsSource=results.OrderBy(x=>x.Category=="Applications"?0:x.Category=="Settings"?1:2).ThenBy(x=>x.Name).Take(150).ToList();
-            status.Text=$"{results.Count} matches (first 150 shown). File coverage depends on drive access and scan limits.";
+            var indexed=await Task.Run(()=>
+                DeskSpaceSearchIndexV13.Search(term,snapshot,token),token);
+            if(!DeskSpaceUniversalSearchPolicyV269.Accept(
+                sequence,requestSequence,token.IsCancellationRequested,
+                term,query.Text.Trim(),selected,category.SelectedItem as string))
+                return;
+            var filtered=DeskSpaceUniversalSearchPolicyV269.Filter(indexed,selected);
+            list.ItemsSource=filtered;
+            status.Text=filtered.Count+" matching result(s)"+
+                (DeskSpaceSearchIndexV13.IsIndexing
+                    ?" · discovering additional drive names":"")+
+                ". Select a result to act.";
         }
         catch(OperationCanceledException){}
-        catch(Exception ex){if(!token.IsCancellationRequested)status.Text="Search incomplete: "+ex.Message;}
-    }
-    private static List<SearchHit> CollectSystemResults(string term,string selected,CancellationToken token)
-    {
-        var results=new List<SearchHit>();
-        if(selected is "All" or "Applications")
+        catch(Exception ex)
         {
-            foreach(var start in new []{Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu)})
-            {
-                foreach(var file in SafeFiles(start,25000,token).Where(x=>x.EndsWith(".lnk",StringComparison.OrdinalIgnoreCase)||x.EndsWith(".url",StringComparison.OrdinalIgnoreCase)))
-                {
-                    token.ThrowIfCancellationRequested();
-                    if(System.IO.Path.GetFileNameWithoutExtension(file).Contains(term,StringComparison.OrdinalIgnoreCase))
-                        results.Add(new SearchHit{Category="Applications",Name=System.IO.Path.GetFileNameWithoutExtension(file),Location=file,OpenTarget=file});
-                    if(results.Count>=100)break;
-                }
-            }
-        }
-        if(selected is "All" or "Files")
-        {
-            var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach(var drive in DriveInfo.GetDrives())
-            {
-                token.ThrowIfCancellationRequested();
-                if(!drive.IsReady||drive.DriveType!=DriveType.Fixed)continue;
-                foreach(var file in SafeFiles(drive.RootDirectory.FullName,350000,token))
-                {
-                    token.ThrowIfCancellationRequested();
-                    if(!System.IO.Path.GetFileName(file).Contains(term,StringComparison.OrdinalIgnoreCase))continue;
-                    if(!seen.Add(file))continue;
-                    results.Add(new SearchHit{Category="Files",Name=System.IO.Path.GetFileName(file),Location=file,OpenTarget=file});
-                    if(results.Count>=150)return results;
-                }
-            }
-        }
-        return results;
-    }
-    private static IEnumerable<string> SafeFiles(string root,int maxCount,CancellationToken token)
-    {
-        var pending=new Stack<string>();pending.Push(root);int checkedCount=0;
-        while(pending.Count>0&&checkedCount<maxCount)
-        {
-            token.ThrowIfCancellationRequested();var dir=pending.Pop();
-            string[] dirs, files;
-            try { dirs=Directory.GetDirectories(dir);files=Directory.GetFiles(dir); }
-            catch(UnauthorizedAccessException){continue;}
-            catch(IOException){continue;}
-            catch(System.Security.SecurityException){continue;}
-            foreach(var sub in dirs)
-            {
-                token.ThrowIfCancellationRequested();
-                try { if((File.GetAttributes(sub)&FileAttributes.ReparsePoint)==0)pending.Push(sub); }
-                catch(UnauthorizedAccessException){}catch(IOException){}
-            }
-            foreach(var file in files)
-            {
-                token.ThrowIfCancellationRequested();
-                if(++checkedCount>maxCount)yield break;
-                yield return file;
-            }
+            if(!token.IsCancellationRequested &&
+               sequence==requestSequence)
+                status.Text="Search unavailable ("+ex.GetType().Name+").";
         }
     }
 }
