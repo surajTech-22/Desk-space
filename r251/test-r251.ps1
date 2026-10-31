@@ -16,7 +16,7 @@ foreach($needle in @(
  }
 }
 if($s.IndexOf('if(order.Any(x=>!DeskSpaceFormulaMetadataV251.Valid(') -gt
-   $s.IndexOf('private static void PopulateBlankFormulas')){
+   $s.IndexOf('internal static string Apply(')){
  throw 'R251 metadata guard must run in preflight before formula writes'
 }
 Write-Host 'R251 STATIC PASS: incomplete R1C1 formula metadata cannot reach Excel paste.'
