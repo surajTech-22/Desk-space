@@ -45,6 +45,15 @@ $method=@'
             Add(docs,blocked,DateTime.UtcNow,"excel.exe");
             Add(docs,other,DateTime.UtcNow,"AcroRd32.exe");
             var selected=Select(docs);
+            Console.WriteLine("R262 diagnostic synthetic candidate count="+
+                selected.Length+"; chosen="+
+                string.Join(", ",selected.Select(x=>x.GetType()
+                    .GetProperty("Path")!.GetValue(x)?.ToString()))+
+                "; safeExcel="+safe.Invoke(null,new object?[]{excel})+
+                "; sameHandler="+
+                Product.GetType("DeskSpace.DeskSpacePinnedRecentV122",true)!
+                    .GetMethod("SameExecutableV122",flags)!
+                    .Invoke(null,new object[]{"excel.exe","excel.exe"}));
             Assert(selected.Length==2 &&
                    (string)selected[0].GetType()
                      .GetProperty("Path")!.GetValue(selected[0])! == excel,
