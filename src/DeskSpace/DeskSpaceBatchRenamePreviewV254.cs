@@ -13,7 +13,7 @@ using Forms=System.Windows.Forms;
 namespace DeskSpace;
 
 // R254 provides deterministic, read-only preview and conflict checks.
-// R275 adds a separately verified non-overwriting Apply and same-session Undo.
+// R275 adds non-overwriting Apply/Undo; R277 persists a recovery journal.
 internal static class DeskSpaceBatchRenamePreviewV254
 {
     internal const int MaxFiles=128;
@@ -112,7 +112,8 @@ internal static class DeskSpaceBatchRenamePreviewV254
             Text="Select a folder and review every proposed filename. "+
                  "Only direct visible files are included, up to 128. "+
                  "Apply requires confirmation, never overwrites, and provides "+
-                 "undo until this window closes. No background watching.",
+                 "durable, explicitly reviewed recovery after a crash. "+
+                 "No background watching or automatic file changes.",
             TextWrapping=TextWrapping.Wrap,Foreground=Brushes.DimGray,
             Margin=new Thickness(0,0,0,12)});
         var prefix=new TextBox{MinHeight=28,MaxLength=64};
@@ -142,12 +143,24 @@ internal static class DeskSpaceBatchRenamePreviewV254
         var cancel=new Button{
             Content="Cancel operation",Padding=new Thickness(9,6,9,6),
             Margin=new Thickness(0,0,8,8),IsEnabled=false};
+        var recovery=new Button{
+            Content="Review previous batch",Padding=new Thickness(9,6,9,6),
+            Margin=new Thickness(0,0,8,8)};
+        var restore=new Button{
+            Content="Recover reviewed batch",Padding=new Thickness(9,6,9,6),
+            Margin=new Thickness(0,0,8,8),IsEnabled=false};
+        AutomationProperties.SetName(recovery,
+            "Select folder to inspect interrupted rename");
+        AutomationProperties.SetName(restore,
+            "Restore safely reviewed renamed files");
         AutomationProperties.SetName(apply,"Apply previewed batch rename");
         AutomationProperties.SetName(undo,"Undo batch rename");
         var choices=new WrapPanel();
         choices.Children.Add(apply);
         choices.Children.Add(undo);
         choices.Children.Add(cancel);
+        choices.Children.Add(recovery);
+        choices.Children.Add(restore);
         var rows=new StackPanel();
         content.Children.Add(inspect);content.Children.Add(choices);
         content.Children.Add(status);content.Children.Add(rows);
@@ -155,6 +168,8 @@ internal static class DeskSpaceBatchRenamePreviewV254
         string preparedPrefix="",preparedSuffix="";
         Plan? prepared=null;
         DeskSpaceBatchRenameTransactionV275.Receipt? undoReceipt=null;
+        DeskSpaceBatchRenameRecoveryV277.Review? recoveryReview=null;
+        string recoveryFolder="";
         CancellationTokenSource? running=null;
         bool working=false;
         void ResetPreview()
@@ -176,6 +191,9 @@ internal static class DeskSpaceBatchRenamePreviewV254
                 prepared?.Eligible==true;
             undo.IsEnabled=!value&&undoReceipt!=null;
             cancel.IsEnabled=value;
+            recovery.IsEnabled=!value&&undoReceipt==null;
+            restore.IsEnabled=!value&&undoReceipt==null&&
+                recoveryReview?.CanRecover==true;
         }
         cancel.Click+=(_,_)=>{
             running?.Cancel();
@@ -191,10 +209,11 @@ internal static class DeskSpaceBatchRenamePreviewV254
             }
             else if(undoReceipt!=null &&
                 MessageBox.Show(window,
-                    "Undo will no longer be available after closing this window. "+
-                    "Keep the renamed files?",
+                    "The local recovery record will be retained after closing. "+
+                    "To restore filenames later, reopen Batch Rename and "+
+                    "choose Review previous batch. Close this window?",
                     "Close rename session",MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning)!=MessageBoxResult.Yes)
+                    MessageBoxImage.Information)!=MessageBoxResult.Yes)
                 e.Cancel=true;
         };
         apply.Click+=async (_,_)=>{
@@ -208,7 +227,8 @@ internal static class DeskSpaceBatchRenamePreviewV254
                 "Rename "+prepared.Files.Count+" files in the selected folder? "+
                 "Every destination must be empty. This changes filenames "+
                 "but never file contents. Undo is available while this "+
-                "window stays open.",
+                "window stays open, and a durable recovery record is kept "+
+                "if the app closes unexpectedly.",
                 "Confirm batch rename",MessageBoxButton.YesNo,
                 MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
             var selected=selectedFolder;
@@ -222,7 +242,7 @@ internal static class DeskSpaceBatchRenamePreviewV254
             try
             {
                 var outcome=await Task.Run(()=>
-                    DeskSpaceBatchRenameTransactionV275.Apply(
+                    DeskSpaceBatchRenameRecoveryV277.Apply(
                         selected,proposal,before,after,cancellation.Token));
                 undoReceipt=outcome.Undo;
                 if(outcome.Success)prepared=null;
@@ -257,7 +277,7 @@ internal static class DeskSpaceBatchRenamePreviewV254
             try
             {
                 var outcome=await Task.Run(()=>
-                    DeskSpaceBatchRenameTransactionV275.Undo(
+                    DeskSpaceBatchRenameRecoveryV277.Undo(
                         receipt,cancellation.Token));
                 undoReceipt=outcome.Undo;
                 prepared=null;
@@ -274,6 +294,89 @@ internal static class DeskSpaceBatchRenamePreviewV254
                 running=null;
                 Busy(false);
             }
+        };
+        recovery.Click+=async (_,_)=>{
+            if(working||undoReceipt!=null)return;
+            using var picker=new Forms.FolderBrowserDialog{
+                Description="Choose folder with a previous batch rename",
+                ShowNewFolderButton=false
+            };
+            if(picker.ShowDialog()!=Forms.DialogResult.OK)return;
+            recoveryFolder="";
+            recoveryReview=null;
+            rows.Children.Clear();
+            Busy(true);
+            status.Text="Checking local recovery record (no files changed)…";
+            try
+            {
+                var selected=picker.SelectedPath;
+                var review=await Task.Run(()=>
+                    DeskSpaceBatchRenameRecoveryV277.Inspect(selected));
+                if(!window.IsLoaded)return;
+                recoveryReview=review;
+                recoveryFolder=selected;
+                status.Text=review.Message;
+                if(review.CanRecover)
+                {
+                    rows.Children.Add(new TextBlock{
+                        Text="Recovery review — renamed: "+review.Renamed+
+                            "; original names intact: "+review.Untouched,
+                        FontWeight=FontWeights.SemiBold,
+                        TextWrapping=TextWrapping.Wrap});
+                    foreach(var move in review.Undo!.Moves)
+                        rows.Children.Add(new TextBlock{
+                            Text=move.After+" → "+move.Before,
+                            Margin=new Thickness(0,0,0,3),
+                            TextWrapping=TextWrapping.Wrap});
+                }
+            }
+            catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
+                or ArgumentException)
+            {status.Text="Recovery inspection unavailable ("+
+                ex.GetType().Name+").";recoveryReview=null;}
+            finally{if(window.IsLoaded)Busy(false);}
+        };
+        restore.Click+=async (_,_)=>{
+            if(working||undoReceipt!=null||
+               recoveryReview?.CanRecover!=true)return;
+            var target=recoveryFolder;
+            var latest=DeskSpaceBatchRenameRecoveryV277.Inspect(target);
+            if(!latest.CanRecover||
+               latest.Renamed!=recoveryReview.Renamed ||
+               latest.Untouched!=recoveryReview.Untouched)
+            {
+                status.Text="Recovery state changed. Review previous batch again.";
+                recoveryReview=null;
+                Busy(false);
+                return;
+            }
+            if(MessageBox.Show(window,
+                "Restore "+latest.Renamed+" renamed files in the selected "+
+                "folder? Names that were not changed will be left alone. "+
+                "Modified, missing or occupied names block recovery.",
+                "Confirm interrupted batch recovery",MessageBoxButton.YesNo,
+                MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;
+            using var cancellation=new CancellationTokenSource();
+            running=cancellation;
+            Busy(true);
+            status.Text="Restoring approved filenames without overwrite…";
+            try
+            {
+                var result=await Task.Run(()=>
+                    DeskSpaceBatchRenameRecoveryV277.Recover(
+                        target,cancellation.Token));
+                status.Text=result.Message;
+                recoveryReview=null;
+                if(result.Success)rows.Children.Clear();
+            }
+            catch(Exception ex) when(ex is IOException or
+                UnauthorizedAccessException or OperationCanceledException)
+            {
+                status.Text="Recovery stopped ("+ex.GetType().Name+
+                    "). Recheck the folder before retrying.";
+                recoveryReview=null;
+            }
+            finally{running=null;Busy(false);}
         };
         window.Content=new ScrollViewer{
             Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
