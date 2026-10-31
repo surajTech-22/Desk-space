@@ -41,8 +41,9 @@
       "id": "UPD-01",
       "priority": "P0",
       "title": "One canonical buildable source",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R248 repeatable independent build from R221 per-file-verified source ZIP, external manifest and SHA receipt; canonical source migration to committed editable tree pending."
     },
     {
       "id": "UPD-02",
@@ -63,8 +64,9 @@
       "id": "UPD-04",
       "priority": "P0",
       "title": "One-hash Stable and Tester release",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R249 prepublication SHA-256 equality for Stable/Tester synthetic candidates. Production release upload and acceptance still pending."
     },
     {
       "id": "UPD-05",
