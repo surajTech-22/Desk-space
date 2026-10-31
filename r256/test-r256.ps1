@@ -20,9 +20,9 @@ foreach($needle in @(
   throw ('R256 missing native pre-drop safety '+$needle)
  }
 }
-if($deck.Contains('if(!busy&&pendingFolderDrop==null)'+[string][char]10+
-  '                    ShowFolderChoice(dropped);')){
- throw 'R256 still opens chooser only after Drop'
+if(!$deck.Contains('if(FolderFilesV256(e)!=null)') -or
+   !$deck.Contains('e.Effects=DragDropEffects.None;')){
+ throw 'R256 original Drop handler must block post-drop choices'
 }
 if(!$deck.Contains('expiryV256?.Stop();')){
  throw 'R256 must clear abandoned drag selection and timer'
