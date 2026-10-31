@@ -175,6 +175,11 @@ jobs:
         run: |
           ./r220/test-r220.ps1
 
+      - name: R249 reject Stable and Tester candidate hash mismatch (synthetic only)
+        shell: pwsh
+        run: |
+          ./r249/test-r249.ps1
+
       - name: Assert the single-release gate blocks unverified remaining work
         shell: pwsh
         run: |
