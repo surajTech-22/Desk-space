@@ -49,19 +49,19 @@ $method=@'
             (bool)method.Invoke(null,new object[]{oldProposal,newProposal})!;
         var original=Build();
         Assert(Same(original,Build()),"R263 identical verified target review accepted");
-        Assert(!Same(original,Build(workbook="C:\\Test\\Different.xlsx")) &&
-               !Same(original,Build(sheet="Other")) &&
-               !Same(original,Build(previous="another value")) &&
-               !Same(original,Build(next="456")) &&
-               !Same(original,Build(target="C2")) &&
-               !Same(original,Build(verified=false)) &&
-               !Same(original,Build(signature=false)) &&
-               !Same(original,Build(decision="Skip")) &&
-               !Same(original,Build(workbook="")) &&
-               !Same(original,Build(sheet="")),
+        Assert(!Same(original,Build(workbook:"C:\\Test\\Different.xlsx")) &&
+               !Same(original,Build(sheet:"Other")) &&
+               !Same(original,Build(previous:"another value")) &&
+               !Same(original,Build(next:"456")) &&
+               !Same(original,Build(target:"C2")) &&
+               !Same(original,Build(verified:false)) &&
+               !Same(original,Build(signature:false)) &&
+               !Same(original,Build(decision:"Skip")) &&
+               !Same(original,Build(workbook:"")) &&
+               !Same(original,Build(sheet:"")),
             "R263 workbook, sheet, old/new content, address, reference signature and "+
             "writable state must remain identical between consent and apply");
-        Assert(!Same(original,Build(decision="Skip")) &&
+        Assert(!Same(original,Build(decision:"Skip")) &&
                !Same(original,null!),
             "R263 corrupted or null previews cannot trigger Excel mutation");
         Console.WriteLine("R263 PASS: exact confirmed Excel workbook/sheet/"+
