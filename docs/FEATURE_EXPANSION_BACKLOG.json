@@ -177,14 +177,15 @@
       "title": "Explicit foreground-app context suggestions",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R237 opted-in session-only foreground category recommendations, pending CI and physical UI verification"
+      "evidence": "R280 real DeskSpaceDropShelfV15 integrates per-process category suggestions inside the existing Deck, with shared session state and fixed click-only actions. Windows CI #553 and #563 passed. Real app-switching on two physical displays remains unverified."
     },
     {
       "id": "CTX-02",
       "priority": "P1",
       "title": "Opt-in event-driven app recommendations",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R280 introduces one opt-in SetWinEventHook listener shared by the Deck views, off by default and disabled on Stop/last widget exit. Uses existing R237 coarse process classifier. Windows native WPF CI #563 passed; physical app switching acceptance pending."
     },
     {
       "id": "CTX-03",
@@ -192,7 +193,7 @@
       "title": "Context permission and privacy audit",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R258 category-only, opt-in foreground listener privacy audit, on Stop wipe session recommendation/category/count and reject pending WinEvent callback. Native Windows tests/real consent acceptance pending."
+      "evidence": "R280 creates a Start/Stop control, uses existing R258 audit text, clears context and count at Stop, and never reads window titles/paths/URLs/clipboard contents. Native CI #563 passed. Verify on installed user's PC."
     },
     {
       "id": "SEARCH-01",
@@ -231,7 +232,7 @@
       "title": "Workspace profile preview and consented restoration",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R179 explicit layout capture/restore plus R257 read-only per-window target preview, no silent monitor fallback, single-use rechecked consent; real physical monitors and installed profile acceptance remain."
+      "evidence": "R281 routes named Workspace Profile Save and Import through cross-process OS mutex, strict corrupted/duplicate-case profile validation and atomic replacement; imports preserve a recovery copy. Native concurrent-write, damaged-file, import tests passed CI #563. Real workspace profile UI and monitor-layout restoration acceptance pending."
     },
     {
       "id": "REM-01",
