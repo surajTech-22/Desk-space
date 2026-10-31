@@ -25,6 +25,8 @@ internal static class DeskSpaceActionPaletteV197
         new("excel","Excel mappings","Open saved Excel mapping and format tools","Excel"),
         new("reminders","Reminders","Open the existing reminders tab","Workspace"),
         new("notes","Notes","Open the existing notes tab","Workspace"),
+        new("universalsearch","Universal search",
+            "Find files across drives, installed apps, settings and DeskSpace content","Files"),
         new("searchhealth","Search index health",
             "Review indexed name counts and optionally start local indexing","System"),
         new("status","Component status","View local component health and indexing","System"),
