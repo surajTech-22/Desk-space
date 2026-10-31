@@ -20,8 +20,7 @@ internal static class DeskSpaceBatchRenameTransactionV275
         Receipt? Undo);
 
     private static string Canonical(string folder)=>
-        Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar,
-            Path.AltDirectorySeparatorChar);
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
 
     private static Mutex Lock(string folder)
     {
