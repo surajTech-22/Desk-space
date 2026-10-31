@@ -7,8 +7,8 @@
     {
       "id": "source-migration",
       "description": "Authoritative source tree replacing versioned reconstruction",
-      "status": "pending",
-      "evidence": "R221 produces a deterministic fully patched WPF source archive with every allowed file SHA-256, embedded/external manifest, ZIP SHA-256, tamper rejection and independent Windows rebuild. This is a verified CI artifact; moving the authoritative source into git and deleting historical reconstruction are still pending. R248 independent source archive verification/rebuild command added, migration of source into checked-in editable project remains pending."
+      "status": "implemented",
+      "evidence": "R267 one-time migration from the exact SHA-256-verified CI #406 source artifact to checked-in src/DeskSpace succeeded in migration CI run 41193292300; source committed at ab9f0a72. Consolidated Windows CI #421 (41194003059), SHA 51bd199df6f9972e37ce4dc31dfbdaa2958c2e8c, verified regenerated source SHA-256, newline-only permitted Git text normalization, strict binary parity, independent checked-in Windows build, and existing WPF/regression gates. The old patch-based reconstruction remains as compatibility evidence; release use of canonical source and installed PC validation remain unfinished, so this is implemented, NOT verified release acceptance."
     },
     {
       "id": "dual-monitor-real",
@@ -98,7 +98,7 @@
       "id": "excel-transactions",
       "description": "Excel undo journal, formula/table/format readback",
       "status": "pending",
-      "evidence": " R242 added fail-closed full-range cell metadata checks (known storage types/occupancy for both source and destination) with native negative tests. No real Office/formula/format readback or transactional rollout verified. R251 source R1C1 validator rejects all-missing, mismatched, oversized and invalid formula metadata before blank format/formula paste; real Office acceptance pending. R252 pre-change Excel backup now receives verified SHA-256 sidecar before modifying destination; full Office undo/rollback readback pending."
+      "evidence": " R242 added fail-closed full-range cell metadata checks (known storage types/occupancy for both source and destination) with native negative tests. No real Office/formula/format readback or transactional rollout verified. R251 source R1C1 validator rejects all-missing, mismatched, oversized and invalid formula metadata before blank format/formula paste; real Office acceptance pending. R252 pre-change Excel backup now receives verified SHA-256 sidecar before modifying destination; full Office undo/rollback readback pending. R268 adds strict matching R1C1 Table calculated-column auto-fill preservation and updates the isolated real Microsoft Excel Office COM fixture to require eight captured formulas with blank other inputs, full/partial gates and real ListObjects; synthetic Windows compile/static checks passed in CI #421. Real Office COM acceptance not run and remains mandatory."
     },
     {
       "id": "excel-office-tests",
