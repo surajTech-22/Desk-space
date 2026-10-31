@@ -1,7 +1,7 @@
-# R256 — folder ZIP or Copy before dropping
+# R256 — enforce the existing ZIP / Copy choice during folder drag
 
-The old folder choice appeared after the user dropped the folder. R256 attaches WPF PreviewDragEnter, PreviewDragOver and PreviewDrop to both the widget and the separate Popup window. The chooser appears over the owning circle during a folder drag. Hover ZIP or Copy and release over the highlighted option. Drop without selecting, or with a changed source list, is blocked and no post-drop prompt opens.
+DeskSpace already has the R160 native on-circle ZIP/Copy **adorner**, shown during DragEnter/DragOver, with the hovered half selected on release. It does not use a separate popup. R256 hardens this existing path: while dragging, record which half (ZIP left, Copy right) was hovered; on Drop, require that exact same option and the same original folder paths before calling the existing bounded, cancellable, SHA-verified ZIP/copy staging engine.
 
-The existing bounded, cancellable, SHA-256-verified ZIP/copy staging pipeline is reused. The chooser stays local to its monitor, while held Deck data is shared. Abandoned drag state automatically clears after 12 seconds without drag events. Ordinary file-only drops continue through their original route.
+A drag that never showed a choice, that moves outside the circle, or whose source identity changes is rejected without any post-drop prompt. The consent state is cleared with the existing drag-leave/window-close cleanup. No second popup window, new drag event subscription, source file mutations, background timer, or other monitor's UI state is created.
 
-Windows tests validate the pre-release action choice, unchanged source identity, and no-choice rejection. Explorer native drag and actual two-monitor mixed-DPI acceptance are still required. No Stable or Tester release is made.
+Native Windows tests verify ZIP/Copy hover identity and reject mismatched source, unselected, oversized and absent drag state. Real Explorer drag on multiple physical mixed-DPI monitors remains a mandatory user-device acceptance test before release.
