@@ -28,7 +28,7 @@ internal static class DeskSpacePinnedRecentMonitorV264
         int x,int y,int width,int height,uint flags);
     private const uint NoSize=0x0001,NoZOrder=0x0004,NoActivate=0x0010;
 
-    internal static Point CentreOnOwner(Rectangle popup,Rectangle owner,
+    internal static System.Drawing.Point CentreOnOwner(Rectangle popup,Rectangle owner,
         Rectangle work)
     {
         var desired=new Rectangle(
@@ -38,7 +38,7 @@ internal static class DeskSpacePinnedRecentMonitorV264
         return DeskSpaceMonitorFenceV152.ClampRectangle(desired,work);
     }
 
-    internal static Point ClampToMonitor(Rectangle popup,Rectangle work)=>
+    internal static System.Drawing.Point ClampToMonitor(Rectangle popup,Rectangle work)=>
         DeskSpaceMonitorFenceV152.ClampRectangle(popup,work);
 
     internal static void Attach(Window dialog,Window owner)
