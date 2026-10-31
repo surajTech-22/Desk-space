@@ -47,8 +47,8 @@ $method=@'
                 // WPF VisualTreeHelper cannot traverse a ScrollViewer's
                 // templated content before the test window is shown. Inspect
                 // its constructed logical controls directly, without popups.
-                var root=(StackPanel)((ScrollViewer)window.Content).Content;
-                var commands=root.Children.OfType<WrapPanel>().Single();
+                var previewLayout=(StackPanel)((ScrollViewer)window.Content).Content;
+                var commands=previewLayout.Children.OfType<WrapPanel>().Single();
                 var buttons=commands.Children.OfType<Button>()
                     .Select(x=>x.Content?.ToString()??"").ToArray();
                 Assert(buttons.Contains("Choose file")&&
