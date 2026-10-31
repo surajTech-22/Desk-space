@@ -116,7 +116,7 @@
       "id": "vault-context",
       "description": "Explicit exact-origin, unlock-gated suggestions, real UI review",
       "status": "implemented",
-      "evidence": ""
+      "evidence": " R258 foreground context session audit/Stop cleanup; separate full context permission real-device audit remains pending."
     },
     {
       "id": "reminders-actions",
