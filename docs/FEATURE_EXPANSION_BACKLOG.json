@@ -194,8 +194,9 @@
       "id": "SEARCH-01",
       "priority": "P2",
       "title": "Unified command palette, progressive search and index health",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R259 Action Palette bounded @group facets, deterministic ranking and PageUp/Down/Home/End navigation; R260 aggregate-only live multi-drive index health with manually authorized WarmStart and no file-content reads. Native CI and real multi-drive performance/Everything IPC remain pending."
     },
     {
       "id": "CLIP-01",
