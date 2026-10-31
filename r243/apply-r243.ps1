@@ -20,14 +20,12 @@ Swap @'
 '@ 'remove destructive global media reset on one monitor shutdown'
 Swap @'
         Views.Remove(this);
-        if(ReferenceEquals(active,this))active=Views.FirstOrDefault();
 '@ @'
         Views.Remove(this);
         // The media player stays inside the Deck until the FINAL widget
         // goes away. Closing monitor 1 must not open an extra floating
-        // player over monitor 2.
+        // player over monitor 2. Preserve other teardown hooks.
         DeskSpaceMediaV18.DeckIntegrationV123=Views.Count>0;
-        if(ReferenceEquals(active,this))active=Views.FirstOrDefault();
 '@ 'share media integration ownership across independently disposed monitor Deck views'
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R243: closing a secondary or primary Deck retains media integration while another widget survives.'
