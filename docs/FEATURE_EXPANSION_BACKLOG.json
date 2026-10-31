@@ -1,0 +1,268 @@
+{
+  "schema": "deskspace-feature-expansion-v1",
+  "recorded_on": "2026-10-31",
+  "branch": "feat/r201-consolidated-roadmap-bundle",
+  "policy": "planned != implemented != verified != released",
+  "source": "docs/UNIFIED_IMPLEMENTATION_FLOW_2026-10-31.md",
+  "items": [
+    {
+      "id": "MON-01",
+      "priority": "P0",
+      "title": "Monitor identity and independent widget/Deck sessions",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "MON-02",
+      "priority": "P0",
+      "title": "Real two-monitor mixed DPI and seam regression",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "MON-03",
+      "priority": "P0",
+      "title": "Explicit docking and popup containment",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "MON-04",
+      "priority": "P0",
+      "title": "Sleep/resume and reconnect recovery",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UPD-01",
+      "priority": "P0",
+      "title": "One canonical buildable source",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UPD-02",
+      "priority": "P0",
+      "title": "Graceful all-process updater exit, veto respected",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UPD-03",
+      "priority": "P0",
+      "title": "Full rollback and heartbeat verified on real PC",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UPD-04",
+      "priority": "P0",
+      "title": "One-hash Stable and Tester release",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UPD-05",
+      "priority": "P0",
+      "title": "Signing and artifact provenance",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "EXCEL-01",
+      "priority": "P0",
+      "title": "Entire-range no-partial paste guard",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "EXCEL-02",
+      "priority": "P0",
+      "title": "Formula, format, ListObject capture and readback",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "EXCEL-03",
+      "priority": "P0",
+      "title": "Backup, transactional write and verified rollback",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "EXCEL-04",
+      "priority": "P1",
+      "title": "Captured Sheet plus Mappings tabs and separate paste routes",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "EXCEL-05",
+      "priority": "P1",
+      "title": "Live Excel exact-signature non-destructive suggestions",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "EXCEL-06",
+      "priority": "P0",
+      "title": "Three real Office workbook acceptance cases",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "DECK-01",
+      "priority": "P1",
+      "title": "Window grouping and stationary-hover previews",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "DECK-02",
+      "priority": "P1",
+      "title": "Pinned apps recent document actions",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "DECK-03",
+      "priority": "P1",
+      "title": "Independent monitor-local Deck UI, shared staged files",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "DECK-04",
+      "priority": "P1",
+      "title": "Folder pre-drop Zip or Copy, cancellation, recovery",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "DECK-05",
+      "priority": "P1",
+      "title": "Safe PDF Office ZIP WAV image and text previews",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "DECK-06",
+      "priority": "P1",
+      "title": "Media controls in shared Deck",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "CTX-01",
+      "priority": "P1",
+      "title": "Explicit foreground-app context suggestions",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "CTX-02",
+      "priority": "P1",
+      "title": "Opt-in event-driven app recommendations",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "CTX-03",
+      "priority": "P1",
+      "title": "Context permission and privacy audit",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "SEARCH-01",
+      "priority": "P2",
+      "title": "Unified command palette, progressive search and index health",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "CLIP-01",
+      "priority": "P2",
+      "title": "Opt-in clipboard snippets and conversions",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "OCR-01",
+      "priority": "P2",
+      "title": "On-demand selected-region OCR",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "FILE-01",
+      "priority": "P2",
+      "title": "Safe file transforms and batch rename preview",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "WORK-01",
+      "priority": "P2",
+      "title": "Workspace profile preview and consented restoration",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "REM-01",
+      "priority": "P2",
+      "title": "Actionable recurring reminders",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "VAULT-01",
+      "priority": "P3",
+      "title": "Protected credential vault and exact-site matching",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "AUTO-01",
+      "priority": "P3",
+      "title": "Allowlisted workflow builder with dry run and audit",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "INT-01",
+      "priority": "P3",
+      "title": "Opt-in AAH local connector",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UI-01",
+      "priority": "P1",
+      "title": "Settings crash resilience and clear navigation",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UI-02",
+      "priority": "P1",
+      "title": "Full keyboard and screen-reader accessibility",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "PERF-01",
+      "priority": "P0",
+      "title": "Event-driven background work and performance budgets",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "TEST-01",
+      "priority": "P0",
+      "title": "CI, safe release gate, physical test evidence",
+      "status": "planned",
+      "release_eligible": false
+    }
+  ]
+}
