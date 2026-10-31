@@ -92,6 +92,7 @@ jobs:
           ./r245/apply-r245.ps1
           ./r246/apply-r246.ps1
           ./r247/apply-r247.ps1
+          ./r251/apply-r251.ps1
           ./r201/apply-tests-r201-r202.ps1
           ./r203/apply-tests-r203.ps1
           ./r205/apply-tests-r205.ps1
@@ -129,6 +130,7 @@ jobs:
           ./r245/apply-tests-r245.ps1
           ./r246/apply-tests-r246.ps1
           ./r247/apply-tests-r247.ps1
+          ./r251/apply-tests-r251.ps1
           ./r201/test-r201-r202.ps1
           ./r203/test-r203.ps1
           ./r205/test-r205.ps1
@@ -169,6 +171,7 @@ jobs:
           ./r245/test-r245.ps1
           ./r246/test-r246.ps1
           ./r247/test-r247.ps1
+          ./r251/test-r251.ps1
 
       - name: Validate legacy updater checksum compatibility on synthetic installer
         shell: pwsh
@@ -225,7 +228,7 @@ jobs:
         run: |
           ./r236/record-runner-displays-r236.ps1
 
-      - name: Run isolated native WPF R201-R247 acceptance (no release)
+      - name: Run isolated native WPF R201-R251 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
