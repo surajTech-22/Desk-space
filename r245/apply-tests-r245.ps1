@@ -25,7 +25,13 @@ $method=@'
         var dialog=(Window)create.Invoke(null,new object[]{owner})!;
         try
         {
-            var buttons=Walk((DependencyObject)dialog.Content)
+            // Materialize the ScrollViewer ContentPresenter/visual tree before
+            // walking its native child controls in a headless Windows runner.
+            var content=(FrameworkElement)dialog.Content;
+            content.Measure(new Size(510,580));
+            content.Arrange(new Rect(0,0,510,580));
+            content.UpdateLayout();
+            var buttons=Walk(content)
                 .OfType<System.Windows.Controls.Button>().ToArray();
             var clear=buttons.Single(x=>x.Content?.ToString()=="Clear local preview");
             var boxes=Walk((DependencyObject)dialog.Content)
