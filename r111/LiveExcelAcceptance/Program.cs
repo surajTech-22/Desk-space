@@ -107,8 +107,8 @@ internal static class Program
             Put(template,"SheetVisualV101",snapshot);
             Console.WriteLine("SOURCE: actual Excel Table1, E7:E11 merged, 30 cells, single/double underline captured.");
 
-            // Test A: wholly empty destination creates true table and formatting,
-            // WITHOUT copying any source transaction values or formulas.
+            // Test A: wholly empty destination creates a real table and restores
+            // exact captured formulas, WITHOUT copying transaction/source values.
             dynamic emptyBook=excel.Workbooks.Add();
             dynamic emptySheet=emptyBook.Worksheets[1];
             emptySheet.Name="Blank target";
@@ -130,25 +130,43 @@ internal static class Program
                 "Excel merged area was not restored");
             Expect((int)emptySheet.Range["G20"].Font.Underline==-4119,
                 "Double underline was not restored");
-            // Every source formula column must remain blank, not display 0.
+            // Saved formulas must be real Excel R1C1 formulas. A formula may
+            // calculate zero with blank inputs; that must never be confused
+            // with an explicitly pasted numeric 0 in an input cell.
+            int restoredFormulas=0;
             for(int row=16;row<=20;row++)
             for(int col=5;col<=10;col++)
             {
                 if(row==16 && col>=6)continue; // Actual ListObject header
-                dynamic blankCell=emptySheet.Cells[row,col];
-                if((bool)blankCell.HasFormula ||
-                   (object?)blankCell.Value2 != null)
-                    throw new InvalidOperationException(
-                        "Format-only pasted a formula/value into empty cell "+
-                        (string)blankCell.Address);
+                dynamic targetCell=emptySheet.Cells[row,col];
+                string expected=(col==10 && row>=17 && row<=19)
+                    ?"=SUM(RC[-4]:RC[-1])"
+                    :row==20 && col>=6
+                        ?"=SUM(R[-3]C:R[-1]C)"
+                        :"";
+                bool hasFormula=(bool)targetCell.HasFormula;
+                if(expected.Length>0)
+                {
+                    Expect(hasFormula && string.Equals(
+                        Convert.ToString((object?)targetCell.FormulaR1C1,
+                            CultureInfo.InvariantCulture),expected,
+                        StringComparison.Ordinal),
+                        "Captured source R1C1 formula was not restored at "+
+                        (string)targetCell.Address);
+                    restoredFormulas++;
+                }
+                else
+                    Expect(!hasFormula && (object?)targetCell.Value2==null,
+                        "Non-formula input cell was populated at "+
+                        (string)targetCell.Address);
             }
-            Expect((object?)emptySheet.Range["J17"].Value2==null,
-                "Blank destination calculated column returned a visible zero");
+            Expect(restoredFormulas==8,
+                "Did not verify all eight captured source formulas");
             Expect((object?)emptySheet.Range["F17"].Value2==null,
                 "Blank destination input returned an unwanted value");
             emptyBook.SaveAs(Path.Combine(work,"applied_blank.xlsx"),51);
             Console.WriteLine("PASS: empty target real table, merges, underline, "+
-                "all body cells blank with zero formula injection.");
+                "eight exact R1C1 formulas restored, no pasted input values.");
 
             // Test B: partial target MUST block before the first write.
             dynamic partialBook=excel.Workbooks.Add();
@@ -265,19 +283,22 @@ internal static class Program
                 "Same-workbook format paste duplicated original Excel table identity");
             Expect(ReadStyleName(source.ListObjects[2])=="TableStyleMedium2",
                 "Same-workbook destination table style differs");
-            Expect(!(bool)source.Range["J17"].HasFormula &&
-                   (object?)source.Range["J17"].Value2==null,
-                "Same-workbook format paste introduced a formula/zero into blank area");
+            Expect((bool)source.Range["J17"].HasFormula &&
+                   (string)source.Range["J17"].FormulaR1C1==
+                       "=SUM(RC[-4]:RC[-1])" &&
+                   (object?)source.Range["F17"].Value2==null,
+                "Same-workbook format/formula paste failed to restore relative "+
+                "formulas while preserving blank input cells");
             Expect((bool)source.Range["J8"].HasFormula,
                 "Same-workbook format paste unexpectedly modified source formulas");
             Console.WriteLine("PASS: same-workbook table identity/style preserved, "+
-                "target body blank and original source formulas intact.");
+                "captured R1C1 formulas restored, other inputs blank and source unchanged.");
             sourceBook.SaveAs(Path.Combine(work,"applied_same_workbook.xlsx"),51);
 
             emptyBook.Close(false);
             fullBook.Close(false);
             sourceBook.Close(false);
-            Console.WriteLine("R111 LIVE MICROSOFT EXCEL ACCEPTANCE PASSED");
+            Console.WriteLine("R268 LIVE MICROSOFT EXCEL FORMAT+FORMULA ACCEPTANCE PASSED");
             Console.WriteLine("Disposable evidence files: "+work);
             return 0;
         }

@@ -1,0 +1,320 @@
+<Window x:Class="DeskSpace.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="DeskSpace — Workspace" Width="1120" Height="760" MinWidth="760" MinHeight="520"
+        Closing="MainWindow_Closing" Background="#F3F6FB">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#15263D" Padding="16,11">
+      <DockPanel>
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+          <TextBlock Text="▦  DeskSpace" FontSize="23" FontWeight="Bold" Foreground="White"/>
+          <Button x:Name="VersionButton" Click="AppVersion_Click" Padding="10,2" Margin="12,0,0,0"
+                  Background="#31496F" Foreground="White" BorderThickness="0" VerticalAlignment="Center"
+                  ToolTip="Show installed DeskSpace version and update information"/>
+        </StackPanel>
+        <TextBlock Text="YOUR WORKSPACE  ·  PRIVATE LOCAL DATA  ·  NO PASSWORD VAULT YET" Foreground="#D9E5F1" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+      </DockPanel>
+    </Border>
+    <StatusBar DockPanel.Dock="Bottom"><TextBlock x:Name="StatusText" Text="Ready — local data is not encrypted in this preview"/></StatusBar>
+    <TabControl x:Name="MainTabs" Margin="10" Background="White" TabStripPlacement="Left">
+      <TabControl.ItemContainerStyle>
+        <Style TargetType="TabItem">
+          <Setter Property="MinWidth" Value="174"/>
+          <Setter Property="Padding" Value="12,11"/>
+          <Setter Property="FontSize" Value="14"/>
+          <Setter Property="Foreground" Value="#27394F"/>
+        </Style>
+      </TabControl.ItemContainerStyle>
+      <TabItem Tag="Home" Header="⌂  Home">
+        <ScrollViewer><StackPanel Margin="24">
+          <TextBlock Text="Your Workspace" FontSize="30" FontWeight="Bold"/>
+          <TextBlock x:Name="DashboardTime" FontSize="24" Margin="0,14,0,6"/>
+          <TextBlock x:Name="DashboardSummary" FontSize="16" TextWrapping="Wrap" Margin="0,8,0,20"/>
+          <TextBlock Text="Quick Actions" FontSize="20" FontWeight="SemiBold"/>
+          <WrapPanel Margin="0,10,0,20">
+            <Button Content="✎  Add Sticky Note" Click="AddNote_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="Show Live Donut Widget" Click="ShowWidget_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="▦  Excel Mapping" Click="ExcelModule_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="Check for Updates" Click="GitHubUpdates_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="✎  Open Floating Note" Click="FloatNote_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="▦  Floating Calendar" Click="FloatCalendar_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="◉  Floating Reminders" Click="FloatReminders_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="◷  Floating Clock" Click="FloatClock_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="▥  Create Data Tab" Click="NewTab_Click" Padding="16,10" Margin="0,0,10,10"/>
+                        <Button Content="▥  View Data Tabs" Click="GoTabs_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="⌕  Universal Search" Click="UniversalSearch_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="▤  Recent Files" Click="RecentFiles_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="▣  Pinned Apps" Click="PinnedApps_Click" Padding="16,10" Margin="0,0,10,10"/>
+            <Button Content="⚙  Widget Settings" Click="WidgetSettings_Click" Padding="16,10" Margin="0,0,10,10"/>
+          </WrapPanel>
+          <TextBlock Text="Available today: notes, calendar, reminders, clock, quick copy, documents, custom data, recent files, pinned apps and universal search. Password encryption, Winman integration, Android, and cloud sync are not included; do not store passwords." TextWrapping="Wrap" Foreground="#526171"/>
+        </StackPanel></ScrollViewer>
+      </TabItem>
+      <TabItem Tag="Notes" Header="✎  Notes">
+        <Grid Margin="12"><Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <DockPanel Grid.Column="0"><StackPanel DockPanel.Dock="Top" Orientation="Horizontal"><Button Content="+ New" Click="AddNote_Click" Margin="0,0,6,8"/><Button Content="Delete" Click="DeleteNote_Click" Margin="0,0,0,8"/></StackPanel>
+            <ListBox x:Name="NotesList" SelectionChanged="NotesList_SelectionChanged"/></DockPanel>
+          <DockPanel Grid.Column="2">
+            <StackPanel DockPanel.Dock="Top">
+              <TextBox x:Name="NoteTitle" FontSize="20" FontWeight="SemiBold" TextChanged="NoteEditor_Changed" Margin="0,0,0,8" ToolTip="Note title"/>
+              <Button Content="Open this note as editable floating widget" Click="FloatNote_Click" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+            </StackPanel>
+            <TextBox x:Name="NoteContent" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="Wrap" FontSize="16" TextChanged="NoteEditor_Changed"/>
+          </DockPanel>
+        </Grid>
+      </TabItem>
+      <TabItem Tag="Calendar" Header="▦  Calendar">
+        <Grid Margin="16"><Grid.ColumnDefinitions><ColumnDefinition Width="330"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Calendar x:Name="EventCalendar" Grid.Column="0" SelectedDatesChanged="CalendarSelection_Changed"/>
+          <DockPanel Grid.Column="2">
+            <StackPanel DockPanel.Dock="Top">
+              <TextBlock Text="Events for selected date" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,14"/>
+              <TextBox x:Name="EventTitle" Margin="0,0,0,8" ToolTip="Event title"/>
+              <StackPanel Orientation="Horizontal"><Button Content="Add event" Click="AddEvent_Click" Margin="0,0,8,10"/><Button Content="Delete selected" Click="DeleteEvent_Click" Margin="0,0,8,10"/></StackPanel>
+            </StackPanel>
+            <ListBox x:Name="EventsList"/>
+          </DockPanel>
+        </Grid>
+      </TabItem>
+                                    <TabItem Tag="Reminders" Header="◉  Reminders">
+        <DockPanel Margin="16">
+          <StackPanel DockPanel.Dock="Top" Margin="0,0,0,9">
+            <TextBlock Text="Reminders and tasks · scheduled with Windows local time"
+              FontWeight="SemiBold" FontSize="17" Margin="0,0,0,9"/>
+            <WrapPanel Margin="0,0,0,5">
+              <TextBox x:Name="ReminderTitle" Width="250" Height="31"
+                Margin="0,0,8,5" ToolTip="Reminder or task title"/>
+              <DatePicker x:Name="ReminderDate" Width="142"
+                Margin="0,0,8,5"/>
+              <TextBox x:Name="ReminderTime" Width="120" Height="31"
+                Text="09:00:00" Margin="0,0,8,5"
+                ToolTip="72345 = 07:23:45; 122345 = 12:23:45; optional AM/PM"
+                TextChanged="ReminderTime_TextChanged"
+                LostKeyboardFocus="ReminderTime_LostKeyboardFocus"/>
+            </WrapPanel>
+            <TextBlock x:Name="ReminderTimePreview"
+              Text="Time: 09:00:00 · 24-hour mode"
+              FontSize="12" Foreground="#57678C"
+              Margin="0,0,0,7"/>
+            <WrapPanel Margin="0,0,0,5" VerticalAlignment="Center">
+              <TextBlock Text="Sound / Tune" Width="108"
+                VerticalAlignment="Center" FontWeight="SemiBold"/>
+              <ComboBox x:Name="ReminderSoundChoice"
+                Width="153" Height="29" SelectedIndex="0"
+                Loaded="ReminderSoundChoice_Loaded"
+                Margin="0,0,8,3"
+                SelectionChanged="ReminderSoundChoice_SelectionChanged">
+                <ComboBoxItem Content="Exclamation"/>
+                <ComboBoxItem Content="Beep"/>
+                <ComboBoxItem Content="Asterisk"/>
+                <ComboBoxItem Content="Hand"/>
+                <ComboBoxItem Content="None"/>
+                <ComboBoxItem Content="Custom WAV"/>
+              </ComboBox>
+              <Button Content="Test sound" Click="ReminderTestSound_Click"
+                Padding="9,5" Margin="0,0,7,3"/>
+              <Button Content="Browse WAV" Click="ReminderBrowseWav_Click"
+                Padding="9,5" Margin="0,0,7,3"/>
+              <TextBox x:Name="ReminderSoundPath" Width="275"
+                TextChanged="ReminderSoundPath_TextChanged"
+                Visibility="Collapsed" Height="30"
+                ToolTip="Selected .wav sound file" Margin="0,0,7,3"/>
+            </WrapPanel>
+            <TextBlock x:Name="ReminderSoundSaveStatus"
+              FontSize="11" Foreground="#76558F" Text="" Margin="0,0,0,5"/>
+            <WrapPanel Margin="0,0,0,7">
+              <TextBlock Text="Perform action" Width="108"
+                VerticalAlignment="Center" FontWeight="SemiBold"/>
+              <ComboBox x:Name="ReminderActionChoice" SelectedIndex="0"
+                SelectionChanged="ReminderActionChoice_SelectionChanged"
+                Width="153" Height="29" Margin="0,0,8,3">
+                <ComboBoxItem Content="None"/>
+                <ComboBoxItem Content="Open application"/>
+                <ComboBoxItem Content="Open file"/>
+                <ComboBoxItem Content="Open URL"/>
+              </ComboBox>
+              <Button Content="Perform action" Click="ReminderChooseAction_Click" Padding="9,5" Margin="0,0,7,3"/>
+              <Button x:Name="ReminderBrowseFileButton" Content="Browse file" Click="ReminderBrowseFile_Click"
+                Padding="9,5" Margin="0,0,7,3"/>
+              <Button x:Name="ReminderBrowseAppButton" Content="Browse app" Click="ReminderBrowseTarget_Click"
+                Padding="9,5" Margin="0,0,7,3"/>
+              <TextBox x:Name="ReminderActionPath" Width="305"
+                TextChanged="ReminderActionPath_TextChanged"
+                Visibility="Collapsed" Height="30"
+                ToolTip="Application, file or pasted URL" Margin="0,0,7,3"/>
+            </WrapPanel>
+            <WrapPanel Margin="0,0,0,4">
+              <Image x:Name="ReminderActionIcon" Width="23" Height="23"
+                Stretch="Uniform" Visibility="Collapsed"
+                Margin="0,0,7,0"/>
+              <TextBlock x:Name="ReminderActionDisplay" FontSize="13"
+                Foreground="#342C57" TextWrapping="Wrap"
+                VerticalAlignment="Center"/>
+            </WrapPanel>
+            <TextBlock x:Name="ReminderUrlNote" Visibility="Collapsed"
+              Text="Paste a website URL. The Windows default browser opens it when due; an existing tab can prepare 12 seconds early."
+              TextWrapping="Wrap" FontSize="12" Foreground="#57678C" Margin="0,0,0,5"/>
+            <StackPanel x:Name="ReminderEmbeddedSearch" Visibility="Collapsed"
+              MaxWidth="450" HorizontalAlignment="Left" Margin="0,0,0,5"/>
+            <WrapPanel Margin="0,0,0,6">
+              <TextBlock Text="Repeat" VerticalAlignment="Center"
+                FontWeight="SemiBold" Width="72"/>
+              <ComboBox x:Name="ReminderRepeatChoice" Width="156" Height="29"
+                SelectedIndex="0" Margin="0,0,7,3"
+                SelectionChanged="ReminderRepeatChoice_SelectionChanged">
+                <ComboBoxItem Content="None"/>
+                <ComboBoxItem Content="Daily"/>
+                <ComboBoxItem Content="Weekdays"/>
+                <ComboBoxItem Content="Weekly"/>
+                <ComboBoxItem Content="Monthly"/>
+                <ComboBoxItem Content="Yearly"/>
+                <ComboBoxItem Content="Selected days"/>
+                <ComboBoxItem Content="Every N days"/>
+              </ComboBox>
+              <TextBox x:Name="ReminderRepeatDays" Width="153" Height="29"
+                Visibility="Collapsed" Margin="0,0,8,3"
+                Text="Mon,Wed,Fri" ToolTip="Comma separated days, e.g. Mon,Wed,Fri"/>
+              <TextBox x:Name="ReminderRepeatEvery" Width="77" Height="29"
+                Visibility="Collapsed" Text="1" Margin="0,0,8,3"
+                ToolTip="Repeat every N days"/>
+            </WrapPanel>
+            <TextBlock Text="Advanced automation · ordered actions, conditions and templates"
+              FontSize="12" FontWeight="SemiBold" Margin="0,4,0,2"/>
+            <StackPanel x:Name="ReminderAutomationHost"
+              Loaded="ReminderAutomationHost_Loaded"
+              Margin="0,0,0,5"/>
+            <WrapPanel Margin="0,0,0,5">
+              <Button Content="Add reminder" Click="AddReminder_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+              <Button Content="Save changes" Click="SaveReminderChanges_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+              <Button Content="History" Click="ReminderHistory_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+              <Button Content="Mark done" Click="DoneReminder_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+              <Button Content="Delete" Click="DeleteReminder_Click"
+                Padding="10,6" Margin="0,0,8,4"/>
+            </WrapPanel>
+            <TextBlock Text="Active reminders only; completed entries remain saved."
+              FontSize="12" Foreground="#64748B" Margin="0,0,0,6"/>
+          </StackPanel>
+          <ListBox x:Name="RemindersList" FontSize="15"
+            SelectionChanged="RemindersList_SelectionChanged"/>
+        </DockPanel>
+      </TabItem>
+      <TabItem Tag="Clipboard" Header="▣  Clipboard">
+        <Grid Margin="14"><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <DockPanel Grid.Column="0"><StackPanel DockPanel.Dock="Top" Orientation="Horizontal"><Button Content="+ New" Click="NewSnippet_Click" Margin="0,0,8,8"/><Button Content="Delete" Click="DeleteSnippet_Click" Margin="0,0,8,8"/></StackPanel><ListBox x:Name="SnippetsList" SelectionChanged="SnippetsList_SelectionChanged"/></DockPanel>
+          <DockPanel Grid.Column="2"><StackPanel DockPanel.Dock="Top"><TextBox x:Name="SnippetName" TextChanged="SnippetEditor_Changed" FontSize="18" Margin="0,0,0,8"/><Button Content="Copy text" Click="CopySnippet_Click" HorizontalAlignment="Left" Padding="18,8" Margin="0,0,0,8"/></StackPanel><TextBox x:Name="SnippetContent" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" TextChanged="SnippetEditor_Changed" FontSize="16"/></DockPanel>
+        </Grid>
+      </TabItem>
+      <TabItem Tag="Documents" Header="▤  Documents">
+        <DockPanel Margin="16">
+          <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <Button Content="Import document" Click="ImportDocument_Click" Margin="0,0,8,8"/>
+            <Button Content="Open" Click="OpenDocument_Click" Margin="0,0,8,8"/>
+            <Button Content="Copy document for pasting" Click="CopyDocument_Click" Margin="0,0,8,8"/>
+            <Button Content="Delete from workspace" Click="DeleteDocument_Click" Margin="0,0,8,8"/>
+          </WrapPanel>
+          <ListBox x:Name="DocumentsList" FontSize="15"/>
+        </DockPanel>
+      </TabItem>
+      <TabItem x:Name="DataTabPage" Tag="Custom Data" Header="▥  Custom Data">
+        <Grid Margin="10"><Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <DockPanel Grid.Column="0"><StackPanel DockPanel.Dock="Top">
+              <TextBlock Text="Your saved tabs" FontWeight="Bold" Margin="0,0,0,8"/>
+              <Button Content="+ Create tab" Click="NewTab_Click" Margin="0,0,0,7"/>
+              <Button Content="Rename tab" Click="RenameTab_Click" Margin="0,0,0,7"/>
+              <Button Content="Delete tab" Click="DeleteTab_Click" Margin="0,0,0,7"/>
+              <Separator Margin="0,8"/>
+              <Button Content="Save cells" Click="SaveGrid_Click" Margin="0,0,0,7"/>
+              <Button Content="Add 20 rows" Click="AddGridRows_Click" Margin="0,0,0,7"/>
+            </StackPanel>
+            <ListBox x:Name="DataTabList" SelectionChanged="DataTabList_SelectionChanged"/>
+          </DockPanel>
+          <DockPanel Grid.Column="2">
+            <StackPanel DockPanel.Dock="Top">
+              <TextBlock x:Name="DataTabTitle" Text="Create or select a tab" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,7"/>
+              <WrapPanel>
+                <Button Content="Paste clipboard cells here" Click="ImportClipboard_Click" Margin="0,0,7,7" ToolTip="Excel copy -> select start cell in table -> paste"/>
+                <Button Content="Copy cells for Excel" Click="CopyGrid_Click" Margin="0,0,7,7"/>
+                <Button Content="Paste edited grid in Excel" Click="PasteGridToExcel_Click" Margin="0,0,7,7"/>
+                <Button Content="Capture selected Excel range" Click="CaptureExcel_Click" Margin="0,0,7,7"/>
+                <Button Content="Paste saved Excel snapshot" Click="PasteExcel_Click" Margin="0,0,7,7" ToolTip="Paste Excel-native snapshot into selected Excel cell, preserving formatting where Excel supports it"/>
+              </WrapPanel>
+              <WrapPanel>
+                <Button Content="Import screenshot" Click="ImportImage_Click" Margin="0,0,7,7"/>
+                <Button Content="View screenshot" Click="ViewImage_Click" Margin="0,0,7,7"/>
+                <Button Content="OCR screenshot to editable draft" Click="RunOcr_Click" Margin="0,0,7,7"/>
+                <Button Content="Mark grid reviewed" Click="ReviewGrid_Click" Margin="0,0,7,7"/>
+              </WrapPanel>
+              <TextBlock x:Name="GridWarning" Foreground="#A43E1C" TextWrapping="Wrap" Margin="0,1,0,5"/>
+            </StackPanel>
+            <DataGrid x:Name="GridEditor" AutoGenerateColumns="True" CanUserAddRows="True" CanUserDeleteRows="True"
+                      HeadersVisibility="All" GridLinesVisibility="All" AutoGeneratingColumn="GridEditor_AutoGeneratingColumn"
+                      CellEditEnding="GridEditor_CellEditEnding" LoadingRow="GridEditor_LoadingRow"/>
+          </DockPanel>
+        </Grid>
+      </TabItem>
+      <TabItem x:Name="ExcelMainTab" Tag="Excel" Header="▦  Excel Mapping">
+         <Grid x:Name="ExcelMainHost" Margin="0" Loaded="ExcelMainHost_Loaded"/>
+       </TabItem>
+       <TabItem Tag="Clock" Header="◷  Clock &amp; Timer">
+        <StackPanel Margin="30" HorizontalAlignment="Left">
+          <TextBlock x:Name="ClockText" FontSize="52" FontWeight="Bold"/>
+                    <TextBlock x:Name="ClockWeather" Text="Weather: select city in widget settings" FontSize="17" Foreground="#536693" Margin="0,0,0,22"/>
+          <TextBlock Text="Countdown timer (minutes)" FontSize="17"/>
+          <StackPanel Orientation="Horizontal" Margin="0,10,0,0"><TextBox x:Name="TimerMinutes" Text="5" Width="75"/><Button Content="Start" Click="StartTimer_Click" Margin="8,0,8,0"/><Button Content="Stop" Click="StopTimer_Click"/></StackPanel>
+          <TextBlock x:Name="TimerRemaining" FontSize="30" Margin="0,15,0,0"/>
+        </StackPanel>
+      </TabItem>
+      <TabItem Tag="Tools" Header="⚒  Tools">
+        <ScrollViewer><StackPanel Margin="24">
+          <TextBlock Text="Tools and Quick Access" FontSize="27" FontWeight="Bold" Margin="0,0,0,16"/>
+          <TextBlock Text="Use the same live tools available from the desktop donut." FontSize="15" Margin="0,0,0,18"/>
+          <WrapPanel>
+            <Button Content="⌕  Search this computer" Click="UniversalSearch_Click" Padding="18,12" Margin="0,0,12,12"/>
+            <Button Content="▤  Recent generated files" Click="RecentFiles_Click" Padding="18,12" Margin="0,0,12,12"/>
+            <Button Content="▣  Pin and launch apps" Click="PinnedApps_Click" Padding="18,12" Margin="0,0,12,12"/>
+            <Button Content="⚙  Donut options" Click="WidgetSettings_Click" Padding="18,12" Margin="0,0,12,12"/>
+            <Button Content="◷  Show donut" Click="ShowWidget_Click" Padding="18,12" Margin="0,0,12,12"/>
+          </WrapPanel>
+          <TextBlock Text="Search supports accessible files, installed shortcuts, Windows Settings, and DeskSpace content. Indexing every drive and every application is not yet implemented." TextWrapping="Wrap" Foreground="#637286" Margin="0,24,0,0"/>
+        </StackPanel></ScrollViewer>
+      </TabItem>
+      <TabItem Tag="Modules" Header="▦  Modules">
+        <ScrollViewer><StackPanel Margin="24">
+          <TextBlock Text="Modules" FontSize="28" FontWeight="Bold" Margin="0,0,0,16"/>
+          <TextBlock Text="Open an existing working module. More integrations will be introduced separately." TextWrapping="Wrap" Margin="0,0,0,16"/>
+          <WrapPanel>
+            <Button Tag="Notes" Content="✎  Notes" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
+            <Button Tag="Calendar" Content="▦  Calendar" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
+            <Button Tag="Reminders" Content="◉  Reminders" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
+            <Button Tag="Clipboard" Content="▣  Clipboard" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
+            <Button Tag="Documents" Content="▤  Documents" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
+            <Button Tag="Custom Data" Content="▥  Custom Data" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
+            <Button Tag="Clock" Content="◷  Clock &amp; Timer" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
+            <Button Tag="Tools" Content="⚒  Tools &amp; Search" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
+            <Button Tag="Excel" Content="▦  Excel Mapping" Click="ExcelModule_Click" Padding="20,15" Margin="0,0,10,12"/>
+          </WrapPanel>
+          <TextBlock Text="Not yet implemented: encrypted password vault, native Windows autofill, Winman import, Android app, cloud synchronization." TextWrapping="Wrap" Foreground="#7E4C24" Margin="0,22,0,0"/>
+        </StackPanel></ScrollViewer>
+      </TabItem>
+      <TabItem Tag="Settings" Header="⚙  Settings">
+        <ScrollViewer><StackPanel Margin="24">
+          <TextBlock Text="Settings" FontSize="28" FontWeight="Bold" Margin="0,0,0,14"/>
+          <TextBlock x:Name="SettingsVersionText" FontSize="16" Margin="0,0,0,18"/>
+          <WrapPanel>
+            <Button Content="⚙  Widget &amp; Weather" Click="WidgetSettings_Click" Padding="18,11" Margin="0,0,10,10"/>
+            <Button Content="◷  Show Widget" Click="ShowWidget_Click" Padding="18,11" Margin="0,0,10,10"/>
+            <Button Content="↻  Check for Updates" Click="CheckForUpdates_Click" Padding="18,11" Margin="0,0,10,10"/>
+          </WrapPanel>
+          <TextBlock Text="Update channel" FontSize="16" FontWeight="SemiBold" Margin="0,14,0,7"/>
+          <ComboBox x:Name="UpdateChannelPickerV104" Width="260" HorizontalAlignment="Left" Height="34"
+                    Loaded="UpdateChannel_LoadedV104" SelectionChanged="UpdateChannel_ChangedV104">
+            <ComboBoxItem Tag="stable" Content="Stable — regular releases"/>
+            <ComboBoxItem Tag="tester" Content="Tester — early builds"/>
+          </ComboBox>
+          <TextBlock Text="Stable receives approved releases only. Tester receives separate opt-in prereleases and automatic updates every five minutes. Switching channels preserves your workspace data and does not downgrade your installation." TextWrapping="Wrap" Foreground="#536693" Margin="0,8,0,0"/>
+        </StackPanel></ScrollViewer>
+      </TabItem>    </TabControl>
+  </DockPanel>
+</Window>

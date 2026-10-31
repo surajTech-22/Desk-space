@@ -1,0 +1,103 @@
+name: R231 independent dual-monitor regression (no release)
+on:
+  push:
+    branches: [feat/r201-consolidated-roadmap-bundle]
+    paths:
+      - .github/workflows/validate-r231-monitor.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Obtain immutable v1.5.1100 source and verify every SHA-256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='surajTech-22/Desk-space'
+          $run=gh api "repos/$repo/actions/runs/41049100123"|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $run.conclusion -ne 'success' -or
+             $run.head_sha -ne '2814520a37496358931fd57e4f30dd6c26bde14f'){
+            throw 'R231 previous published R229 baseline was not accepted by native Windows'
+          }
+          New-Item -ItemType Directory -Force .r231/receipt|Out-Null
+          gh run download 41049100123 -R $repo -n DeskSpace-R221-Consolidated-Verified-Source -D .r231/receipt
+          if($LASTEXITCODE -ne 0){throw 'R231 cannot retrieve previously verified source'}
+          ./r221/verify-single-source.ps1 -ArchivePath '.r231/receipt/DeskSpace-R221-Source.zip' -ManifestPath '.r231/receipt/DeskSpace-R221-Source.manifest.json' -ReceiptPath '.r231/receipt/DeskSpace-R221-Source.sha256.txt'
+          $m=Get-Content '.r231/receipt/DeskSpace-R221-Source.manifest.json' -Raw|ConvertFrom-Json
+          if($m.commit -ne '2814520a37496358931fd57e4f30dd6c26bde14f'){
+            throw 'R231 source provenance differs from the published native-verified R229 build'
+          }
+          Expand-Archive .r231/receipt/DeskSpace-R221-Source.zip -DestinationPath .r231/unpacked
+          New-Item -ItemType Directory -Force DeskSpace_Windows_R1 | Out-Null
+          Move-Item .r231/unpacked/DeskSpace DeskSpace_Windows_R1/DeskSpace
+          Write-Host 'R231 immutable source: exactly the Windows-verified published v1.5.1100 code.'
+      - name: Apply monitor isolation fix and enforce no-magnet source policy
+        shell: pwsh
+        run: |
+          ./r231/apply-r231.ps1
+          ./r231/test-r231.ps1
+      - name: Build actual app in Windows release mode
+        shell: pwsh
+        run: |
+          dotnet build DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R231 production WPF application build failed'}
+      - name: Inject and run native WPF dual-monitor regression suite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($script in @(
+            'r201/apply-tests-r201-r202.ps1',
+            'r203/apply-tests-r203.ps1',
+            'r205/apply-tests-r205.ps1',
+            'r206/apply-tests-r206.ps1',
+            'r207/apply-tests-r207.ps1',
+            'r208/apply-tests-r208.ps1',
+            'r209/apply-tests-r209.ps1',
+            'r210/apply-tests-r210.ps1',
+            'r211/apply-tests-r211.ps1',
+            'r212/apply-tests-r212.ps1',
+            'r214/apply-tests-r214.ps1',
+            'r215/apply-tests-r215.ps1',
+            'r216/apply-tests-r216.ps1',
+            'r217/apply-tests-r217.ps1',
+            'r218/apply-tests-r218.ps1',
+            'r219/apply-tests-r219.ps1',
+            'r222/apply-tests-r222.ps1',
+            'r224/apply-tests-r224.ps1',
+            'r225/apply-tests-r225.ps1',
+            'r226/apply-tests-r226.ps1',
+            'r227/apply-tests-r227.ps1',
+            'r228/apply-tests-r228.ps1',
+            'r231/apply-tests-r231.ps1'
+          )){& $script}
+          New-Item -ItemType Directory -Force .r231/evidence|Out-Null
+          dotnet run --project r36/UiSmoke/UiSmoke.csproj -c Release -- .r231/evidence --r201-only
+          if($LASTEXITCODE -ne 0){throw 'R231 simulated two-display live WPF and native seam tests failed'}
+          ./r231/test-r231.ps1
+      - name: Freeze patched source and verify independent rebuild
+        shell: pwsh
+        run: |
+          ./r221/package-single-source.ps1 -Output '.r231/frozen'
+          ./r221/verify-single-source.ps1 -ArchivePath '.r231/frozen/DeskSpace-R221-Source.zip' -ManifestPath '.r231/frozen/DeskSpace-R221-Source.manifest.json' -ReceiptPath '.r231/frozen/DeskSpace-R221-Source.sha256.txt'
+          Expand-Archive .r231/frozen/DeskSpace-R221-Source.zip -DestinationPath .r231/rebuilt
+          dotnet build .r231/rebuilt/DeskSpace/DeskSpace.csproj -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R231 independently unpacked source failed to build'}
+          Write-Host 'R231 PASS: shipped R229 verified base, no magnetic dock, no primary-coordinate reveal, native two-display tests and independent build.'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R231-Native-Verified-Source
+          path: |
+            .r231/frozen/DeskSpace-R221-Source.zip
+            .r231/frozen/DeskSpace-R221-Source.manifest.json
+            .r231/frozen/DeskSpace-R221-Source.sha256.txt
+          retention-days: 30

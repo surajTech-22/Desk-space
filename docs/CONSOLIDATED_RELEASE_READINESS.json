@@ -1,0 +1,194 @@
+{
+  "schema": "deskspace-single-consolidated-release-v1",
+  "baseline": "v1.5.1093",
+  "policy": "no release until every required checkpoint has verified evidence",
+  "release_status": "not-ready",
+  "checks": [
+    {
+      "id": "source-migration",
+      "description": "Authoritative source tree replacing versioned reconstruction",
+      "status": "implemented",
+      "evidence": "R267 one-time migration from the exact SHA-256-verified CI #406 source artifact to checked-in src/DeskSpace succeeded in migration CI run 41193292300; source committed at ab9f0a72. Consolidated Windows CI #421 (41194003059), SHA 51bd199df6f9972e37ce4dc31dfbdaa2958c2e8c, verified regenerated source SHA-256, newline-only permitted Git text normalization, strict binary parity, independent checked-in Windows build, and existing WPF/regression gates. The old patch-based reconstruction remains as compatibility evidence; release use of canonical source and installed PC validation remain unfinished, so this is implemented, NOT verified release acceptance."
+    },
+    {
+      "id": "dual-monitor-real",
+      "description": "Physical mixed-DPI dual-monitor testing, monitor attach/detach",
+      "status": "pending",
+      "evidence": "R214 synthetic tests for negative virtual-desktop origin, different monitor work areas, disconnected/reconnected device names, and dock confinement. Physical two-monitor attach/detach and screenshot acceptance remain required. R225: screenshot regression: Search opens full usable width on its own monitor, action/close columns no longer collide, its own Deck popup is suspended without clearing held files or changing preferences and restored on exit. Windows CI pending. R236 CI native WPF matrix adds 12 synthetic 100/125/150/200% DPI monitor geometries (negative origins, seam, stacked, compact, reconnect), plus host-runner screen enumeration artifact. This remains a simulated test; real two-display input/focus and physical device acceptance required, so checkpoint remains pending. R247 adds PowerModeChanged Resume three-pass reconnection recovery, real sleep/reconnect/physical monitors unverified."
+    },
+    {
+      "id": "monitor-input",
+      "description": "Independent per-monitor right-click/hover/focus containment",
+      "status": "pending",
+      "evidence": "Partial R214: the original monitor assignment survives temporary disconnect; native HWND-bound satellites are shown once after placement; topology reconnect actively re-clamps. Synthetic negative-origin and dock geometry acceptance included in Windows CI. Real mixed-DPI monitors and physical hover/right-click validation still pending. R226 dev-only: remove zero-count Deck header clutter, cap title TextBlock width and ellipsize rather than extending across monitor seams; synthetic WPF acceptance pending. R228: existing satellites no longer re-place themselves at monitor edges during reconciliation; per-monitor Deck drag offset saved independently and bounded to owner display, shared held files preserved. Windows acceptance pending. R234 development: each Deck now has a monitor-local right-click reset command without clearing shared held files; physical acceptance and Windows CI remain pending. R235 development: per-monitor Deck offset saves now use a storage-scoped OS mutex to prevent lost updates when two widget processes save concurrently; Windows CI and real simultaneous monitor test pending. R236 CI native WPF matrix adds 12 synthetic 100/125/150/200% DPI monitor geometries (negative origins, seam, stacked, compact, reconnect), plus host-runner screen enumeration artifact. This remains a simulated test; real two-display input/focus and physical device acceptance required, so checkpoint remains pending."
+    },
+    {
+      "id": "update-full-rollback",
+      "description": "Full-install rollback with heartbeat and data preservation",
+      "status": "pending",
+      "evidence": "Existing R185 full-install snapshot/restore and heartbeat acknowledgement. R213 tests real PowerShell backup/restore functions with synthetic EXE, plugin, config, quarantined new install, SHA-256 tampering rejection, and data-root protection (CI pending). Physical failed-update/second-PC acceptance remains required. R219 corrects the updater's R191 'invalid verified update staging scope': published SHA256 lines contain the filename, which the former Stage() rejected after Verify() succeeded. Both now share a strict canonical SHA parser, with end-to-end synthetic Windows coverage pending. Existing installations cannot self-repair without running a build containing this fix. R220 adds a production packaging bridge that publishes the already-verified installer SHA256 as precisely 64 ASCII digits without newline; existing R191 clients accept bare hashes and no old app-side modification is required when the next properly packaged release is available. Synthetic Windows tests pending. R222: updater streams downloads to same-directory uniquely named partial files, replaces the cached setup only after complete byte count and cleans stale partials; native Windows tests pending. Checksum, PE, peer and rollback protections preserved. R224 dev-only: post-install primary widget must remain Loaded for 12s before writing matching ready receipt, avoiding false success from immediate post-start crash. Windows CI pending; real installed-PC rollback still pending. R227: demonstrated mutex/relaunch storm in user logs; supervisor contention now exits cleanly without fallback spawn, cross-process release replay hints bounded, handoff preflights installed supervisor mutex; native Windows regression pending. R229 dev: updater now downloads/validates before deferral when another DeskSpace window owns unsaved work, reuses cached installer only after current official SHA256 and GitHub release metadata checks, and waits for safe normal peer exit before supervised install. Physical-PC test pending. R230: user-requested automatic graceful closure of all Workspace, floating monitor widget and tray processes before installation; per-install scoped WPF close IPC, older-version WM_CLOSE fallback, process-zero gate, unsaved-work cancellations honoured, no forced close and no Inno /CLOSEAPPLICATIONS. Real physical-PC verification pending. R233 development: a single held supervisor exit event now triggers one normal WPF close attempt rather than recurring unsaved-work prompts every eight seconds; regression and Windows CI pending. Full installed-device acceptance still required."
+    },
+    {
+      "id": "startup-recovery",
+      "description": "Sleep/resume, startup crash loop, tray and component recovery",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "perf-budget",
+      "description": "CPU/RAM/GPU/performance budget and event-based refresh",
+      "status": "pending",
+      "evidence": "Partial R215: per-widget owned-window fallback enumeration stops when widget is hidden or minimized, and resumes on visibility/restore events with a coalesced immediate correction. No change to R153 synchronous popup fencing. Full CPU/GPU/RAM performance budget and leak testing pending. R216: monitor configuration uses FileSystemWatcher events with 180ms dispatcher debounce and 45s resilience fallback; Windows CI pending. Full physical performance profiling still outstanding. R253 advisory runtime memory/handles/threads in Component Health; sustained perf/installed-PC acceptance still pending."
+    },
+    {
+      "id": "signed-release",
+      "description": "Code-signing and integrity/publisher verification policy",
+      "status": "pending",
+      "evidence": " R249 synthetic same-SHA Stable/Tester guard; signing, trusted provenance and real dual-channel publishing still pending. R250 strict Authenticode signer+commit+SHA provenance check and synthetic unsigned rejection; positive signed build/official attestation missing."
+    },
+    {
+      "id": "smartdrop-progress",
+      "description": "Cancellable ZIP/copy progress, interruption recovery",
+      "status": "implemented",
+      "evidence": "Existing R162/R164/R165 ZIP/copy cancellation, partial cleanup, and progress; R212 source-to-staging copy SHA-256 readback plus change detection (Windows CI 41022246586 PASS); R206 bounded ZIP byte progress/Cancel UI with native Windows CI run 41013178784. R210 streams SHA-256 digests and verifies decompressed ZIP payloads before atomic Deck staging (Windows CI 41020682223 PASS). Physical UI acceptance and post-R206 hardening rerun remain required."
+    },
+    {
+      "id": "duplicate-fingerprints",
+      "description": "Content hash deduplication and safe replace/keep-both",
+      "status": "pending",
+      "evidence": "Partial R211: opt-in user-drop SHA-256 file duplicate detection with Keep both/Skip inline decision. No auto-replacement, folder fingerprinting or final physical device acceptance yet; Windows CI 41021942118 PASS."
+    },
+    {
+      "id": "smartdrop-actions",
+      "description": "Document/image/URL-specific Smart Drop actions",
+      "status": "pending",
+      "evidence": " R244: user-selected, bounded read-only local SHA-256 duplicate inspector under Features. Native tests/real-device acceptance pending; document/image URL Smart Drop and batch operations remain pending. R254 FILE-01 prefix/suffix batch rename preview only; undoable apply, Smart Drop and physical UI acceptance not yet tested. R256 on-circle ZIP/Copy selection during WPF DragOver before mouse release; physical Explorer and dual-monitor validation pending."
+    },
+    {
+      "id": "file-previews",
+      "description": "Safe type-aware preview for PDF/Office/audio/code",
+      "status": "pending",
+      "evidence": "Partial R217: native Windows PDF page rendering on user-initiated preview, next/previous up to 100 pages, 32 MiB bound, no extraction/writes. Existing R189 Office package and WAV metadata, R161/R163 ZIP previews retained. Windows CI and real PDF rendering/device acceptance pending; richer document/audio/code preview still required. R240 code/test added: explicit read-only allowlisted text/code excerpts, 2MiB/3600-char caps, reject reparse/oversized/binary; native disposable fixture tests and physical acceptance pending. R241 pending native Windows acceptance: bounded DOCX word/document.xml excerpt, DTD/macro/ZIP-bomb defenses, user-initiated preview only."
+    },
+    {
+      "id": "clipboard-security",
+      "description": "Clipboard conversion, privacy filter, optional OCR",
+      "status": "pending",
+      "evidence": " R245 adds explicit Clear local preview in Clipboard conversions; clears local input/output, prevents Copy/Save until another manual read, never accesses Windows Clipboard in clear action. Native UI/real device acceptance pending; opt-in clipboard history/security policy not complete."
+    },
+    {
+      "id": "search-provider",
+      "description": "Context ranking, health and optional Everything IPC",
+      "status": "pending",
+      "evidence": " R259 bounded category faceted Action Palette query and keyboard paging. R260 user-invoked aggregate multi-drive indexed-name counters and optional manual start; real indexes, optional Everything provider, production latency and Windows acceptance unverified."
+    },
+    {
+      "id": "apps-recent-files",
+      "description": "Window previews, grouped windows, recent-document actions",
+      "status": "pending",
+      "evidence": "Partial R218: stationary-hover running-window preview now chooses native screen-relative popup side with owner-monitor DPI rather than primary-monitor SystemParameters.WorkArea. Existing pinned recent-document actions retained. Windows synthetic geometry CI pending and real physical mixed-DPI acceptance still outstanding. R261 running app groups multiwindow-first and deterministic per-window ordering (distinct HWND, cap 24). Real Windows hover/focus, cross-monitor previews, and recent-document acceptance still pending. R262 explicit right-click per-app recent document picker, extension allowlist, exact app-handler matching and click-time recheck. Physical app/WPF Explorer/Office and dual-screen acceptance pending."
+    },
+    {
+      "id": "excel-suggestions",
+      "description": "Live exact-signature Excel suggestions in Deck",
+      "status": "pending",
+      "evidence": " R263 every saved Excel suggestion will re-preview after user confirmation, comparing workbook/sheet, reference signature, writable count and all cell before/after values. Real Excel COM/physical test pending."
+    },
+    {
+      "id": "excel-transactions",
+      "description": "Excel undo journal, formula/table/format readback",
+      "status": "pending",
+      "evidence": " R242 added fail-closed full-range cell metadata checks (known storage types/occupancy for both source and destination) with native negative tests. No real Office/formula/format readback or transactional rollout verified. R251 source R1C1 validator rejects all-missing, mismatched, oversized and invalid formula metadata before blank format/formula paste; real Office acceptance pending. R252 pre-change Excel backup now receives verified SHA-256 sidecar before modifying destination; full Office undo/rollback readback pending. R268 adds strict matching R1C1 Table calculated-column auto-fill preservation and updates the isolated real Microsoft Excel Office COM fixture to require eight captured formulas with blank other inputs, full/partial gates and real ListObjects; synthetic Windows compile/static checks passed in CI #421. Real Office COM acceptance not run and remains mandatory."
+    },
+    {
+      "id": "excel-office-tests",
+      "description": "Three real workbooks with native Office acceptance",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "vault-encryption",
+      "description": "Protected credentials, no raw secret diagnostics or auto-fill",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "vault-context",
+      "description": "Explicit exact-origin, unlock-gated suggestions, real UI review",
+      "status": "implemented",
+      "evidence": " R258 foreground context session audit/Stop cleanup; separate full context permission real-device audit remains pending."
+    },
+    {
+      "id": "reminders-actions",
+      "description": "Actionable notifications, snooze, recurrence history",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "media-deck",
+      "description": "Media playback, mute, close in shared Deck",
+      "status": "pending",
+      "evidence": " R243 correction for media integration when one of two monitor Decks closes; native two-instance test pending Windows CI. Full playback/music-session and device checks still outstanding."
+    },
+    {
+      "id": "settings-ui",
+      "description": "Safe and consistent settings navigation/preview",
+      "status": "pending",
+      "evidence": " R255 recoverable Features/Settings action guard with private-error redaction and Settings-tab link; full real Settings navigation acceptance still pending."
+    },
+    {
+      "id": "window-layouts",
+      "description": "Window restore across monitors with mixed-DPI acceptance",
+      "status": "pending",
+      "evidence": " R257 adds preview of planned application positions and skips disconnected saved display names rather than moving to primary; requires preview+recheck+Yes before changing positions. Native Windows and real two-monitor acceptance required."
+    },
+    {
+      "id": "workflow-preview",
+      "description": "Read-only workflow preflight and redacted target previews",
+      "status": "implemented",
+      "evidence": ""
+    },
+    {
+      "id": "workflow-builder",
+      "description": "No-code workflow permissions, logging, undo and safeguards",
+      "status": "pending",
+      "evidence": ""
+    },
+    {
+      "id": "donut-accessibility",
+      "description": "Keyboard-only donut, focus, high contrast and screen readers",
+      "status": "pending",
+      "evidence": "Partial: R207 per-widget root donut arrow/Enter/Escape keyboard navigation and WPF automation names; R208 root/high-contrast system color routing. Windows CI 41015091790 passed. Nested arcs, screen-reader physical acceptance, reduced-motion and full-focus audit remain pending. R209 respects Windows client-area/menu animation and high-contrast preferences in widget module morph and nested Information/Excel transitions; native Windows CI 41019555192 PASS with 0 compiler errors. Full screen-reader and all child-arc keyboard acceptance remains outstanding. R246: F1 Workspace guide, verified scoped actions + AutomationProperties and Escape close; native CI and full keyboard/screen-reader/physical user acceptance outstanding."
+    },
+    {
+      "id": "profile-transfer",
+      "description": "Strict profile export/import without overwriting user data",
+      "status": "implemented",
+      "evidence": ""
+    },
+    {
+      "id": "features-access",
+      "description": "Main Workspace and widget features discoverable and usable",
+      "status": "verified",
+      "evidence": "v1.5.1093 Windows CI, device acceptance still required where relevant"
+    },
+    {
+      "id": "diagnostics-health",
+      "description": "On-demand status, privacy-safe ZIP and signal health",
+      "status": "verified",
+      "evidence": "v1.5.1093 Windows CI, device acceptance still required where relevant"
+    },
+    {
+      "id": "update-channels",
+      "description": "Stable and Tester same-hash release/notification contract",
+      "status": "verified",
+      "evidence": "v1.5.1093 Windows CI, device acceptance still required where relevant"
+    },
+    {
+      "id": "context-suggestions",
+      "description": "Explicit session-only app-category recommendations with privacy/accessibility and installed-PC acceptance; active Excel exact-signature remains separate",
+      "status": "pending",
+      "evidence": "R237 implementation in development branch: temporary opt-in foreground hook stores only broad app category, no URLs/titles/clipboard, manual existing-tool buttons. Native Windows CI and user-device acceptance pending."
+    }
+  ]
+}

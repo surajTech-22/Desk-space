@@ -1,0 +1,351 @@
+name: Validate consolidated DeskSpace bundle (no release)
+on:
+  push:
+    branches:
+      - feat/r201-consolidated-roadmap-bundle
+  workflow_dispatch:
+
+concurrency:
+  group: deskspace-r201-consolidated-validation
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - name: Checkout feature implementation
+        uses: actions/checkout@v4
+
+      - name: Install Windows .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Retrieve last verified v1.5.1093 canonical app sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force '.r201/received' | Out-Null
+          gh run download 41002762293 -R surajTech-22/Desk-space -n DeskSpace-R195-Canonical-WPF-Source -D '.r201/received'
+          if($LASTEXITCODE -ne 0){throw 'Cannot fetch verified R200 source snapshot'}
+          $a=@(Get-ChildItem '.r201/received' -Recurse -File -Filter DeskSpace-Canonical-Source.zip)
+          $hash=@(Get-ChildItem '.r201/received' -Recurse -File -Filter DeskSpace-Canonical-Source.sha256.txt)
+          if($a.Count -ne 1 -or $hash.Count -ne 1){throw 'Canonical source ZIP or SHA256 receipt missing'}
+          $expected=((Get-Content -Raw $hash[0].FullName).Trim() -split '\s+')[0]
+          $actual=(Get-FileHash $a[0].FullName -Algorithm SHA256).Hash
+          if(!$actual.Equals($expected,[StringComparison]::OrdinalIgnoreCase)){throw 'Source ZIP hash mismatch'}
+          Expand-Archive -LiteralPath $a[0].FullName -DestinationPath '.r201/unpacked'
+          if(!(Test-Path '.r201/unpacked/DeskSpace/DeskSpace.csproj')){throw 'Verified WPF project missing from source ZIP'}
+          New-Item -ItemType Directory 'DeskSpace_Windows_R1' -Force | Out-Null
+          Move-Item '.r201/unpacked/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace'
+          Write-Host 'R201-R202 PASS: verified 1.5.1093 canonical sources staged without touching releases.'
+
+      - name: Apply profile and vault changes, strictly check patch anchors
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r201/apply-r201.ps1
+          ./r202/apply-r202.ps1
+          ./r203/apply-r203.ps1
+          ./r205/apply-r205.ps1
+          ./r206/apply-r206.ps1
+          ./r207/apply-r207.ps1
+          ./r208/apply-r208.ps1
+          ./r209/apply-r209.ps1
+          ./r210/apply-r210.ps1
+          ./r211/apply-r211.ps1
+          ./r212/apply-r212.ps1
+          ./r214/apply-r214.ps1
+          ./r215/apply-r215.ps1
+          ./r216/apply-r216.ps1
+          ./r217/apply-r217.ps1
+          ./r218/apply-r218.ps1
+          ./r219/apply-r219.ps1
+          ./r222/apply-r222.ps1
+          ./r224/apply-r224.ps1
+          ./r225/apply-r225.ps1
+          ./r226/apply-r226.ps1
+          ./r227/apply-r227.ps1
+          ./r228/apply-r228.ps1
+          ./r229/apply-r229.ps1
+          ./r230/apply-r230.ps1
+          ./r231/apply-r231.ps1
+          ./r233/apply-r233.ps1
+          ./r234/apply-r234.ps1
+          ./r235/apply-r235.ps1
+          ./r237/apply-r237.ps1
+          ./r238/apply-r238.ps1
+          ./r239/apply-r239.ps1
+          ./r240/apply-r240.ps1
+          ./r241/apply-r241.ps1
+          ./r242/apply-r242.ps1
+          ./r243/apply-r243.ps1
+          ./r244/apply-r244.ps1
+          ./r245/apply-r245.ps1
+          ./r246/apply-r246.ps1
+          ./r247/apply-r247.ps1
+          ./r251/apply-r251.ps1
+          ./r252/apply-r252.ps1
+          ./r253/apply-r253.ps1
+          ./r254/apply-r254.ps1
+          ./r255/apply-r255.ps1
+          ./r256/apply-r256.ps1
+          ./r257/apply-r257.ps1
+          ./r258/apply-r258.ps1
+          ./r259/apply-r259.ps1
+          ./r260/apply-r260.ps1
+          ./r261/apply-r261.ps1
+          ./r262/apply-r262.ps1
+          ./r263/apply-r263.ps1
+          ./r264/apply-r264.ps1
+          ./r265/apply-r265.ps1
+          ./r266/apply-r266.ps1
+          ./r269/apply-r269.ps1
+          ./r270/apply-r270.ps1
+          ./r271/apply-r271.ps1
+          ./r272/apply-r272.ps1
+          ./r273/apply-r273.ps1
+          ./r274/apply-r274.ps1
+          ./r275/apply-r275.ps1
+          ./r276/apply-r276.ps1
+          ./r277/apply-r277.ps1
+          ./r201/apply-tests-r201-r202.ps1
+          ./r203/apply-tests-r203.ps1
+          ./r205/apply-tests-r205.ps1
+          ./r206/apply-tests-r206.ps1
+          ./r207/apply-tests-r207.ps1
+          ./r208/apply-tests-r208.ps1
+          ./r209/apply-tests-r209.ps1
+          ./r210/apply-tests-r210.ps1
+          ./r211/apply-tests-r211.ps1
+          ./r212/apply-tests-r212.ps1
+          ./r214/apply-tests-r214.ps1
+          ./r215/apply-tests-r215.ps1
+          ./r216/apply-tests-r216.ps1
+          ./r217/apply-tests-r217.ps1
+          ./r218/apply-tests-r218.ps1
+          ./r219/apply-tests-r219.ps1
+          ./r222/apply-tests-r222.ps1
+          ./r224/apply-tests-r224.ps1
+          ./r225/apply-tests-r225.ps1
+          ./r226/apply-tests-r226.ps1
+          ./r227/apply-tests-r227.ps1
+          ./r228/apply-tests-r228.ps1
+          ./r230/apply-tests-r230.ps1
+          ./r231/apply-tests-r231.ps1
+          ./r233/apply-tests-r233.ps1
+          ./r236/apply-tests-r236.ps1
+          ./r237/apply-tests-r237.ps1
+          ./r238/apply-tests-r238.ps1
+          ./r239/apply-tests-r239.ps1
+          ./r240/apply-tests-r240.ps1
+          ./r241/apply-tests-r241.ps1
+          ./r242/apply-tests-r242.ps1
+          ./r243/apply-tests-r243.ps1
+          ./r244/apply-tests-r244.ps1
+          ./r245/apply-tests-r245.ps1
+          ./r246/apply-tests-r246.ps1
+          ./r247/apply-tests-r247.ps1
+          ./r251/apply-tests-r251.ps1
+          ./r252/apply-tests-r252.ps1
+          ./r253/apply-tests-r253.ps1
+          ./r254/apply-tests-r254.ps1
+          ./r255/apply-tests-r255.ps1
+          ./r256/apply-tests-r256.ps1
+          ./r257/apply-tests-r257.ps1
+          ./r258/apply-tests-r258.ps1
+          ./r259/apply-tests-r259.ps1
+          ./r260/apply-tests-r260.ps1
+          ./r261/apply-tests-r261.ps1
+          ./r262/apply-tests-r262.ps1
+          ./r263/apply-tests-r263.ps1
+          ./r264/apply-tests-r264.ps1
+          ./r265/apply-tests-r265.ps1
+          ./r266/apply-tests-r266.ps1
+          ./r269/apply-tests-r269.ps1
+          ./r270/apply-tests-r270.ps1
+          ./r271/apply-tests-r271.ps1
+          ./r272/apply-tests-r272.ps1
+          ./r273/apply-tests-r273.ps1
+          ./r274/apply-tests-r274.ps1
+          ./r275/apply-tests-r275.ps1
+          ./r276/apply-tests-r276.ps1
+          ./r277/apply-tests-r277.ps1
+          ./r201/test-r201-r202.ps1
+          ./r203/test-r203.ps1
+          ./r205/test-r205.ps1
+          ./r206/test-r206.ps1
+          ./r207/test-r207.ps1
+          ./r208/test-r208.ps1
+          ./r209/test-r209.ps1
+          ./r210/test-r210.ps1
+          ./r211/test-r211.ps1
+          ./r212/test-r212.ps1
+          ./r214/test-r214.ps1
+          ./r215/test-r215.ps1
+          ./r216/test-r216.ps1
+          ./r217/test-r217.ps1
+          ./r218/test-r218.ps1
+          ./r219/test-r219.ps1
+          ./r222/test-r222.ps1
+          ./r224/test-r224.ps1
+          ./r225/test-r225.ps1
+          ./r226/test-r226.ps1
+          ./r227/test-r227.ps1
+          ./r228/test-r228.ps1
+          ./r229/test-r229.ps1
+          ./r230/test-r230.ps1
+          ./r231/test-r231.ps1
+          ./r233/test-r233.ps1
+          ./r234/test-r234.ps1
+          ./r235/test-r235.ps1
+          ./r236/test-r236.ps1
+          ./r237/test-r237.ps1
+          ./r238/test-r238.ps1
+          ./r239/test-r239.ps1
+          ./r240/test-r240.ps1
+          ./r241/test-r241.ps1
+          ./r242/test-r242.ps1
+          ./r243/test-r243.ps1
+          ./r244/test-r244.ps1
+          ./r245/test-r245.ps1
+          ./r246/test-r246.ps1
+          ./r247/test-r247.ps1
+          ./r251/test-r251.ps1
+          ./r252/test-r252.ps1
+          ./r253/test-r253.ps1
+          ./r254/test-r254.ps1
+          ./r255/test-r255.ps1
+          ./r256/test-r256.ps1
+          ./r257/test-r257.ps1
+          ./r258/test-r258.ps1
+          ./r259/test-r259.ps1
+          ./r260/test-r260.ps1
+          ./r261/test-r261.ps1
+          ./r262/test-r262.ps1
+          ./r263/test-r263.ps1
+          ./r264/test-r264.ps1
+          ./r265/test-r265.ps1
+          ./r266/test-r266.ps1
+          ./r269/test-r269.ps1
+          ./r270/test-r270.ps1
+          ./r271/test-r271.ps1
+          ./r272/test-r272.ps1
+          ./r273/test-r273.ps1
+          ./r274/test-r274.ps1
+          ./r275/test-r275.ps1
+          ./r276/test-r276.ps1
+          ./r277/test-r277.ps1
+
+      - name: Validate legacy updater checksum compatibility on synthetic installer
+        shell: pwsh
+        run: |
+          ./r220/test-r220.ps1
+
+      - name: R249 reject Stable and Tester candidate hash mismatch (synthetic only)
+        shell: pwsh
+        run: |
+          ./r249/test-r249.ps1
+
+      - name: R250 reject unsigned/mismatched provenance (synthetic only)
+        shell: pwsh
+        run: |
+          ./r250/test-r250.ps1
+
+      - name: Assert the single-release gate blocks unverified remaining work
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $blocked=$false
+          try { ./r204/require-consolidated-ready.ps1 }
+          catch {
+            if($_.Exception.Message -like '*SINGLE-RELEASE GATE*') {
+              $blocked=$true
+              Write-Host 'R204 PASS: partial implementation explicitly blocked from publication.'
+            } else { throw }
+          }
+          if(!$blocked){throw 'R204 regression: unverified roadmap would be publishable'}
+
+      - name: R227 test real supervisor mutex contention without installation
+        shell: pwsh
+        run: |
+          ./r227/test-supervisor-r227.ps1
+
+      - name: R230 real Win32 WPF close with unsaved-work cancellation
+        shell: pwsh
+        run: |
+          ./r232/test-native-close-r232.ps1
+
+      - name: Verify full-install rollback using synthetic files only (R213)
+        shell: pwsh
+        run: |
+          ./r213/test-r213.ps1
+
+      - name: Compile amended WPF application from canonical source
+        shell: pwsh
+        run: |
+          dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'Consolidated WPF compilation failed'}
+
+      - name: Record actual GitHub runner monitors (separate from synthetic topology)
+        shell: pwsh
+        run: |
+          ./r236/record-runner-displays-r236.ps1
+
+      - name: Run isolated native WPF R201-R277 acceptance (no release)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.r201/evidence' '--r201-only'
+          if($LASTEXITCODE -ne 0){throw 'Native WPF tests failed'}
+
+      - name: R221 freeze verified consolidated patched WPF sources
+        shell: pwsh
+        run: |
+          ./r221/package-single-source.ps1
+          ./r221/test-r221.ps1
+
+      - name: R248 rebuild only verified canonical source ZIP, receipt and manifest
+        shell: pwsh
+        run: |
+          ./r248/test-r248.ps1
+          ./r248/build-verified-source.ps1 -ArchivePath 'r221/output/DeskSpace-R221-Source.zip' -ManifestPath 'r221/output/DeskSpace-R221-Source.manifest.json' -ReceiptPath 'r221/output/DeskSpace-R221-Source.sha256.txt'
+
+      - name: R267 assert committed canonical WPF source parity and independent build
+        shell: pwsh
+        run: |
+          ./r267/test-r267.ps1
+          ./r268/test-r268.ps1
+          ./r267/verify-checked-in-source.ps1
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R267 checked-in canonical project build failed'}
+
+      - name: Upload verified consolidated source (NON-RELEASE build evidence)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R221-Consolidated-Verified-Source
+          path: |
+            r221/output/DeskSpace-R221-Source.zip
+            r221/output/DeskSpace-R221-Source.sha256.txt
+            r221/output/DeskSpace-R221-Source.manifest.json
+          retention-days: 28
+
+      - name: Upload validation evidence only (NO release assets)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R201-R202-Validation-Only
+          path: |
+            .r201/evidence/*.png
+            .r201/evidence/*.json
+          if-no-files-found: ignore
+          retention-days: 10

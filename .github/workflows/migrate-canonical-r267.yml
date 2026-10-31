@@ -1,0 +1,114 @@
+name: R267 materialize verified canonical DeskSpace source (development only)
+on:
+  push:
+    branches:
+      - feat/r201-consolidated-roadmap-bundle
+    paths:
+      - r267/START_CANONICAL_MIGRATION.txt
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: deskspace-r267-canonical-migration
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Confirm exact prior successful non-release source attestation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $run=gh api repos/surajTech-22/Desk-space/actions/runs/41190840248 | ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $null -eq $run){throw 'Source CI evidence cannot be retrieved'}
+          if($run.conclusion -ne 'success' -or
+             $run.head_sha -ne '17d3f25d8e9aceed6e6936d81a46682e1ceb0f4a' -or
+             $run.head_branch -ne 'feat/r201-consolidated-roadmap-bundle'){
+            throw 'R267 source evidence mismatch; refusing source migration'
+          }
+          Write-Host 'R267 exact validated source run and commit confirmed.'
+      - name: Download verified WPF source archive, SHA receipt and manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item '.r267/evidence' -ItemType Directory -Force | Out-Null
+          gh run download 41190840248 -R surajTech-22/Desk-space -n DeskSpace-R221-Consolidated-Verified-Source -D '.r267/evidence'
+          if($LASTEXITCODE -ne 0){throw 'R267 verified source archive unavailable'}
+          foreach($name in @('DeskSpace-R221-Source.zip',
+              'DeskSpace-R221-Source.manifest.json','DeskSpace-R221-Source.sha256.txt')){
+            if(!(Test-Path -LiteralPath (Join-Path '.r267/evidence' $name))){
+              throw "Missing verified source evidence: $name"
+            }
+          }
+          ./r221/verify-single-source.ps1 -ArchivePath '.r267/evidence/DeskSpace-R221-Source.zip' -ManifestPath '.r267/evidence/DeskSpace-R221-Source.manifest.json' -ReceiptPath '.r267/evidence/DeskSpace-R221-Source.sha256.txt'
+          $manifest=Get-Content '.r267/evidence/DeskSpace-R221-Source.manifest.json' -Raw | ConvertFrom-Json
+          if($manifest.commit -ne '17d3f25d8e9aceed6e6936d81a46682e1ceb0f4a'){
+            throw 'R267 source manifest was not built by the exact validated commit'
+          }
+          Write-Host ('R267 verified '+$manifest.file_count+' WPF source file hashes.')
+      - name: Materialize only validated WPF application source to git
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if(Test-Path -LiteralPath 'src/DeskSpace'){
+            throw 'R267 canonical source already exists; no unexpected replacement'
+          }
+          New-Item -ItemType Directory '.r267/extracted' -Force | Out-Null
+          [IO.Compression.ZipFile]::ExtractToDirectory(
+            [IO.Path]::GetFullPath('.r267/evidence/DeskSpace-R221-Source.zip'),
+            [IO.Path]::GetFullPath('.r267/extracted'),$false)
+          $source='.r267/extracted/DeskSpace'
+          if(!(Test-Path -LiteralPath "$source/DeskSpace.csproj")){throw 'R267 canonical project missing'}
+          $manifest=Get-Content '.r267/evidence/DeskSpace-R221-Source.manifest.json' -Raw | ConvertFrom-Json
+          $actual=@(Get-ChildItem -LiteralPath $source -Recurse -File)
+          if($actual.Count -ne $manifest.file_count){
+            throw 'R267 extracted file count differs from signed manifest'
+          }
+          foreach($file in $manifest.source_files){
+            $relative=$file.path.Substring('DeskSpace/'.Length)
+            $path=Join-Path $source ($relative.Replace('/',[IO.Path]::DirectorySeparatorChar))
+            if(!(Test-Path -LiteralPath $path -PathType Leaf)){throw 'R267 missing manifest file'}
+            if((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $file.sha256){
+              throw 'R267 content hash differs from verified source manifest'
+            }
+          }
+          New-Item -ItemType Directory 'src' -Force | Out-Null
+          Copy-Item -LiteralPath $source -Destination 'src/DeskSpace' -Recurse
+          Write-Host 'R267 source materialized with all original bytes preserved.'
+      - name: Independently compile newly checked-in canonical source location
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R267 canonical source did not independently compile'}
+      - name: Commit only verified, rebuilt source on development branch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- src/DeskSpace
+          $files=@(git diff --cached --name-only)
+          if($files.Count -lt 140){throw 'R267 source migration staged fewer than 140 files'}
+          if(@($files|Where-Object {$_ -notlike 'src/DeskSpace/*'}).Count -gt 0){
+            throw 'R267 tried to stage files outside canonical WPF source'
+          }
+          git commit -m 'R267: check in hash-verified, independently buildable canonical WPF source'
+          if($LASTEXITCODE -ne 0){throw 'R267 canonical source commit failed'}
+          git push origin HEAD:feat/r201-consolidated-roadmap-bundle
+          if($LASTEXITCODE -ne 0){throw 'R267 source push failed; original branch is preserved'}
+          Write-Host 'R267 completed: canonical WPF sources committed to development branch only.'

@@ -1,0 +1,295 @@
+{
+  "schema": "deskspace-feature-expansion-v1",
+  "recorded_on": "2026-10-31",
+  "branch": "feat/r201-consolidated-roadmap-bundle",
+  "policy": "planned != implemented != verified != released",
+  "source": "docs/UNIFIED_IMPLEMENTATION_FLOW_2026-10-31.md",
+  "items": [
+    {
+      "id": "MON-01",
+      "priority": "P0",
+      "title": "Monitor identity and independent widget/Deck sessions",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R214/R228/R231/R232/R233 development implemented; physical or installed PC acceptance pending"
+    },
+    {
+      "id": "MON-02",
+      "priority": "P0",
+      "title": "Real two-monitor mixed DPI and seam regression",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R236 synthetic Windows test matrix pending CI; real physical dual monitor explicitly unverified"
+    },
+    {
+      "id": "MON-03",
+      "priority": "P0",
+      "title": "Explicit docking and popup containment",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R214/R228/R231/R232/R233 development implemented; physical or installed PC acceptance pending"
+    },
+    {
+      "id": "MON-04",
+      "priority": "P0",
+      "title": "Sleep/resume and reconnect recovery",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R247 event-driven Windows PowerModes.Resume; three bounded delayed topology reconciliations, teardown guard, no settings/Deck overwrite. Native CI and real sleep/reconnect acceptance pending."
+    },
+    {
+      "id": "UPD-01",
+      "priority": "P0",
+      "title": "One canonical buildable source",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R248 repeatable independent build from R221 per-file-verified source ZIP, external manifest and SHA receipt; canonical source migration to committed editable tree pending."
+    },
+    {
+      "id": "UPD-02",
+      "priority": "P0",
+      "title": "Graceful all-process updater exit, veto respected",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R214/R228/R231/R232/R233 development implemented; physical or installed PC acceptance pending"
+    },
+    {
+      "id": "UPD-03",
+      "priority": "P0",
+      "title": "Full rollback and heartbeat verified on real PC",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UPD-04",
+      "priority": "P0",
+      "title": "One-hash Stable and Tester release",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R249 prepublication SHA-256 equality for Stable/Tester synthetic candidates. Production release upload and acceptance still pending."
+    },
+    {
+      "id": "UPD-05",
+      "priority": "P0",
+      "title": "Signing and artifact provenance",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R250 strict prepublication Authenticode and pinned source-commit/provenance policy; CI synthetic unsigned/tampered rejection, no signing certificate or positive trusted release yet."
+    },
+    {
+      "id": "EXCEL-01",
+      "priority": "P0",
+      "title": "Entire-range no-partial paste guard",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R107 full rectangle occupancy gate now hardened by R242 to reject unknown, null and contradictory source/destination stored types before empty acceptance; CI and real Excel acceptance pending."
+    },
+    {
+      "id": "EXCEL-02",
+      "priority": "P0",
+      "title": "Formula, format, ListObject capture and readback",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R251 R1C1 formula source integrity guard in direct Excel preview and blank-target writes. Existing capture/R139-R141 readback retained; real Office workbooks and full formatting/table acceptance pending."
+    },
+    {
+      "id": "EXCEL-03",
+      "priority": "P0",
+      "title": "Backup, transactional write and verified rollback",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R252 verifies pre-change Excel SaveCopyAs backup bytes using SHA-256 sidecar receipt before COM changes. Real Excel rollback/readback under Office acceptance still pending."
+    },
+    {
+      "id": "EXCEL-04",
+      "priority": "P1",
+      "title": "Captured Sheet plus Mappings tabs and separate paste routes",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "EXCEL-05",
+      "priority": "P1",
+      "title": "Live Excel exact-signature non-destructive suggestions",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "Existing R122 Deck suggests verified foreground Excel mapping; R263 adds mandatory re-preview, exact current workbook/sheet/each target cell and source mapping before ApplyAsync. All changes after consent fail closed; native Windows/real Office acceptance pending."
+    },
+    {
+      "id": "EXCEL-06",
+      "priority": "P0",
+      "title": "Three real Office workbook acceptance cases",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "DECK-01",
+      "priority": "P1",
+      "title": "Window grouping and stationary-hover previews",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R261 true distinct-HWND multiwindow-first running apps Deck order, descending window count, alphabetical single-window fallback, stable grouped flyout order and 24-icon cap. Native Windows CI / mixed-DPI physical hover acceptance pending."
+    },
+    {
+      "id": "DECK-02",
+      "priority": "P1",
+      "title": "Pinned apps recent document actions",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R262 explicit right click on existing pinned app sector opens on-demand per-app Windows Recent document choices (max 70 shortcuts scanned, 10 safe matches); exact OS association, allowlist and click-time revalidation; WPF native tests in CI, real Office/Windows Recent dual-monitor acceptance remains."
+    },
+    {
+      "id": "DECK-03",
+      "priority": "P1",
+      "title": "Independent monitor-local Deck UI, shared staged files",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R228/R234/R235 development accepted in native CI; independent monitor physical acceptance pending"
+    },
+    {
+      "id": "DECK-04",
+      "priority": "P1",
+      "title": "Folder pre-drop Zip or Copy, cancellation, recovery",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R256 native PreviewDragEnter/Over/Drop on monitor-local widget and Popup, hover-selected ZIP/Copy before drop; existing bounded cancellable verified staging retained; real Explorer dual-monitor acceptance pending."
+    },
+    {
+      "id": "DECK-05",
+      "priority": "P1",
+      "title": "Safe PDF Office ZIP WAV image and text previews",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R217 PDF + prior Office metadata, R240 text/code, R241 Word DOCX on-demand bounded preview; CI and real-device acceptance pending."
+    },
+    {
+      "id": "DECK-06",
+      "priority": "P1",
+      "title": "Media controls in shared Deck",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R123 existing media Deck controls, R243 patch corrects global DeckIntegration flag on individual monitor widget close; native Windows CI and physical hardware acceptance pending."
+    },
+    {
+      "id": "CTX-01",
+      "priority": "P1",
+      "title": "Explicit foreground-app context suggestions",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R237 opted-in session-only foreground category recommendations, pending CI and physical UI verification"
+    },
+    {
+      "id": "CTX-02",
+      "priority": "P1",
+      "title": "Opt-in event-driven app recommendations",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "CTX-03",
+      "priority": "P1",
+      "title": "Context permission and privacy audit",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R258 category-only, opt-in foreground listener privacy audit, on Stop wipe session recommendation/category/count and reject pending WinEvent callback. Native Windows tests/real consent acceptance pending."
+    },
+    {
+      "id": "SEARCH-01",
+      "priority": "P2",
+      "title": "Unified command palette, progressive search and index health",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R259 Action Palette bounded @group facets, deterministic ranking and PageUp/Down/Home/End navigation; R260 aggregate-only live multi-drive index health with manually authorized WarmStart and no file-content reads. Native CI and real multi-drive performance/Everything IPC remain pending."
+    },
+    {
+      "id": "CLIP-01",
+      "priority": "P2",
+      "title": "Opt-in clipboard snippets and conversions",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "Existing on-demand transforms plus R245 local clear; no background history, opt-in retention or privacy exclusions yet."
+    },
+    {
+      "id": "OCR-01",
+      "priority": "P2",
+      "title": "On-demand selected-region OCR",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "FILE-01",
+      "priority": "P2",
+      "title": "Safe file transforms and batch rename preview",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R244 SHA-256 duplicate inspector and R254 bounded, explicit preview-only prefix/suffix batch rename with collision/no-op checks; transaction, rollback and real-device acceptance pending."
+    },
+    {
+      "id": "WORK-01",
+      "priority": "P2",
+      "title": "Workspace profile preview and consented restoration",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R179 explicit layout capture/restore plus R257 read-only per-window target preview, no silent monitor fallback, single-use rechecked consent; real physical monitors and installed profile acceptance remain."
+    },
+    {
+      "id": "REM-01",
+      "priority": "P2",
+      "title": "Actionable recurring reminders",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "VAULT-01",
+      "priority": "P3",
+      "title": "Protected credential vault and exact-site matching",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "AUTO-01",
+      "priority": "P3",
+      "title": "Allowlisted workflow builder with dry run and audit",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "INT-01",
+      "priority": "P3",
+      "title": "Opt-in AAH local connector",
+      "status": "planned",
+      "release_eligible": false
+    },
+    {
+      "id": "UI-01",
+      "priority": "P1",
+      "title": "Settings crash resilience and clear navigation",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R255 Features-initiated Settings/tool-launch error containment and secret-redacted status; standalone Widget Settings dialog, real installed Windows and full navigation accessibility still pending."
+    },
+    {
+      "id": "UI-02",
+      "priority": "P1",
+      "title": "Full keyboard and screen-reader accessibility",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R207 root donut key model + R199 Ctrl+K existing; R246 F1 help with 10 scoped verified shortcuts and accessible WPF close. Screen-reader/keyboard-only full flow still pending."
+    },
+    {
+      "id": "PERF-01",
+      "priority": "P0",
+      "title": "Event-driven background work and performance budgets",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R205 existing on-demand CPU/heap/handles and R253 private memory, handle, thread advisory thresholds; full sustained performance profiling and real hardware acceptance missing."
+    },
+    {
+      "id": "TEST-01",
+      "priority": "P0",
+      "title": "CI, safe release gate, physical test evidence",
+      "status": "planned",
+      "release_eligible": false
+    }
+  ]
+}

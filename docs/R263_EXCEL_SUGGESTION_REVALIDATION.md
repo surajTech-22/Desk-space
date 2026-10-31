@@ -1,0 +1,7 @@
+# R263 — confirm the exact same Excel destination immediately before paste
+
+DeskSpace's existing Deck already suggests a stored header/value mapping when a real foreground Excel instance has a uniquely verified reference-label signature and at least one writable destination. Selecting a suggestion already displays a preview and requests explicit Yes/No approval before applying with backup. However, Excel, its active workbook or the saved mapping could change while that dialog was open.
+
+R263 adds a **second read-only Excel COM preview after the confirmation**, reloads the saved mapping, and requires exact equality with the originally reviewed proposal before invoking ApplyAsync. It checks verified signature status, workbook and sheet identity, starting coordinates, every planned cell address, old/raw contents, new value, write/skip decision and writable count. Any mismatch aborts without calling the workbook write path; a new explicit review is required. The existing backup and Excel transactional preflight still apply afterward. Error messages no longer include raw COM exception text or private workbook paths.
+
+The new comparison engine is pure and has no file I/O, COM interaction, timer, background watcher, or data writes. Native Windows tests use synthetic Excel proposals to validate identical plans and reject changed workbooks, sheets, cell addresses, values and reference signatures. This is partial EXCEL-05 hardening: actual Excel COM/Office workbook cases and physical monitor suggestion behavior remain mandatory before release.
