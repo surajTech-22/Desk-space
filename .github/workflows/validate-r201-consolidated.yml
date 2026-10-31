@@ -292,6 +292,14 @@ jobs:
           ./r248/test-r248.ps1
           ./r248/build-verified-source.ps1 -ArchivePath 'r221/output/DeskSpace-R221-Source.zip' -ManifestPath 'r221/output/DeskSpace-R221-Source.manifest.json' -ReceiptPath 'r221/output/DeskSpace-R221-Source.sha256.txt'
 
+      - name: R267 assert committed canonical WPF source parity and independent build
+        shell: pwsh
+        run: |
+          ./r267/test-r267.ps1
+          ./r267/verify-checked-in-source.ps1
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R267 checked-in canonical project build failed'}
+
       - name: Upload verified consolidated source (NON-RELEASE build evidence)
         if: success()
         uses: actions/upload-artifact@v4
