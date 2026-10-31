@@ -38,7 +38,7 @@
       "id": "perf-budget",
       "description": "CPU/RAM/GPU/performance budget and event-based refresh",
       "status": "pending",
-      "evidence": "Partial R215: per-widget owned-window fallback enumeration stops when widget is hidden or minimized, and resumes on visibility/restore events with a coalesced immediate correction. No change to R153 synchronous popup fencing. Full CPU/GPU/RAM performance budget and leak testing pending. R216: monitor configuration uses FileSystemWatcher events with 180ms dispatcher debounce and 45s resilience fallback; Windows CI pending. Full physical performance profiling still outstanding."
+      "evidence": "Partial R215: per-widget owned-window fallback enumeration stops when widget is hidden or minimized, and resumes on visibility/restore events with a coalesced immediate correction. No change to R153 synchronous popup fencing. Full CPU/GPU/RAM performance budget and leak testing pending. R216: monitor configuration uses FileSystemWatcher events with 180ms dispatcher debounce and 45s resilience fallback; Windows CI pending. Full physical performance profiling still outstanding. R253 advisory runtime memory/handles/threads in Component Health; sustained perf/installed-PC acceptance still pending."
     },
     {
       "id": "signed-release",
