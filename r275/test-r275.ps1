@@ -25,8 +25,8 @@ foreach($needle in @(
  'TestSafeBatchRenameApplyUndoV275();',
  'R275 one locked source must roll back earlier successful renames'
 )){
- if(!$engine.Contains($needle) -and !$preview.Contains($needle) -
-    and !$native.Contains($needle)){
+ if(!$engine.Contains($needle) -and !$preview.Contains($needle) -and
+    !$native.Contains($needle)){
   throw ('R275 transactional file operation missing: '+$needle)
  }
 }
