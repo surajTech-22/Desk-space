@@ -92,7 +92,7 @@
       "id": "excel-suggestions",
       "description": "Live exact-signature Excel suggestions in Deck",
       "status": "pending",
-      "evidence": ""
+      "evidence": " R263 every saved Excel suggestion will re-preview after user confirmation, comparing workbook/sheet, reference signature, writable count and all cell before/after values. Real Excel COM/physical test pending."
     },
     {
       "id": "excel-transactions",
