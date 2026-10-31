@@ -36,11 +36,20 @@ Swap @'
         host.IsVisibleChanged+=FolderChoiceVisible;
 '@ 'drag handlers before release'
 Swap @'
-                if(!busy&&pendingFolderDrop==null)
-                    ShowFolderChoice(dropped);
+    private void Receive(object sender,DragEventArgs e)
+    {
 '@ @'
-                // No post-drop prompt. Unselected folders are ignored.
-                HideFolderChoice();
+    private void Receive(object sender,DragEventArgs e)
+    {
+        // Ignore unapproved native folder drops; only PreviewDrop can
+        // commit a hover-selected action. No post-drop prompt is shown.
+        if(FolderFilesV256(e)!=null)
+        {
+            HideFolderChoice();
+            e.Effects=DragDropEffects.None;
+            e.Handled=true;
+            return;
+        }
 '@ 'remove post-drop chooser'
 Swap @'
     private void FolderChoiceVisible(object sender,DependencyPropertyChangedEventArgs e)
