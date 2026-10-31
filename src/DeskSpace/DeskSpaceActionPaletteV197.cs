@@ -34,6 +34,8 @@ internal static class DeskSpaceActionPaletteV197
         new("layouts","Window layout profiles","Review or restore monitor window layouts","Windows"),
         new("clipboard","Clipboard conversions","Convert selected text with a preview","Text"),
         new("diagnostics","Export diagnostics","Save privacy-safe troubleshooting ZIP to Downloads","System",true),
+        new("previewfile","Preview file or folder",
+            "Choose a local file or folder and inspect it without opening an external app","Files"),
         new("downloads","Open Downloads folder","Show the ordinary Windows Downloads folder","Files")
     };
     private static readonly Dictionary<Window,Window> Open=new();
