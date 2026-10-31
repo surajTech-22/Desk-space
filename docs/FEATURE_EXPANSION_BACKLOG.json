@@ -9,22 +9,25 @@
       "id": "MON-01",
       "priority": "P0",
       "title": "Monitor identity and independent widget/Deck sessions",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R214/R228/R231/R232/R233 development implemented; physical or installed PC acceptance pending"
     },
     {
       "id": "MON-02",
       "priority": "P0",
       "title": "Real two-monitor mixed DPI and seam regression",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R236 synthetic Windows test matrix pending CI; real physical dual monitor explicitly unverified"
     },
     {
       "id": "MON-03",
       "priority": "P0",
       "title": "Explicit docking and popup containment",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R214/R228/R231/R232/R233 development implemented; physical or installed PC acceptance pending"
     },
     {
       "id": "MON-04",
@@ -44,8 +47,9 @@
       "id": "UPD-02",
       "priority": "P0",
       "title": "Graceful all-process updater exit, veto respected",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R214/R228/R231/R232/R233 development implemented; physical or installed PC acceptance pending"
     },
     {
       "id": "UPD-03",
@@ -128,8 +132,9 @@
       "id": "DECK-03",
       "priority": "P1",
       "title": "Independent monitor-local Deck UI, shared staged files",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R228/R234/R235 development accepted in native CI; independent monitor physical acceptance pending"
     },
     {
       "id": "DECK-04",
