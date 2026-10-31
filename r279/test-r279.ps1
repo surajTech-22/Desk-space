@@ -17,8 +17,8 @@ foreach($needle in @(
  'TestRunningWindowControlsV279();',
  'R279 changing a window'
 )){
- if(!$source.Contains($needle) -and !$hover.Contains($needle) -
-    and !$tests.Contains($needle)){throw ('R279 P1 state control missing: '+$needle)}
+ if(!$source.Contains($needle) -and !$hover.Contains($needle) -and
+    !$tests.Contains($needle)){throw ('R279 P1 state control missing: '+$needle)}
 }
 if(!$source.Contains('PostMessage(entry.Handle,WmClose,IntPtr.Zero,IntPtr.Zero)')){
  throw 'R279 unsaved-work-friendly close must remain unchanged'
