@@ -3,6 +3,8 @@
 **Branch:** `feat/r201-consolidated-roadmap-bundle`, draft PR #79.  
 **Rule:** Implemented ≠ native Windows CI tested ≠ physical acceptance ≠ released. **No P2/P3 feature work ahead of P0/P1 unless it blocks a P0/P1 requirement.**
 
+**Latest development evidence:** R280 + R281 combined Windows CI #563 successful. Feature code is not a released update.
+
 ## P0 — reliability and correctness (do first)
 
 | Requirement from plan | Actual repository status | Required next evidence |
@@ -20,11 +22,11 @@
 | Captured Sheet + Mappings, separate paste engines | R126 already has exactly two unified tabs and routes Information vs Formats/Formulas separately. This is **implemented code**, not an unstarted feature | Actual Windows Excel UI origin selection, copy/format/formula/table/blank-values, source library and save/delete behavior |
 | Running Apps, grouped thumbnails, quick controls | R261 grouped order; R93 stationary hover and monitor-side flyout; R279 added explicit per-window Minimize/Restore controls alongside normal Close and exact stale-HWND title guards. Native CI #540 PASS | Real multi-window Explorer/Office selection, focus/minimize/restore/close and dual-monitor positions |
 | Shared Deck/media/files | R210/R211 staged file ZIP integrity and duplication; R243/R272 media Deck controls and reopen | Media session on user's PC, two widgets showing shared held data while deck placement is independent, real Explorer drag |
-| Active-app Smart Context Deck | R237 event-driven process-category suggestions exist as **a separate opt-in panel**. R263 Excel exact-signature suggestions exist in the Deck | Missing real unified Deck presentation for approved context actions; explicit opt-in and stop/wipe/privacy audit, no auto-paste |
+| Active-app Smart Context Deck | **R280 implemented in the real Deck:** explicit Start/Stop, one event-driven process-category listener, cross-widget shared in-memory state, R258 audit, fixed click-only tool actions. R263 exact Excel suggestions remain separate and intact. Native Windows CI #563 PASS | Verify actual Excel/Explorer/Word/browser switching and privacy on user's installed PC and both screens; never auto-paste |
 | Pinned apps recent documents | R262 per-app recent-document choices + click-time revalidation exist | Real Windows Recent/Office/Explorer validation |
 | Settings stability and keyboard navigation | R255 guarded Features→Settings, R207 keyboard donut, R246 help, R208 contrast | Real settings failure cases and keyboard/screen-reader navigation for every donut level, multi-DPI |
 | Search and indexing | R269 shared progressive multi-drive index, R259 palette facets, R260 index health | Real multi-drive end-to-end latency, cancel/stale searches, optional native Everything IPC |
-| Workspace layouts | R179 and R257 existing capture/review/restore safety | Physical multi-monitor Save/Restore and missing apps/monitor reconnection |
+| Workspace profiles and window layouts | **R281** replaces the lossy profile Save/Import with a cross-process OS mutex, strict existing-file checks, atomic write, and import backup; native Windows CI #563 PASS. R179/R257 already provide separate captured window-layout restore safeguards | Physical saved-widget-profile UI plus multi-monitor window placement, reconnect, and missing-app restore acceptance |
 
 ## P2 / P3 deliberately **deferred**
 The plan places OCR, extra clipboard tools, batch rename additions, vault expansion, visual workflow builders and optional AAH connectors *after* P0 and the unfinished P1 workflows. R277 already provides durable rename recovery in development; do not continue refining it at the expense of core reliability.
