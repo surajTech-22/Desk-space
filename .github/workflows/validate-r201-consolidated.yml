@@ -180,6 +180,11 @@ jobs:
         run: |
           ./r249/test-r249.ps1
 
+      - name: R250 reject unsigned/mismatched provenance (synthetic only)
+        shell: pwsh
+        run: |
+          ./r250/test-r250.ps1
+
       - name: Assert the single-release gate blocks unverified remaining work
         shell: pwsh
         run: |
