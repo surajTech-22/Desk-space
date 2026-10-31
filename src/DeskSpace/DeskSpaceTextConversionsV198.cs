@@ -19,8 +19,11 @@ internal static class DeskSpaceTextConversionsV198
         string result=operation switch
         {
             "Format JSON"=>FormatJson(input),
+            "Minify JSON"=>MinifyJson(input),
             "CSV to Markdown table"=>CsvToMarkdown(input),
             "Unique lines"=>UniqueLines(input),
+            "Sort lines"=>SortLines(input),
+            "Trim lines"=>TrimLines(input),
             _=>throw new ArgumentOutOfRangeException(nameof(operation))
         };
         if(result.Length>MaxInput*2)
@@ -37,6 +40,29 @@ internal static class DeskSpaceTextConversionsV198
         return JsonSerializer.Serialize(doc.RootElement,new JsonSerializerOptions
         {WriteIndented=true});
     }
+    private static string MinifyJson(string input)
+    {
+        using var doc=JsonDocument.Parse(input,new JsonDocumentOptions{
+            AllowTrailingCommas=false,CommentHandling=JsonCommentHandling.Disallow,
+            MaxDepth=32
+        });
+        return JsonSerializer.Serialize(doc.RootElement);
+    }
+
+    private static string Lines(string input)=>
+        input.Replace("\r\n","\n",StringComparison.Ordinal)
+             .Replace('\r','\n');
+
+    private static string SortLines(string input)=>
+        string.Join(Environment.NewLine,
+            Lines(input).Split('\n')
+                .OrderBy(line=>line,StringComparer.OrdinalIgnoreCase)
+                .ThenBy(line=>line,StringComparer.Ordinal));
+
+    private static string TrimLines(string input)=>
+        string.Join(Environment.NewLine,
+            Lines(input).Split('\n').Select(line=>line.Trim()));
+
     private static string UniqueLines(string input)
     {
         var set=new HashSet<string>(StringComparer.Ordinal);
