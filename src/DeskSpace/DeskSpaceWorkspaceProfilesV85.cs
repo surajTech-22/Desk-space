@@ -44,68 +44,18 @@ internal static class DeskSpaceWorkspaceProfilesV85
                 return Array.Empty<DeskSpaceProfileV85>();}
         }
     }
+    // All profile mutations use a cross-process storage lock and validate
+    // the EXISTING file before any overwrite. A damaged database is never
+    // treated as an empty list during Save or Import.
     internal static void Save(DeskSpaceProfileV85 profile)
     {
-        if(string.IsNullOrWhiteSpace(profile.Name) || profile.Name.Length>48)
-            throw new ArgumentException("Profile name must be 1–48 characters");
-        lock(Gate)
-        {
-            var profiles=Load().ToList();
-            profiles.RemoveAll(x=>x.Name.Equals(profile.Name,
-                StringComparison.OrdinalIgnoreCase));
-            profiles.Insert(0,profile);
-            if(profiles.Count>24)profiles.RemoveRange(24,profiles.Count-24);
-            Directory.CreateDirectory(WorkspaceStore.Root);
-            var temp=Filename+"."+Guid.NewGuid().ToString("N")+".tmp";
-            try
-            {
-                File.WriteAllText(temp,JsonSerializer.Serialize(profiles));
-                File.Move(temp,Filename,true);
-            }
-            finally{if(File.Exists(temp))File.Delete(temp);}
-        }
+        DeskSpaceProfileStoreV281.SaveAt(Filename,profile);
     }
-    // Import profiles without applying a single setting. Existing profile
-    // names are retained, and the same data lock as Save() is used.
+
     internal static int ImportNewProfilesV201(
         IReadOnlyList<DeskSpaceProfileV85> incoming)
     {
-        if(incoming==null || incoming.Count>24)
-            throw new FormatException("Invalid profile import count.");
-        foreach(var profile in incoming)
-            DeskSpaceProfilePortabilityV201.Validate(profile);
-        if(incoming.Select(x=>x.Name).Distinct(
-            StringComparer.OrdinalIgnoreCase).Count()!=incoming.Count)
-            throw new FormatException("Duplicate imported profile names.");
-        lock(Gate)
-        {
-            var current=Load().ToList();
-            var known=new HashSet<string>(current.Select(x=>x.Name),
-                StringComparer.OrdinalIgnoreCase);
-            var fresh=incoming.Where(x=>!known.Contains(x.Name)).ToList();
-            if(fresh.Count==0)return 0;
-            if(current.Count+fresh.Count>24)
-                throw new FormatException("Profile limit is 24; no changes made.");
-            Directory.CreateDirectory(WorkspaceStore.Root);
-            var temp=Filename+"."+Guid.NewGuid().ToString("N")+".partial";
-            try
-            {
-                File.WriteAllText(temp,
-                    JsonSerializer.Serialize(current.Concat(fresh).ToList()));
-                // Keep a separate recovery copy of the previous profile
-                // database. This never touches Notes, Excel or secrets.
-                if(File.Exists(Filename))
-                {
-                    var backup=Filename+".before-import-"+
-                        DateTime.UtcNow.ToString("yyyyMMddHHmmss")+"-"+
-                        Guid.NewGuid().ToString("N")+".bak";
-                    File.Copy(Filename,backup,false);
-                }
-                File.Move(temp,Filename,true);
-                return fresh.Count;
-            }
-            finally{if(File.Exists(temp))File.Delete(temp);}
-        }
+        return DeskSpaceProfileStoreV281.ImportAt(Filename,incoming);
     }
     internal static DeskSpaceProfileV85 Capture(string name,WidgetSettingsV3 source)
         =>new(){
