@@ -25,6 +25,7 @@ $method=@'
         var inspect=type.GetMethod("Inspect",flags)!;
         var apply=type.GetMethod("Apply",flags)!;
         var recover=type.GetMethod("Recover",flags)!;
+        var keep=type.GetMethod("Keep",flags)!;
         var journalPath=type.GetMethod("JournalPath",flags)!;
         var plan=preview.GetMethod("InspectFolder",flags)!;
         object Plan(string folder)=>
@@ -35,6 +36,8 @@ $method=@'
             })!;
         object Review(string folder)=>inspect.Invoke(null,new object[]{folder})!;
         object Recover(string folder)=>recover.Invoke(null,new object[]{
+            folder,System.Threading.CancellationToken.None})!;
+        object Keep(string folder)=>keep.Invoke(null,new object[]{
             folder,System.Threading.CancellationToken.None})!;
         bool Prop(object value,string name)=>
             (bool)value.GetType().GetProperty(name)!.GetValue(value)!;
@@ -84,6 +87,8 @@ $method=@'
             Assert(Prop(mixed,"CanRecover") &&
                 Count(mixed,"Renamed")==1 && Count(mixed,"Untouched")==1,
                 "R277 partial-crash record must distinguish moved from untouched");
+            Assert(!Prop(Keep(root),"Success") && File.Exists(log),
+                "R277 incomplete batch cannot be permanently accepted");
             Assert(Prop(Recover(root),"Success") &&
                 File.Exists(Local("a.txt")) && File.Exists(Local("b.txt")) &&
                 !File.Exists(log),
@@ -106,6 +111,16 @@ $method=@'
             Assert(Count(Review(root),"Renamed")==0 &&
                 Prop(Recover(root),"Success") && !File.Exists(log),
                 "R277 journal before first move must clear only by explicit recovery");
+            Assert(Prop(Apply(root,Plan(root)),"Success"),
+                "R277 fixture completed Keep");
+            Assert(Prop(Keep(root),"Success") &&
+                !File.Exists(log) &&
+                File.ReadAllText(Local("R-a.txt"))=="ALPHA" &&
+                File.ReadAllText(Local("R-b.txt"))=="BETA",
+                "R277 explicit Keep must preserve renamed contents and "+
+                "discard only the durable journal");
+            File.Move(Local("R-a.txt"),Local("a.txt"),false);
+            File.Move(Local("R-b.txt"),Local("b.txt"),false);
             Assert(Prop(Apply(root,Plan(root)),"Success"),
                 "R277 fixture corrupt record");
             File.WriteAllText(log,"{corrupted json, no trust");
