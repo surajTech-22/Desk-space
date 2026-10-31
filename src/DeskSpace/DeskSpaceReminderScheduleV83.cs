@@ -97,7 +97,16 @@ internal static class DeskSpaceReminderScheduleV83
         item.SnoozedUntil=null;item.SnoozeOnly=false;
         if(snoozed)
         {
-            item.LastAlert=IsRecurring(item)?null:now;
+            if(IsRecurring(item))
+            {
+                // The snooze notification is DISPLAY-ONLY. The original
+                // recurring Due can be hours/days in the past. Rearm it
+                // past the snooze dismissal, or it will immediately fire
+                // again (and again) after the user closes the alert.
+                if(item.Due<=now)item.Due=Next(item,now);
+                item.LastAlert=null;
+            }
+            else item.LastAlert=now;
             return false;
         }
         if(IsRecurring(item))
