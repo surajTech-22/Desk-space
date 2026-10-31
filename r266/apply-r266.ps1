@@ -77,7 +77,19 @@ Swap @'
         foreach(var item in live.FormulaPlanV266)
         {
             dynamic cell=live.Range.Cells[item.Row+1,item.Column+1];
-            if(IsFormula(cell) || (object?)cell.Value2!=null)
+            // A real Excel ListObject can propagate an exact calculated-
+            // column formula automatically after the preceding cell is set.
+            // Accept only the identical captured relative formula; never
+            // overwrite a different formula or a literal value.
+            if(IsFormula(cell))
+            {
+                if(!DeskSpaceExcelFormulaPlanV266.Matches(item,true,
+                    Text((object?)cell.FormulaR1C1)))
+                    throw new InvalidDataException(
+                        "Excel auto-filled a different formula than the captured template.");
+                continue;
+            }
+            if((object?)cell.Value2!=null)
                 throw new InvalidDataException(
                     "Formula destination was changed during formatting.");
             cell.FormulaR1C1=item.FormulaR1C1;
