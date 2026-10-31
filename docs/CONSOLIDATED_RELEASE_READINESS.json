@@ -183,6 +183,12 @@
       "description": "Stable and Tester same-hash release/notification contract",
       "status": "verified",
       "evidence": "v1.5.1093 Windows CI, device acceptance still required where relevant"
+    },
+    {
+      "id": "context-suggestions",
+      "description": "Explicit session-only app-category recommendations with privacy/accessibility and installed-PC acceptance; active Excel exact-signature remains separate",
+      "status": "pending",
+      "evidence": "R237 implementation in development branch: temporary opt-in foreground hook stores only broad app category, no URLs/titles/clipboard, manual existing-tool buttons. Native Windows CI and user-device acceptance pending."
     }
   ]
 }
