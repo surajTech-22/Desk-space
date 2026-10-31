@@ -96,8 +96,9 @@
       "id": "EXCEL-03",
       "priority": "P0",
       "title": "Backup, transactional write and verified rollback",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R252 verifies pre-change Excel SaveCopyAs backup bytes using SHA-256 sidecar receipt before COM changes. Real Excel rollback/readback under Office acceptance still pending."
     },
     {
       "id": "EXCEL-04",
