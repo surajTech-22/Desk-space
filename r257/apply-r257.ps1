@@ -108,12 +108,9 @@ Swap @'
         var restore=new Button{Content="Restore selected",
             Padding=new Thickness(9,6,9,6)};
 '@ 'visible non-mutating preview action'
-Swap @'
-        buttons.Children.Add(capture);buttons.Children.Add(restore);
-'@ @'
+Swap '        buttons.Children.Add(capture);' @'
         buttons.Children.Add(capture);
         buttons.Children.Add(preview);
-        buttons.Children.Add(restore);
 '@ 'preview button beside existing capture/restore'
 Swap @'
         layout.Children.Add(status);
