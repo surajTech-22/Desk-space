@@ -161,8 +161,9 @@
       "id": "CTX-01",
       "priority": "P1",
       "title": "Explicit foreground-app context suggestions",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R237 opted-in session-only foreground category recommendations, pending CI and physical UI verification"
     },
     {
       "id": "CTX-02",
