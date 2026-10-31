@@ -40,8 +40,8 @@ $method=@'
             (bool)value.GetType().GetProperty(name)!.GetValue(value)!;
         int Count(object value,string name)=>
             (int)value.GetType().GetProperty(name)!.GetValue(value)!;
-        var root=Path.Combine(outdir,"r277-journal-"+
-            Guid.NewGuid().ToString("N"));
+        var root=Path.GetFullPath(Path.Combine(outdir,"r277-journal-"+
+            Guid.NewGuid().ToString("N")));
         Directory.CreateDirectory(root);
         var log=(string)journalPath.Invoke(null,new object[]{root})!;
         string Local(string filename)=>Path.Combine(root,filename);
