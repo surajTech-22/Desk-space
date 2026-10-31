@@ -11,7 +11,7 @@
       "title": "Monitor identity and independent widget/Deck sessions",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R214/R228/R231/R232/R233 development implemented; physical or installed PC acceptance pending"
+      "evidence": "R278 adds storage-keyed cross-process OS mutex, strict per-monitor record validation, atomic update and exact device-key restore in the actual Widget session. Windows CI #530 and #540 passed. Physical dual-monitor validation pending; release ineligible."
     },
     {
       "id": "MON-02",
@@ -19,7 +19,7 @@
       "title": "Real two-monitor mixed DPI and seam regression",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R236 synthetic Windows test matrix pending CI; real physical dual monitor explicitly unverified"
+      "evidence": "Existing R236 100/125/150/200% synthetic native DPI geometries and R278 independent cross-process saved positions passed Windows CI #540; physical two-display hotplug, dragging/expansion/seams remain unverified."
     },
     {
       "id": "MON-03",
@@ -27,7 +27,7 @@
       "title": "Explicit docking and popup containment",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R214/R228/R231/R232/R233 development implemented; physical or installed PC acceptance pending"
+      "evidence": "R190/R228/R234/R264 contain monitor-local Dock geometry, popup bounds and Deck reset. R278 corrects widget positions but real seam and explicit dock physical tests remain pending."
     },
     {
       "id": "MON-04",
@@ -104,8 +104,9 @@
       "id": "EXCEL-04",
       "priority": "P1",
       "title": "Captured Sheet plus Mappings tabs and separate paste routes",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R126 already implements one unified Excel module with exactly Captured Sheet and Mappings tabs and separate information/format libraries/engines. Prior status 'planned' was stale; actual Excel UI/Office acceptance and library origin/regression checks remain pending."
     },
     {
       "id": "EXCEL-05",
@@ -128,7 +129,7 @@
       "title": "Window grouping and stationary-hover previews",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R261 true distinct-HWND multiwindow-first running apps Deck order, descending window count, alphabetical single-window fallback, stable grouped flyout order and 24-icon cap. Native Windows CI / mixed-DPI physical hover acceptance pending."
+      "evidence": "R261 running-app grouping and R279 exact live-HWND-title guard with explicit Minimize and Restore beside existing WM_CLOSE inside the real multi-window flyout; Windows native CI #540 passed. Physical per-monitor hover/focus remains pending."
     },
     {
       "id": "DECK-02",
@@ -222,7 +223,7 @@
       "title": "Safe file transforms and batch rename preview",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R244 SHA-256 duplicate inspector and R254 bounded, explicit preview-only prefix/suffix batch rename with collision/no-op checks; transaction, rollback and real-device acceptance pending."
+      "evidence": "R254 preview; R275 explicit bounded no-overwrite Apply/Undo; R277 durable write-ahead recovery, explicit Keep, partial-crash reconstruction and malformed-record rejection. Windows native CI #519 passed. Actual power cut/antivirus/network share tests pending; P2 deprioritized."
     },
     {
       "id": "WORK-01",
