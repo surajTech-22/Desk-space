@@ -50,13 +50,11 @@ Swap "$root/DeskSpaceActionPaletteV197.cs" @'
 Swap "$root/DeskSpaceActionPaletteV197.cs" @'
         switch(command.Id)
         {
-            case "status":
 '@ @'
         switch(command.Id)
         {
             case "searchhealth":
                 DeskSpaceSearchIndexHealthV260.Show(owner);
                 break;
-            case "status":
 '@ 'explicit manual index-status command dispatch'
 Write-Host 'R260: aggregate multi-volume search status and opt-in indexing in Workspace and Action Palette.'
