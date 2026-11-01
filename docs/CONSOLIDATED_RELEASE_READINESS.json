@@ -1,7 +1,7 @@
 {
   "schema": "deskspace-single-consolidated-release-v1",
   "baseline": "v1.5.1093",
-  "policy": "no release until every required checkpoint has verified evidence",
+  "policy": "No Stable/Tester publication until verified signed installer, installed updater rollback/heartbeat, real mixed-DPI dual-monitor acceptance and Office COM workbook tests. Current R286 dev CI #650 is not a release.",
   "release_status": "not-ready",
   "checks": [
     {
@@ -32,7 +32,7 @@
       "id": "startup-recovery",
       "description": "Sleep/resume, startup crash loop, tray and component recovery",
       "status": "pending",
-      "evidence": ""
+      "evidence": "R286 sticky tray Exit Widget and explicit Show restore implemented; Windows native full CI #650 passed. Still requires installed Windows test confirming the widget stays closed through main Workspace auto-launch, logon, updater relaunch, while a deliberate Show brings it back. R276 early tray recovery and R183 short-crash guard remain."
     },
     {
       "id": "perf-budget",
