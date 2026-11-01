@@ -318,6 +318,15 @@ internal static class DeskSpacePublicUpdaterV44
         if(data.ReadByte()!=0x4d||data.ReadByte()!=0x5a)
             throw new InvalidDataException("Installer PE signature missing");
     }
+    // R310: A busy supervisor is a deferred in-progress transaction, not an
+    // installer failure. Keep the verified cached candidate for the next
+    // automatic retry without trying a second installer or closing windows.
+    private sealed class SupervisorBusyV310Exception : InvalidOperationException
+    {
+        internal SupervisorBusyV310Exception() :
+            base("Another verified DeskSpace installation is already in progress."){}
+    }
+
     private static async Task StartSupervisor(string installer,string folder,string tag)
     {
         // Never shut down this widget to launch a duplicate supervisor while
@@ -333,8 +342,8 @@ internal static class DeskSpacePublicUpdaterV44
             finally{if(free)existing.ReleaseMutex();}
             if(!free)
             {
-                Log("R227 active supervisor already owns installer; retaining this widget.");
-                throw new InvalidOperationException("R227 supervised installation already running; no second handoff.");
+                Log("R310 update deferred: an existing supervisor owns the install mutex; no duplicate handoff. Verified download stays available.");
+                throw new SupervisorBusyV310Exception();
             }
         }
         var ps=Path.Combine(folder,"CompleteDeskSpaceUpdate."+
@@ -398,6 +407,19 @@ internal static class DeskSpacePublicUpdaterV44
             {
                 await StartSupervisor(pending.Installer,pending.Folder,pending.Tag);
                 DeskSpaceVerifiedUpdateQueueV191.Clear(pending);
+                return true;
+            }
+            catch(SupervisorBusyV310Exception)
+            {
+                Log("R310 verified candidate retained: another supervisor is still completing the installation.");
+                DeskSpaceUpdateProgress.Clear();
+                if(!automatic)
+                    MessageBox.Show(owner,
+                        "A DeskSpace installation is already in progress. "+
+                        "No second installer was launched. Your current Workspace and saved data are unchanged. "+
+                        "The verified update remains cached and DeskSpace will retry when the supervisor finishes.",
+                        "DeskSpace update in progress",MessageBoxButton.OK,
+                        MessageBoxImage.Information);
                 return true;
             }
             catch(Exception error) when(error is InvalidOperationException or IOException)
@@ -635,6 +657,22 @@ internal static class DeskSpacePublicUpdaterV44
             Log("R230 verified installer ready; independent supervisor will request normal exit of all DeskSpace windows.");
             await StartSupervisor(installer,folder,tag);
             supervisorLaunched=true;
+        }
+        catch(SupervisorBusyV310Exception)
+        {
+            // Not a failed update. Another live supervisor owns the Windows
+            // named mutex and is responsible for completing or rolling back
+            // the transaction. Never start a duplicate, clear cached bytes,
+            // cancel the owner or ask the user to bypass the guard.
+            Log("R310 update deferred at "+stage+
+                ": another supervisor owns the transaction. Cached verified installer retained.");
+            if(!automatic)
+                MessageBox.Show(owner,
+                    "Another DeskSpace installation is already in progress. "+
+                    "No second installation was started. The current app and saved data are unchanged. "+
+                    "The verified update remains cached for automatic retry after the first supervisor exits.",
+                    "DeskSpace update in progress",MessageBoxButton.OK,
+                    MessageBoxImage.Information);
         }
         catch(Exception ex)
         {
