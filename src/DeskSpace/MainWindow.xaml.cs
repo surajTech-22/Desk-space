@@ -79,8 +79,11 @@ public partial class MainWindow : Window
         uiTimer.Start();
         saveTimer.Tick += (_, _) => { saveTimer.Stop(); SafeSave(); };
         Tick();
-        if (WidgetSettingsV3.Load().ShowAtLaunch)
-            Dispatcher.BeginInvoke(new Action(ShowFloatingWidget), DispatcherPriority.ApplicationIdle);
+        // Workspace auto-show is not a user Show Widget click. Keep a
+        // previously exited widget dismissed even after app restart.
+        Dispatcher.BeginInvoke(
+            new Action(()=>WidgetHostLauncher.EnsureRunning(false)),
+            DispatcherPriority.ApplicationIdle);
     }
     private void ShowMainWindow()
     {
