@@ -128,6 +128,7 @@ jobs:
           ./r286/apply-r286.ps1
           ./r288/apply-r288.ps1
           ./r289/apply-r289.ps1
+          ./r290/apply-r290.ps1
           ./r201/apply-tests-r201-r202.ps1
           ./r203/apply-tests-r203.ps1
           ./r205/apply-tests-r205.ps1
@@ -337,14 +338,14 @@ jobs:
         run: |
           ./r236/record-runner-displays-r236.ps1
 
-      - name: Run isolated native WPF R201-R289 acceptance (no release)
+      - name: Run isolated native WPF R201-R290 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
           dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.r201/evidence' '--r201-only'
           if($LASTEXITCODE -ne 0){throw 'Native WPF tests failed'}
 
-      - name: R289 verify below-only Running Apps Deck and precision touchpad
+      - name: R289/R290 verify below-only Deck and precision touchpad menu/navigation
         shell: pwsh
         run: |
           dotnet run --project 'r289/Tests/DeckTouchpadTests.csproj' -c Release
