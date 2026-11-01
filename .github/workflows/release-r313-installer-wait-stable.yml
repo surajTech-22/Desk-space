@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/release-r313-installer-wait-stable.yml
       - r313/**
+      - r312/**
       - r310/**
 
 permissions:
