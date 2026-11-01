@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -11,6 +12,12 @@ using Forms=System.Windows.Forms;
 
 internal static class Program
 {
+    [DllImport("user32.dll",SetLastError=true)]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hwnd,IntPtr insertAfter,
+        int x,int y,int width,int height,uint flags);
+    private const uint MoveOnly=0x0001|0x0004|0x0010;
+
     private static void Assert(bool pass,string reason)
     { if(!pass)throw new Exception("R292 FAIL: "+reason); }
     private static readonly Assembly Product=typeof(DeskSpace.WeatherReading).Assembly;
@@ -124,6 +131,29 @@ internal static class Program
                 deckRect.Top>=ownerRect.Bottom+10 &&
                 !deckRect.IntersectsWith(ownerRect),
                 $"real native HWND overlap after reflow: clock={ownerRect}, deck={deckRect}");
+            // R295: force an external native popup reposition that does not
+            // fire owner.LocationChanged or popup.SizeChanged. The hook MUST
+            // detect it and restore the minimum gap without user interaction.
+            var popupHwnd=(PresentationSource.FromVisual(border) as
+                System.Windows.Interop.HwndSource)?.Handle??IntPtr.Zero;
+            Assert(popupHwnd!=IntPtr.Zero,"R295 HWND observer target not created");
+            for(int trial=0;trial<2;trial++)
+            {
+                ownerRect=Bounds("WindowBounds",owner);
+                deckRect=Bounds("PopupBounds",popup);
+                var forcedY=ownerRect.Top+trial*4;
+                Assert(SetWindowPos(popupHwnd,IntPtr.Zero,
+                    ownerRect.Left,forcedY,0,0,MoveOnly),
+                    "R295 could not force a native popup move");
+                Pump(owner);
+                deckRect=Bounds("PopupBounds",popup);
+                ownerRect=Bounds("WindowBounds",owner);
+                Assert(screen.Contains(deckRect) &&
+                    deckRect.Top>=ownerRect.Bottom+10 &&
+                    !deckRect.IntersectsWith(ownerRect),
+                    $"R295 HWND mover bypassed below-only repair: clock={ownerRect}, deck={deckRect}");
+            }
+            Console.WriteLine("R295 PASS: forced native Deck/window overlap repaired on two external HWND moves.");
             Console.WriteLine("R292 PASS: below-only Deck after actual WPF popup Opened and content resize; 4 synthetic monitor topologies including negative origins; 12px visual gap; tiny-display fail-closed.");
             return 0;
         }
