@@ -77,7 +77,7 @@ jobs:
           }
           if(!$scroll.Contains('PixelsForWheelV289(') -or
              !$menu.Contains('PrecisionWheelV290') -or
-             !$updater.Contains('InstalledVersion = new(1, 5, 1107)')){
+             !$updater.Contains('InstalledVersion = new(1, 5, 1108)')){
             throw 'R290 touchpad or v1.5.1108 updater version missing from final source'
           }
           if(!(Test-Path "$root/DeskSpaceWidgetExitV286.cs") -or
