@@ -36,16 +36,17 @@ public partial class MainWindow
         };
         var body=new StackPanel
         {
-            Margin=new Thickness(18),
-            MaxWidth=900
+            Margin=new Thickness(25),
+            MaxWidth=920
         };
         outer.Content=body;
         body.Children.Add(new TextBlock
         {
-            Text="DeskSpace features",
-            FontSize=23,
-            FontWeight=FontWeights.SemiBold,
-            Foreground=new SolidColorBrush(Color.FromRgb(42,32,76)),
+            Text="Explore DeskSpace",
+            FontSize=27,
+            FontWeight=FontWeights.Bold,
+            Foreground=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Text),
             Margin=new Thickness(0,0,0,6)
         });
         string version=Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
@@ -54,7 +55,8 @@ public partial class MainWindow
         {
             Text="Installed version: "+version+"   ·   Works in Workspace and widget",
             FontSize=12,
-            Foreground=Brushes.DimGray,
+            Foreground=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Muted),
             Margin=new Thickness(0,0,0,14)
         });
         body.Children.Add(new TextBlock
@@ -93,18 +95,21 @@ public partial class MainWindow
                         new TextBlock
                         {
                             Text=detail,FontSize=12,
-                            Foreground=Brushes.DimGray,
+                            Foreground=DeskSpaceDesignV283.Solid(
+                                DeskSpaceDesignV283.Current.Muted),
                             TextWrapping=TextWrapping.Wrap
                         }
                     }
                 },
                 HorizontalContentAlignment=HorizontalAlignment.Stretch,
                 HorizontalAlignment=HorizontalAlignment.Stretch,
-                Padding=new Thickness(13,10,13,10),
-                MinHeight=58,
-                Margin=new Thickness(0,0,0,7),
-                Background=Brushes.White
+                Padding=new Thickness(15,12,15,12),
+                MinHeight=62,
+                Margin=new Thickness(0,0,0,9),
+                Background=DeskSpaceDesignV283.Solid(
+                    DeskSpaceDesignV283.Current.Raised)
             };
+            DeskSpaceDesignV283.Button(button);
             AutomationProperties.SetName(button,caption);
             AutomationProperties.SetHelpText(button,detail);
             // One failing tool/settings action cannot close the entire
