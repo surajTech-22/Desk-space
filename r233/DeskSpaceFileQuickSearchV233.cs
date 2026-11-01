@@ -22,9 +22,11 @@ internal static class DeskSpaceFileQuickSearchV233
         yield return Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
         foreach (var drive in DriveInfo.GetDrives())
         {
-            try { if (drive.IsReady) yield return drive.RootDirectory.FullName; }
+            string? readyRoot = null;
+            try { if (drive.IsReady) readyRoot = drive.RootDirectory.FullName; }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+            if (readyRoot != null) yield return readyRoot;
         }
     }
 
