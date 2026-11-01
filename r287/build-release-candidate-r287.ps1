@@ -83,7 +83,7 @@ $content=[IO.File]::ReadAllText($setup)
 # Exactly one legitimate Inno preprocessor declaration. Show version
 # declarations (never secrets) if a historic archive uses another layout.
 $versions=[regex]::Matches($content,
- '(?im)^[ \t]*#define[ \t]+AppVersion[ \t]+"[0-9]+(?:\.[0-9]+){1,3}"')
+ '(?im)^[ \t]*#define[ \t]+AppVersion[ \t]+"[^"\r\n]+"[ \t]*')
 if($versions.Count -ne 1){
  $observed=@($content -split '\r?\n'|Where-Object{
   $_ -match '(?i)appversion|myappversion' }|Select-Object -First 7)
