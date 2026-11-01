@@ -22,25 +22,31 @@ internal static class DeskSpaceSmoothScrollV41
         internal readonly ScrollViewer Viewer;
         internal readonly DispatcherTimer Tick;
         internal double Goal;
+        internal double HorizontalGoal;
         internal Motion(ScrollViewer viewer)
         {
             Viewer=viewer;
             Goal=viewer.VerticalOffset;
+            HorizontalGoal=viewer.HorizontalOffset;
             Tick=new DispatcherTimer(DispatcherPriority.Render,viewer.Dispatcher) {
                 Interval=TimeSpan.FromMilliseconds(16)
             };
             Tick.Tick+=(_,_)=>{
-                if(!Viewer.IsVisible||Viewer.ScrollableHeight<=0){
+                if(!Viewer.IsVisible){Tick.Stop();return;}
+                Goal=Math.Clamp(Goal,0,Viewer.ScrollableHeight);
+                HorizontalGoal=Math.Clamp(HorizontalGoal,0,Viewer.ScrollableWidth);
+                var y=Goal-Viewer.VerticalOffset;
+                var x=HorizontalGoal-Viewer.HorizontalOffset;
+                if(Math.Abs(y)<.6 && Math.Abs(x)<.6)
+                {
+                    Viewer.ScrollToVerticalOffset(Goal);
+                    Viewer.ScrollToHorizontalOffset(HorizontalGoal);
                     Tick.Stop();return;
                 }
-                var distance=Goal-Viewer.VerticalOffset;
-                if(Math.Abs(distance)<.8){
-                    Viewer.ScrollToVerticalOffset(Goal);
-                    Tick.Stop();
-                    return;
-                }
-                Viewer.ScrollToVerticalOffset(Viewer.VerticalOffset+
-                    distance*.31);
+                if(Math.Abs(y)>=.6)
+                    Viewer.ScrollToVerticalOffset(Viewer.VerticalOffset+y*.40);
+                if(Math.Abs(x)>=.6)
+                    Viewer.ScrollToHorizontalOffset(Viewer.HorizontalOffset+x*.40);
             };
             viewer.Unloaded+=(_,_)=>Tick.Stop();
         }
@@ -59,42 +65,65 @@ internal static class DeskSpaceSmoothScrollV41
             return VisualTreeHelper.GetParent(obj)??LogicalTreeHelper.GetParent(obj);
         return LogicalTreeHelper.GetParent(obj);
     }
-    private static ScrollViewer? FindTarget(DependencyObject? origin,int delta)
+    private static ScrollViewer? FindTarget(DependencyObject? origin,int delta,
+        bool horizontal)
     {
         for(var current=origin;current!=null;current=Parent(current))
         {
             if(current is not ScrollViewer viewer || !viewer.IsVisible ||
-               !viewer.IsEnabled || viewer.ScrollableHeight<=0)continue;
-            double offset=viewer.VerticalOffset;
+               !viewer.IsEnabled || (horizontal?
+                  viewer.ScrollableWidth<=0:viewer.ScrollableHeight<=0))continue;
+            double offset=horizontal?viewer.HorizontalOffset:viewer.VerticalOffset;
             // A mouse wheel can have an uncompleted animation: use both the
             // present position and the target to decide if an inner panel
             // has reached the end, allowing the outer panel to move.
             var motion=motions.GetValue(viewer,v=>new Motion(v));
-            double planned=motion.Tick.IsEnabled?motion.Goal:offset;
+            double planned=motion.Tick.IsEnabled?
+                (horizontal?motion.HorizontalGoal:motion.Goal):offset;
+            double max=horizontal?viewer.ScrollableWidth:viewer.ScrollableHeight;
             if(delta>0 && planned>.3)return viewer;
-            if(delta<0 && planned<viewer.ScrollableHeight-.3)return viewer;
+            if(delta<0 && planned<max-.3)return viewer;
         }
         return null;
     }
+    // Trackpads emit many sub-120 deltas. Preserve each signed fraction
+    // instead of rounding it to a full wheel notch or losing it.
+    internal static double PixelsForWheelV289(int delta,int lines=3)
+    {
+        if(delta==0)return 0;
+        if(lines<1||lines>12)lines=3;
+        return -Math.Clamp(delta,-480,480)*lines*22.0/120.0;
+    }
     private static void OnWheel(object sender,MouseWheelEventArgs e)
     {
-        if(e.Handled||e.Delta==0 || (Keyboard.Modifiers &
-           (ModifierKeys.Control|ModifierKeys.Shift|ModifierKeys.Alt))!=0)
-           return; // Keep system zoom/horizontal/modifier operations.
-        var target=FindTarget(e.OriginalSource as DependencyObject,e.Delta);
+        if(e.Handled||e.Delta==0)return;
+        var mods=Keyboard.Modifiers;
+        if((mods&(ModifierKeys.Control|ModifierKeys.Alt))!=0)return;
+        // Shift-wheel gives horizontal motion to touchpad users. Ordinary
+        // two-finger vertical wheel continues through the nested panels.
+        bool horizontal=(mods&ModifierKeys.Shift)!=0;
+        var target=FindTarget(e.OriginalSource as DependencyObject,
+            e.Delta,horizontal);
         if(!ReferenceEquals(sender,target) || target==null)return;
-        // WPF virtualized grids measure scrolling in item units. Smooth
-        // animation on logical lists can trigger expensive re-layout, so
-        // keep the native virtualized wheel behavior there.
-        if(target.CanContentScroll) return;
+        // Large logical/virtualized lists keep their native behavior;
+        // Deck explicitly opts into pixel scrolling instead.
+        if(target.CanContentScroll && Math.Abs(e.Delta)>=120 &&
+           !horizontal)return;
         var motion=motions.GetValue(target,v=>new Motion(v));
-        int lines=SystemParameters.WheelScrollLines;
-        if(lines<1||lines>12)lines=3;
-        double dip=Math.Clamp(lines*21.0,45,132);
-        double start=motion.Tick.IsEnabled?motion.Goal:target.VerticalOffset;
-        motion.Goal=Math.Clamp(start-(e.Delta/120.0)*dip,
-            0,target.ScrollableHeight);
-        if(Math.Abs(motion.Goal-target.VerticalOffset)<.3)return;
+        double dip=PixelsForWheelV289(e.Delta,SystemParameters.WheelScrollLines);
+        if(horizontal)
+        {
+            double start=motion.Tick.IsEnabled?
+                motion.HorizontalGoal:target.HorizontalOffset;
+            motion.HorizontalGoal=Math.Clamp(start+dip,0,target.ScrollableWidth);
+        }
+        else
+        {
+            double start=motion.Tick.IsEnabled?motion.Goal:target.VerticalOffset;
+            motion.Goal=Math.Clamp(start+dip,0,target.ScrollableHeight);
+        }
+        // Accept even tiny fractional input: subsequent touchpad events
+        // accumulate in Goal rather than being discarded.
         motion.Tick.Start();
         e.Handled=true;
     }

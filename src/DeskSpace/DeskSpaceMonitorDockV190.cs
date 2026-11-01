@@ -93,6 +93,45 @@ internal static class DeskSpaceMonitorDockV190
             desiredDip;
     }
 
+
+    // R289: the floating Deck always belongs underneath its own clock.
+    // If there is no vertical room, move the clock slightly UP on its own
+    // monitor, and cap the Deck's scrolling viewport instead of flipping it.
+    internal readonly record struct BelowPlanV289(int WidgetTop,int DeckHeightPx);
+    internal static BelowPlanV289 PlanBelowV289(
+        Rectangle widget,Rectangle work,int desiredPopupPx,int gap=12)
+    {
+        int usable=Math.Max(1,work.Height-Math.Min(widget.Height,work.Height)-gap-8);
+        int deck=Math.Min(Math.Max(1,desiredPopupPx),usable);
+        int maxTop=Math.Max(work.Top,work.Bottom-widget.Height-gap-deck-8);
+        return new(Math.Clamp(widget.Top,work.Top,maxTop),deck);
+    }
+
+    internal static PlacementResult CalculateBelowV289(
+        Rectangle widget,Rectangle work,int width,int height,int gap=12)
+    {
+        int w=Math.Max(1,Math.Min(width,Math.Max(1,work.Width)));
+        int h=Math.Max(1,Math.Min(height,Math.Max(1,work.Height)));
+        int x=Math.Clamp(widget.Left+(widget.Width-w)/2,
+            work.Left,Math.Max(work.Left,work.Right-w));
+        return new(x,widget.Bottom+gap,Side.Below,w,h);
+    }
+
+    internal static Rectangle RepairBelowV289(
+        Rectangle popup,Rectangle widget,Rectangle work,int gap=12)
+    {
+        int x=Math.Clamp(popup.Left,work.Left,
+            Math.Max(work.Left,work.Right-popup.Width));
+        // The owner is pre-positioned to make this Y feasible.
+        int y=widget.Bottom+gap;
+        return new Rectangle(x,y,popup.Width,popup.Height);
+    }
+
+    // Trackpad taps shouldn't immediately capture the Deck as a drag.
+    // 8 native pixels accommodates precision touchpad cursor jitter.
+    internal static bool HasDeckDragIntentV289(int dx,int dy)=>
+        Math.Abs(dx)>=8 || Math.Abs(dy)>=8;
+
     private static Rectangle Work(Window window)
     {
         if(window is WidgetShellWindow widget)
@@ -129,6 +168,8 @@ internal static class DeskSpaceMonitorDockV190
             scroll=existingScroll;
             scroll.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;
             scroll.HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled;
+            scroll.CanContentScroll=false;
+            scroll.PanningMode=PanningMode.VerticalOnly;
         }
         else
         {
@@ -138,7 +179,10 @@ internal static class DeskSpaceMonitorDockV190
                 Content=contents,
                 VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,
-                CanContentScroll=true};
+                CanContentScroll=false,
+                PanningMode=PanningMode.VerticalOnly,
+                PanningRatio=1.0,
+                PanningDeceleration=0.001};
             border.Child=scroll;
         }
         // Recalculate available height and width on this widget's monitor;
@@ -169,9 +213,10 @@ internal static class DeskSpaceMonitorDockV190
                 chosenWidth=Math.Min(chosenWidth,freeSide/sx);
             border.MaxWidth=Math.Max(1,chosenWidth);
             border.MinWidth=Math.Min(180,border.MaxWidth);
-            scroll.MaxHeight=Math.Min(Math.Min(520,h),
-                ScrollHeightV282(widgetRect,bounds,sy,
-                    (int)Math.Ceiling(border.MaxWidth*sx)));
+            // Never size from room ABOVE: below-only layout is mandatory.
+            int availableBelow=Math.Max(1,bounds.Bottom-widgetRect.Bottom-22);
+            scroll.MaxHeight=Math.Max(12,Math.Min(
+                Math.Min(520,h),Math.Max(12,availableBelow/sy-14)));
         }
         // Each Deck owns its position and drag state independently. Only
         // staged held-file DATA is shared with the other physical display.
@@ -190,6 +235,8 @@ internal static class DeskSpaceMonitorDockV190
         DeskSpaceDeckOffsetV228.Offset shift=new(0,0);
         bool positionLoaded=false;
         bool dragging=false;
+        bool dragCandidate=false;
+        bool liftingWidget=false;
         System.Drawing.Point startCursor=default;
         DeskSpaceDeckOffsetV228.Offset startOffset=new(0,0);
         void Reposition()
@@ -209,8 +256,32 @@ internal static class DeskSpaceMonitorDockV190
             positionLoaded=true;
             Reposition();
         }
+        void EnsureBelowV289()
+        {
+            if(liftingWidget || !owner.Dispatcher.CheckAccess())return;
+            var hwnd=new WindowInteropHelper(owner).Handle;
+            if(hwnd==IntPtr.Zero)return;
+            var work=Work(owner);
+            var current=Owner(owner,work);
+            if(current.Width<=0 || current.Height<=0)return;
+            // 220px makes Running Apps readable without covering the clock.
+            var plan=PlanBelowV289(current,work,220);
+            if(plan.WidgetTop==current.Top)return;
+            liftingWidget=true;
+            try
+            {
+                SetWindowPos(hwnd,IntPtr.Zero,current.Left,plan.WidgetTop,
+                    0,0,NoSize|NoZOrder|NoActivate);
+            }
+            finally{liftingWidget=false;}
+        }
         owner.Loaded+=(_,_)=>LoadPosition();
-        popup.Opened+=(_,_)=>LoadPosition();
+        // Run on opening rather than moving a hidden or manually positioned
+        // widget continuously. The shift is limited to this widget's HWND.
+        popup.Opened+=(_,_)=>{LoadPosition();EnsureBelowV289();};
+        System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
+            Popup.IsOpenProperty,typeof(Popup))?.AddValueChanged(popup,
+            (_,_)=>{if(popup.IsOpen){EnsureBelowV289();AdjustBounds();Reposition();}});
         border.PreviewMouseLeftButtonDown+=(_,e)=>{
             LoadPosition();
             if(e.GetPosition(border).Y>34)return;
@@ -220,16 +291,25 @@ internal static class DeskSpaceMonitorDockV190
                 if(child is Button)return;
                 child=VisualTreeHelper.GetParent(child);
             }
-            dragging=true;
+            // A light touchpad tap selects normally. Capture only after a
+            // definite movement threshold, not on pointer-down.
+            dragCandidate=true;
+            dragging=false;
             startCursor=Forms.Cursor.Position;
             startOffset=shift;
-            System.Windows.Input.Mouse.Capture(border);
-            e.Handled=true;
         };
         border.PreviewMouseMove+=(_,e)=>{
-            if(!dragging)return;
-            if(e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed)return;
+            if(!dragCandidate)return;
+            if(e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed)
+            {dragCandidate=false;return;}
             var now=Forms.Cursor.Position;
+            if(!dragging)
+            {
+                if(!HasDeckDragIntentV289(now.X-startCursor.X,
+                    now.Y-startCursor.Y))return;
+                dragging=true;
+                System.Windows.Input.Mouse.Capture(border);
+            }
             shift=DeskSpaceDeckOffsetV228.Clamp(new(
                 startOffset.X+now.X-startCursor.X,
                 startOffset.Y+now.Y-startCursor.Y));
@@ -237,7 +317,9 @@ internal static class DeskSpaceMonitorDockV190
             e.Handled=true;
         };
         border.PreviewMouseLeftButtonUp+=(_,e)=>{
-            if(!dragging)return;
+            if(!dragCandidate)return;
+            dragCandidate=false;
+            if(!dragging)return; // Tap: no saved Deck offset.
             dragging=false;
             System.Windows.Input.Mouse.Capture(null);
             DeskSpaceDeckSaveGuardV265.TrySave(() => { DeskSpaceDeckOffsetV228.Save(Device(),shift); });
@@ -245,7 +327,7 @@ internal static class DeskSpaceMonitorDockV190
         };
         border.LostMouseCapture+=(_,_)=>{
             if(!dragging)return;
-            dragging=false;
+            dragging=false;dragCandidate=false;
             DeskSpaceDeckSaveGuardV265.TrySave(() => { DeskSpaceDeckOffsetV228.Save(Device(),shift); });
         };
         // R234: recovery control belongs to THIS popup Border and THIS
@@ -277,7 +359,7 @@ internal static class DeskSpaceMonitorDockV190
             sx=DeskSpaceDpiBoundsV195.CleanScale(sx);
             sy=DeskSpaceDpiBoundsV195.CleanScale(sy);
             var ownerBounds=Owner(owner,screen);
-            var result=Calculate(ownerBounds,screen,
+            var result=CalculateBelowV289(ownerBounds,screen,
                 DeskSpaceDpiBoundsV195.Pixels(popupSize.Width,sx,screen.Width),
                 DeskSpaceDpiBoundsV195.Pixels(popupSize.Height,sy,screen.Height));
             // WPF Custom placement is relative to the TARGET top-left,
@@ -288,10 +370,10 @@ internal static class DeskSpaceMonitorDockV190
             var width=result.Width;var height=result.Height;
             var deckX=Math.Clamp(result.X+shift.X,screen.Left,
                 Math.Max(screen.Left,screen.Right-width));
-            var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,
-                Math.Max(screen.Top,screen.Bottom-height));
-            var safe=AvoidWidgetV282(
-                new Rectangle(deckX,deckY,width,height),ownerBounds,screen);
+            // Y is ALWAYS below the owner. Ignore old manual Y offsets;
+            // retain per-monitor horizontal preference only.
+            var safe=RepairBelowV289(
+                new Rectangle(deckX,result.Y,width,height),ownerBounds,screen);
             var relative=new System.Windows.Point(
                 (safe.Left-ownerBounds.Left)/sx,
                 (safe.Top-ownerBounds.Top)/sy);
@@ -301,6 +383,7 @@ internal static class DeskSpaceMonitorDockV190
         void Refresh()
         {
             if(!owner.Dispatcher.CheckAccess() || !owner.IsLoaded)return;
+            if(popup.IsOpen)EnsureBelowV289();
             AdjustBounds();
         }
         // After WPF and the native monitor fence finish positioning,
@@ -316,7 +399,7 @@ internal static class DeskSpaceMonitorDockV190
             var widget=Owner(owner,screen);
             var current=new Rectangle(actual.Left,actual.Top,
                 actual.Right-actual.Left,actual.Bottom-actual.Top);
-            var safe=AvoidWidgetV282(current,widget,screen);
+            var safe=RepairBelowV289(current,widget,screen);
             if(safe.Location!=current.Location)
                 SetWindowPos(source.Handle,IntPtr.Zero,safe.X,safe.Y,
                     0,0,NoSize|NoZOrder|NoActivate);

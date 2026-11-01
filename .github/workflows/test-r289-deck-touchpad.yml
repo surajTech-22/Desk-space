@@ -1,0 +1,62 @@
+name: R289 Deck-below and laptop touchpad Windows validation
+on:
+  push:
+    branches: [fix/r289-deck-below-touchpad]
+    paths:
+      - src/DeskSpace/DeskSpaceMonitorDockV190.cs
+      - src/DeskSpace/DeskSpaceSmoothScrollV41.cs
+      - r289/**
+      - .github/workflows/test-r289-deck-touchpad.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Check source and no forced foreground or unsafe user-file writes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $a=Get-Content 'src/DeskSpace/DeskSpaceMonitorDockV190.cs' -Raw
+          $b=Get-Content 'src/DeskSpace/DeskSpaceSmoothScrollV41.cs' -Raw
+          if(!$a.Contains('CalculateBelowV289(ownerBounds,screen,') -or
+             !$a.Contains('RepairBelowV289(current,widget,screen)') -or
+             !$b.Contains('PixelsForWheelV289(e.Delta,')){
+             throw 'Live WPF Deck/touchpad paths do not use R289 implementation'
+          }
+          foreach($bad in @('Process.Kill(','Clipboard.SetText(','File.Delete(')){
+            if($a.Contains($bad) -or $b.Contains($bad)){
+              throw ('R289 must not perform destructive operations: '+$bad)
+            }
+          }
+          Write-Host 'R289 STATIC PASS: actual Deck popup and global WPF wheel paths are wired.'
+      - name: Compile canonical Windows WPF app
+        shell: pwsh
+        run: |
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R289 canonical WPF build failed'}
+      - name: Run native Deck and touchpad geometry regression
+        shell: pwsh
+        run: |
+          dotnet run --project r289/Tests/DeckTouchpadTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R289 native Windows regression failed'}
+      - name: Check patch recipe reproduces canonical R289 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force 'DeskSpace_Windows_R1/DeskSpace'|Out-Null
+          Copy-Item 'r282/DeskSpaceMonitorDockV282.cs' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMonitorDockV190.cs'
+          Copy-Item 'r41/DeskSpaceSmoothScrollV41.cs' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSmoothScrollV41.cs'
+          ./r289/apply-r289.ps1
+          foreach($pair in @(@('DeskSpaceMonitorDockV190.cs','DeskSpaceMonitorDockV190.cs'),
+                             @('DeskSpaceSmoothScrollV41.cs','DeskSpaceSmoothScrollV41.cs'))){
+            $left=(Get-FileHash "DeskSpace_Windows_R1/DeskSpace/$($pair[0])" -Algorithm SHA256).Hash
+            $right=(Get-FileHash "src/DeskSpace/$($pair[1])" -Algorithm SHA256).Hash
+            if($left -ne $right){throw 'R289 legacy build recipe differs from authoritative source'}
+          }
+          Write-Host 'R289 PASS: source recipe and canonical code match byte for byte.'
