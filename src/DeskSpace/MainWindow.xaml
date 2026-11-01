@@ -1,26 +1,107 @@
 <Window x:Class="DeskSpace.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="DeskSpace — Workspace" Width="1120" Height="760" MinWidth="760" MinHeight="520"
-        Closing="MainWindow_Closing" Background="#F3F6FB">
+        Closing="MainWindow_Closing" Background="#101829"
+        Foreground="#EAF0FF" FontFamily="Segoe UI Variable, Segoe UI"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+  <Window.Resources>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#293A5C"/>
+      <Setter Property="Foreground" Value="#F5F7FF"/>
+      <Setter Property="BorderBrush" Value="#4F648A"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="13,9"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="MinHeight" Value="33"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="chrome" CornerRadius="10"
+              Background="{TemplateBinding Background}"
+              BorderBrush="{TemplateBinding BorderBrush}"
+              BorderThickness="{TemplateBinding BorderThickness}"
+              Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                RecognizesAccessKey="True"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="chrome" Property="Background" Value="#3E5280"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="chrome" Property="BorderBrush" Value="#A5B7FF"/>
+                <Setter TargetName="chrome" Property="BorderThickness" Value="2"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="chrome" Property="Opacity" Value=".48"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#253550"/>
+      <Setter Property="Foreground" Value="#F5F7FF"/>
+      <Setter Property="BorderBrush" Value="#526588"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="9,7"/>
+      <Setter Property="CaretBrush" Value="#9BAFFF"/>
+    </Style>
+    <Style TargetType="ListBox">
+      <Setter Property="Background" Value="#19253E"/>
+      <Setter Property="Foreground" Value="#F3F7FF"/>
+      <Setter Property="BorderBrush" Value="#465B7B"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+  </Window.Resources>
   <DockPanel>
-    <Border DockPanel.Dock="Top" Background="#15263D" Padding="16,11">
+    <Border DockPanel.Dock="Top" Padding="23,15"
+            BorderBrush="#465A82" BorderThickness="0,0,0,1">
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+          <GradientStop Color="#172544" Offset="0"/>
+          <GradientStop Color="#273B65" Offset=".66"/>
+          <GradientStop Color="#352D66" Offset="1"/>
+        </LinearGradientBrush>
+      </Border.Background>
       <DockPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-          <TextBlock Text="▦  DeskSpace" FontSize="23" FontWeight="Bold" Foreground="White"/>
+          <TextBlock Text="◈  DeskSpace" FontSize="25" FontWeight="Bold" Foreground="#F7FAFF"/>
           <Button x:Name="VersionButton" Click="AppVersion_Click" Padding="10,2" Margin="12,0,0,0"
                   Background="#31496F" Foreground="White" BorderThickness="0" VerticalAlignment="Center"
                   ToolTip="Show installed DeskSpace version and update information"/>
         </StackPanel>
-        <TextBlock Text="YOUR WORKSPACE  ·  PRIVATE LOCAL DATA  ·  NO PASSWORD VAULT YET" Foreground="#D9E5F1" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+        <TextBlock Text="YOUR WORKSPACE   /   PRIVATE BY DESIGN"
+                     Foreground="#BFCFF1" FontSize="11" FontWeight="SemiBold"
+                     VerticalAlignment="Center" HorizontalAlignment="Right"/>
       </DockPanel>
     </Border>
-    <StatusBar DockPanel.Dock="Bottom"><TextBlock x:Name="StatusText" Text="Ready — local data is not encrypted in this preview"/></StatusBar>
-    <TabControl x:Name="MainTabs" Margin="10" Background="White" TabStripPlacement="Left">
+    <StatusBar DockPanel.Dock="Bottom" Background="#16223A"
+               Foreground="#ACBCD9" BorderBrush="#405575" BorderThickness="0,1,0,0">
+      <TextBlock x:Name="StatusText" Text="Ready — local data is not encrypted in this preview"/>
+    </StatusBar>
+    <TabControl x:Name="MainTabs" Margin="14" Background="#16223A"
+                Foreground="#F3F6FF" TabStripPlacement="Left">
       <TabControl.ItemContainerStyle>
         <Style TargetType="TabItem">
-          <Setter Property="MinWidth" Value="174"/>
-          <Setter Property="Padding" Value="12,11"/>
+          <Setter Property="MinWidth" Value="182"/>
+          <Setter Property="Padding" Value="17,13"/>
+          <Setter Property="Margin" Value="2,3,7,3"/>
           <Setter Property="FontSize" Value="14"/>
-          <Setter Property="Foreground" Value="#27394F"/>
+          <Setter Property="FontWeight" Value="SemiBold"/>
+          <Setter Property="Foreground" Value="#C0CEE8"/>
+          <Setter Property="Background" Value="#1B2944"/>
+          <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter Property="Foreground" Value="#F6F8FF"/>
+              <Setter Property="Background" Value="#445B95"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="Foreground" Value="#FFFFFF"/>
+            </Trigger>
+          </Style.Triggers>
         </Style>
       </TabControl.ItemContainerStyle>
       <TabItem Tag="Home" Header="⌂  Home">
@@ -45,7 +126,7 @@
             <Button Content="▣  Pinned Apps" Click="PinnedApps_Click" Padding="16,10" Margin="0,0,10,10"/>
             <Button Content="⚙  Widget Settings" Click="WidgetSettings_Click" Padding="16,10" Margin="0,0,10,10"/>
           </WrapPanel>
-          <TextBlock Text="Available today: notes, calendar, reminders, clock, quick copy, documents, custom data, recent files, pinned apps and universal search. Password encryption, Winman integration, Android, and cloud sync are not included; do not store passwords." TextWrapping="Wrap" Foreground="#526171"/>
+          <TextBlock Text="Available today: notes, calendar, reminders, clock, quick copy, documents, custom data, recent files, pinned apps and universal search. Password encryption, Winman integration, Android, and cloud sync are not included; do not store passwords." TextWrapping="Wrap" Foreground="#A2B3D0"/>
         </StackPanel></ScrollViewer>
       </TabItem>
       <TabItem Tag="Notes" Header="✎  Notes">
@@ -260,7 +341,7 @@
        <TabItem Tag="Clock" Header="◷  Clock &amp; Timer">
         <StackPanel Margin="30" HorizontalAlignment="Left">
           <TextBlock x:Name="ClockText" FontSize="52" FontWeight="Bold"/>
-                    <TextBlock x:Name="ClockWeather" Text="Weather: select city in widget settings" FontSize="17" Foreground="#536693" Margin="0,0,0,22"/>
+                    <TextBlock x:Name="ClockWeather" Text="Weather: select city in widget settings" FontSize="17" Foreground="#A2B3D0" Margin="0,0,0,22"/>
           <TextBlock Text="Countdown timer (minutes)" FontSize="17"/>
           <StackPanel Orientation="Horizontal" Margin="0,10,0,0"><TextBox x:Name="TimerMinutes" Text="5" Width="75"/><Button Content="Start" Click="StartTimer_Click" Margin="8,0,8,0"/><Button Content="Stop" Click="StopTimer_Click"/></StackPanel>
           <TextBlock x:Name="TimerRemaining" FontSize="30" Margin="0,15,0,0"/>
@@ -295,7 +376,7 @@
             <Button Tag="Tools" Content="⚒  Tools &amp; Search" Click="ModuleNavigate_Click" Padding="20,15" Margin="0,0,10,12"/>
             <Button Tag="Excel" Content="▦  Excel Mapping" Click="ExcelModule_Click" Padding="20,15" Margin="0,0,10,12"/>
           </WrapPanel>
-          <TextBlock Text="Not yet implemented: encrypted password vault, native Windows autofill, Winman import, Android app, cloud synchronization." TextWrapping="Wrap" Foreground="#7E4C24" Margin="0,22,0,0"/>
+          <TextBlock Text="Not yet implemented: encrypted password vault, native Windows autofill, Winman import, Android app, cloud synchronization." TextWrapping="Wrap" Foreground="#E3BD81" Margin="0,22,0,0"/>
         </StackPanel></ScrollViewer>
       </TabItem>
       <TabItem Tag="Settings" Header="⚙  Settings">
@@ -313,7 +394,7 @@
             <ComboBoxItem Tag="stable" Content="Stable — regular releases"/>
             <ComboBoxItem Tag="tester" Content="Tester — early builds"/>
           </ComboBox>
-          <TextBlock Text="Stable receives approved releases only. Tester receives separate opt-in prereleases and automatic updates every five minutes. Switching channels preserves your workspace data and does not downgrade your installation." TextWrapping="Wrap" Foreground="#536693" Margin="0,8,0,0"/>
+          <TextBlock Text="Stable receives approved releases only. Tester receives separate opt-in prereleases and automatic updates every five minutes. Switching channels preserves your workspace data and does not downgrade your installation." TextWrapping="Wrap" Foreground="#A2B3D0" Margin="0,8,0,0"/>
         </StackPanel></ScrollViewer>
       </TabItem>    </TabControl>
   </DockPanel>
