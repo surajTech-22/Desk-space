@@ -141,6 +141,8 @@ jobs:
           & ./r308/test-r308.ps1 -Source 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs'
           if($LASTEXITCODE -ne 0){throw 'R308 Deck controls not correctly staged in installer source'}
           # R310 patch runs against immutable verified R232 app source.
+          & ./r312/apply-r312.ps1
+          if(!$?){throw 'R312 supervisor direct process guard patch failed'}
           & ./r310/apply-r310.ps1
           if($LASTEXITCODE -ne 0){throw 'R310 safe supervisor busy handoff patch failed'}
           $updater=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpacePublicUpdaterV44.cs' -Raw
@@ -269,6 +271,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R304 stable: Deck hidden behind Chrome, clipped or scrollbar inaccessible'}
           & ./r308/test-r308.ps1 -Source 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs'
           if($LASTEXITCODE -ne 0){throw 'R308 Stable Deck header/default-expanded regression failed'}
+          & ./r312/test-r312.ps1
+          if(!$?){throw 'R312 process wait regression failed'}
           dotnet run --project 'r310/StableTests/SupervisorBusyStableTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R310 native Windows supervisor contention/duplicate handoff test failed'}
       - name: Install Inno Setup
@@ -321,7 +325,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1113 Stable R310 updater correction: when another verified installer supervisor owns the Windows mutex, do not show a false install-failed dialog or launch a second installer. Retain the verified cached update and retry safely after supervisor releases the mutex, with non-error in-progress feedback on manual checks. Real cross-thread Windows contention regression, WPF app, full installer SHA256 and previous updater/rollback tests pass. R308 retains Minimize/Expand, Preview and Close with standard expanded Deck. R301/R304 native Deck placement and foreground fixes retained. User data and installed workspace preserved. Unsigned as previous Stable builds. Requires on-device update acceptance; does not override or terminate an existing active installer."
+              $notes="DeskSpace 1.5.1113 Stable installer-supervisor fix. R312 replaces Start-Process -Wait, which can remain blocked by long-lived widget-host child processes even after Inno Setup ends. Supervisor now waits only on direct installer PID with a bounded timeout. Does not kill other processes or bypass installer verification, retains rollback safety and snapshot. Windows tests, checksum and normal versioned release checks pass. Previous Deck button, full expanded default, file search and native placement fixes retained. Existing stale supervisors from older installed versions require safe local cleanup after checking no installer is active. Unsigned as previous Stable versions; physical-PC installation confirmation pending."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Deck overlap hotfix" --notes $notes
               }else{
