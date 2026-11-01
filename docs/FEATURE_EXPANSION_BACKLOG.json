@@ -19,7 +19,7 @@
       "title": "Real two-monitor mixed DPI and seam regression",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R285 embeds genuine Windows PerMonitorV2 app.manifest and adds an opt-in actual DeskSpace.exe --dpi-audit + Settings Displays report to Downloads; Windows process proof in CI pending. R236 synthetic mixed-DPI matrix remains. Physical two-display hover/drag/expansion/hotplug is NOT verified."
+      "evidence": "R285 embedded PerMonitorV2 app.manifest was verified by executing actual built DeskSpace.exe in Windows CI #635 (41275443521): genuine process awareness PerMonitorV2, read-only Downloads report and Screen.AllScreens. R236 100/125/150/200% synthetic geometry tests also passed. Physical mixed-DPI two-display drag/hover/hotplug still NOT verified."
     },
     {
       "id": "MON-03",
@@ -300,7 +300,7 @@
       "title": "CI, safe release gate, physical test evidence",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R283-R284 Windows WPF and exact canonical SHA parity CI #617 passed. R285 now requires an actual compiled DeskSpace.exe PerMonitorV2 audit and Downloads screen metadata in CI; that run is pending. Still missing real two-display, installed updater rollback, Office COM and signing acceptance."
+      "evidence": "R285 full Windows CI #635 PASS: actual compiled DeskSpace.exe PerMonitorV2 runtime audit, native R201-R285 WPF suite, source reconstruction, SHA parity, independent build and synthetic updater rollback. Real two monitors, Office COM Excel, installed rollback/heartbeat and code signing remain open."
     }
   ]
 }
