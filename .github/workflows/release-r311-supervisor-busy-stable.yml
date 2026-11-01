@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/release-r311-supervisor-busy-stable.yml
       - r311/**
+      - r310/**
 
 permissions:
   contents: write
@@ -139,6 +140,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R308 restore header buttons/default expand failed'}
           & ./r308/test-r308.ps1 -Source 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs'
           if($LASTEXITCODE -ne 0){throw 'R308 Deck controls not correctly staged in installer source'}
+          # R310 patch runs against immutable verified R232 app source.
           & ./r310/apply-r310.ps1
           if($LASTEXITCODE -ne 0){throw 'R310 safe supervisor busy handoff patch failed'}
           $updater=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpacePublicUpdaterV44.cs' -Raw
