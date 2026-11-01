@@ -117,7 +117,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
     private IReadOnlyList<DeskSpaceRunningAppsV88.Entry> runningApps=
         Array.Empty<DeskSpaceRunningAppsV88.Entry>();
     private readonly DispatcherTimer runningAppsTimer=new(){
-        Interval=TimeSpan.FromSeconds(2)
+        Interval=TimeSpan.FromSeconds(5)
     };
     private bool runningAppsTimerConnected,refreshingRunningApps;
     // Compatibility pointer for older Deck UI hooks only; files, clipboard,
@@ -255,6 +255,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         DeskSpaceMonitorFenceV153.TrackPopup(host,popup,
             (proposed,work)=>DeskSpaceMonitorDockV190.ConstrainBeforePaintV298(
                 host,proposed,work));
+        DeskSpaceDeckVisibilityV304.Attach(host,popup,panel);
         // Folder actions are drawn inside this widget's actual WPF window,
         // before the user releases a dragged folder. Never use a Popup.
         host.PreviewDragEnter+=FolderDragEnter;
