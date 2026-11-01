@@ -252,7 +252,9 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // Keep independent dock HWNDs on their OWN monitor, with a scrollable
         // viewport. Staged content remains shared across all dock views.
         DeskSpaceMonitorDockV190.Attach(host,popup,panel);
-        DeskSpaceMonitorFenceV153.TrackPopup(host,popup);
+        DeskSpaceMonitorFenceV153.TrackPopup(host,popup,
+            (proposed,work)=>DeskSpaceMonitorDockV190.ConstrainBeforePaintV298(
+                host,proposed,work));
         // Folder actions are drawn inside this widget's actual WPF window,
         // before the user releases a dragged folder. Never use a Popup.
         host.PreviewDragEnter+=FolderDragEnter;

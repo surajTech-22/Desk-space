@@ -112,6 +112,11 @@ internal static class Program
             };
             Dock.GetMethod("Attach",Static)!.Invoke(
                 null,new object[]{owner,popup,border});
+            Fence.GetMethod("TrackPopup",Static)!.Invoke(
+                null,new object?[]{owner,popup,
+                    new Func<Rectangle,Rectangle,Rectangle>((candidate,work)=>
+                        (Rectangle)Call("ConstrainBeforePaintV298",
+                            owner!,candidate,work))});
             popup.IsOpen=true;
             Pump(owner);
             Assert(popup.IsOpen,"popup should open on actual Windows runner");
@@ -145,6 +150,11 @@ internal static class Program
                 Assert(SetWindowPos(popupHwnd,IntPtr.Zero,
                     ownerRect.Left,forcedY,0,0,MoveOnly),
                     "R295 could not force a native popup move");
+                var beforeRender=Bounds("PopupBounds",popup);
+                ownerRect=Bounds("WindowBounds",owner);
+                Assert(beforeRender.Top>=ownerRect.Bottom+10 &&
+                    !beforeRender.IntersectsWith(ownerRect),
+                    $"R298 monitor fence allowed Deck overlap before WPF repaint: clock={ownerRect}, deck={beforeRender}");
                 Pump(owner);
                 deckRect=Bounds("PopupBounds",popup);
                 ownerRect=Bounds("WindowBounds",owner);

@@ -49,9 +49,12 @@ internal static class DeskSpaceMonitorFenceV153
         internal readonly HwndSource Source;
         internal readonly Func<Rectangle?> WorkArea;
         internal readonly HwndSourceHook Hook;
-        internal Registration(HwndSource source,Func<Rectangle?> workArea)
+        internal readonly Func<Rectangle,Rectangle,Rectangle>? AdditionalConstraint;
+        internal Registration(HwndSource source,Func<Rectangle?> workArea,
+            Func<Rectangle,Rectangle,Rectangle>? additionalConstraint=null)
         {
             Source=source;WorkArea=workArea;
+            AdditionalConstraint=additionalConstraint;
             Hook=Handle;
             source.AddHook(Hook);
         }
@@ -74,6 +77,13 @@ internal static class DeskSpaceMonitorFenceV153
                     var y=(pos.flags&NoMove)!=0?current.Top:pos.y;
                     var proposed=new Rectangle(x,y,Math.Max(1,width),Math.Max(1,height));
                     var fit=Constrain(proposed,work);
+                    if(AdditionalConstraint!=null)
+                    {
+                        // For the main Deck, apply the BELOW-CIRCLE contract
+                        // during WM_WINDOWPOSCHANGING, before any pixels draw.
+                        // Other popups retain the normal monitor-only fence.
+                        fit=Constrain(AdditionalConstraint(fit,work),work);
+                    }
                     bool changed=false;
                     if(fit.X!=x || fit.Y!=y)
                     {
@@ -161,7 +171,8 @@ internal static class DeskSpaceMonitorFenceV153
     // owner can be the main widget or a visual inside another Popup. The
     // anchor is sampled before WPF can flip the newly opened popup to a
     // neighbouring screen; nested popups inherit the parent popup's screen.
-    internal static void TrackPopup(FrameworkElement anchor,Popup popup)
+    internal static void TrackPopup(FrameworkElement anchor,Popup popup,
+        Func<Rectangle,Rectangle,Rectangle>? additionalConstraint=null)
     {
         if(Tracked.TryGetValue(popup,out _))return;
         Tracked.Add(popup,new object());
@@ -207,7 +218,7 @@ internal static class DeskSpaceMonitorFenceV153
             {
                 if(ReferenceEquals(existing.Source,source))
                 {
-                    ClampNow(source,existing.WorkArea);return;
+                    ClampNow(source,existing.WorkArea,additionalConstraint);return;
                 }
                 existing.Uninstall();
                 Popups.Remove(popup);
@@ -215,9 +226,9 @@ internal static class DeskSpaceMonitorFenceV153
             Func<Rectangle?> assigned=()=>
                 SyntheticWorkAreas.TryGetValue(popup,out var forced)?forced:
                 PopupScreen.TryGetValue(popup,out var screen)?screen.WorkingArea:null;
-            var registration=new Registration(source,assigned);
+            var registration=new Registration(source,assigned,additionalConstraint);
             Popups[popup]=registration;
-            ClampNow(source,assigned);
+            ClampNow(source,assigned,additionalConstraint);
         }
         popup.Opened+=Opened;
         popup.Closed+=(_,_)=>{
@@ -229,7 +240,8 @@ internal static class DeskSpaceMonitorFenceV153
         if(popup.IsOpen)Opened(popup,EventArgs.Empty);
     }
 
-    private static void ClampNow(HwndSource source,Func<Rectangle?> workArea)
+    private static void ClampNow(HwndSource source,Func<Rectangle?> workArea,
+        Func<Rectangle,Rectangle,Rectangle>? additionalConstraint=null)
     {
         if(source.IsDisposed)return;
         var screen=workArea();
@@ -237,6 +249,8 @@ internal static class DeskSpaceMonitorFenceV153
         if(native.Width<=0||native.Height<=0)return;
         var fit=Constrain(new Rectangle(native.Left,native.Top,native.Width,
             native.Height),screen.Value);
+        if(additionalConstraint!=null)
+            fit=Constrain(additionalConstraint(fit,screen.Value),screen.Value);
         if(fit.X!=native.Left||fit.Y!=native.Top||
            fit.Width!=native.Width||fit.Height!=native.Height)
             SetWindowPos(source.Handle,IntPtr.Zero,fit.X,fit.Y,fit.Width,fit.Height,
