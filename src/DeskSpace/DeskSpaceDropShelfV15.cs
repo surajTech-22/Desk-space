@@ -91,7 +91,8 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         new(StringComparer.OrdinalIgnoreCase);
     private bool disposed;
     private bool heldExpanded=true,recentExpanded=true;
-    private bool deckMinimized,deckDismissed,appRenderPending;
+    // Deck is permanently expanded while visible. No auto/header-only state.
+    private bool deckDismissed,appRenderPending;
     private bool searchActiveV225;
     // Foreground Search hides ONLY this widget's Deck HWND; source data,
     // retained staged files and other displays stay untouched.
@@ -1331,13 +1332,9 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             });
         DockPanel.SetDock(previewMode,Dock.Right);
         title.Children.Add(previewMode);
-        var minimise=DeckHeaderButton(deckMinimized?"▢":"−",
-            deckMinimized?"Expand deck":"Minimise deck to header",()=>{
-                deckMinimized=!deckMinimized;
-                Render();
-            });
-        DockPanel.SetDock(minimise,Dock.Right);
-        title.Children.Add(minimise);
+        // R306: Keep the full Deck content expanded at all times.
+        // No minimise/collapse control or hidden header-only layout.
+        // Close remains an explicit dismiss action, not a collapse.
         var heading=Text(
             DeskSpaceDeckHeaderV226.Format(busy,runningApps.Count,
                 held.Count,detected.Count),11,Brushes.White);
@@ -1349,18 +1346,15 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // cap header text separately from the Deck's three right buttons.
         // Ellipsis prevents the title from pushing an owned Popup across
         // the source monitor when data counts grow.
-        heading.MaxWidth=Math.Max(70,panel.MaxWidth-103);
+        // Two header actions remain: preview and dismiss. Reserve their widths.
+        heading.MaxWidth=Math.Max(70,panel.MaxWidth-79);
         heading.MinWidth=0;
         heading.TextTrimming=TextTrimming.CharacterEllipsis;
         heading.ToolTip="Running applications / held copies / recent files";
         title.Children.Add(heading);
         list.Children.Add(title);
-        if(deckMinimized)
-        {
-            deckPreview?.Close();
-            popup.IsOpen=host.IsVisible;
-            return;
-        }        // Running Apps is hover-only: first hover reveals app icons,
+        // Running Apps always remains in the expanded Deck. First hover
+        // reveals app icons, and app hover shows its additional windows.
         // then app hover shows any additional windows.
         DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
             (appsNow,windowsNow)=>{
