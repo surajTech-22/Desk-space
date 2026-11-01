@@ -33,6 +33,14 @@ public partial class App : Application
         }
         if(e.Args.Contains("--widget-host",StringComparer.OrdinalIgnoreCase))
         {
+            // Direct Windows Run/updater relaunch is NOT an explicit Show.
+            // A prior tray Exit wins until Workspace tray Show Widget clears
+            // the marker before spawning this host.
+            if(DeskSpaceWidgetExitV286.Dismissed)
+            {
+                Shutdown(0);
+                return;
+            }
             ShutdownMode=ShutdownMode.OnMainWindowClose;
             widgetMutex=new Mutex(true,@"Local\DeskSpace.WidgetHost.v3",out var first);
             if(!first)
