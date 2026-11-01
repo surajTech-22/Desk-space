@@ -7,7 +7,7 @@ foreach($needle in @(
  'shift=new DeskSpaceDeckOffsetV228.Offset(0,0);',
  'DeskSpaceDeckOffsetV228.Save(Device(),shift);',
  'border.ContextMenu=deckContext;',
- 'Reposition();',
+ 'Reposition();'
 )){
  if(!$s.Contains($needle)){throw ('R234 missing monitor-specific reset: '+$needle)}
 }
