@@ -1,0 +1,98 @@
+name: Publish verified DeskSpace v1.5.1106 unsigned manual preview
+on:
+  push:
+    branches: [feat/r201-consolidated-roadmap-bundle]
+    paths:
+      - .github/workflows/publish-r294-manual-preview.yml
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: deskspace-r294-manual-preview
+  cancel-in-progress: false
+jobs:
+  preview:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: surajTech-22/Desk-space
+      PREVIEW_TAG: preview-v1.5.1106-unsigned
+      SOURCE_SHA: 6313d403a7ab88278da13127dde60678033d1c48
+      BUILD_SHA: 0a6af93e12e46ff47df18c283e097e6b68f2aab4
+      INSTALLER_SHA: a47522db7936f64efe6250dcf974c2a659b8d69c4a59c5f073dd58ab47f8576d
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact successful source and installer CI runs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($check in @(@{id=41285791538;sha=$env:SOURCE_SHA},@{id=41286092068;sha=$env:BUILD_SHA})){
+            $run=(gh api "repos/$env:REPO/actions/runs/$($check.id)" | Out-String | ConvertFrom-Json)
+            if($LASTEXITCODE -ne 0 -or $run.conclusion -ne 'success' -or $run.status -ne 'completed' -or $run.head_sha -ne $check.sha){throw 'Source/installer CI evidence mismatch'}
+          }
+          $tags=(gh api "repos/$env:REPO/releases?per_page=60" | Out-String | ConvertFrom-Json)
+          if($LASTEXITCODE -ne 0 -or @($tags|Where-Object{$_.tag_name -eq $env:PREVIEW_TAG}).Count -ne 0){throw 'Preview exists or cannot read releases'}
+          if($env:PREVIEW_TAG -match '^(?:tester-)?v\d+\.\d+\.\d+$'){throw 'Preview must never qualify for auto-update'}
+      - name: Retrieve and independently validate immutable candidate artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          gh run download 41286092068 -R $env:REPO -n DeskSpace-R293-v1.5.1106-Installer-Candidate -D preview-input
+          if($LASTEXITCODE -ne 0){throw 'Candidate artifact unavailable'}
+          $setups=@(Get-ChildItem preview-input -Recurse -File -Filter DeskSpace_Setup.exe)
+          if($setups.Count -ne 1){throw 'Missing/ambiguous installer'}
+          $installer=$setups[0].FullName
+          $receipt=Join-Path $setups[0].DirectoryName 'DeskSpace_Setup.sha256.txt'
+          if(!(Test-Path $receipt)){throw 'Missing verified installer receipt'}
+          $hash=(Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($hash -ne $env:INSTALLER_SHA -or !(Get-Content $receipt -Raw).Trim().ToLowerInvariant().StartsWith($hash)){throw 'Installer SHA256 mismatch'}
+          $provenance=@(Get-ChildItem preview-input -Recurse -File -Filter DeskSpace.provenance.json)
+          $verdict=@(Get-ChildItem preview-input -Recurse -File -Filter release-verdict.json)
+          if($provenance.Count -ne 1 -or $verdict.Count -ne 1){throw 'Missing provenance or safety verdict'}
+          $p=(Get-Content $provenance[0].FullName -Raw | ConvertFrom-Json)
+          $v=(Get-Content $verdict[0].FullName -Raw | ConvertFrom-Json)
+          if($p.installer_sha256 -ne $hash -or $p.commit -ne $env:SOURCE_SHA -or $p.signed -ne $false -or $v.release_ready -ne $false -or $v.signed -ne $false){throw 'Unapproved release verdict/provenance mismatch'}
+          New-Item -ItemType Directory -Force publish | Out-Null
+          Copy-Item $installer publish/DeskSpace_Setup.exe
+          Copy-Item $receipt publish/DeskSpace_Setup.sha256.txt
+          Copy-Item $provenance[0].FullName publish/DeskSpace.provenance.json
+          Copy-Item $verdict[0].FullName publish/release-verdict.json
+          Write-Host ('Validated UNSIGNED manual preview: '+$hash)
+      - name: Publish manual-only UNSIGNED prerelease separate from both update channels
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $notes=@'
+          # DeskSpace 1.5.1106 - UNSIGNED manual-testing PREVIEW
+
+          This is NOT an approved Stable/Tester auto-update. Do not install on
+          production or unattended machines. Publisher signing and physical
+          laptop/dual-monitor/Office acceptance remain incomplete. Do not
+          bypass Windows security warnings to install this candidate.
+
+          Contains R292 Deck fixes: real HWND correction to keep Running Apps
+          below the circular clock, media offset protection, and screen-edge
+          sizing. Also includes R201-R290 development and touchpad/search fixes.
+
+          Download only for evaluation on a test PC. Verify SHA256 against
+          DeskSpace_Setup.sha256.txt and inspect provenance/release-verdict.
+          No Update.exe is published, and official update channels are unchanged.
+
+          Source CI: https://github.com/surajTech-22/Desk-space/actions/runs/41285791538
+          Installer CI: https://github.com/surajTech-22/Desk-space/actions/runs/41286092068
+          '@
+          gh release create $env:PREVIEW_TAG publish/DeskSpace_Setup.exe publish/DeskSpace_Setup.sha256.txt publish/DeskSpace.provenance.json publish/release-verdict.json --prerelease -R $env:REPO --target $env:SOURCE_SHA --title 'DeskSpace 1.5.1106 UNSIGNED PREVIEW - manual testing only' --notes $notes
+          if($LASTEXITCODE -ne 0){throw 'GitHub prerelease publication failed'}
+      - name: Verify published binary digest and preserve Stable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $r=(gh api "repos/$env:REPO/releases/tags/$env:PREVIEW_TAG" | Out-String | ConvertFrom-Json)
+          if($LASTEXITCODE -ne 0 -or !$r.prerelease -or $r.draft){throw 'Preview metadata not published correctly'}
+          $files=@($r.assets|Where-Object{$_.name -eq 'DeskSpace_Setup.exe'})
+          if($files.Count -ne 1 -or $files[0].digest -ne ('sha256:'+$env:INSTALLER_SHA)){throw 'Published binary SHA256 mismatch'}
+          $stable=(gh api "repos/$env:REPO/releases/latest" | Out-String | ConvertFrom-Json)
+          if($LASTEXITCODE -ne 0 -or $stable.tag_name -ne 'v1.5.1104'){throw 'Stable channel unexpectedly modified'}
+          Write-Host ('PREVIEW PUBLISHED: '+$r.html_url)
+          Write-Host 'Stable/Tester automatic release channels unchanged.'

@@ -1,0 +1,70 @@
+name: Verify and notify published DeskSpace v1.5.1096
+on:
+  push:
+    branches: [feat/r201-consolidated-roadmap-bundle]
+    paths:
+      - .github/workflows/verify-r222-published.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify both GitHub release assets and notify Stable and Tester
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='surajTech-22/Desk-space'
+          $source='a37d6024835891bcd858ab7b78eeca9727063383'
+          $digest='1b3259e27e715e410318c34e84fce451ef5dd50408b25a1609fa0ab643b57a5b'
+          $receiptDigest='42ed109506ac8280e110002e46ba72b18c9db3901a6d89148d7351b13dee40e3'
+          $targets=@(
+            @{Channel='tester';Tag='tester-v1.5.1096';Prerelease=$true},
+            @{Channel='stable';Tag='v1.5.1096';Prerelease=$false}
+          )
+          foreach($entry in $targets){
+            $tag=$entry.Tag
+            $json=gh api "repos/$repo/releases/tags/$tag"
+            if($LASTEXITCODE -ne 0){throw "Cannot retrieve published release $tag"}
+            $release=($json|Out-String)|ConvertFrom-Json
+            if($release.tag_name -ne $tag -or $release.draft -or
+               [bool]$release.prerelease -ne [bool]$entry.Prerelease -or
+               $release.target_commitish -ne $source){
+              throw "Release identity mismatch: $tag"
+            }
+            foreach($name in @('DeskSpace_Setup.exe','Update.exe',
+                'DeskSpace_Setup.sha256.txt','Update.sha256.txt')){
+              $assets=@($release.assets | Where-Object {$_.name -eq $name})
+              $size=if($name -like '*.exe'){63839480L}else{64L}
+              $required=if($name -like '*.exe'){$digest}else{$receiptDigest}
+              if($assets.Count -ne 1 -or
+                 [long]$assets[0].size -ne $size -or
+                 $assets[0].digest -ne ('sha256:'+$required)){
+                throw "Published asset invalid: $tag $name"
+              }
+            }
+            Write-Host "VERIFIED: $tag SHA256 $digest"
+          }
+          $topic='deskspace-verified-release-r133-20261026-9a6c412f'
+          foreach($entry in $targets){
+            $msg=$entry.Channel+'|'+$entry.Tag
+            $sent=$false
+            for($attempt=1;$attempt -le 4;$attempt++){
+              try{
+                $receipt=Invoke-RestMethod -Uri ("https://ntfy.sh/"+$topic) -Method Post -Body $msg -ContentType 'text/plain; charset=utf-8' -TimeoutSec 18
+                if($receipt.topic -ne $topic -or $receipt.message -ne $msg){throw 'Event receipt mismatch'}
+                Write-Host ("NOTIFIED: "+$msg+" receipt="+$receipt.id)
+                $sent=$true
+                break
+              }catch{
+                Write-Warning ("Notification "+$msg+" attempt "+$attempt+" failed")
+                if($attempt -lt 4){Start-Sleep -Seconds (2*$attempt)}
+              }
+            }
+            if(!$sent){throw "Release published, but update notification failed for $msg"}
+          }
+          Write-Host 'PASS: both published releases share identical trusted assets and both update notifications were delivered.'

@@ -1,0 +1,52 @@
+name: R298 physical Deck prepaint native HWND constraint
+on:
+  push:
+    branches: [fix/r298-deck-prepaint-constraint]
+    paths:
+      - src/DeskSpace/DeskSpaceMonitorFenceV153.cs
+      - src/DeskSpace/DeskSpaceMonitorDockV190.cs
+      - src/DeskSpace/DeskSpaceDropShelfV15.cs
+      - r292/Tests/Program.cs
+      - r298/**
+      - .github/workflows/test-r298-deck-prepaint.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile actual DeskSpace WPF application
+        shell: pwsh
+        run: |
+          dotnet build src/DeskSpace/DeskSpace.csproj -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R298 app build failed'}
+      - name: Prove native HWND deck cannot overlap clock before next render
+        shell: pwsh
+        run: |
+          dotnet run --project r292/Tests/DeckNativeTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R298 before-paint Deck overlapped its clock'}
+      - name: Preserve touchpad and other Deck behavior
+        shell: pwsh
+        run: |
+          dotnet run --project r289/Tests/DeckTouchpadTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R298 touchpad regression'}
+      - name: Exact source parity with consolidated delivery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force DeskSpace_Windows_R1/DeskSpace | Out-Null
+          foreach($file in @('DeskSpaceMonitorFenceV153.cs','DeskSpaceMonitorDockV190.cs','DeskSpaceDropShelfV15.cs')){
+            Copy-Item "src/DeskSpace/$file" "DeskSpace_Windows_R1/DeskSpace/$file"
+          }
+          ./r298/apply-r298.ps1
+          foreach($file in @('DeskSpaceMonitorFenceV153.cs','DeskSpaceMonitorDockV190.cs','DeskSpaceDropShelfV15.cs')){
+            $a=(Get-FileHash "src/DeskSpace/$file" -Algorithm SHA256).Hash
+            $b=(Get-FileHash "DeskSpace_Windows_R1/DeskSpace/$file" -Algorithm SHA256).Hash
+            if($a -ne $b){throw 'R298 shipping source mismatch: '+$file}
+          }
+          Write-Host 'R298 WPF prepaint and installed-app source parity passed'

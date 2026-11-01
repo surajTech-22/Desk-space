@@ -1,0 +1,240 @@
+name: DeskSpace R227 updater crash-loop recovery — Stable and Tester
+on:
+  push:
+    branches: [feat/r201-consolidated-roadmap-bundle]
+    paths:
+      - .github/workflows/release-r227-recovery.yml
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: deskspace-r227-recovery-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - name: Checkout exactly the authorized interim release recipe
+        uses: actions/checkout@v4
+      - name: Install .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify R227 CI provenance and restore exact hashed source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='surajTech-22/Desk-space'
+          $pass=gh api "repos/$repo/actions/runs/41037745780"
+          if($LASTEXITCODE -ne 0){throw 'Cannot verify R222 Windows acceptance run'}
+          $check=($pass|Out-String)|ConvertFrom-Json
+          if($check.conclusion -ne 'success' -or
+             $check.head_sha -ne '19ca1eda061767da66ee55225fd3cf74c553b202'){
+             throw 'R227 canonical source was not successfully validated'
+          }
+          New-Item -ItemType Directory -Force '.release-r227/source'|Out-Null
+          gh run download 41037745780 -R $repo -n DeskSpace-R221-Consolidated-Verified-Source -D '.release-r227/source'
+          if($LASTEXITCODE -ne 0){throw 'Cannot retrieve verified R222 source'}
+          & ./r221/verify-single-source.ps1 -ArchivePath '.release-r227/source/DeskSpace-R221-Source.zip' -ManifestPath '.release-r227/source/DeskSpace-R221-Source.manifest.json' -ReceiptPath '.release-r227/source/DeskSpace-R221-Source.sha256.txt'
+          $m=Get-Content '.release-r227/source/DeskSpace-R221-Source.manifest.json' -Raw|ConvertFrom-Json
+          if($m.commit -ne '19ca1eda061767da66ee55225fd3cf74c553b202'){
+              throw 'R227 source provenance commit is different from accepted run'
+          }
+          New-Item -ItemType Directory -Force '.release-r227/base'|Out-Null
+          gh run download 41002762293 -R $repo -n DeskSpace-R195-Canonical-WPF-Source -D '.release-r227/base'
+          if($LASTEXITCODE -ne 0){throw 'Cannot retrieve verified installer tooling'}
+          $expected=((Get-Content '.release-r227/base/DeskSpace-Canonical-Source.sha256.txt' -Raw).Trim() -split '\s+')[0]
+          $actual=(Get-FileHash '.release-r227/base/DeskSpace-Canonical-Source.zip' -Algorithm SHA256).Hash
+          if(!$actual.Equals($expected,[StringComparison]::OrdinalIgnoreCase)){
+              throw 'Baseline installer build source checksum mismatch'
+          }
+          Expand-Archive '.release-r227/base/DeskSpace-Canonical-Source.zip' -DestinationPath '.release-r227/legacy'
+          # The original model test project is required by the canonical
+          # self-contained installer builder; it never reads user files.
+          $parts=for($i=1;$i -le 4;$i++){
+              (Get-Content -LiteralPath "assets/source.part$i.txt" -Raw).Trim()
+          }
+          $legacyTar='.release-r227/legacy-source.tar.xz'
+          [IO.File]::WriteAllBytes(
+              [IO.Path]::GetFullPath($legacyTar),[Convert]::FromBase64String($parts -join ''))
+          $tarhash=(Get-FileHash $legacyTar -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($tarhash -ne 'de852a020013de604cdb9b206e38f4ec1359e7f2169bc898e9ca60299a0249a3'){
+              throw 'Original model-test source checksum mismatch'
+          }
+          tar -xJf $legacyTar
+          if($LASTEXITCODE -ne 0){throw 'Cannot restore original unit test sources'}
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj')){
+              throw 'DeskSpace original model tests not restored'
+          }
+          # R222 application targets Windows SDK 19041. The original R1
+          # test project defaults to Windows 7 and cannot project-reference
+          # the newly verified app. Update the TEST TARGET only.
+          $testProject='DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj'
+          $tests=[IO.File]::ReadAllText($testProject)
+          $targetPattern='<TargetFramework>net8\.0-windows(?:[0-9.]+)?</TargetFramework>'
+          if(([regex]::Matches($tests,$targetPattern)).Count -ne 1){
+              throw 'Cannot align original test target with verified Windows app'
+          }
+          $tests=[regex]::Replace($tests,$targetPattern,
+              '<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>')
+          [IO.File]::WriteAllText($testProject,$tests,[Text.UTF8Encoding]::new($false))
+          Remove-Item -LiteralPath 'DeskSpace_Windows_R1/DeskSpace' -Recurse -Force
+          Expand-Archive '.release-r227/source/DeskSpace-R221-Source.zip' -DestinationPath '.release-r227/latest'
+          Move-Item '.release-r227/latest/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace'
+          New-Item -ItemType Directory -Force 'installer'|Out-Null
+          Copy-Item '.release-r227/legacy/installer/DeskSpace.iss' 'installer/DeskSpace.iss' -Force
+          Copy-Item '.release-r227/legacy/BUILD_DESKSPACE_SETUP.ps1' 'BUILD_DESKSPACE_SETUP.ps1' -Force
+          $code=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVerifiedUpdateQueueV191.cs' -Raw
+          if(!$code.Contains('NormalizeOfficialChecksumV219')){
+              throw 'R219 updater checksum fix missing from verified source'
+          }
+          $atomic=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceAtomicInstallerV222.cs' -Raw
+          if(!$atomic.Contains('File.Move(partial,final,true)')){
+              throw 'R222 atomic installer handoff missing from verified source'
+          }
+          Write-Host "R227 updater recovery source is identical to Windows acceptance build, with immutable SHA256 evidence."
+      - name: Assign upgrade version above previously published stable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $version='1.5.'+(1097+[int]$env:GITHUB_RUN_NUMBER)
+          $stable=gh api 'repos/surajTech-22/Desk-space/releases/latest' --jq .tag_name
+          if($LASTEXITCODE -ne 0){throw 'Cannot read existing Stable release'}
+          if([version]$version -le [version](($stable|Out-String).Trim().TrimStart('v'))){
+              throw 'New version would be a downgrade'
+          }
+          $setup='installer/DeskSpace.iss'
+          $value=[IO.File]::ReadAllText($setup)
+          $old='#define AppVersion "1.5.1093"'
+          if(!$value.Contains($old)){throw 'Original installer version unexpected'}
+          [IO.File]::WriteAllText($setup,$value.Replace($old,'#define AppVersion "'+$version+'"'),[Text.UTF8Encoding]::new($false))
+          $updater='DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs'
+          $s=[IO.File]::ReadAllText($updater)
+          $old='private static readonly Version InstalledVersion = new(1, 5, 1093);'
+          if(!$s.Contains($old)){throw 'Original updater version unexpected'}
+          $s=$s.Replace($old,'private static readonly Version InstalledVersion = new(1, 5, '+(1097+[int]$env:GITHUB_RUN_NUMBER)+');')
+          [IO.File]::WriteAllText($updater,$s,[Text.UTF8Encoding]::new($false))
+          [IO.File]::WriteAllText('.release-r227/version.txt',$version,[Text.Encoding]::ASCII)
+          Write-Host "Updater crash-loop recovery candidate: $version"
+      - name: Run isolated synthetic updater and WPF acceptance on shipping source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r220/test-r220.ps1
+          ./r213/test-r213.ps1
+          ./r227/test-supervisor-r227.ps1
+          foreach($script in @(
+            'r201/apply-tests-r201-r202.ps1',
+            'r203/apply-tests-r203.ps1',
+            'r205/apply-tests-r205.ps1',
+            'r206/apply-tests-r206.ps1',
+            'r207/apply-tests-r207.ps1',
+            'r208/apply-tests-r208.ps1',
+            'r209/apply-tests-r209.ps1',
+            'r210/apply-tests-r210.ps1',
+            'r211/apply-tests-r211.ps1',
+            'r212/apply-tests-r212.ps1',
+            'r214/apply-tests-r214.ps1',
+            'r215/apply-tests-r215.ps1',
+            'r216/apply-tests-r216.ps1',
+            'r217/apply-tests-r217.ps1',
+            'r218/apply-tests-r218.ps1',
+            'r219/apply-tests-r219.ps1',
+            'r222/apply-tests-r222.ps1',
+            'r224/apply-tests-r224.ps1',
+            'r225/apply-tests-r225.ps1',
+            'r226/apply-tests-r226.ps1',
+            'r227/apply-tests-r227.ps1'
+          )){ & $script }
+          New-Item -ItemType Directory -Force '.release-r227/evidence'|Out-Null
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.release-r227/evidence' '--r201-only'
+          if($LASTEXITCODE -ne 0){throw 'Interim release native WPF/updater tests failed'}
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          if($LASTEXITCODE -ne 0){throw 'Inno Setup not available'}
+      - name: Build verified self-contained Windows installer
+        shell: pwsh
+        run: |
+          ./BUILD_DESKSPACE_SETUP.ps1
+          ./r220/normalize-release-checksum.ps1 -OutputDirectory release
+          ./r220/test-r220.ps1
+          $setup='release/DeskSpace_Setup.exe'
+          $sha=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::Copy([IO.Path]::GetFullPath($setup),
+              [IO.Path]::GetFullPath('release/Update.exe'),$true)
+          [IO.File]::WriteAllText('release/Update.sha256.txt',$sha,[Text.Encoding]::ASCII)
+          foreach($name in @('DeskSpace_Setup.exe','Update.exe')){
+              $actual=(Get-FileHash "release/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+              if($actual -ne $sha){throw 'The release binary bridge SHA256 diverged'}
+          }
+          if(([IO.File]::ReadAllBytes('release/DeskSpace_Setup.sha256.txt')).Length -ne 64){
+              throw 'Older updater compatibility checksum length invalid'
+          }
+          Write-Host "R227 verified installer SHA256: $sha"
+      - name: Prevent obsolete or changed-branch publication
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $current=gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/feat/r201-consolidated-roadmap-bundle" --jq '.object.sha'
+          if($LASTEXITCODE -ne 0 -or ($current|Out-String).Trim() -ne $env:GITHUB_SHA){
+              throw 'Interim release recipe has changed during the build; do not publish'
+          }
+      - name: Publish same verified installer to Tester and Stable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $version=Get-Content '.release-r227/version.txt' -Raw
+          $version=$version.Trim()
+          if($version -notmatch '^1\.5\.\d+$'){throw 'Invalid interim release version'}
+          $repo='surajTech-22/Desk-space'
+          $assets=@('release/DeskSpace_Setup.exe',
+              'release/DeskSpace_Setup.sha256.txt','release/Update.exe',
+              'release/Update.sha256.txt')
+          foreach($entry in @(
+              @{Tag='tester-v'+$version;Pre=$true},
+              @{Tag='v'+$version;Pre=$false}
+          )){
+              $tag=$entry.Tag
+              gh release view $tag -R $repo *> $null
+              if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
+              $notes="DeskSpace R227 updater recovery fixes repeat supervisor relaunch, release-event replay and exact widget-host matching. Includes all verified changes through R227. Automated Windows acceptance, SHA-256 and synthetic rollback passed. Known limitations: physical mixed-DPI monitor tests, real Excel COM acceptance, code signing, and remaining roadmap are pending. User should save work and close all DeskSpace processes normally before a one-time official installer recovery; do not force-terminate processes. Data preserved. User-PC health acknowledgement remains to be verified."
+              if($entry.Pre){
+                  gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version tester updater recovery" --notes $notes
+              }else{
+                  gh release create $tag @assets -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version stable updater recovery" --notes $notes
+              }
+              if($LASTEXITCODE -ne 0){throw "Failed to publish $tag"}
+          }
+          foreach($tag in @("tester-v$version","v$version")){
+              $release=((gh api "repos/$repo/releases/tags/$tag")|Out-String)|ConvertFrom-Json
+              if($LASTEXITCODE -ne 0 -or $release.target_commitish -ne $env:GITHUB_SHA){
+                  throw "Published release target SHA mismatch for $tag"
+              }
+              $local=(Get-FileHash 'release/DeskSpace_Setup.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+              foreach($name in @('DeskSpace_Setup.exe','Update.exe')){
+                  $asset=@($release.assets | Where-Object {$_.name -eq $name})
+                  if($asset.Count -ne 1 -or $asset[0].digest -ne ('sha256:'+$local)){
+                      throw "Published installer checksum mismatch for $tag : $name"
+                  }
+              }
+          }
+          Write-Host "Updater recovery release SUCCESS: same SHA256 build on Tester and Stable."
+      - name: No release-event burst to pre-R227 clients with active supervisor loops
+        shell: pwsh
+        run: |
+          Write-Host 'R227 recovery releases are published and SHA-verified on both channels.'
+          Write-Host 'Avoid old-client instant push retry storm. Manual installer recovery is available; existing scheduled checks continue.'
+      - name: Record limited-scope release verdict
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host 'R227 updater recovery release scope is R201-R227; final roadmap gate remains NOT READY.'

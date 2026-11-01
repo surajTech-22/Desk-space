@@ -1,0 +1,7 @@
+# R259 — Search: in-memory Action Palette group facets and full keyboard browsing
+
+The existing DeskSpace Action Palette already exposes commands via Ctrl+K, but only supports plain words and Up/Down arrow navigation. R259 preserves every existing command and adds **explicit group facets** by typing `@Windows`, `@System`, `@Files`, `@Privacy`, or another group actually present among registered actions. Combine a facet with ordinary words, such as `@Windows layout`. `@all` lists everything, while unknown/conflicting facets and oversized queries return no results. Results are ranked deterministically with exact/prefix command matches ahead of others. WPF shows each command's group and whether it requires confirmation, and provides an explicit no-results message.
+
+The Action Palette now supports Page Up/Down (seven results), Home/End, Up/Down and Enter, with focused text search and Esc close retained. No new process launch, external index, file content reading, clipboard monitoring, saved search history, background timer, or telemetry is added. Actions still execute only after direct keyboard or mouse selection; diagnostics still require their existing confirmation.
+
+Native Windows tests verify actual registered command groups, case-insensitive facets, bounds, invalid syntax, keyboard range clamping, and the WPF hint. This is partial SEARCH-01 work; underlying multi-drive file indexing and optional Everything IPC are still pending and not claimed complete.

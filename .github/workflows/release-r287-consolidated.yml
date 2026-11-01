@@ -1,0 +1,146 @@
+name: DeskSpace R287 consolidated installer and gated Stable Tester release
+on:
+  push:
+    branches: [feat/r201-consolidated-roadmap-bundle]
+    paths:
+      - .github/workflows/release-r287-consolidated.yml
+      - r287/**
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: deskspace-r287-release
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 70
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DESKSPACE_SIGNING_PFX_BASE64: ${{ secrets.DESKSPACE_SIGNING_PFX_BASE64 }}
+      DESKSPACE_SIGNING_PASSWORD: ${{ secrets.DESKSPACE_SIGNING_PASSWORD }}
+      DESKSPACE_SIGNING_THUMBPRINT: ${{ secrets.DESKSPACE_SIGNING_THUMBPRINT }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject obsolete or duplicate Stable Tester versions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $versions=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100'|Out-String|ConvertFrom-Json)
+          if($LASTEXITCODE -ne 0 -or @($versions).Count -lt 1){
+            throw 'R287 cannot verify official channel history'
+          }
+          $latest=@($versions|Where-Object{!$_.prerelease -and !$_.draft}|Sort-Object published_at -Descending)[0]
+          if([version]'1.5.1104' -le [version]($latest.tag_name.Substring(1))){
+            throw 'R287 candidate version must exceed current Stable'
+          }
+          foreach($candidate in @('v1.5.1104','tester-v1.5.1104')){
+            if(@($versions|Where-Object{$_.tag_name -eq $candidate}).Count -ne 0){
+              throw ('R287 refuses to overwrite '+$candidate)
+            }
+          }
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Rebuild exact R288 CI source and original installer tooling
+        shell: pwsh
+        run: |
+          ./r287/build-release-candidate-r287.ps1 -SourceRunId '41279973819' -ExpectedSourceSha '883e6b8d93371c975f675cbd0107fedc9668f46c' -Version '1.5.1104'
+      - name: Verify final source contains Exit Widget, deck and PMv2
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='DeskSpace_Windows_R1/DeskSpace'
+          if(!(Test-Path "$root/DeskSpaceWidgetExitV286.cs") -or
+             !(Test-Path "$root/app.manifest")){throw 'R287 missing R285/R286'}
+          $widgetSource=Get-Content "$root/WidgetHost.cs" -Raw
+          if(!$widgetSource.Contains('DeskSpaceWidgetExitV286.ExitFromTray(this)') -or
+             !$widgetSource.Contains('DeskSpaceWidgetExitV286.MayOpen(force,')){
+            throw 'R287 tray Exit regression'
+          }
+          if(!(Get-Content "$root/DeskSpaceUpdater.cs" -Raw).Contains(
+               'InstalledVersion = new(1, 5, 1104)')){
+            throw 'R287 updater installed version is not newer'
+          }
+      - name: Compile real versioned WPF application
+        shell: pwsh
+        run: |
+          dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R287 real WPF app compile failed'}
+      - name: Verify real compiled PerMonitorV2 manifest
+        shell: pwsh
+        run: ./r285/test-actual-exe-r285.ps1
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          if($LASTEXITCODE -ne 0){throw 'R287 Inno Setup unavailable'}
+      - name: Package verified R288 self-contained Windows installer
+        shell: pwsh
+        run: |
+          ./BUILD_DESKSPACE_SETUP.ps1
+          if($LASTEXITCODE -ne 0){throw 'R287 Windows installer failed'}
+      - name: Verify signature, provenance, identical channels, publication readiness
+        id: gate
+        shell: pwsh
+        run: |
+          ./r287/package-and-gate-r287.ps1 -Version '1.5.1104' -SourceSha '883e6b8d93371c975f675cbd0107fedc9668f46c'
+      - name: Upload installer candidate and evidence before any publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R287-v1.5.1104-Candidate-NOT-RELEASED
+          path: |
+            release/DeskSpace_Setup.exe
+            release/DeskSpace_Setup.sha256.txt
+            release/Update.exe
+            release/Update.sha256.txt
+            release/DeskSpace.provenance.json
+            release/NOT_RELEASED_README.txt
+            .candidate/evidence/*.json
+          retention-days: 28
+          if-no-files-found: error
+      - name: Publish identical verified installer on Tester and Stable
+        if: steps.gate.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='surajTech-22/Desk-space'
+          $current=(gh api "repos/$repo/git/ref/heads/feat/r201-consolidated-roadmap-bundle" --jq '.object.sha'|Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $current -ne $env:GITHUB_SHA){
+            throw 'R287 source branch advanced during build'
+          }
+          $verified=Get-Content '.candidate/evidence/release-verdict.json' -Raw|ConvertFrom-Json
+          if(!$verified.signed -or !$verified.release_ready){
+            throw 'R287 signed release conditions not met'
+          }
+          $sources=@('release/DeskSpace_Setup.exe','release/DeskSpace_Setup.sha256.txt',
+             'release/Update.exe','release/Update.sha256.txt','release/DeskSpace.provenance.json')
+          foreach($entry in @(@{tag='tester-v1.5.1104';pre=$true},
+                             @{tag='v1.5.1104';pre=$false})){
+            $notes='DeskSpace R201–R286 from audited canonical source 883e6b8d93371c975f675cbd0107fedc9668f46c, trusted signed and identical Stable/Tester SHA256 installer. Tray Exit persists until Show Widget; modern theme and PMv2 included. Approved release-readiness checks passed.'
+            if($entry.pre){
+              gh release create $entry.tag @sources --prerelease -R $repo --target $env:GITHUB_SHA --title 'DeskSpace 1.5.1104 Tester' --notes $notes
+            }else{
+              gh release create $entry.tag @sources -R $repo --target $env:GITHUB_SHA --title 'DeskSpace 1.5.1104 Stable' --notes $notes
+            }
+            if($LASTEXITCODE -ne 0){throw ('R287 publication failed '+$entry.tag)}
+          }
+          $hash=(Get-FileHash 'release/DeskSpace_Setup.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          foreach($tag in @('tester-v1.5.1104','v1.5.1104')){
+            $release=(gh api "repos/$repo/releases/tags/$tag"|Out-String|ConvertFrom-Json)
+            if($LASTEXITCODE -ne 0){throw 'Published release lookup failure'}
+            foreach($filename in @('DeskSpace_Setup.exe','Update.exe')){
+              $asset=@($release.assets|Where-Object{$_.name -eq $filename})
+              if($asset.Count -ne 1 -or $asset[0].digest -ne ('sha256:'+$hash)){
+                throw ('R287 published asset SHA mismatch '+$tag+'/'+$filename)
+              }
+            }
+          }
+          Write-Host 'R287 SUCCESS: one trusted signed installer published to Tester and Stable.'
+      - name: Explain why release was not published
+        if: steps.gate.outputs.publish != 'true'
+        shell: pwsh
+        run: |
+          Write-Host '::warning::Installer candidate built. Stable and Tester publication blocked by missing trusted signing and/or physical readiness. No auto-update event was sent.'

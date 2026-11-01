@@ -1,0 +1,5 @@
+# R250 — pinned Authenticode + provenance verification (fail closed)
+
+The signed-release checkpoint now has a **read-only prepublication verification script**. It requires the expected 64-hex installer SHA-256, 40-hex exact Git source commit, explicitly approved signer thumbprint, and a small structured provenance JSON with exactly those pinned fields. The installer must be an ordinary file, 5–250 MiB; the manifest must be an ordinary 10–64 KiB-max JSON file. The Windows Authenticode signature must report Valid, match the approved signer thumbprint, have a current certificate validity period and contain the code-signing EKU. It does not sign, execute or upload anything.
+
+Synthetic Windows CI fixtures deliberately provide an unsigned MZ file; tests confirm **rejection** of unsigned candidate, malformed commit, altered source commit, mismatched SHA and missing provenance. There is intentionally no positive signed-release claim until a real vendor-approved signing certificate and trust chain exist. Attestation and one-hash dual-channel publication will require separate integration, and the consolidated release gate remains blocked.

@@ -1,0 +1,57 @@
+name: Diagnose actual R229 multi-monitor runtime source (read-only)
+on:
+  push:
+    branches: [feat/r201-consolidated-roadmap-bundle]
+    paths: [.github/workflows/diagnose-r231-monitor.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  diagnostics:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and verify shipped R229 source archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='surajTech-22/Desk-space'
+          $pass=gh api "repos/$repo/actions/runs/41049100123"|ConvertFrom-Json
+          if($pass.conclusion -ne 'success'){throw 'R229 prior native acceptance not successful'}
+          New-Item -ItemType Directory .diag231 -Force|Out-Null
+          gh run download 41049100123 -R $repo -n DeskSpace-R221-Consolidated-Verified-Source -D .diag231
+          if($LASTEXITCODE -ne 0){throw 'R229 source artifact missing'}
+          ./r221/verify-single-source.ps1 -ArchivePath '.diag231/DeskSpace-R221-Source.zip' -ManifestPath '.diag231/DeskSpace-R221-Source.manifest.json' -ReceiptPath '.diag231/DeskSpace-R221-Source.sha256.txt'
+          Expand-Archive .diag231/DeskSpace-R221-Source.zip -DestinationPath .diag231/source
+      - name: Print exact runtime widget movement, docking, position and bindings
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $files=@(
+            '.diag231/source/DeskSpace/WidgetHost.cs',
+            '.diag231/source/DeskSpace/DeskSpaceMultiMonitorV151.cs',
+            '.diag231/source/DeskSpace/DeskSpaceMonitorSessionsV154.cs',
+            '.diag231/source/DeskSpace/DeskSpaceMonitorFenceV152.cs')
+          foreach($file in $files){
+            if(!(Test-Path $file)){throw "Missing $file"}
+            $lines=Get-Content $file
+            Write-Host ("===== SOURCE "+$file+" / "+$lines.Count+" lines =====")
+            $hits=@()
+            for($i=0;$i -lt $lines.Count;$i++){
+              if($lines[$i] -match 'DockToEdge|SavePosition\(|KeepOnVisibleDesktop\(|DragMove\(|Restore\(|Reconcile\(|ApplySnap|Snap|Magnet|LocationChanged|Left\s*=|Top\s*=|PositionModuleFromCircle|PlaceNewSatellite|Attach\(|Bind\('){
+                $hits+=$i
+              }
+            }
+            $range=@{}
+            foreach($hit in $hits){
+              for($j=[Math]::Max(0,$hit-6);$j -le [Math]::Min($lines.Count-1,$hit+17);$j++){
+                $range[$j]=$true
+              }
+            }
+            foreach($index in ($range.Keys|Sort-Object)){
+              Write-Host ("{0,5} {1}" -f ($index+1),$lines[$index])
+            }
+          }

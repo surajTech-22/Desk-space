@@ -1,0 +1,9 @@
+# R266 — restore actual Excel formulas with formatting
+
+**Business priority:** Previously R136 intentionally left source formulas as metadata when Formats & Formulas Save was pasted onto a wholly empty range. That contradicted the requirement for format+formula pasting. R266 restores the saved relative R1C1 formulas *as real Excel formulas* in the same combined format-paste action—no separate formula-only button, no header matching prompt.
+
+The full-range gate is unchanged: an entirely empty destination is eligible; a fully compatible populated destination receives **formatting only**, preserving every existing value and formula; partial/mismatched targets are blocked. On empty targets, genuine Excel table/merge structure and formatting are applied; Excel-generated calculated-column values are cleared, then only captured formula cells receive exact saved R1C1 expressions. Non-formula blank cells remain blank, and source transaction values are never copied. Formulas can naturally calculate numeric zero when their arguments are blank: that is an Excel formula result, not an inserted zero value.
+
+The source's stored type, formula length, R1C1 literal, physical coordinates, table-header and merged-cell exclusions are checked *before* any Excel writes. Every formula is compared to exact R1C1 after pasting, while non-formula positions are checked for unexpected contents. The existing verified SaveCopyAs + SHA-256 backup, formatting/table readback, and rollback remain in place.
+
+Native Windows tests cover missing formulas, contradictory metadata, table headers, merged children, duplicate positions, no-formula templates and readback mismatches. The release gate remains blocked until native Microsoft Office COM tests using real Excel workbooks (including auto-calculated ListObject columns) and installed-device acceptance pass.

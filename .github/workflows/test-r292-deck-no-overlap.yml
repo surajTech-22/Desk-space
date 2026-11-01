@@ -1,0 +1,49 @@
+name: R292 Real HWND Deck no-overlap Windows validation
+on:
+  push:
+    branches: [fix/r292-deck-hwnd-no-overlap]
+    paths:
+      - src/DeskSpace/DeskSpaceMonitorDockV190.cs
+      - src/DeskSpace/DeskSpaceDropShelfV15.cs
+      - r292/**
+      - .github/workflows/test-r292-deck-no-overlap.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify real WPF app builds
+        shell: pwsh
+        run: |
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R292 shipping WPF compilation failed'}
+      - name: Test actual Deck and clock HWNDs on Windows display
+        shell: pwsh
+        run: |
+          dotnet run --project 'r292/Tests/DeckNativeTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R292 real HWND Deck overlap regression failed'}
+      - name: Test R289/R290 touchpad with new Deck placement
+        shell: pwsh
+        run: |
+          dotnet run --project 'r289/Tests/DeckTouchpadTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R292 R289/R290 regression failed'}
+      - name: Check patch recipe matches checked-in WPF source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory 'DeskSpace_Windows_R1/DeskSpace' -Force | Out-Null
+          Copy-Item r290/DeskSpaceMonitorDockV290.cs 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMonitorDockV190.cs'
+          Copy-Item r292/DeskSpaceDropShelfV292.cs 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs'
+          ./r292/apply-r292.ps1
+          foreach($file in @('DeskSpaceMonitorDockV190.cs','DeskSpaceDropShelfV15.cs')){
+            $a=(Get-FileHash "src/DeskSpace/$file" -Algorithm SHA256).Hash
+            $b=(Get-FileHash "DeskSpace_Windows_R1/DeskSpace/$file" -Algorithm SHA256).Hash
+            if($a -ne $b){throw ("R292 source parity failed "+$file)}
+          }
+          Write-Host 'R292 PATCH PARITY PASS: exact live WPF source.'
