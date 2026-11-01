@@ -211,12 +211,15 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         host.SizeChanged+=Position;
         host.IsVisibleChanged+=Visible;
         host.Closed+=Closed;
-        list=new StackPanel {Margin=new Thickness(7,6,7,6)};
+        list=new StackPanel {Margin=new Thickness(9,8,9,8)};
         panel=new Border{
-            CornerRadius=new CornerRadius(15),
-            Background=new SolidColorBrush(Color.FromArgb(204,20,28,52)),
-            BorderBrush=new SolidColorBrush(Color.FromArgb(170,187,201,245)),
-            BorderThickness=new Thickness(1.1),
+            CornerRadius=new CornerRadius(18),
+            Background=DeskSpaceDesignV283.Gradient(
+                DeskSpaceDesignV283.Current.Raised,
+                DeskSpaceDesignV283.Current.Navigation),
+            BorderBrush=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Border),
+            BorderThickness=new Thickness(1),
             MinWidth=180,MaxWidth=310,
             Child=new ScrollViewer{
                 Content=list,MaxHeight=295,
@@ -224,6 +227,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled
             },AllowDrop=true
         };
+        DeskSpaceDesignV283.ApplyDeck(panel);
         panel.PreviewDragOver+=DragOver;
         panel.PreviewDrop+=Receive;
         DeskSpaceDeckVisibilityV89.Changed+=DeckVisibilityChanged;
@@ -1331,7 +1335,10 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         var heading=Text(
             DeskSpaceDeckHeaderV226.Format(busy,runningApps.Count,
                 held.Count,detected.Count),11,Brushes.White);
-        heading.Margin=new Thickness(6,0,0,0);
+        heading.Margin=new Thickness(8,0,0,0);
+        heading.FontWeight=FontWeights.SemiBold;
+        heading.Foreground=DeskSpaceDesignV283.Solid(
+            DeskSpaceDesignV283.Current.Text);
         // WPF ScrollViewer may measure its StackPanel with unbounded width:
         // cap header text separately from the Deck's three right buttons.
         // Ellipsis prevents the title from pushing an owned Popup across
