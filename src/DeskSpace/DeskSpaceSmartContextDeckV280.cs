@@ -201,6 +201,7 @@ internal static class DeskSpaceSmartContextDeckV280
             ToolTip=state.Listening?
                 "Stop listening and erase this session's context":
                 "Start process-category foreground listener; session only"};
+        DeskSpaceDesignV283.Button(toggle);
         AutomationProperties.SetName(toggle,state.Listening?
             "Stop Smart Context Deck monitoring":
             "Start Smart Context Deck monitoring");
@@ -245,6 +246,7 @@ internal static class DeskSpaceSmartContextDeckV280
                     ToolTip="Open this DeskSpace tool only when clicked; "+
                         "no automatic data access or paste"
                 };
+                DeskSpaceDesignV283.Button(button);
                 AutomationProperties.SetName(button,
                     "Smart Context suggestion: "+entry.Label);
                 button.Click+=(_,_)=>Open(owner,entry.Id);
@@ -257,14 +259,9 @@ internal static class DeskSpaceSmartContextDeckV280
                 Margin=new Thickness(0,5,0,0)
             });
         }
-        return new Border{
-            Child=content,
-            Background=new SolidColorBrush(Color.FromRgb(39,53,83)),
-            BorderBrush=new SolidColorBrush(Color.FromRgb(72,88,125)),
-            BorderThickness=new Thickness(1),
-            CornerRadius=new CornerRadius(7),
-            Margin=new Thickness(2,3,2,4)
-        };
+        var card=DeskSpaceDesignV283.Card(content);
+        card.Margin=new Thickness(2,3,2,5);
+        return card;
     }
 
     internal static void Open(Window owner,string id)
