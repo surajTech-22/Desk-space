@@ -271,7 +271,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $current=gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/release/search-files-20261101" --jq '.object.sha'
+          $current=gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/release/stable-deck-hotfix-r301" --jq '.object.sha'
           if($LASTEXITCODE -ne 0 -or ($current|Out-String).Trim() -ne $env:GITHUB_SHA){
               throw 'Interim release recipe has changed during the build; do not publish'
           }
