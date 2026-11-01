@@ -16,9 +16,9 @@ namespace DeskSpace;
 // All WidgetShellWindow brushes reference Current to support live refresh.
 internal sealed class DeskSpaceAppearanceV148
 {
-    public string Style {get;set;}="Soft";
-    public string Mode {get;set;}="System";
-    public string Accent {get;set;}="#7364D3";
+    public string Style {get;set;}="Modern";
+    public string Mode {get;set;}="Dark";
+    public string Accent {get;set;}="#8291FF";
     public double Scale {get;set;}=1;
     public double Opacity {get;set;}=.96;
     public int Softness {get;set;}=16;
@@ -37,7 +37,7 @@ internal sealed class DeskSpaceAppearanceV148
     }
     internal static DeskSpaceAppearanceV148 Sanitize(DeskSpaceAppearanceV148 item)
     {
-        item.Style=item.Style=="Material"?"Material":"Soft";
+        item.Style=item.Style is "Modern" or "Material" or "Soft"?item.Style:"Modern";
         item.Mode=new[]{"Light","Dark","System"}.Contains(item.Mode)?item.Mode:"System";
         item.Accent=TryColor(item.Accent,out _)?item.Accent.ToUpperInvariant():"#7364D3";
         item.Scale=double.IsFinite(item.Scale)?Math.Clamp(item.Scale,.75,1.25):1;
@@ -90,6 +90,9 @@ internal sealed class DeskSpaceAppearanceV148
     {
         get
         {
+            if(Current.Style=="Modern")
+                return DeskSpaceDesignV283.Solid(
+                    DeskSpaceDesignV283.Current.Raised);
             var accent=AccentColor;
             double blend=Current.Style=="Material"?.78:.88;
             // Softness is a tonal, not transparency, adjustment.
@@ -99,8 +102,10 @@ internal sealed class DeskSpaceAppearanceV148
         }
     }
     internal static Brush SecondaryBrush=>
-        new SolidColorBrush(Mix(AccentColor,Dark?Color.FromRgb(41,43,56):
-            Colors.White,Current.Style=="Material"?.68:.80));
+        Current.Style=="Modern"?
+            DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Current.Surface):
+            new SolidColorBrush(Mix(AccentColor,Dark?Color.FromRgb(41,43,56):
+                Colors.White,Current.Style=="Material"?.68:.80));
     internal static Brush InkBrush=>new SolidColorBrush(
         Dark?Color.FromRgb(244,242,255):Color.FromRgb(48,43,73));
     internal static Color Mix(Color a,Color b,double frac)=>
@@ -116,9 +121,9 @@ internal sealed class DeskSpaceAppearanceV148
 internal sealed class DeskSpaceVisualPresetV148
 {
     public string Name {get;set;}="";
-    public string Style {get;set;}="Soft";
-    public string Mode {get;set;}="System";
-    public string Accent {get;set;}="#7364D3";
+    public string Style {get;set;}="Modern";
+    public string Mode {get;set;}="Dark";
+    public string Accent {get;set;}="#8291FF";
     public double Scale {get;set;}=1;
     public double Opacity {get;set;}=.96;
     public int Softness {get;set;}=16;
@@ -162,7 +167,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     private readonly Action refresh;
     private readonly Action general;
     private readonly DeskSpaceAppearanceV148 draft;
-    private readonly StackPanel body=new(){Margin=new Thickness(18)};
+    private readonly StackPanel body=new(){Margin=new Thickness(26,25,26,28)};
     private readonly TextBlock subtitle=new(){FontSize=13,Margin=new Thickness(0,4,0,8)};
     private readonly TextBlock status=new(){FontSize=12,TextWrapping=TextWrapping.Wrap};
     // Edits stay local to this settings window until Apply is clicked.
@@ -170,6 +175,12 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     private readonly ListBox pinned=new(){Height=230,MinWidth=270};
     private readonly Canvas donut=new(){Width=290,Height=290};
     private string current="Donut toolbar";
+    private readonly Dictionary<string,Button> navigationV283=new();
+    private StackPanel? navigationPanelV283;
+    private Grid? chromeV283;
+    private TextBlock? brandV283;
+    private TextBlock? helpV283;
+    private DockPanel? pageHostV283;
     private bool showEveryMonitorDraft;
     private static DeskSpaceSettingsStudioV148? open;
     private static readonly string[] Modules={
@@ -192,25 +203,38 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         Title="DeskSpace · Donut & Appearance";Width=1000;Height=750;
         MinWidth=800;MinHeight=570;ShowInTaskbar=true;
         WindowStartupLocation=WindowStartupLocation.CenterScreen;
-        Background=new SolidColorBrush(Color.FromRgb(247,248,253));
-        var root=new Grid();root.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(200)});
+        var root=new Grid();
+        chromeV283=root;
+        root.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(226)});
         root.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-        var nav=new StackPanel{Background=Brushes.White,Margin=new Thickness(0)};
-        nav.Children.Add(new TextBlock{Text="DeskSpace",FontSize=23,FontWeight=FontWeights.Bold,
-            Foreground=new SolidColorBrush(Color.FromRgb(23,45,78)),Margin=new Thickness(18,18,8,25)});
+        var nav=new StackPanel{Margin=new Thickness(0)};
+        navigationPanelV283=nav;
+        nav.Children.Add(new TextBlock{Text="  YOUR WORKSPACE",FontSize=10,
+            FontWeight=FontWeights.SemiBold,Margin=new Thickness(18,23,8,2)});
+        brandV283=new TextBlock{Text="DeskSpace",FontSize=28,
+            FontWeight=FontWeights.Bold,Margin=new Thickness(18,5,8,4)};
+        nav.Children.Add(brandV283);
+        nav.Children.Add(new TextBlock{Text="CONTROL CENTER  ·  V2",
+            FontSize=10,Margin=new Thickness(18,0,8,23)});
         foreach(var name in new[]{"Donut toolbar","Theme","Displays","Presets","General"})
         {
             var selection=name;
             var b=Button(selection,()=>Navigate(selection));
-            b.Margin=new Thickness(10,4,10,4);
+            b.Margin=new Thickness(12,4,12,4);
+            b.MinHeight=44;
+            navigationV283[selection]=b;
             nav.Children.Add(b);
         }
-        nav.Children.Add(new TextBlock{Text="DeskSpace settings\nYour files and Excel mappings stay local.",
-            TextWrapping=TextWrapping.Wrap,Margin=new Thickness(14,27,9,0),
-            Foreground=Brushes.Gray});
+        helpV283=new TextBlock{
+            Text="LOCAL FIRST  ·  PRIVATE BY DESIGN\nYour files and Excel mappings stay on your PC.",
+            TextWrapping=TextWrapping.Wrap,Margin=new Thickness(18,30,12,0),
+            FontSize=11};
+        nav.Children.Add(helpV283);
         Grid.SetColumn(nav,0);root.Children.Add(nav);
         var host=new DockPanel{LastChildFill=true};
-        var footer=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(18,9,16,15)};
+        pageHostV283=host;
+        var footer=new StackPanel{Orientation=Orientation.Horizontal,
+            Margin=new Thickness(25,10,25,21)};
         footer.Children.Add(Button("Apply changes",Apply));
         footer.Children.Add(Button("Reset appearance",()=>{
             var d=new DeskSpaceAppearanceV148();
@@ -248,10 +272,10 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     }
     private static Button Button(string name,Action click)
     {
-        var b=new Button{Content=name,Padding=new Thickness(12,8,12,8),
-            Margin=new Thickness(0,0,9,6),Background=Brushes.White,
-            HorizontalContentAlignment=HorizontalAlignment.Left,
-            BorderBrush=new SolidColorBrush(Color.FromRgb(216,218,235))};
+        var b=new Button{Content=name,
+            Margin=new Thickness(0,0,9,6),
+            HorizontalContentAlignment=HorizontalAlignment.Left};
+        DeskSpaceDesignV283.Button(b,name=="Apply changes");
         // WPF treats uncaught Click handlers as fatal dispatcher exceptions.
         // An invalid/stale preset or a failing page must never exit DeskSpace.
         b.Click+=(_,_)=>{
@@ -262,17 +286,61 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         return b;
     }
     private static TextBlock Caption(string title)=>new(){
-        Text=title,Foreground=new SolidColorBrush(Color.FromRgb(59,69,98)),
-        FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,14,0,5)};
+        Text=title,Foreground=DeskSpaceDesignV283.Solid(
+            DeskSpaceDesignV283.Current.Muted),
+        FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,16,0,7)};
+    private void UpdateChromeV283()
+    {
+        if(chromeV283==null)return;
+        var palette=DeskSpaceDesignV283.Resolve(
+            DeskSpaceAppearanceV148.IsDarkFor(draft),
+            SystemParameters.HighContrast,
+            DeskSpaceAppearanceV148.TryColor(draft.Accent,out var accentV283)?
+                accentV283:Colors.MediumPurple);
+        DeskSpaceDesignV283.ApplyWindow(this,palette);
+        chromeV283.Background=DeskSpaceDesignV283.Solid(palette.Canvas);
+        if(navigationPanelV283!=null)
+            navigationPanelV283.Background=DeskSpaceDesignV283.Solid(
+                palette.Navigation);
+        if(pageHostV283!=null)
+            pageHostV283.Background=DeskSpaceDesignV283.Solid(palette.Surface);
+        if(brandV283!=null)brandV283.Foreground=
+            DeskSpaceDesignV283.Solid(palette.Text);
+        if(helpV283!=null)helpV283.Foreground=
+            DeskSpaceDesignV283.Solid(palette.Muted);
+        foreach(var pair in navigationV283)
+        {
+            bool selected=pair.Key==current;
+            DeskSpaceDesignV283.Button(pair.Value,false,palette);
+            pair.Value.Background=DeskSpaceDesignV283.Solid(
+                selected?palette.AccentSoft:palette.Navigation);
+            pair.Value.Foreground=DeskSpaceDesignV283.Solid(
+                selected?palette.Text:palette.Muted);
+            pair.Value.BorderThickness=new Thickness(selected?1:0);
+            pair.Value.BorderBrush=DeskSpaceDesignV283.Solid(
+                selected?palette.Accent:palette.Navigation);
+            pair.Value.FontWeight=selected?FontWeights.SemiBold:
+                FontWeights.Normal;
+        }
+        subtitle.Foreground=DeskSpaceDesignV283.Solid(palette.Muted);
+        status.Foreground=DeskSpaceDesignV283.Solid(palette.Muted);
+    }
+
     private void Navigate(string page)
     {
         current=page;
         try
         {
+            UpdateChromeV283();
             body.Children.Clear();
-            body.Children.Add(new TextBlock{Text=page,FontSize=25,
-                FontWeight=FontWeights.SemiBold,
-                Foreground=new SolidColorBrush(Color.FromRgb(30,42,73))});
+            body.Children.Add(DeskSpaceDesignV283.Eyebrow("DESKSPACE  /  SETTINGS"));
+            body.Children.Add(new TextBlock{
+                Text=page,FontSize=29,
+                FontWeight=FontWeights.Bold,
+                Foreground=DeskSpaceDesignV283.Solid(
+                    DeskSpaceDesignV283.Current.Text),
+                Margin=new Thickness(0,0,0,13)
+            });
             if(page=="Donut toolbar")DonutPage();
             else if(page=="Theme")ThemePage();
             else if(page=="Displays")DisplaysPage();
@@ -337,6 +405,8 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             Foreground=Brushes.Gray,TextWrapping=TextWrapping.Wrap});
         body.Children.Add(Caption("Theme style"));
         var types=new WrapPanel();
+        types.Children.Add(Button("Modern · immersive",()=>{
+            draft.Style="Modern";ThemePageRefresh();}));
         types.Children.Add(Button("Soft pastel",()=>{draft.Style="Soft";ThemePageRefresh();}));
         types.Children.Add(Button("Material tonal",()=>{draft.Style="Material";ThemePageRefresh();}));
         body.Children.Add(types);
@@ -358,8 +428,9 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             swatches.Children.Add(b);
         }
         body.Children.Add(swatches);
-        var custom=new TextBox{Text=draft.Accent,Width=130,
+        var custom=new TextBox{Text=draft.Accent,Width=145,
             HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,5,0,7)};
+        DeskSpaceDesignV283.Input(custom);
         custom.LostFocus+=(_,_)=>{
             try{
                 if(DeskSpaceAppearanceV148.TryColor(custom.Text,out _)){
@@ -374,7 +445,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             v=>{draft.Softness=(int)v;Draw();},v=>$"{v:0}"));
         body.Children.Add(Caption("Preview"));
         if(donut.Parent is Panel previous)previous.Children.Remove(donut);
-        body.Children.Add(donut);Draw();
+        body.Children.Add(DeskSpaceDesignV283.Card(donut));Draw();
     }
     private void ThemePageRefresh(){Navigate("Theme");}
     private static FrameworkElement Slider(string label,double min,double max,
@@ -432,8 +503,9 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             "without storing notes, Excel data or passwords.",
             TextWrapping=TextWrapping.Wrap,Foreground=Brushes.Gray});
         body.Children.Add(Caption("Visual presets"));
-        var name=new TextBox{Text="My DeskSpace",Width=260,
+        var name=new TextBox{Text="My DeskSpace",Width=270,
             HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,7,0,7)};
+        DeskSpaceDesignV283.Input(name);
         body.Children.Add(name);
         body.Children.Add(Button("Save current appearance",()=>{
             try{
