@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Forms=System.Windows.Forms;
 
 namespace DeskSpace;
@@ -22,6 +23,11 @@ internal static class DeskSpaceMonitorDockV190
     [DllImport("user32.dll")]
     [return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr hwnd,out NativeRect rect);
+    [DllImport("user32.dll",SetLastError=true)]
+    [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hwnd,IntPtr insertAfter,
+        int x,int y,int width,int height,uint flags);
+    private const uint NoSize=0x0001,NoZOrder=0x0004,NoActivate=0x0010;
 
     internal enum Side { Below,Above,Right,Left,Contained }
     internal readonly record struct PlacementResult(
@@ -53,6 +59,38 @@ internal static class DeskSpaceMonitorDockV190
         int freeAbove=Math.Max(0,owner.Top-work.Top);
         int y=freeBelow>=freeAbove?owner.Bottom+gap:owner.Top-gap-h;
         return new(ClampX(xCenter),ClampY(y),Side.Contained,w,h);
+    }
+
+    // A saved manual Deck offset and a late WPF HWND clamp can both put
+    // the Deck on top of the widget, despite the calculated normal side.
+    // Repair the actual popup rectangle against its OWN monitor and leave
+    // independent monitor-local offsets intact until explicit dragging.
+    internal static Rectangle AvoidWidgetV282(
+        Rectangle popup,Rectangle owner,Rectangle work,int gap=12)
+    {
+        if(!popup.IntersectsWith(Rectangle.Inflate(owner,gap,gap)))
+            return popup;
+        var safe=Calculate(owner,work,popup.Width,popup.Height,gap);
+        if(safe.Side==Side.Contained)return popup;
+        return new Rectangle(safe.X,safe.Y,popup.Width,popup.Height);
+    }
+
+    // In a tight corner, prefer a smaller SCROLLABLE Deck to a full-height
+    // popup painted over the circle. Keep a 12px visual/pointer gap.
+    internal static double ScrollHeightV282(Rectangle owner,Rectangle work,
+        double dpi,int widthPx,double desiredDip=520)
+    {
+        if(!double.IsFinite(dpi)||dpi<=0)dpi=1;
+        const int gapPixels=14;
+        int side=Math.Max(owner.Left-work.Left-gapPixels,
+            work.Right-owner.Right-gapPixels);
+        if(side>=widthPx)return desiredDip;
+        int vertical=Math.Max(owner.Top-work.Top-gapPixels,
+            work.Bottom-owner.Bottom-gapPixels);
+        // Reserve border size so the total Popup cannot touch the widget.
+        return vertical>=44?
+            Math.Min(desiredDip,Math.Max(34,(vertical-6)/dpi)):
+            desiredDip;
     }
 
     private static Rectangle Work(Window window)
@@ -118,9 +156,22 @@ internal static class DeskSpaceMonitorDockV190
             // and current screen-DPI rounding.
             double w=Math.Max(1,(bounds.Width-16)/sx);
             double h=Math.Max(1,(bounds.Height-28)/sy);
-            border.MaxWidth=Math.Min(310,w);
+            var widgetRect=Owner(owner,bounds);
+            int freeSide=Math.Max(widgetRect.Left-bounds.Left-14,
+                bounds.Right-widgetRect.Right-14);
+            int freeVertical=Math.Max(widgetRect.Top-bounds.Top-14,
+                bounds.Bottom-widgetRect.Bottom-14);
+            // Preserve width where the full Deck can fit above/below.
+            // If the vertical space is cramped and the left/right side
+            // fits, use a narrower scrollable Deck on that side instead.
+            double chosenWidth=Math.Min(310,w);
+            if(freeVertical<170 && freeSide>=180*sx)
+                chosenWidth=Math.Min(chosenWidth,freeSide/sx);
+            border.MaxWidth=Math.Max(1,chosenWidth);
             border.MinWidth=Math.Min(180,border.MaxWidth);
-            scroll.MaxHeight=Math.Min(520,h);
+            scroll.MaxHeight=Math.Min(Math.Min(520,h),
+                ScrollHeightV282(widgetRect,bounds,sy,
+                    (int)Math.Ceiling(border.MaxWidth*sx)));
         }
         // Each Deck owns its position and drag state independently. Only
         // staged held-file DATA is shared with the other physical display.
@@ -239,9 +290,11 @@ internal static class DeskSpaceMonitorDockV190
                 Math.Max(screen.Left,screen.Right-width));
             var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,
                 Math.Max(screen.Top,screen.Bottom-height));
+            var safe=AvoidWidgetV282(
+                new Rectangle(deckX,deckY,width,height),ownerBounds,screen);
             var relative=new System.Windows.Point(
-                (deckX-ownerBounds.Left)/sx,
-                (deckY-ownerBounds.Top)/sy);
+                (safe.Left-ownerBounds.Left)/sx,
+                (safe.Top-ownerBounds.Top)/sy);
             return new[]{new CustomPopupPlacement(relative,
                 PopupPrimaryAxis.None)};
         };
@@ -250,11 +303,36 @@ internal static class DeskSpaceMonitorDockV190
             if(!owner.Dispatcher.CheckAccess() || !owner.IsLoaded)return;
             AdjustBounds();
         }
+        // After WPF and the native monitor fence finish positioning,
+        // inspect the REAL Deck HWND. Do not assume requested placement is
+        // the painted location (the reported screenshot shows overlap).
+        void RepairVisible()
+        {
+            if(!popup.IsOpen)return;
+            if(PresentationSource.FromVisual(border) is not HwndSource source ||
+               !GetWindowRect(source.Handle,out var actual) ||
+               actual.Right<=actual.Left || actual.Bottom<=actual.Top)return;
+            var screen=Work(owner);
+            var widget=Owner(owner,screen);
+            var current=new Rectangle(actual.Left,actual.Top,
+                actual.Right-actual.Left,actual.Bottom-actual.Top);
+            var safe=AvoidWidgetV282(current,widget,screen);
+            if(safe.Location!=current.Location)
+                SetWindowPos(source.Handle,IntPtr.Zero,safe.X,safe.Y,
+                    0,0,NoSize|NoZOrder|NoActivate);
+        }
+        void RepairLater()
+        {
+            if(!owner.Dispatcher.CheckAccess() || !popup.IsOpen)return;
+            owner.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,
+                new Action(RepairVisible));
+        }
         owner.Loaded+=(_,_)=>Refresh();
-        owner.SizeChanged+=(_,_)=>Refresh();
-        popup.Opened+=(_,_)=>Refresh();
-        // R153 already owns synchronous HWND clamping. Keep R190's
-        // independent WPF placement and R153 Win32 fence in agreement.
+        owner.SizeChanged+=(_,_)=>{Refresh();RepairLater();};
+        owner.LocationChanged+=(_,_)=>{Refresh();RepairLater();};
+        popup.Opened+=(_,_)=>{Refresh();RepairLater();};
+        // R153 still owns native HWND seam confinement; this additional
+        // check only prevents the Deck from covering its own circle.
         Refresh();
     }
 }
