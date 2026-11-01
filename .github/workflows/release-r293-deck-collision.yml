@@ -1,0 +1,154 @@
+name: DeskSpace R293 R201-R292 v1.5.1106 verified installer and release gate
+on:
+  push:
+    branches: [feat/r201-consolidated-roadmap-bundle]
+    paths:
+      - .github/workflows/release-r293-deck-collision.yml
+      - r293/**
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: deskspace-r291-candidate-release
+  cancel-in-progress: false
+jobs:
+  candidate:
+    runs-on: windows-latest
+    timeout-minutes: 70
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DESKSPACE_SIGNING_PFX_BASE64: ${{ secrets.DESKSPACE_SIGNING_PFX_BASE64 }}
+      DESKSPACE_SIGNING_PASSWORD: ${{ secrets.DESKSPACE_SIGNING_PASSWORD }}
+      DESKSPACE_SIGNING_THUMBPRINT: ${{ secrets.DESKSPACE_SIGNING_THUMBPRINT }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Reject stale or duplicate official versions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $versions=(gh api repos/surajTech-22/Desk-space/releases?per_page=100 | Out-String | ConvertFrom-Json)
+          if($LASTEXITCODE -ne 0){throw 'Cannot read official releases'}
+          $stable=@($versions|Where-Object{!$_.prerelease -and !$_.draft}|Sort-Object published_at -Descending)[0]
+          if([version]'1.5.1106' -le [version]$stable.tag_name.TrimStart('v')){
+            throw 'Candidate is older than latest Stable release'
+          }
+          foreach($tag in @('v1.5.1106','tester-v1.5.1106')){
+            if(@($versions|Where-Object{$_.tag_name -eq $tag}).Count -ne 0){
+              throw ('Refuse to replace existing release '+$tag)
+            }
+          }
+          Write-Host ('Current official Stable: '+$stable.tag_name)
+      - name: Restore exact R201-R292 source and independent installer tooling
+        shell: pwsh
+        run: |
+          ./r287/build-release-candidate-r287.ps1 -SourceRunId '41285791538' -ExpectedSourceSha '6313d403a7ab88278da13127dde60678033d1c48' -Version '1.5.1106'
+      - name: Verify R292 live HWND Deck fix, touchpad and updater version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='DeskSpace_Windows_R1/DeskSpace'
+          $dock=Get-Content "$root/DeskSpaceMonitorDockV190.cs" -Raw
+          $scroll=Get-Content "$root/DeskSpaceSmoothScrollV41.cs" -Raw
+          $menu=Get-Content "$root/DeskSpaceMiddleScrollV63.cs" -Raw
+          $deck=Get-Content "$root/DeskSpaceDropShelfV15.cs" -Raw
+          if(!$dock.Contains('NativeCorrectionV292(') -or
+             !$dock.Contains('FitBelowV292(') -or
+             !$dock.Contains('border.SizeChanged+=(_,_)=>RepairLater();') -or
+             !$deck.Contains('if(popup.VerticalOffset!=0)popup.VerticalOffset=0;')){
+              throw 'R292 real HWND non-overlap or media-offset correction missing'
+          }
+          $updater=Get-Content "$root/DeskSpaceUpdater.cs" -Raw
+          foreach($token in @('CalculateBelowV289(', 'RepairBelowV289(', 'HasDeckDragIntentV289(', 'shift=new DeskSpaceDeckOffsetV228.Offset(saved.X,0);')){
+            if(!$dock.Contains($token)){throw ('R289/R290 Deck fix missing '+$token)}
+          }
+          if(!$scroll.Contains('PixelsForWheelV289(') -or
+             !$menu.Contains('PrecisionWheelV290') -or
+             !$updater.Contains('InstalledVersion = new(1, 5, 1105)')){
+            throw 'R290 touchpad or v1.5.1106 updater version missing from final source'
+          }
+          if(!(Test-Path "$root/DeskSpaceWidgetExitV286.cs") -or
+             !(Test-Path "$root/DeskSpaceSearchIndexV13.cs")){
+            throw 'R286 persistent Exit or consolidated search index missing'
+          }
+      - name: Build versioned release WPF application
+        shell: pwsh
+        run: |
+          dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'DeskSpace source compilation failed'}
+      - name: Check compiled PerMonitorV2 app manifest
+        shell: pwsh
+        run: |
+          ./r285/test-actual-exe-r285.ps1
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          if($LASTEXITCODE -ne 0){throw 'Windows installer tooling missing'}
+      - name: Package same installer for Tester and Stable with data-preserving updater
+        shell: pwsh
+        run: |
+          ./BUILD_DESKSPACE_SETUP.ps1
+          if($LASTEXITCODE -ne 0){throw 'Installer packaging failed'}
+      - name: Check signed provenance and real release readiness
+        id: gate
+        shell: pwsh
+        run: |
+          ./r291/package-and-gate-r291.ps1 -Version '1.5.1106' -SourceSha '6313d403a7ab88278da13127dde60678033d1c48' -SourceRunId 41285791538
+      - name: Preserve checked installation candidate, SHA256 and readiness evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R293-v1.5.1106-Installer-Candidate
+          path: |
+            release/DeskSpace_Setup.exe
+            release/DeskSpace_Setup.sha256.txt
+            release/Update.exe
+            release/Update.sha256.txt
+            release/DeskSpace.provenance.json
+            release/NOT_RELEASED_README.txt
+            .candidate/evidence/*.json
+          retention-days: 28
+          if-no-files-found: error
+      - name: Publish one approved checksum-identical installer to Tester and Stable
+        if: steps.gate.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='surajTech-22/Desk-space'
+          $receipt=Get-Content '.candidate/evidence/release-verdict.json' -Raw | ConvertFrom-Json
+          if(!$receipt.release_ready -or !$receipt.signed -or
+              $receipt.source_commit -ne '6313d403a7ab88278da13127dde60678033d1c48'){
+            throw 'Unsigned/unverified release forbidden'
+          }
+          $assets=@('release/DeskSpace_Setup.exe','release/DeskSpace_Setup.sha256.txt',
+            'release/Update.exe','release/Update.sha256.txt','release/DeskSpace.provenance.json')
+          $notes='DeskSpace R201-R292 validated Windows build: Deck below clock, laptop touchpad navigation, real file search, multi-monitor improvements, graceful updater and additional modules. Publisher signing, real-device acceptance and readiness gate all passed.'
+          foreach($item in @(@{tag='tester-v1.5.1106';pre=$true},@{tag='v1.5.1106';pre=$false})){
+            if($item.pre){
+              gh release create $item.tag @assets -R $repo --target $env:GITHUB_SHA --prerelease --title 'DeskSpace 1.5.1106 Tester' --notes $notes
+            }else{
+              gh release create $item.tag @assets -R $repo --target $env:GITHUB_SHA --title 'DeskSpace 1.5.1106 Stable' --notes $notes
+            }
+            if($LASTEXITCODE -ne 0){throw ('Publish failed: '+$item.tag)}
+          }
+          $hash=(Get-FileHash release/DeskSpace_Setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          foreach($tag in @('tester-v1.5.1106','v1.5.1106')){
+            $rel=(gh api "repos/$repo/releases/tags/$tag" | Out-String | ConvertFrom-Json)
+            if($LASTEXITCODE -ne 0){throw ('Cannot verify release '+$tag)}
+            foreach($name in @('DeskSpace_Setup.exe','Update.exe')){
+              $found=@($rel.assets|Where-Object{$_.name -eq $name})
+              if($found.Count -ne 1 -or $found[0].digest -ne ('sha256:'+$hash)){
+                throw ('Published asset checksum mismatch '+$tag+'/'+$name)
+              }
+            }
+          }
+          Write-Host 'Approved DeskSpace 1.5.1106 Stable and Tester published with same SHA256.'
+      - name: Record why automatic release was gated
+        if: steps.gate.outputs.publish != 'true'
+        shell: pwsh
+        run: |
+          Write-Host '::warning::v1.5.1106 candidate built and archived. Trusted signature and/or physical release-readiness checkpoints are incomplete. Stable and Tester channels were NOT changed.'
