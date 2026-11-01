@@ -21,7 +21,7 @@ jobs:
         shell: powershell
         run: |
           ./r312/test-r312.ps1
-          if($LASTEXITCODE -ne 0){throw 'R312 direct process wait regression'}
+          if(!$?){throw 'R312 direct process wait regression'}
       - name: Compile DeskSpace WPF app and supervisor embedded resource
         shell: pwsh
         run: |
