@@ -4,6 +4,7 @@ on:
     branches: [release/search-files-20261101]
     paths:
       - .github/workflows/release-search-files-20261101.yml
+      - fix-search-file-results-20261101/**
 
 permissions:
   contents: write
@@ -157,7 +158,7 @@ jobs:
           $s=$s.Replace($old,'private static readonly Version InstalledVersion = new(1, 5, '+$nextBuild+');')
           [IO.File]::WriteAllText($updater,$s,[Text.UTF8Encoding]::new($false))
           [IO.File]::WriteAllText('.release-r232/version.txt',$version,[Text.Encoding]::ASCII)
-          Write-Host "R232 graceful-update release candidate: $version"
+          Write-Host "DeskSpace verified search and development bundle candidate: $version"
       - name: Run isolated synthetic updater and WPF acceptance on shipping source
         shell: pwsh
         run: |
