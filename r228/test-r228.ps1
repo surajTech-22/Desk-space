@@ -17,7 +17,6 @@ foreach($needle in @(
  'startCursor=Forms.Cursor.Position;',
  'DeskSpaceDeckOffsetV228.Clamp(new(',
  'popup.PlacementTarget=owner;',
- 'var deckX=Math.Clamp(result.X+shift.X,screen.Left,',
 
  'AvoidWidgetV282(',
  '(safe.Left-ownerBounds.Left)/sx',
@@ -27,7 +26,15 @@ foreach($needle in @(
 }
 # R289 replaces the legacy movable Y offset: vertical placement is
 # locked below the owning widget and can never be manually shifted above.
-if($dock.Contains('CalculateBelowV289('))
+if($dock.Contains('FitBelowV292('))
+{
+ if(!$dock.Contains('var deckX=Math.Clamp(plan.Deck.Left+shift.X,screen.Left,') -or
+    !$dock.Contains('var corrected=NativeCorrectionV292(') -or
+    !$dock.Contains('EnsureBelowV289()')){
+   throw 'R292 physical Deck positioning must remain below clock'
+ }
+}
+elseif($dock.Contains('CalculateBelowV289('))
 {
  if(!$dock.Contains('var safe=RepairBelowV289(') -or
     !$dock.Contains('EnsureBelowV289()') -or
