@@ -61,6 +61,28 @@ internal static class Program
              "precision two-finger fractional deltas must accumulate linearly");
         Check(scroll.GetMethod("Enable",BindingFlags.NonPublic|BindingFlags.Static)!=null,
             "existing global wheel routing must remain available");
+        var precisionMenu=asm.GetType(
+            "DeskSpace.DeskSpaceMiddleScrollV63+PrecisionWheelV290",true)!;
+        var menu=Activator.CreateInstance(precisionMenu,true)!;
+        var step=precisionMenu.GetMethod("Step",
+            BindingFlags.NonPublic|BindingFlags.Instance)!;
+        var reset=precisionMenu.GetMethod("Reset",
+            BindingFlags.NonPublic|BindingFlags.Instance)!;
+        int Move(int delta)=>(int)step.Invoke(menu,new object[]{delta})!;
+        Check(Move(15)==0 && Move(15)==0 && Move(15)==0 &&
+              Move(15)==-1,
+              "sub-donut fine-grained touchpad gesture must advance after 60 units");
+        Check(Move(15)==0 && Move(-15)==0 && Move(-45)==1,
+              "reversed touchpad direction must discard old buffered motion");
+        Check(Move(-120)==1 && Move(120)==-1,
+              "ordinary mouse wheel must remain exactly one menu step per notch");
+        Check(Move(15)==0 && Move(15)==0,"trackpad buffer should not jump");
+        reset.Invoke(menu,Array.Empty<object>());
+        Check(Move(30)==0 && Move(30)==-1,
+              "closing a menu must clear leftover gesture motion");
+        Check(Move(0)==0,"no menu navigation on zero wheel delta");
+        Console.WriteLine(
+            "R290 PASS: laptop two-finger fractional donut scroll, reversal/reset and native wheel parity.");
         Console.WriteLine("R289 PASS: below-only Deck on four physical and negative-origin monitor geometries, screen-edge fitting, popup repair, touchpad drag threshold, fractional wheel/Shift handling.");
     }
 }
