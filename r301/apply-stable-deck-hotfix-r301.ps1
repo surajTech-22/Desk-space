@@ -16,6 +16,7 @@ if(!$dock.Contains('internal static void Attach(Window owner,Popup popup,Border 
  throw 'Unexpected Stable Deck baseline; manual review needed'
 }
 Copy-Item -LiteralPath 'r298/DeskSpaceMonitorDockV298.cs' -Destination "$root/DeskSpaceMonitorDockV190.cs" -Force
+Copy-Item -LiteralPath 'r265/DeskSpaceDeckSaveGuardV265.cs' -Destination "$root/DeskSpaceDeckSaveGuardV265.cs" -Force
 Copy-Item -LiteralPath 'r298/DeskSpaceMonitorFenceV298.cs' -Destination "$root/DeskSpaceMonitorFenceV153.cs" -Force
 $path="$root/DeskSpaceDropShelfV15.cs"
 $source=[IO.File]::ReadAllText($path)
