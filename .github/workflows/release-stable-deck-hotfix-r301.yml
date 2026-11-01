@@ -219,8 +219,8 @@ jobs:
           foreach($require in @(
              'DeskSpaceDeckOffsetV228.Read(Device())',
              'DeskSpaceDeckOffsetV228.Save(Device(),shift)',
-             'var deckX=Math.Clamp(result.X+shift.X,screen.Left,',
-             'var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,'
+             'ConstrainBeforePaintV298(',
+             'NativeCorrectionV292('
           )){
              if(!$dock.Contains($require)){throw "R228 shipping monitor Deck regression: $require"}
           }
