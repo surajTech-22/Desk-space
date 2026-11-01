@@ -19,7 +19,6 @@ foreach($token in @(
  'internal static Rectangle AvoidWidgetV282(',
  'internal static double ScrollHeightV282(',
  'owner.LocationChanged+=(_,_)=>{Refresh();RepairLater();};',
- 'if(safe.Location!=current.Location)',
  'TestRunningAppCountAndDeckClearanceV282();',
  'R282 two distinct executables with same friendly name',
  'R282 a Deck painted onto the clock must move fully outside'
@@ -30,7 +29,16 @@ foreach($token in @(
  }
 }
 # R289 constrains the viewport strictly to room below its own clock.
-if($dock.Contains('CalculateBelowV289('))
+if($dock.Contains('FitBelowV292('))
+{
+ if(!$dock.Contains('scroll.MaxHeight=Math.Max(20,max);') -or
+    !$dock.Contains('border.SizeChanged+=(_,_)=>RepairLater();') -or
+    !$dock.Contains('var corrected=NativeCorrectionV292(') -or
+    !$dock.Contains('SetWindowPos(source.Handle,IntPtr.Zero,')){
+   throw 'R292 real HWND Deck size/position guard missing'
+ }
+}
+elseif($dock.Contains('CalculateBelowV289('))
 {
  if(!$dock.Contains('int availableBelow=Math.Max(1,bounds.Bottom-widgetRect.Bottom-22);') -or
     !$dock.Contains('scroll.MaxHeight=Math.Max(12,Math.Min(')){
