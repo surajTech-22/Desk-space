@@ -8,13 +8,19 @@ foreach($needle in @(
  'DeskSpaceDeckOffsetV228.Save(Device(),shift);',
  'border.ContextMenu=deckContext;',
  'Reposition();',
- 'var deckX=Math.Clamp(result.X+shift.X,screen.Left,'
 )){
  if(!$s.Contains($needle)){throw ('R234 missing monitor-specific reset: '+$needle)}
 }
 # R289 replaces the legacy movable Y offset: vertical placement is
 # locked below the owning widget and can never be manually shifted above.
-if($s.Contains('CalculateBelowV289('))
+if($s.Contains('FitBelowV292('))
+{
+ if(!$s.Contains('var deckX=Math.Clamp(plan.Deck.Left+shift.X,screen.Left,') -or
+    !$s.Contains('NativeCorrectionV292(')){
+   throw 'R292 monitor-local reset and below-only positioning missing'
+ }
+}
+elseif($s.Contains('CalculateBelowV289('))
 {
  if(!$s.Contains('var safe=RepairBelowV289(') -or
     !$s.Contains('EnsureBelowV289()') -or
