@@ -165,7 +165,7 @@ jobs:
           if($latest.Major -ne 1 -or $latest.Minor -ne 5){
               throw 'Unexpected DeskSpace stable version family'
           }
-          $nextBuild=1111
+          $nextBuild=1112
           $version="1.5.$nextBuild"
           $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
           if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
