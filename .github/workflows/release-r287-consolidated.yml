@@ -55,9 +55,9 @@ jobs:
           $root='DeskSpace_Windows_R1/DeskSpace'
           if(!(Test-Path "$root/DeskSpaceWidgetExitV286.cs") -or
              !(Test-Path "$root/app.manifest")){throw 'R287 missing R285/R286'}
-          $host=Get-Content "$root/WidgetHost.cs" -Raw
-          if(!$host.Contains('DeskSpaceWidgetExitV286.ExitFromTray(this)') -or
-             !$host.Contains('DeskSpaceWidgetExitV286.MayOpen(force,')){
+          $widgetSource=Get-Content "$root/WidgetHost.cs" -Raw
+          if(!$widgetSource.Contains('DeskSpaceWidgetExitV286.ExitFromTray(this)') -or
+             !$widgetSource.Contains('DeskSpaceWidgetExitV286.MayOpen(force,')){
             throw 'R287 tray Exit regression'
           }
           if(!(Get-Content "$root/DeskSpaceUpdater.cs" -Raw).Contains(
