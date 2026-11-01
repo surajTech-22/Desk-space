@@ -29,7 +29,7 @@ $child=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentLis
 [IO.File]::WriteAllText($ChildPidPath,[string]$child.Id)
 '@
  [IO.File]::WriteAllText($parentScript,$parentText)
- $exe=Join-Path $PSHOME 'powershell.exe'
+ $exe=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
  $args='-NoProfile -NonInteractive -File "'+$parentScript+'" "'+$childScript+'" "'+$pidPath+'"'
  $parent=Start-Process -FilePath $exe -ArgumentList $args -PassThru -ErrorAction Stop
  $elapsed=[Diagnostics.Stopwatch]::StartNew()
