@@ -55,7 +55,7 @@ internal static class Program
     [STAThread]
     private static int Main()
     {
-        var app=new Application { ShutdownMode=ShutdownMode.OnExplicitShutdown };
+        var app=new System.Windows.Application { ShutdownMode=ShutdownMode.OnExplicitShutdown };
         Window? owner=null;
         Popup? popup=null;
         try
@@ -81,7 +81,7 @@ internal static class Program
                 ResizeMode=ResizeMode.NoResize,
                 Content=new Border {
                     Width=110,Height=110,
-                    Background=Brushes.DodgerBlue,
+                    Background=System.Windows.Media.Brushes.DodgerBlue,
                     CornerRadius=new CornerRadius(55)
                 }
             };
@@ -94,7 +94,7 @@ internal static class Program
                     Text="Running App "+i,Height=24
                 });
             var border=new Border {
-                MinWidth=180,MaxWidth=310,Background=Brushes.DarkSlateBlue,
+                MinWidth=180,MaxWidth=310,Background=System.Windows.Media.Brushes.DarkSlateBlue,
                 BorderThickness=new Thickness(1),
                 Child=stack
             };
