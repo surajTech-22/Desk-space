@@ -35,9 +35,10 @@ jobs:
           $ErrorActionPreference='Stop'
           New-Item -ItemType Directory 'DeskSpace_Windows_R1/DeskSpace' -Force|Out-Null
           Copy-Item 'r289/DeskSpaceSmoothScrollV289.cs' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSmoothScrollV41.cs'
+          Copy-Item 'r289/DeskSpaceMonitorDockV289.cs' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMonitorDockV190.cs'
           Copy-Item 'src/DeskSpace/DeskSpaceMiddleScrollV63.cs' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMiddleScrollV63.cs'
           ./r290/apply-r290.ps1
-          foreach($file in @('DeskSpaceMiddleScrollV63.cs','DeskSpaceSmoothScrollV41.cs')){
+          foreach($file in @('DeskSpaceMiddleScrollV63.cs','DeskSpaceSmoothScrollV41.cs','DeskSpaceMonitorDockV190.cs')){
             $app=(Get-FileHash "src/DeskSpace/$file" -Algorithm SHA256).Hash
             $recipe=(Get-FileHash "DeskSpace_Windows_R1/DeskSpace/$file" -Algorithm SHA256).Hash
             if($app -ne $recipe){throw ("R290 shipping source differs from canonical app: "+$file)}
