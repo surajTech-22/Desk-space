@@ -41,11 +41,9 @@ $insert=@'
             }
 '@
 One $old ($insert+$nl+$old) 'verified queue defer'
-$oldCatch=@'
-        catch(Exception ex)
-        {
-            Log("Update failed at "+stage+": "+ex.GetType().Name+" "+ex.Message);
-'@
+$oldCatch=('        catch(Exception ex)'+$nl+
+'        {'+$nl+
+'            Log("Update failed at "+stage+": "+ex.GetType().Name+" "+ex.Message);')
 $newCatch=@'
         catch(SupervisorBusyV310Exception)
         {
@@ -61,11 +59,8 @@ $newCatch=@'
                     "DeskSpace update in progress",MessageBoxButton.OK,
                     MessageBoxImage.Information);
         }
-        catch(Exception ex)
-        {
-            Log("Update failed at "+stage+": "+ex.GetType().Name+" "+ex.Message);
 '@
-One $oldCatch ($newCatch.Replace(([string][char]13+$nl),$nl)) 'no false failed-update dialog'
+One $oldCatch ($newCatch.Replace(([string][char]13+$nl),$nl)+$nl+$oldCatch) 'no false failed-update dialog'
 foreach($token in @('catch(SupervisorBusyV310Exception)', 'throw new SupervisorBusyV310Exception();',
     'DeskSpace update in progress', 'DeskSpaceVerifiedUpdateQueueV191.Stage(')){
  if(!$s.Contains($token)){throw "R310 missing guard $token"}
