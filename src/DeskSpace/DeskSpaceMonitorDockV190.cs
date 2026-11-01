@@ -515,6 +515,50 @@ internal static class DeskSpaceMonitorDockV190
                     if(popup.IsOpen){AdjustBounds();RepairVisible();}
                 }));
         }
+        // R295: the Popup is a SEPARATE top-level Win32 window. Explorer,
+        // WPF animations, taskbar/DPI changes and R153 monitor fencing can
+        // move that HWND AFTER Opened/SizeChanged/LocationChanged. Observe
+        // native window position notifications and re-check its actual rect.
+        // This is event driven: no background timer, no other monitor touch.
+        HwndSource? observedPopupSource=null;
+        HwndSourceHook? nativeMoveHook=null;
+        const int WindowPosChangedV295=0x0047;
+        const int DpiChangedV295=0x02e0;
+        void DetachNativeObserverV295()
+        {
+            if(observedPopupSource!=null && nativeMoveHook!=null &&
+                !observedPopupSource.IsDisposed)
+                observedPopupSource.RemoveHook(nativeMoveHook);
+            observedPopupSource=null;
+            nativeMoveHook=null;
+        }
+        void AttachNativeObserverV295(int retries=0)
+        {
+            if(!popup.IsOpen)return;
+            if(PresentationSource.FromVisual(border) is not HwndSource src)
+            {
+                if(retries<3)
+                    owner.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,
+                        new Action(()=>AttachNativeObserverV295(retries+1)));
+                return;
+            }
+            if(ReferenceEquals(observedPopupSource,src))return;
+            DetachNativeObserverV295();
+            observedPopupSource=src;
+            nativeMoveHook=(IntPtr hwnd,int message,IntPtr wparam,
+                IntPtr lparam,ref bool handled)=>
+            {
+                if(message==WindowPosChangedV295 ||
+                   message==DpiChangedV295)
+                    RepairLater();
+                return IntPtr.Zero;
+            };
+            src.AddHook(nativeMoveHook);
+            RepairLater();
+        }
+        popup.Opened+=(_,_)=>AttachNativeObserverV295();
+        popup.Closed+=(_,_)=>DetachNativeObserverV295();
+        owner.Closed+=(_,_)=>DetachNativeObserverV295();
         owner.Loaded+=(_,_)=>{Refresh();RepairLater();};
         owner.SizeChanged+=(_,_)=>{Refresh();RepairLater();};
         owner.LocationChanged+=(_,_)=>{Refresh();RepairLater();};
