@@ -7,7 +7,7 @@ function Once([string]$a,[string]$b,[string]$why)
 {
  $a=$a.Replace($crlf,$lf);$b=$b.Replace($crlf,$lf)
  $n=([regex]::Matches($script:s,[regex]::Escape($a))).Count
- if($n -ne 1){throw "Search-file test $why: anchor count $n"}
+ if($n -ne 1){throw "Search-file test ${why}: anchor count $n"}
  $script:s=$script:s.Replace($a,$b)
 }
 Once '                TestSearchDeckLayoutV225();' @'
