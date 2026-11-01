@@ -46,7 +46,13 @@ internal static class DeskSpaceShelfGroupsV88
 // returns too few results when several visible windows share a process.
 internal static class DeskSpaceRunningAppsV88
 {
-    internal sealed record Entry(string Name,string Path,IntPtr Handle,string WindowTitle);
+    internal sealed record Entry(string Name,string Path,IntPtr Handle,string WindowTitle)
+    {
+        // Retain identity without changing the long-established four-item
+        // constructor used by Deck previews and native UI smoke tests.
+        internal int ProcessId {get;init;}
+        internal string WindowClass {get;init;}="";
+    }
     private const int Restore=9, Minimise=6, GwlExStyle=-20, GwOwner=4;
     private const uint WmClose=0x0010;
     private const long WsExToolWindow=0x80, WsExAppWindow=0x40000;
@@ -160,6 +166,52 @@ internal static class DeskSpaceRunningAppsV88
 
     // Retain every individual HWND so hovering a grouped app exposes all
     // of its windows; the old Snapshot still provides the distinct app count.
+    // Two different executables may expose the same FileDescription
+    // (e.g. "Application"). Grouping by that display label lost a whole
+    // app and made a three-app desktop appear as only two Deck tiles.
+    // Disambiguate only colliding names, keeping all windows of the same
+    // executable together and preserving normal labels otherwise.
+    internal static IReadOnlyList<Entry> DistinctLabelsV282(
+        IEnumerable<Entry> input)
+    {
+        var source=input.ToArray();
+        var changes=new Dictionary<string,string>(
+            StringComparer.OrdinalIgnoreCase);
+        foreach(var group in source.GroupBy(x=>x.Name,
+            StringComparer.OrdinalIgnoreCase))
+        {
+            var identities=group.Select(x=>string.IsNullOrWhiteSpace(x.Path)?
+                    "unresolved:"+x.Name:"file:"+x.Path)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x=>x,StringComparer.OrdinalIgnoreCase).ToArray();
+            if(identities.Length<=1)continue;
+            for(int i=0;i<identities.Length;i++)
+            {
+                var identity=identities[i];
+                var basename=identity.StartsWith("file:",
+                    StringComparison.OrdinalIgnoreCase)?
+                    Path.GetFileNameWithoutExtension(identity[5..]):"App";
+                // An ordinal is always unique even when executable
+                // basenames are equal in different install directories.
+                changes[group.Key+"|"+identity]=
+                    group.Key+" · "+basename+" "+(i+1);
+            }
+        }
+        return source.Select(entry=>{
+            var key=entry.Name+"|"+(string.IsNullOrWhiteSpace(entry.Path)?
+                "unresolved:"+entry.Name:"file:"+entry.Path);
+            return changes.TryGetValue(key,out var label)?
+                entry with{Name=label}:entry;
+        }).ToArray();
+    }
+
+    internal static bool UntitledTaskbarWindowV282(
+        string title,long extendedStyle,string windowClass)=>
+        title.Length>0 ||
+        ((extendedStyle&WsExAppWindow)!=0 &&
+         windowClass is not ("Progman" or "WorkerW" or
+             "Shell_TrayWnd" or "Windows.UI.Core.CoreWindow"));
+
     internal static IReadOnlyList<Entry> SnapshotWindows()
     {
         var windows=new List<Entry>();
@@ -168,8 +220,9 @@ internal static class DeskSpaceRunningAppsV88
             EnumWindows((window,_)=>{
                 if(!IsActiveWindow(window))return true;
                 string title=WindowText(window);
-                if(title.Length==0)return true;
                 string windowClass=WindowClass(window);
+                if(!UntitledTaskbarWindowV282(title,WindowStyle(window),
+                    windowClass))return true;
                 if(windowClass is "Progman" or "WorkerW" or
                    "Shell_TrayWnd" or "Windows.UI.Core.CoreWindow")return true;
                 GetWindowThreadProcessId(window,out uint pid);
@@ -187,7 +240,9 @@ internal static class DeskSpaceRunningAppsV88
                     // using their actual visible title, not that generic host.
                     bool packaged=name.Equals("ApplicationFrameHost",
                         StringComparison.OrdinalIgnoreCase);
-                    if(packaged && windowClass!="ApplicationFrameWindow")return true;
+                    if(packaged &&
+                       (windowClass!="ApplicationFrameWindow" ||
+                        title.Length==0))return true;
                     string path="";
                     try{path=process.MainModule?.FileName??"";}
                     catch(Win32Exception){}
@@ -212,7 +267,9 @@ internal static class DeskSpaceRunningAppsV88
                         catch(IOException){}
                     }
                     if(label.Length>44)label=label[..44];
-                    windows.Add(new Entry(label,path,window,title));
+                    windows.Add(new Entry(label,path,window,title){
+                        ProcessId=(int)pid,WindowClass=windowClass
+                    });
                 }
                 catch(Win32Exception){}
                 catch(ArgumentException){}
@@ -222,7 +279,8 @@ internal static class DeskSpaceRunningAppsV88
             },IntPtr.Zero);
         }
         catch(Win32Exception){}
-        return windows.GroupBy(x=>x.Handle).Select(g=>g.First()).ToArray();
+        return DistinctLabelsV282(windows.GroupBy(x=>x.Handle)
+            .Select(g=>g.First()));
     }
 
     // P1: stale HWNDs can be recycled between Deck refreshes. Every
@@ -234,10 +292,36 @@ internal static class DeskSpaceRunningAppsV88
         !string.IsNullOrWhiteSpace(entry.WindowTitle) &&
         string.Equals(actualTitle,entry.WindowTitle,StringComparison.Ordinal);
 
+    internal static bool CanControlV282(Entry entry,bool exists,
+        string actualTitle,int processId,string windowClass)
+    {
+        if(!exists || entry.Handle==IntPtr.Zero)return false;
+        if(entry.ProcessId!=0 && processId!=entry.ProcessId)return false;
+        if(entry.WindowClass.Length>0 && !string.Equals(
+            entry.WindowClass,windowClass,StringComparison.Ordinal))return false;
+        if(entry.WindowTitle.Length>0)
+            return CanControlV279(entry,exists,actualTitle);
+        // Without a window title, only a previously enumerated HWND with
+        // BOTH matching PID and class may be controlled.
+        return entry.ProcessId>0 && entry.WindowClass.Length>0 &&
+            actualTitle.Length==0;
+    }
+
+    private static bool IsSameLiveWindowV282(Entry entry)
+    {
+        if(!IsActiveWindow(entry.Handle))return false;
+        GetWindowThreadProcessId(entry.Handle,out uint pid);
+        return CanControlV282(entry,true,WindowText(entry.Handle),
+            checked((int)pid),WindowClass(entry.Handle));
+    }
+
+    internal static string DisplayTitleV282(Entry entry)=>
+        string.IsNullOrWhiteSpace(entry.WindowTitle)?
+            entry.Name:entry.WindowTitle;
+
     internal static bool RequestStateV279(Entry entry,bool minimize)
     {
-        if(!IsActiveWindow(entry.Handle) ||
-           !CanControlV279(entry,true,WindowText(entry.Handle)))return false;
+        if(!IsSameLiveWindowV282(entry))return false;
         // Send an ordinary window-state request. This never kills a
         // process, opens a document, or changes another monitor's Deck.
         ShowWindowAsync(entry.Handle,minimize?Minimise:Restore);
@@ -251,15 +335,13 @@ internal static class DeskSpaceRunningAppsV88
     // no longer matches the originally enumerated window.
     internal static bool RequestClose(Entry entry)
     {
-        if(!IsActiveWindow(entry.Handle) ||
-           !CanControlV279(entry,true,WindowText(entry.Handle)))return false;
+        if(!IsSameLiveWindowV282(entry))return false;
         return PostMessage(entry.Handle,WmClose,IntPtr.Zero,IntPtr.Zero);
     }
 
     internal static void Focus(Entry entry)
     {
-        if(!IsActiveWindow(entry.Handle) ||
-           !CanControlV279(entry,true,WindowText(entry.Handle)))return;
+        if(!IsSameLiveWindowV282(entry))return;
         // Like a taskbar button: select to activate, select the same active
         // window again to minimise it. The last selection also covers cases
         // where the no-activate floating deck temporarily owns foreground.
