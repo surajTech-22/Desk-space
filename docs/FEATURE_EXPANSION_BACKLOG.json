@@ -11,7 +11,7 @@
       "title": "Tray Exit Widget must stay closed until explicit Show Widget",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R286 uses atomic persistent widget-user-exited-v286.flag; primary tray Exit stores it before ordinary close; App --widget-host, Workspace ShowAtLaunch, Windows Run and updater auto-relaunch respect it; only direct Workspace/main tray Show Widget or explicit widget command clears it. Native real-file marker tests and full Windows CI #650 PASS. Installed-PC observed reappearance regression still requires acceptance."
+      "evidence": "R286 atomic user Exit flag, automatic startup blocked until explicit Show, persisted across Windows Run/updater/Workspace launch; native filesystem tests PASSED CI #652 and full R288 CI #670. Included in unsigned offline installer candidate 1.5.1104, not released."
     },
     {
       "id": "MON-01",
@@ -51,7 +51,7 @@
       "title": "One canonical buildable source",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R267 checked-in canonical src/DeskSpace with deterministic R201-R284 patch reconstruction, exact SHA parity and independent .NET WPF rebuild; Windows CI #615 PASS. Signing and installed machine acceptance remain."
+      "evidence": "R267 canonical source checked in; deterministic R201–R288 reconstruction, native WPF, SHA parity and independent build PASSED CI #670. Versioned offline installer candidate 1.5.1104 compiled and checksum verified in R287 candidate CI #11. Production release not signed or hardware-accepted."
     },
     {
       "id": "UPD-02",
@@ -74,7 +74,7 @@
       "title": "One-hash Stable and Tester release",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R249 prepublication SHA-256 equality for Stable/Tester synthetic candidates. Production release upload and acceptance still pending."
+      "evidence": "R249 single SHA policy; R287 built candidate 1.5.1104 with both DeskSpace_Setup.exe and Update.exe matching SHA-256 90c585e6600300db2951be27c88398f056fc8a255d422d9bd7d28f2ef8cb0734. Signed Stable/Tester release gate BLOCKED, neither published."
     },
     {
       "id": "UPD-05",
@@ -82,7 +82,7 @@
       "title": "Signing and artifact provenance",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R250 strict prepublication Authenticode and pinned source-commit/provenance policy; CI synthetic unsigned/tampered rejection, no signing certificate or positive trusted release yet."
+      "evidence": "R250 requires trusted Authenticode signer/pinned source provenance. R287 candidate CI #11 confirmed signing secrets unavailable, produced unsigned test-only artifact, release_ready=false. Signing and installed-PC acceptance pending; cannot claim published update."
     },
     {
       "id": "EXCEL-01",
@@ -209,7 +209,7 @@
       "title": "Unified command palette, progressive search and index health",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R259 Action Palette bounded @group facets, deterministic ranking and PageUp/Down/Home/End navigation; R260 aggregate-only live multi-drive index health with manually authorized WarmStart and no file-content reads. Native CI and real multi-drive performance/Everything IPC remain pending."
+      "evidence": "R288 fixes shared actual widget/Workspace search: file eligibility independent from recent-file watch, files before directories, 48-file vs 12-folder per-volume quotas, bounded cancellable Desktop/Documents/Downloads/OneDrive warm-up scan. Real XLSX/PDF Windows test PASSED CI #670; installed PC validation pending."
     },
     {
       "id": "CLIP-01",
@@ -308,7 +308,7 @@
       "title": "CI, safe release gate, physical test evidence",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R285 full Windows CI #635 PASS: actual compiled DeskSpace.exe PerMonitorV2 runtime audit, native R201-R285 WPF suite, source reconstruction, SHA parity, independent build and synthetic updater rollback. Real two monitors, Office COM Excel, installed rollback/heartbeat and code signing remain open."
+      "evidence": "R288 Windows native file-search and all historical regression, source parity and independent build PASSED CI #670. Versioned offline installer R287 candidate CI #11 SUCCESS, SHA verified and production publication deliberately blocked due unsigned certificate and 28 pending readiness checks. Hardware acceptance pending."
     }
   ]
 }
