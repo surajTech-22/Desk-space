@@ -18,10 +18,11 @@ foreach($token in @(
  'owner.Bottom+gap+h<=work.Bottom',
  'owner.Top-gap-h>=work.Top',
  'Math.Clamp(',
- 'border.MaxWidth=Math.Min(310,w)',
- 'scroll.MaxHeight=Math.Min(520,h)',
- 'result.X-ownerBounds.Left',
- 'result.Y-ownerBounds.Top',
+ 'border.MaxWidth=Math.Max(1,chosenWidth)',
+ 'ScrollHeightV282(widgetRect,bounds,sy,',
+ 'safe.Left-ownerBounds.Left',
+ 'safe.Top-ownerBounds.Top',
+ 'AvoidWidgetV282(',
  'PopupPrimaryAxis.None'
 )){
  if(!$s.Contains($token)){throw "R190 monitor dock missing: $token"}
