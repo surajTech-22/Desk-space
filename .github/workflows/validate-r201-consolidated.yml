@@ -130,6 +130,7 @@ jobs:
           ./r289/apply-r289.ps1
           ./r290/apply-r290.ps1
           ./r292/apply-r292.ps1
+          ./r295/apply-r295.ps1
           ./r201/apply-tests-r201-r202.ps1
           ./r203/apply-tests-r203.ps1
           ./r205/apply-tests-r205.ps1
@@ -339,7 +340,7 @@ jobs:
         run: |
           ./r236/record-runner-displays-r236.ps1
 
-      - name: Run isolated native WPF R201-R292 acceptance (no release)
+      - name: Run isolated native WPF R201-R295 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
@@ -352,7 +353,7 @@ jobs:
           dotnet run --project 'r289/Tests/DeckTouchpadTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R289 native Windows touchpad/Deck tests failed'}
 
-      - name: R292 real HWND non-overlap checks in Windows desktop session
+      - name: R292/R295 real HWND collision and automatic post-move recovery
         shell: pwsh
         run: |
           dotnet run --project 'r292/Tests/DeckNativeTests.csproj' -c Release
