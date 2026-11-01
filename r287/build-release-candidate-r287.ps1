@@ -80,9 +80,20 @@ $c=$c.Replace($anchor,
 [IO.File]::WriteAllText($code,$c,[Text.UTF8Encoding]::new($false))
 $setup='installer/DeskSpace.iss'
 $content=[IO.File]::ReadAllText($setup)
-$versions=[regex]::Matches($content,'(?m)^#define AppVersion "[0-9.]+".*$')
-if($versions.Count -ne 1){throw 'R287 missing or ambiguous original installer version'}
-$content=$content.Replace($versions[0].Value,'#define AppVersion "'+$Version+'"')
+# Exactly one legitimate Inno preprocessor declaration. Show version
+# declarations (never secrets) if a historic archive uses another layout.
+$versions=[regex]::Matches($content,
+ '(?im)^[ \t]*#define[ \t]+AppVersion[ \t]+"[0-9]+(?:\.[0-9]+){1,3}"')
+if($versions.Count -ne 1){
+ $observed=@($content -split '\r?\n'|Where-Object{
+  $_ -match '(?i)appversion|myappversion' }|Select-Object -First 7)
+ throw ('R287 installer version declarations unexpected (count '+
+  $versions.Count+'): '+($observed -join ' | '))
+}
+$versionDeclaration=$versions[0].Value
+$newVersion='#define AppVersion "'+$Version+'"'
+$content=$content.Remove($versions[0].Index,$versions[0].Length).
+ Insert($versions[0].Index,$newVersion)
 [IO.File]::WriteAllText($setup,$content,[Text.UTF8Encoding]::new($false))
 New-Item -ItemType Directory -Force '.candidate/evidence'|Out-Null
 @{
