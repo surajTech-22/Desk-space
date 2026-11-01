@@ -43,7 +43,7 @@ jobs:
       - name: Run native Deck and touchpad geometry regression
         shell: pwsh
         run: |
-          dotnet run --project r289/Tests/DeckTouchpadTests.csproj -c Release --no-restore
+          dotnet run --project r289/Tests/DeckTouchpadTests.csproj -c Release
           if($LASTEXITCODE -ne 0){throw 'R289 native Windows regression failed'}
       - name: Check patch recipe reproduces canonical R289 source
         shell: pwsh
