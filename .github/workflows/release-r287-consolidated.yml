@@ -44,10 +44,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Rebuild exact R286 CI source and original installer tooling
+      - name: Rebuild exact R288 CI source and original installer tooling
         shell: pwsh
         run: |
-          ./r287/build-release-candidate-r287.ps1 -SourceRunId '41277588354' -ExpectedSourceSha 'b9e3afb315193478f818eb2352a2f62c954d29f0' -Version '1.5.1104'
+          ./r287/build-release-candidate-r287.ps1 -SourceRunId '41279973819' -ExpectedSourceSha '883e6b8d93371c975f675cbd0107fedc9668f46c' -Version '1.5.1104'
       - name: Verify final source contains Exit Widget, deck and PMv2
         shell: pwsh
         run: |
@@ -77,7 +77,7 @@ jobs:
         run: |
           choco install innosetup --yes --no-progress
           if($LASTEXITCODE -ne 0){throw 'R287 Inno Setup unavailable'}
-      - name: Package verified R286 self-contained Windows installer
+      - name: Package verified R288 self-contained Windows installer
         shell: pwsh
         run: |
           ./BUILD_DESKSPACE_SETUP.ps1
@@ -86,7 +86,7 @@ jobs:
         id: gate
         shell: pwsh
         run: |
-          ./r287/package-and-gate-r287.ps1 -Version '1.5.1104' -SourceSha 'b9e3afb315193478f818eb2352a2f62c954d29f0'
+          ./r287/package-and-gate-r287.ps1 -Version '1.5.1104' -SourceSha '883e6b8d93371c975f675cbd0107fedc9668f46c'
       - name: Upload installer candidate and evidence before any publication
         uses: actions/upload-artifact@v4
         with:
@@ -119,7 +119,7 @@ jobs:
              'release/Update.exe','release/Update.sha256.txt','release/DeskSpace.provenance.json')
           foreach($entry in @(@{tag='tester-v1.5.1104';pre=$true},
                              @{tag='v1.5.1104';pre=$false})){
-            $notes='DeskSpace R201–R286 from audited canonical source b9e3afb315193478f818eb2352a2f62c954d29f0, trusted signed and identical Stable/Tester SHA256 installer. Tray Exit persists until Show Widget; modern theme and PMv2 included. Approved release-readiness checks passed.'
+            $notes='DeskSpace R201–R286 from audited canonical source 883e6b8d93371c975f675cbd0107fedc9668f46c, trusted signed and identical Stable/Tester SHA256 installer. Tray Exit persists until Show Widget; modern theme and PMv2 included. Approved release-readiness checks passed.'
             if($entry.pre){
               gh release create $entry.tag @sources --prerelease -R $repo --target $env:GITHUB_SHA --title 'DeskSpace 1.5.1104 Tester' --notes $notes
             }else{
