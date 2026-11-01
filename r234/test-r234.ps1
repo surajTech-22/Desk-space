@@ -8,8 +8,8 @@ foreach($needle in @(
  'DeskSpaceDeckOffsetV228.Save(Device(),shift);',
  'border.ContextMenu=deckContext;',
  'Reposition();',
- 'var deckX=Math.Clamp(result.X+shift.X,screen.Left,',
- )){
+ 'var deckX=Math.Clamp(result.X+shift.X,screen.Left,'
+)){
  if(!$s.Contains($needle)){throw ('R234 missing monitor-specific reset: '+$needle)}
 }
 # R289 replaces the legacy movable Y offset: vertical placement is
