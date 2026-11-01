@@ -105,7 +105,7 @@ internal static class Program
                 "Deck should not fade/clip during popup positioning");
             Assert(((uint)GetWindowLong(native,-20)&0x8)!=0,
                 "Deck popup must be TOPMOST like the owning circle");
-            var bars=scroll.Resources[typeof(ScrollBar)] as Style;
+            var bars=scroll.Resources[typeof(System.Windows.Controls.Primitives.ScrollBar)] as Style;
             Assert(bars!=null,"Deck should have custom dark scrollbar style");
             Assert(scroll.CanContentScroll==false &&
                    scroll.PanningMode==PanningMode.VerticalOnly,
