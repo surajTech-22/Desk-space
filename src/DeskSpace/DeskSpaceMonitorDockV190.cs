@@ -179,6 +179,36 @@ internal static class DeskSpaceMonitorDockV190
         return plan.Fits?plan.Deck:Rectangle.Empty;
     }
 
+    // Called by R153's popup monitor fence during WM_WINDOWPOSCHANGING.
+    // Unlike after-paint repairs, this prevents even the FIRST frame of the
+    // Running Apps Deck being rendered behind the circular owner.
+    internal static Rectangle ConstrainBeforePaintV298(
+        Window owner,Rectangle proposed,Rectangle work)
+    {
+        var hwnd=new WindowInteropHelper(owner).Handle;
+        if(hwnd==IntPtr.Zero || proposed.Width<=0 || proposed.Height<=0 ||
+            !GetWindowRect(hwnd,out var rect))return proposed;
+        var widget=new Rectangle(rect.Left,rect.Top,
+            Math.Max(1,rect.Right-rect.Left),Math.Max(1,rect.Bottom-rect.Top));
+        var fit=FitBelowV292(widget,work,proposed.Width,proposed.Height);
+        if(!fit.Fits)
+        {
+            // An impossibly small monitor must never paint the Deck over
+            // the circle. Its existing post-layout handler closes the
+            // popup; until then limit it to a noninteractive 1px edge.
+            return new Rectangle(work.Left,work.Top,1,1);
+        }
+        if(widget.Location!=fit.Widget.Location)
+            SetWindowPos(hwnd,IntPtr.Zero,fit.Widget.Left,fit.Widget.Top,
+                0,0,NoSize|NoZOrder|NoActivate);
+
+        // Keep horizontal monitor-local manual preference where valid.
+        int x=Math.Clamp(proposed.Left,work.Left,
+            Math.Max(work.Left,work.Right-fit.Deck.Width));
+        return new Rectangle(x,fit.Widget.Bottom+12,
+            fit.Deck.Width,fit.Deck.Height);
+    }
+
     private static Rectangle Work(Window window)
     {
         if(window is WidgetShellWindow widget)
