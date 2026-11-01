@@ -18,13 +18,30 @@ foreach($needle in @(
  'DeskSpaceDeckOffsetV228.Clamp(new(',
  'popup.PlacementTarget=owner;',
  'var deckX=Math.Clamp(result.X+shift.X,screen.Left,',
- 'var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,',
+
  'AvoidWidgetV282(',
  '(safe.Left-ownerBounds.Left)/sx',
  '(safe.Top-ownerBounds.Top)/sy'
 )){
  if(!$dock.Contains($needle)){throw ("R228 Deck display binding missing "+$needle)}
 }
+# R289 replaces the legacy movable Y offset: vertical placement is
+# locked below the owning widget and can never be manually shifted above.
+if($dock.Contains('CalculateBelowV289('))
+{
+ if(!$dock.Contains('var safe=RepairBelowV289(') -or
+    !$dock.Contains('EnsureBelowV289()') -or
+    $dock.Contains('var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,')){
+  throw 'R289 Deck must remain below its circle regardless of saved Y offset'
+ }
+}
+else
+{
+ if(!$dock.Contains('var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,')){
+   throw 'Legacy R228 per-monitor Deck vertical offset missing'
+ }
+}
+
 if(!$offset.Contains('widget-independent-displays') -and
    !$offset.Contains('deck-per-monitor-v228.json')){
  throw 'R228 per-screen persisted Deck state absent'
