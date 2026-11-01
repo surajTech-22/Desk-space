@@ -80,9 +80,9 @@ $c=$c.Replace($anchor,
 [IO.File]::WriteAllText($code,$c,[Text.UTF8Encoding]::new($false))
 $setup='installer/DeskSpace.iss'
 $content=[IO.File]::ReadAllText($setup)
-$from='#define AppVersion "1.5.1093"'
-if(!$content.Contains($from)){throw 'R287 unexpected original installer version'}
-$content=$content.Replace($from,'#define AppVersion "'+$Version+'"')
+$versions=[regex]::Matches($content,'(?m)^#define AppVersion "[0-9.]+".*$')
+if($versions.Count -ne 1){throw 'R287 missing or ambiguous original installer version'}
+$content=$content.Replace($versions[0].Value,'#define AppVersion "'+$Version+'"')
 [IO.File]::WriteAllText($setup,$content,[Text.UTF8Encoding]::new($false))
 New-Item -ItemType Directory -Force '.candidate/evidence'|Out-Null
 @{
