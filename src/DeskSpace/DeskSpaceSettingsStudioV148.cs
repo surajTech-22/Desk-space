@@ -479,6 +479,11 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             ()=>{showEveryMonitorDraft=true;Navigate("Displays");}));
         var monitors=System.Windows.Forms.Screen.AllScreens;
         body.Children.Add(Caption("Connected displays ("+monitors.Length+")"));
+        body.Children.Add(Button(
+            "Save actual monitor / DPI diagnostic to Downloads",()=>{
+                var output=DeskSpaceDpiAuditV285.SaveToDownloads();
+                status.Text="Monitor and DPI report saved: "+output;
+            }));
         foreach(var screen in monitors)
         {
             body.Children.Add(new TextBlock{
