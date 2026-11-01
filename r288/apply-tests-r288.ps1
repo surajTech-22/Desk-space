@@ -42,7 +42,7 @@ $method=@'
                 "R288 normal existing files must be eligible for search");
             var matches=((System.Collections.IEnumerable)
                 quick.Invoke(null,new object[]{
-                    root,"INVOICE",CancellationToken.None,2200,3})!)
+                    root,"INVOICE",System.Threading.CancellationToken.None,2200,3})!)
                     .Cast<SearchHit>().ToArray();
             Assert(matches.Length==2 &&
                    matches.All(x=>x.Category=="Files" &&
@@ -53,11 +53,11 @@ $method=@'
                 "case-insensitive XLSX and PDF files, not folders");
             var limited=((System.Collections.IEnumerable)
                 quick.Invoke(null,new object[]{
-                    root,"invoice",CancellationToken.None,1,3})!)
+                    root,"invoice",System.Threading.CancellationToken.None,1,3})!)
                     .Cast<SearchHit>().ToArray();
             Assert(limited.Length<=1,
                 "R288 quick search must honor its entry budget");
-            using(var cancel=new CancellationTokenSource())
+            using(var cancel=new System.Threading.CancellationTokenSource())
             {
                 cancel.Cancel();
                 bool refused=false;
