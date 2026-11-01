@@ -28,6 +28,19 @@
 | Search and indexing | R269 shared progressive multi-drive index, R259 palette facets, R260 index health | Real multi-drive end-to-end latency, cancel/stale searches, optional native Everything IPC |
 | Workspace profiles and window layouts | **R281** replaces the lossy profile Save/Import with a cross-process OS mutex, strict existing-file checks, atomic write, and import backup; native Windows CI #563 PASS. R179/R257 already provide separate captured window-layout restore safeguards | Physical saved-widget-profile UI plus multi-monitor window placement, reconnect, and missing-app restore acceptance |
 
+## P1 UI modernization — user-requested design rework (R283–R284)
+
+| Area | Actual committed implementation | Remaining acceptance |
+|---|---|---|
+| Modern styling system | R283 shared WPF theme palette: Midnight Navy / violet-blue accents, light/dark, native high-contrast, rounded accessible controls, typography, cards and Deck chrome | Physical contrast checks with Windows Narrator/NVDA and 100–200% DPI |
+| Main Workspace and Action Palette | R283 real MainWindow.xaml updated to gradient header, modern native-button templates, dark tab navigation, refined status; Action Palette and Feature Hub updated | Exercise every main tab, settings and shortcut without visual clipping |
+| Floating clock, Ring and Deck | R283 modern widget face/halo, non-interactive clock ornaments, improved Deck chrome; existing twelve wedge geometries and R282 collision-free Deck placement unchanged | Two physical displays, notifications, weather, parked widget, expanded donut and pointer hit targets |
+| Settings and appearance | R283 Modern appearance added for fresh installs; legacy Soft/Material presets and current saved users retained; five Settings Studio pages and pin settings preserved | Live light/dark switching, saved-presets, reset, installed-machine real settings navigation |
+| Everyday dialogs, running apps and opt-in Smart Context | R284 actual widget Details, Widget Options (scrollable), Pinned Apps, Running Apps flyouts and opt-in Smart Context cards modernized; keyboard focus/hover and WPF-native controls tested | Real Explorer/Office multi-window, Accessibility keyboard/screen-reader, small-screen visual QA |
+| Verified development evidence | [Windows CI #615](https://github.com/surajTech-22/Desk-space/actions/runs/41274378265) SUCCESS, native WPF R201–R284, exact canonical SHA parity, independent build, synthetic updater checks | None of the CI evidence constitutes installed-PC, signed release or real Excel COM acceptance |
+
+**Release gate unchanged:** This is a substantial two-stage code redesign, **not a fully released UI**. Defer further optional P2/P3 tools until P0 real updater/dual monitor/Office acceptance is addressed.
+
 ## P2 / P3 deliberately **deferred**
 The plan places OCR, extra clipboard tools, batch rename additions, vault expansion, visual workflow builders and optional AAH connectors *after* P0 and the unfinished P1 workflows. R277 already provides durable rename recovery in development; do not continue refining it at the expense of core reliability.
 
