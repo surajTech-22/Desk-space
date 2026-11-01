@@ -127,6 +127,7 @@ jobs:
           ./r285/apply-r285.ps1
           ./r286/apply-r286.ps1
           ./r288/apply-r288.ps1
+          ./r289/apply-r289.ps1
           ./r201/apply-tests-r201-r202.ps1
           ./r203/apply-tests-r203.ps1
           ./r205/apply-tests-r205.ps1
@@ -274,6 +275,7 @@ jobs:
           ./r285/test-r285.ps1
           ./r286/test-r286.ps1
           ./r288/test-r288.ps1
+          # R289 below-only Deck and touchpad regression runs after compiled WPF.
 
       - name: Validate legacy updater checksum compatibility on synthetic installer
         shell: pwsh
@@ -335,12 +337,18 @@ jobs:
         run: |
           ./r236/record-runner-displays-r236.ps1
 
-      - name: Run isolated native WPF R201-R288 acceptance (no release)
+      - name: Run isolated native WPF R201-R289 acceptance (no release)
         shell: pwsh
         run: |
           New-Item -ItemType Directory '.r201/evidence' -Force | Out-Null
           dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.r201/evidence' '--r201-only'
           if($LASTEXITCODE -ne 0){throw 'Native WPF tests failed'}
+
+      - name: R289 verify below-only Running Apps Deck and precision touchpad
+        shell: pwsh
+        run: |
+          dotnet run --project 'r289/Tests/DeckTouchpadTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R289 native Windows touchpad/Deck tests failed'}
 
       - name: R221 freeze verified consolidated patched WPF sources
         shell: pwsh
