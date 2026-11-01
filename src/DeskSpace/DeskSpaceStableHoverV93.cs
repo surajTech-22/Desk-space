@@ -483,9 +483,12 @@ internal static class DeskSpaceStableHoverV93
         }
         int liveCount=windows.Count;
         var iconCard=new Border{
-            Background=new SolidColorBrush(Color.FromRgb(32,44,71)),
-            BorderBrush=new SolidColorBrush(Color.FromRgb(71,85,121)),
-            BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(7),
+            Background=DeskSpaceDesignV283.Gradient(
+                DeskSpaceDesignV283.Current.Raised,
+                DeskSpaceDesignV283.Current.Navigation),
+            BorderBrush=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Border),
+            BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(14),
             Padding=new Thickness(5),
             Child=new ScrollViewer{
                 MaxHeight=230,MaxWidth=250,
@@ -515,9 +518,12 @@ internal static class DeskSpaceStableHoverV93
         // Content width is constrained to actual free monitor space on hover.
         var windowItems=new StackPanel{MinWidth=0,MaxWidth=268};
         var windowCard=new Border{
-            Background=new SolidColorBrush(Color.FromRgb(32,44,71)),
-            BorderBrush=new SolidColorBrush(Color.FromRgb(71,85,121)),
-            BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(7),
+            Background=DeskSpaceDesignV283.Gradient(
+                DeskSpaceDesignV283.Current.Raised,
+                DeskSpaceDesignV283.Current.Navigation),
+            BorderBrush=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Border),
+            BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(14),
             Padding=new Thickness(5),
             Child=new ScrollViewer{
                 MaxHeight=292,MaxWidth=280,
