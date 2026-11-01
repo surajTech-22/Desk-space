@@ -22,7 +22,7 @@ $source=[IO.File]::ReadAllText($path)
 function Replace-One([string]$find,[string]$new,[string]$label)
 {
  $count=([regex]::Matches($script:source,[regex]::Escape($find))).Count
- if($count -ne 1){throw "R301 $label: expected one original anchor, found $count"}
+ if($count -ne 1){throw "R301 ${label}: expected one original anchor, found $count"}
  $script:source=$script:source.Replace($find,$new)
 }
 Replace-One 'HorizontalOffset=0,VerticalOffset=5,StaysOpen=true,' 'HorizontalOffset=0,VerticalOffset=0,StaysOpen=true,' 'popup initial vertical offset'
