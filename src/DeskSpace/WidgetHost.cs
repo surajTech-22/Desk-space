@@ -93,7 +93,13 @@ public static class WidgetHostLauncher
     }
     public static void EnsureRunning(bool force = false)
     {
-        if (!force && !WidgetSettingsV3.Load().ShowAtLaunch) return;
+        // force=true is used only for a direct Show Widget / open-widget
+        // command. Automatic launch must honor a prior tray Exit even after
+        // Windows logon, Workspace startup or update relaunch.
+        if(!DeskSpaceWidgetExitV286.MayOpen(force,
+            DeskSpaceWidgetExitV286.Dismissed,
+            WidgetSettingsV3.Load().ShowAtLaunch))return;
+        if(force)DeskSpaceWidgetExitV286.AllowExplicitShow();
         try
         {
             using var client = new NamedPipeClientStream(".", "DeskSpace.Widget.V3", PipeDirection.Out);
@@ -344,7 +350,8 @@ public sealed class WidgetShellWindow : Window
             DeskSpaceExcelClipboardV39.ShowActive));
         menu.Items.Add("About / Version", null, (_, _) => Dispatcher.Invoke(ShowAbout));
         menu.Items.Add("Open DeskSpace", null, (_, _) => Dispatcher.Invoke(OpenMain));
-        menu.Items.Add("Exit widget", null, (_, _) => Dispatcher.Invoke(Close));
+        menu.Items.Add("Exit widget", null, (_, _) => Dispatcher.Invoke(
+            ()=>DeskSpaceWidgetExitV286.ExitFromTray(this)));
         tray.ContextMenuStrip = menu;
         tray.DoubleClick += (_, _) => Dispatcher.Invoke(Reveal);
         edgeHandle = CreateEdgeHandle();
