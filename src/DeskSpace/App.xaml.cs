@@ -10,6 +10,27 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // User-requested live DPI audit: no widget, tray, scan or watcher.
+        // The process reports its OWN Windows DPI awareness before creating
+        // any HWND so CI can validate the embedded PMv2 manifest.
+        if(e.Args.Contains("--dpi-audit",StringComparer.OrdinalIgnoreCase))
+        {
+            ShutdownMode=ShutdownMode.OnExplicitShutdown;
+            try
+            {
+                DeskSpaceDpiAuditV285.SaveToDownloads();
+                Shutdown(0);
+            }
+            catch(Exception error) when(error is IOException or
+                UnauthorizedAccessException or
+                System.ComponentModel.Win32Exception or
+                System.Runtime.InteropServices.ExternalException)
+            {
+                Debug.WriteLine("DeskSpace DPI audit failed: "+error);
+                Shutdown(2);
+            }
+            return;
+        }
         if(e.Args.Contains("--widget-host",StringComparer.OrdinalIgnoreCase))
         {
             ShutdownMode=ShutdownMode.OnMainWindowClose;
