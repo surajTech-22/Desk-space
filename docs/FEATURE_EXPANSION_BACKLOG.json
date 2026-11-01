@@ -6,6 +6,14 @@
   "source": "docs/UNIFIED_IMPLEMENTATION_FLOW_2026-10-31.md",
   "items": [
     {
+      "id": "START-EXIT-01",
+      "priority": "P0",
+      "title": "Tray Exit Widget must stay closed until explicit Show Widget",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R286 uses atomic persistent widget-user-exited-v286.flag; primary tray Exit stores it before ordinary close; App --widget-host, Workspace ShowAtLaunch, Windows Run and updater auto-relaunch respect it; only direct Workspace/main tray Show Widget or explicit widget command clears it. Native real-file marker tests and full Windows CI #650 PASS. Installed-PC observed reappearance regression still requires acceptance."
+    },
+    {
       "id": "MON-01",
       "priority": "P0",
       "title": "Monitor identity and independent widget/Deck sessions",
