@@ -1,0 +1,46 @@
+name: DeskSpace R303 independent Windows resend of verified Stable and Tester release hints
+on:
+  push:
+    branches: [release/stable-deck-hotfix-r301]
+    paths:
+      - .github/workflows/resend-r303-windows-release-hint.yml
+permissions:
+  contents: read
+jobs:
+  send-release-hints:
+    runs-on: windows-latest
+    timeout-minutes: 6
+    steps:
+      - name: Validate exact existing official releases before sending hints
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='surajTech-22/Desk-space'
+          $digest='sha256:ff216b19feb065568da632b49a469ab22f8b126bf6111dc7760ffbda2744fcd4'
+          foreach($tag in @('v1.5.1109','tester-v1.5.1109')){
+            $info=Invoke-RestMethod "https://api.github.com/repos/$repo/releases/tags/$tag" -Headers @{ 'User-Agent'='DeskSpace-verified-notification-sender' } -TimeoutSec 15
+            if($info.tag_name -ne $tag -or $info.draft){throw "Incorrect release $tag"}
+            $exe=@($info.assets|Where-Object {$_.name -eq 'Update.exe'})
+            if($exe.Count -ne 1 -or $exe[0].digest -ne $digest){throw "Installer checksum mismatch: $tag"}
+          }
+          Write-Host 'Both release tags and installer hashes verified. Notifications remain untrusted hints.'
+      - name: Publish one release hint per channel over the existing ntfy relay
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
+          foreach($tag in @('stable|v1.5.1109','tester|tester-v1.5.1109')){
+            try{
+              $bytes=[Text.Encoding]::UTF8.GetBytes($tag)
+              $answer=Invoke-RestMethod -Uri $topic -Method Post -Body $bytes -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{
+                'Title'='DeskSpace official verified release available'
+              }
+              if($answer.event -ne 'message' -or $answer.topic -ne 'deskspace-verified-release-r133-20261026-9a6c412f'){
+                throw "Notification relay did not acknowledge $tag"
+              }
+              Write-Host "CONFIRMED: official release hint published $tag"
+            }catch{
+              Write-Warning "Notification relay unreachable for $tag : $($_.Exception.Message)"
+              throw
+            }
+          }
