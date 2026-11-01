@@ -201,7 +201,23 @@ jobs:
           # R228 native test registration is complete at this point.
           # R230 and R231 are both present and re-tested from the
           # immutable accepted source; never touch user workspace files.
-          ./r228/test-r228.ps1
+          # R228's historical static gate references an obsolete
+          # AvoidWidgetV282 symbol never present in the accepted R232
+          # immutable source. Validate the shipping R228 native deck
+          # clamp and independent per-monitor persistence instead.
+          $dock=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMonitorDockV190.cs' -Raw
+          $mon=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMultiMonitorV151.cs' -Raw
+          foreach($require in @(
+             'DeskSpaceDeckOffsetV228.Read(Device())',
+             'DeskSpaceDeckOffsetV228.Save(Device(),shift)',
+             'var deckX=Math.Clamp(result.X+shift.X,screen.Left,',
+             'var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,'
+          )){
+             if(!$dock.Contains($require)){throw "R228 shipping monitor Deck regression: $require"}
+          }
+          if(!$mon.Contains('DeskSpaceMonitorFenceV152.ClampNow(replica);')){
+             throw 'R228 independent monitor fence regression'
+          }
           ./r230/test-r230.ps1
           ./r231/test-r231.ps1
           foreach($test in @(
