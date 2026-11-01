@@ -19,7 +19,7 @@
 
 Microsoft's WPF/Windows guidance distinguishes system-DPI-aware apps from Per-Monitor V2 apps. Prior to R285, `DeskSpace.csproj` had no `ApplicationManifest`, even though the source positions widget/Deck HWNDs in native monitor coordinates.
 
-R285 declares **PerMonitorV2** with a real application manifest and adds `--dpi-audit`, which runs the **actual DeskSpace.exe** without constructing a widget or tray. CI must confirm that Windows reports PMv2 on the built application, not merely on a synthetic geometry test. The existing Displays settings page gains a manual *Save actual monitor / DPI diagnostic to Downloads* button so real mixed-DPI setup can later be audited. This remains **development**, not physical multi-monitor acceptance.
+R285 declares **PerMonitorV2** with a real application manifest and adds `--dpi-audit`, which runs the **actual DeskSpace.exe** without constructing a widget or tray. **Windows CI #635 PASSED**: the built executable reported PerMonitorV2, native R201–R285 UI tests passed, source parity and independent build passed. This is not proof of physical dual-monitor behavior. The existing Displays settings page gains a manual *Save actual monitor / DPI diagnostic to Downloads* button so real mixed-DPI setup can later be audited. This remains **development**, not physical multi-monitor acceptance.
 
 Further app improvement opportunities are tracked in [R285 source audit](R285_PMv2_AND_RESEARCH_AUDIT.md), prioritized as real updater rollback, Excel COM acceptance, mixed-DPI hardware, high-contrast/light-theme consistency, Running Apps physical UI and sustained performance profiling. Defer unrelated P2/P3 additions.
 
