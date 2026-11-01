@@ -1173,7 +1173,8 @@ public sealed class WidgetShellWindow : Window
         highlightedSector = -1;
         canvas.Width = canvas.Height = 292;
         var shadow = new Ellipse { Width = 282, Height = 282,
-            Fill = new SolidColorBrush(Color.FromArgb(70, 25, 19, 58)) };
+            Fill = new SolidColorBrush(Color.FromArgb(85, 9, 16, 35)),
+            IsHitTestVisible=false };
         Canvas.SetLeft(shadow, 5); Canvas.SetTop(shadow, 7);
         canvas.Children.Add(shadow);
         var circle = new Ellipse { Width = 272, Height = 272, Fill = ClockFace(),
@@ -1184,8 +1185,25 @@ public sealed class WidgetShellWindow : Window
         Canvas.SetLeft(circle, 10); Canvas.SetTop(circle, 9);
         canvas.Children.Add(circle);
         clockFace = circle;
+        // A thin translucent halo creates depth without another clickable
+        // layer or changing the existing clock/donut hit geometry.
+        if(DeskSpaceAppearanceV148.Current.Style=="Modern" &&
+           !SystemParameters.HighContrast)
+        {
+            var halo=new Ellipse{
+                Width=259,Height=259,Fill=Brushes.Transparent,
+                Stroke=DeskSpaceDesignV283.Gradient(
+                    Color.FromArgb(185,150,179,255),
+                    Color.FromArgb(50,109,218,229),150),
+                StrokeThickness=2,IsHitTestVisible=false
+            };
+            Canvas.SetLeft(halo,17);Canvas.SetTop(halo,15);
+            canvas.Children.Add(halo);
+        }
         AddWeatherScene(10,9,272);
         content.FontSize = 35;
+        content.FontFamily=new FontFamily("Segoe UI Variable, Segoe UI");
+        content.FontWeight=FontWeights.SemiBold;
         content.IsHitTestVisible=false;
         bool liveClock=prefs.CenterMode=="Clock" && prefs.ShowWeather &&
             DeskSpaceWeather.Latest!=null &&
@@ -1507,7 +1525,9 @@ public sealed class WidgetShellWindow : Window
         ringPaths.Clear();
         highlightedSector=-1;
         canvas.Width=canvas.Height=420;
-        var shadow=new Ellipse{Width=408,Height=408,Fill=new SolidColorBrush(Color.FromArgb(36,25,20,60)),IsHitTestVisible=false};
+        var shadow=new Ellipse{Width=408,Height=408,
+            Fill=new SolidColorBrush(Color.FromArgb(65,10,17,40)),
+            IsHitTestVisible=false};
         Canvas.SetLeft(shadow,6);Canvas.SetTop(shadow,7);canvas.Children.Add(shadow);
         for(int i=0;i<Segments.Length;i++)
         {
@@ -1600,6 +1620,8 @@ public sealed class WidgetShellWindow : Window
     private Brush ClockFace()
     {
         if(SystemParameters.HighContrast)return SystemColors.WindowBrush;
+        if(DeskSpaceAppearanceV148.Current.Style=="Modern")
+            return DeskSpaceDesignV283.WidgetFace();
         if (prefs.CenterMode != "Clock" || !prefs.ShowWeather) return accent;
         var value=DeskSpaceWeather.Latest;
         if (value == null || !value.City.Equals(prefs.WeatherCity,StringComparison.OrdinalIgnoreCase))
