@@ -72,6 +72,15 @@ internal static class DeskSpaceSearchRankingV192
 
         private int Compare(SearchHit first,SearchHit second)
         {
+            // Keep matching files visible even when indexed folder names
+            // match the same search term. The shared widget and Workspace
+            // search both use this ranking, without a separate index.
+            if(first.Category=="Files" && second.Category=="Files")
+            {
+                bool fileA=File.Exists(first.OpenTarget);
+                bool fileB=File.Exists(second.OpenTarget);
+                if(fileA!=fileB)return fileA?-1:1;
+            }
             int quality=Quality(first,query).CompareTo(Quality(second,query));
             if(quality!=0)return quality;
             int category=CategoryOrder(first).CompareTo(CategoryOrder(second));
