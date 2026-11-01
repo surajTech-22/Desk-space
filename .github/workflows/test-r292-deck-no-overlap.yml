@@ -39,7 +39,7 @@ jobs:
           $ErrorActionPreference='Stop'
           New-Item -ItemType Directory 'DeskSpace_Windows_R1/DeskSpace' -Force | Out-Null
           Copy-Item r290/DeskSpaceMonitorDockV290.cs 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMonitorDockV190.cs'
-          Copy-Item r282/DeskSpaceShelfGroupsV282.cs 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs'
+          Copy-Item r292/DeskSpaceDropShelfV292.cs 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs'
           ./r292/apply-r292.ps1
           foreach($file in @('DeskSpaceMonitorDockV190.cs','DeskSpaceDropShelfV15.cs')){
             $a=(Get-FileHash "src/DeskSpace/$file" -Algorithm SHA256).Hash
