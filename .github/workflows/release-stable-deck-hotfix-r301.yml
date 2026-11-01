@@ -145,9 +145,12 @@ jobs:
           }
           $nextBuild=1109
           $version="1.5.$nextBuild"
+          $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
+          if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
           foreach($tag in @('v1.5.1109','tester-v1.5.1109')){
-            gh release view $tag -R 'surajTech-22/Desk-space' *> $null
-            if($LASTEXITCODE -eq 0){throw ('Refuse to overwrite existing release: '+$tag)}
+            if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
+              throw ('Refuse to overwrite existing release: '+$tag)
+            }
           }
           if([version]$version -le [version](($stable|Out-String).Trim().TrimStart('v'))){
               throw 'New version would be a downgrade'
