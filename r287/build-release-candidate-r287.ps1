@@ -92,8 +92,7 @@ if($versions.Count -ne 1){
 }
 $versionDeclaration=$versions[0].Value
 $newVersion='#define AppVersion "'+$Version+'"'
-$content=$content.Remove($versions[0].Index,$versions[0].Length).
- Insert($versions[0].Index,$newVersion)
+$content=$content.Remove($versions[0].Index,$versions[0].Length).Insert($versions[0].Index,$newVersion)
 [IO.File]::WriteAllText($setup,$content,[Text.UTF8Encoding]::new($false))
 New-Item -ItemType Directory -Force '.candidate/evidence'|Out-Null
 @{
