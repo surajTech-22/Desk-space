@@ -2,7 +2,9 @@ name: DeskSpace R287 consolidated installer and gated Stable Tester release
 on:
   push:
     branches: [feat/r201-consolidated-roadmap-bundle]
-    paths: [.github/workflows/release-r287-consolidated.yml]
+    paths:
+      - .github/workflows/release-r287-consolidated.yml
+      - r287/**
   workflow_dispatch:
 permissions:
   contents: write
