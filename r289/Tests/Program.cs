@@ -52,6 +52,7 @@ internal static class Program
             }
         }
         Check(!(bool)Call(dock,"HasDeckDragIntentV289",7,7) &&
+             !(bool)Call(dock,"HasDeckDragIntentV289",0,50) &&
              (bool)Call(dock,"HasDeckDragIntentV289",8,0),
              "light touchpad taps must not start a Deck drag");
         double Pixels(int delta)=>(double)Call(scroll,"PixelsForWheelV289",delta,3);
