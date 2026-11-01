@@ -147,32 +147,45 @@ internal static class DeskSpaceActionPaletteV197
             Title="DeskSpace actions",Width=530,Height=420,
             MinWidth=420,MinHeight=320,Owner=owner,
             WindowStartupLocation=WindowStartupLocation.CenterOwner,
-            Background=Brushes.White,ShowInTaskbar=false,
+            Background=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Canvas),
+            ShowInTaskbar=false,
             ResizeMode=ResizeMode.CanResize
         };
-        var root=new DockPanel{Margin=new Thickness(16)};
+        DeskSpaceDesignV283.ApplyWindow(window,
+            DeskSpaceDesignV283.Current);
+        var root=new DockPanel{Margin=new Thickness(22)};
         window.Content=root;
         var heading=new TextBlock{
-            Text="DeskSpace actions",FontSize=20,FontWeight=FontWeights.SemiBold,
-            Foreground=new SolidColorBrush(Color.FromRgb(36,27,65)),
+            Text="DeskSpace  /  ACTIONS",FontSize=23,
+            FontWeight=FontWeights.Bold,
+            Foreground=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Text),
             Margin=new Thickness(0,0,0,8)
         };
         DockPanel.SetDock(heading,Dock.Top);root.Children.Add(heading);
         var hint=new TextBlock{
             Text="Type words or @Windows/@System/@Files · ↑/↓, PgUp/PgDn, Home/End · Enter open · Esc close",
-            Foreground=Brushes.DimGray,FontSize=12,
+            Foreground=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Muted),FontSize=12,
             Margin=new Thickness(0,0,0,12)
         };
         DockPanel.SetDock(hint,Dock.Top);root.Children.Add(hint);
         var input=new TextBox{FontSize=15,Padding=new Thickness(9),
             MinHeight=38,Margin=new Thickness(0,0,0,10)};
+        DeskSpaceDesignV283.Input(input);
         AutomationProperties.SetName(input,"Find a DeskSpace action");
         DockPanel.SetDock(input,Dock.Top);root.Children.Add(input);
-        var status=new TextBlock{Foreground=Brushes.DimGray,FontSize=12,
+        var status=new TextBlock{
+            Foreground=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Muted),FontSize=12,
             Margin=new Thickness(2,8,0,0)};
         DockPanel.SetDock(status,Dock.Bottom);root.Children.Add(status);
-        var list=new ListBox{BorderThickness=new Thickness(0),
-            Background=Brushes.White};
+        var list=new ListBox{
+            BorderThickness=new Thickness(1),
+            Background=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Surface)};
+        DeskSpaceDesignV283.Selection(list);
         KeyboardNavigation.SetTabNavigation(list,KeyboardNavigationMode.Continue);
         AutomationProperties.SetName(list,"Available DeskSpace actions");
         root.Children.Add(list);
@@ -185,14 +198,26 @@ internal static class DeskSpaceActionPaletteV197
             {
                 var box=new StackPanel{Margin=new Thickness(4,5,4,5)};
                 box.Children.Add(new TextBlock{
-                    Text=command.Name,FontSize=14,FontWeight=FontWeights.SemiBold});
+                    Text=command.Name,FontSize=14,
+                    Foreground=DeskSpaceDesignV283.Solid(
+                        DeskSpaceDesignV283.Current.Text),
+                    FontWeight=FontWeights.SemiBold});
                 box.Children.Add(new TextBlock{
                     Text=command.Group+" · "+(command.Confirm?"Confirmation required":"Manual action"),
-                    FontSize=10,Foreground=Brushes.DimGray});
+                    FontSize=10,Foreground=DeskSpaceDesignV283.Solid(
+                        DeskSpaceDesignV283.Current.Muted)});
                 box.Children.Add(new TextBlock{
-                    Text=command.Description,FontSize=11,Foreground=Brushes.DimGray,
+                    Text=command.Description,FontSize=11,
+                    Foreground=DeskSpaceDesignV283.Solid(
+                        DeskSpaceDesignV283.Current.Muted),
                     TextWrapping=TextWrapping.Wrap});
-                var item=new ListBoxItem{Content=box,Tag=command,Padding=new Thickness(6)};
+                var item=new ListBoxItem{
+                    Content=box,Tag=command,Padding=new Thickness(11,8,11,8),
+                    Margin=new Thickness(3),
+                    Background=DeskSpaceDesignV283.Solid(
+                        DeskSpaceDesignV283.Current.Raised),
+                    Foreground=DeskSpaceDesignV283.Solid(
+                        DeskSpaceDesignV283.Current.Text)};
                 AutomationProperties.SetName(item,command.Name+": "+command.Description);
                 list.Items.Add(item);
             }
