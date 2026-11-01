@@ -55,7 +55,7 @@ $provenance=Join-Path $target 'DeskSpace.provenance.json'
  installer_sha256=$digest;
  signer_thumbprint=if($signed){$thumb}else{'UNSIGNED'};
  build_version=$Version;
- validated_source_run_id=41277588354;
+ validated_source_run_id=41279973819;
  signed=$signed;
 } | ConvertTo-Json -Depth 3 | Set-Content $provenance
 if($signed){
