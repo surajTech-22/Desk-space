@@ -698,7 +698,7 @@ internal static class DeskSpaceStableHoverV93
                 DockPanel.SetDock(windowActions,Dock.Right);
                 row.Children.Add(windowActions);
                 var choice=new Button{
-                    Content=selected.WindowTitle,FontSize=11,
+                    Content=DeskSpaceRunningAppsV88.DisplayTitleV282(selected),FontSize=11,
                     Foreground=Brushes.White,
                     Background=Brushes.Transparent,
                     BorderThickness=new Thickness(0),
