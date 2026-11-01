@@ -15,8 +15,23 @@ public sealed class WidgetDetailsWindow : Window
     public WidgetDetailsWindow(string mode,Func<Workspace> getData)
     {
         this.mode=mode;this.getData=getData;
-        Title="DeskSpace · "+mode;Width=350;Height=370;Topmost=true;
-        Content=new ScrollViewer{Content=body};
+        Title="DeskSpace · "+mode;Width=390;Height=425;Topmost=true;
+        DeskSpaceDesignV283.ApplyWindow(this,DeskSpaceDesignV283.Current);
+        body.Foreground=DeskSpaceDesignV283.Solid(
+            DeskSpaceDesignV283.Current.Text);
+        body.FontFamily=new FontFamily("Segoe UI Variable, Segoe UI");
+        var content=new StackPanel{Margin=new Thickness(16)};
+        content.Children.Add(DeskSpaceDesignV283.Eyebrow(
+            "DESKSPACE  /  "+mode.ToUpperInvariant()));
+        content.Children.Add(new TextBlock{
+            Text=mode,FontSize=24,FontWeight=FontWeights.Bold,
+            Foreground=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Text),
+            Margin=new Thickness(0,0,0,12)
+        });
+        content.Children.Add(DeskSpaceDesignV283.Card(body));
+        Content=new ScrollViewer{Content=content,
+            VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
         timer.Tick+=(_,_)=>Refresh();Closed+=(_,_)=>timer.Stop();timer.Start();Refresh();
     }
     private void Refresh()
@@ -36,9 +51,18 @@ public sealed class WidgetOptionsWindow : Window
 {
     public WidgetOptionsWindow(WidgetSettingsV3 prefs,Action apply)
     {
-        Title="DeskSpace · Donut options";Width=410;Height=490;Topmost=true;
-        var panel=new StackPanel{Margin=new Thickness(18)};
-        panel.Children.Add(new TextBlock{Text="Live Donut Widget",FontSize=22,FontWeight=FontWeights.Bold,Margin=new Thickness(0,0,0,14)});
+        Title="DeskSpace · Donut options";Width=470;Height=570;Topmost=true;
+        MinWidth=370;MinHeight=430;
+        DeskSpaceDesignV283.ApplyWindow(this,DeskSpaceDesignV283.Current);
+        var panel=new StackPanel{Margin=new Thickness(23)};
+        panel.Children.Add(DeskSpaceDesignV283.Eyebrow(
+            "DESKSPACE  /  PREFERENCES"));
+        panel.Children.Add(new TextBlock{
+            Text="Live Widget",FontSize=25,FontWeight=FontWeights.Bold,
+            Foreground=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Text),
+            Margin=new Thickness(0,0,0,14)
+        });
         AddToggle("Open widget with DeskSpace",prefs.ShowAtLaunch,v=>prefs.ShowAtLaunch=v);
         AddToggle("Start widget with Windows (background)",prefs.StartWithWindows,v=>prefs.StartWithWindows=v);
         AddToggle("Auto-dock when another app is fullscreen",prefs.AutoHideFullscreen,v=>prefs.AutoHideFullscreen=v);
@@ -47,16 +71,32 @@ public sealed class WidgetOptionsWindow : Window
         panel.Children.Add(new TextBlock{Text="Weather city (no precise location used)",Margin=new Thickness(0,8,0,3)});
         var cities=new ComboBox{ItemsSource=DeskSpaceWeather.Cities.Select(c=>c.Name).ToArray(),SelectedItem=prefs.WeatherCity};
         cities.SelectionChanged+=(_,_)=>{if(cities.SelectedItem is string city)prefs.WeatherCity=city;};
+        cities.Background=DeskSpaceDesignV283.Solid(
+            DeskSpaceDesignV283.Current.Raised);
+        cities.Foreground=DeskSpaceDesignV283.Solid(
+            DeskSpaceDesignV283.Current.Text);
         panel.Children.Add(cities);
         panel.Children.Add(new TextBlock{Text="Centre display",Margin=new Thickness(0,8,0,3)});
         var modes=new ComboBox{ItemsSource=new []{"Clock","Date","Calendar","Notes","Reminders","Tasks"},SelectedItem=prefs.CenterMode};
-        modes.SelectionChanged+=(_,_)=>prefs.CenterMode=(string)modes.SelectedItem;panel.Children.Add(modes);
+        modes.SelectionChanged+=(_,_)=>prefs.CenterMode=(string)modes.SelectedItem;
+        modes.Background=DeskSpaceDesignV283.Solid(
+            DeskSpaceDesignV283.Current.Raised);
+        modes.Foreground=DeskSpaceDesignV283.Solid(
+            DeskSpaceDesignV283.Current.Text);
+        panel.Children.Add(modes);
         var save=new Button{Content="Save preferences",Margin=new Thickness(0,20,0,0),Padding=new Thickness(8)};
+        DeskSpaceDesignV283.Button(save,true);
         save.Click+=(_,_)=>{try{apply();Close();}catch(Exception ex){MessageBox.Show(ex.Message,"Settings could not be saved");}};
-        panel.Children.Add(save);Content=panel;
+        panel.Children.Add(save);
+        Content=new ScrollViewer{Content=panel,
+            VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
         void AddToggle(string name,bool value,Action<bool> change)
         {
-            var b=new CheckBox{Content=name,IsChecked=value,Margin=new Thickness(0,0,0,12)};
+            var b=new CheckBox{
+                Content=name,IsChecked=value,Margin=new Thickness(0,0,0,12),
+                Foreground=DeskSpaceDesignV283.Solid(
+                    DeskSpaceDesignV283.Current.Text),
+                MinHeight=30};
             b.Checked+=(_,_)=>change(true);b.Unchecked+=(_,_)=>change(false);panel.Children.Add(b);
         }
     }
@@ -68,11 +108,29 @@ public sealed class AppPinsWindow : Window
     private readonly ListBox pins=new(){Margin=new Thickness(12)};
     public AppPinsWindow(WidgetSettingsV3 prefs)
     {
-        this.prefs=prefs;Title="DeskSpace · Pinned applications";Width=500;Height=410;Topmost=true;
-        var root=new DockPanel();var bar=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(12)};
+        this.prefs=prefs;Title="DeskSpace · Pinned applications";
+        Width=540;Height=455;MinWidth=400;Topmost=true;
+        DeskSpaceDesignV283.ApplyWindow(this,DeskSpaceDesignV283.Current);
+        var root=new DockPanel();
+        var heading=new TextBlock{
+            Text="Pinned applications",FontSize=23,FontWeight=FontWeights.Bold,
+            Foreground=DeskSpaceDesignV283.Solid(
+                DeskSpaceDesignV283.Current.Text),
+            Margin=new Thickness(20,18,16,12)
+        };
+        DockPanel.SetDock(heading,Dock.Top);root.Children.Add(heading);
+        var bar=new StackPanel{Orientation=Orientation.Horizontal,
+            Margin=new Thickness(20,4,12,10)};
         Add("Pin an application",Pin);Add("Launch selected",Launch);Add("Unpin",Unpin);
-        DockPanel.SetDock(bar,Dock.Top);root.Children.Add(bar);root.Children.Add(pins);Content=root;Refresh();
-        void Add(string text,Action action){var b=new Button{Content=text,Margin=new Thickness(0,0,7,0)};b.Click+=(_,_)=>action();bar.Children.Add(b);}
+        DockPanel.SetDock(bar,Dock.Top);root.Children.Add(bar);
+        DeskSpaceDesignV283.Selection(pins);
+        root.Children.Add(pins);Content=root;Refresh();
+        void Add(string text,Action action)
+        {
+            var b=new Button{Content=text,Margin=new Thickness(0,0,7,0)};
+            DeskSpaceDesignV283.Button(b);
+            b.Click+=(_,_)=>action();bar.Children.Add(b);
+        }
     }
     private void Refresh(){pins.ItemsSource=null;pins.ItemsSource=prefs.PinnedApps.ToList();}
     private void Pin()
