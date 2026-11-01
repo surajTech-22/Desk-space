@@ -130,7 +130,9 @@ internal static class DeskSpaceMonitorDockV190
     // Trackpad taps shouldn't immediately capture the Deck as a drag.
     // 8 native pixels accommodates precision touchpad cursor jitter.
     internal static bool HasDeckDragIntentV289(int dx,int dy)=>
-        Math.Abs(dx)>=8 || Math.Abs(dy)>=8;
+        // Below-only Deck may move horizontally, not vertically.
+        // Vertical touchpad swipes should scroll content, not grab the header.
+        Math.Abs(dx)>=8;
 
     private static Rectangle Work(Window window)
     {
@@ -252,7 +254,9 @@ internal static class DeskSpaceMonitorDockV190
             // permanent physical screen assignment.
             if(owner is WidgetShellWindow widget &&
                 DeskSpaceMonitorSessionsV154.Device(widget)==null)return;
-            shift=DeskSpaceDeckOffsetV228.Read(Device());
+            var saved=DeskSpaceDeckOffsetV228.Read(Device());
+            // Legacy saved Y offsets are ignored; below-only is mandatory.
+            shift=new DeskSpaceDeckOffsetV228.Offset(saved.X,0);
             positionLoaded=true;
             Reposition();
         }
@@ -311,8 +315,7 @@ internal static class DeskSpaceMonitorDockV190
                 System.Windows.Input.Mouse.Capture(border);
             }
             shift=DeskSpaceDeckOffsetV228.Clamp(new(
-                startOffset.X+now.X-startCursor.X,
-                startOffset.Y+now.Y-startCursor.Y));
+                startOffset.X+now.X-startCursor.X,0));
             Reposition();
             e.Handled=true;
         };

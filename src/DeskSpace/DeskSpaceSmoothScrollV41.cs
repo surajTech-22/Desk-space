@@ -107,8 +107,7 @@ internal static class DeskSpaceSmoothScrollV41
         if(!ReferenceEquals(sender,target) || target==null)return;
         // Large logical/virtualized lists keep their native behavior;
         // Deck explicitly opts into pixel scrolling instead.
-        if(target.CanContentScroll && Math.Abs(e.Delta)>=120 &&
-           !horizontal)return;
+        if(target.CanContentScroll && !horizontal)return;
         var motion=motions.GetValue(target,v=>new Motion(v));
         double dip=PixelsForWheelV289(e.Delta,SystemParameters.WheelScrollLines);
         if(horizontal)

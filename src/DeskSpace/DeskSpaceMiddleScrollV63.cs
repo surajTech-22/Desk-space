@@ -21,13 +21,38 @@ internal static class DeskSpaceMiddleScrollV63
         return 0;
     }
 
+    // High-resolution trackpads emit fractional (<120) wheel deltas.
+    // A normal mouse wheel must keep one page step per 120 units, whereas
+    // precision touches can advance after a smaller accumulated movement.
+    internal sealed class PrecisionWheelV290
+    {
+        private int remainder;
+        internal int Step(int delta)
+        {
+            if(delta==0)return 0;
+            if(Math.Abs(delta)>=120)
+            {
+                remainder=0;
+                return Math.Clamp(-delta/120,-3,3);
+            }
+            if(remainder!=0 && Math.Sign(remainder)!=Math.Sign(delta))
+                remainder=0;
+            remainder=Math.Clamp(remainder+delta,-360,360);
+            int page=0;
+            while(remainder>=60){remainder-=60;page--;}
+            while(remainder<=-60){remainder+=60;page++;}
+            return Math.Clamp(page,-3,3);
+        }
+        internal void Reset()=>remainder=0;
+    }
+
     internal sealed class Controller : IDisposable
     {
         private readonly Canvas surface;
         private readonly Func<bool> hasOverflow,menuVisible;
         private readonly Action<int> scroll;
         private readonly DispatcherTimer timer;
-        private readonly DeskSpaceSubDonutStandardV62.Wheel normalWheel=new();
+        private readonly PrecisionWheelV290 precisionWheel=new();
         private Point anchor;
         private Cursor? previousCursor;
         private bool disposed;
@@ -65,8 +90,11 @@ internal static class DeskSpaceMiddleScrollV63
         private void ScrollWheel(MouseWheelEventArgs e)
         {
             if(e.Handled||!IsPointerOverVisiblePart())return;
+            // Respect zoom, accessibility/system and horizontal gestures.
+            if((Keyboard.Modifiers &(ModifierKeys.Control|
+                ModifierKeys.Alt|ModifierKeys.Shift))!=0)return;
             if(IsActive)Stop();
-            int amount=normalWheel.Step(e.Delta);
+            int amount=precisionWheel.Step(e.Delta);
             if(amount!=0)scroll(amount);
             // Even a fine-grained touchpad delta belongs to this wheel.
             e.Handled=true;
@@ -108,7 +136,8 @@ internal static class DeskSpaceMiddleScrollV63
         internal void Pulse(Point pointer)
         {
             if(!IsActive || disposed)return;
-            if(!menuVisible() || !hasOverflow()){Stop();return;}
+            if(!menuVisible() || !hasOverflow())
+            {precisionWheel.Reset();Stop();return;}
             int dir=Direction(anchor,pointer);
             if(dir==0)return;
             TickCount++;
@@ -128,6 +157,7 @@ internal static class DeskSpaceMiddleScrollV63
         internal void Stop()
         {
             timer.Stop();
+            precisionWheel.Reset();
             if(IsActive)surface.Cursor=previousCursor;
             previousCursor=null;
             IsActive=false;

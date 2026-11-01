@@ -1,0 +1,46 @@
+name: R290 Precision touchpad menu and WPF scroll Windows validation
+on:
+  push:
+    branches: [fix/r290-precision-menu-touchpad]
+    paths:
+      - src/DeskSpace/DeskSpaceMiddleScrollV63.cs
+      - src/DeskSpace/DeskSpaceSmoothScrollV41.cs
+      - r289/Tests/Program.cs
+      - r290/**
+      - .github/workflows/test-r290-touchpad.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Windows WPF app compile
+        shell: pwsh
+        run: |
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R290 WPF build error'}
+      - name: Test R289 below-only Deck and R290 touchpad scroll in compiled WPF
+        shell: pwsh
+        run: |
+          dotnet run --project 'r289/Tests/DeckTouchpadTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R290 native Windows touchpad regression failed'}
+      - name: Reconstruct the shipping source and check byte-for-byte parity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory 'DeskSpace_Windows_R1/DeskSpace' -Force|Out-Null
+          Copy-Item 'r289/DeskSpaceSmoothScrollV289.cs' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSmoothScrollV41.cs'
+          Copy-Item 'r289/DeskSpaceMonitorDockV289.cs' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMonitorDockV190.cs'
+          Copy-Item 'src/DeskSpace/DeskSpaceMiddleScrollV63.cs' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMiddleScrollV63.cs'
+          ./r290/apply-r290.ps1
+          foreach($file in @('DeskSpaceMiddleScrollV63.cs','DeskSpaceSmoothScrollV41.cs','DeskSpaceMonitorDockV190.cs')){
+            $app=(Get-FileHash "src/DeskSpace/$file" -Algorithm SHA256).Hash
+            $recipe=(Get-FileHash "DeskSpace_Windows_R1/DeskSpace/$file" -Algorithm SHA256).Hash
+            if($app -ne $recipe){throw ("R290 shipping source differs from canonical app: "+$file)}
+          }
+          Write-Host 'R290 PASS: source parity, WPF build and real compiled precision touchpad scroll. Physical laptop gestures remain unverified.'
