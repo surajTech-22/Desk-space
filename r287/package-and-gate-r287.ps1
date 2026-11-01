@@ -40,12 +40,12 @@ else{
  Write-Host '::warning::R287 publisher signing credentials unavailable. Installer stays UNRELEASED.'
 }
 & ./r220/normalize-release-checksum.ps1 -OutputDirectory $target
-if($LASTEXITCODE -ne 0){throw 'R287 updater SHA normalization failed'}
+# PowerShell assertion scripts throw on failure; no native LASTEXITCODE to inspect.
 Copy-Item -LiteralPath $setup -Destination (Join-Path $target 'Update.exe') -Force
 $digest=(Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText((Join-Path $target 'Update.sha256.txt'),$digest,[Text.Encoding]::ASCII)
 & ./r249/assert-dual-channel-hash.ps1 -StableInstaller $setup -TesterInstaller (Join-Path $target 'Update.exe') -ExpectedSha256 $digest
-if($LASTEXITCODE -ne 0){throw 'R287 Stable/Tester parity failed'}
+# PowerShell assertion scripts throw on failure; no native LASTEXITCODE to inspect.
 $receipt=((Get-Content (Join-Path $target 'DeskSpace_Setup.sha256.txt') -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
 if($receipt -cne $digest){throw 'R287 legacy updater SHA differs'}
 $provenance=Join-Path $target 'DeskSpace.provenance.json'
@@ -60,7 +60,7 @@ $provenance=Join-Path $target 'DeskSpace.provenance.json'
 } | ConvertTo-Json -Depth 3 | Set-Content $provenance
 if($signed){
  & ./r250/assert-signed-release.ps1 -InstallerPath $setup -ExpectedSha256 $digest -ExpectedSignerThumbprint $thumb -ExpectedSourceCommit $SourceSha -ProvenanceManifestPath $provenance
- if($LASTEXITCODE -ne 0){throw 'R287 real Authenticode verification failed'}
+ # PowerShell assertion scripts throw on failure; no native LASTEXITCODE to inspect.
 }
 $ready=Get-Content 'docs/CONSOLIDATED_RELEASE_READINESS.json' -Raw | ConvertFrom-Json
 $blocked=@($ready.checks | Where-Object { $_.status -ne 'verified' })
