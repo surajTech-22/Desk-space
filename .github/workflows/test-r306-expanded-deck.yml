@@ -1,0 +1,49 @@
+name: R306 verify Deck always expanded
+on:
+  push:
+    branches: [fix/r306-deck-always-expanded]
+    paths:
+      - src/DeskSpace/DeskSpaceDropShelfV15.cs
+      - r306/**
+      - .github/workflows/test-r306-expanded-deck.yml
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Enforce full Deck on every render and reopening
+        shell: pwsh
+        run: |
+          ./r306/test-r306.ps1
+      - name: Compile actual WPF Deck source
+        shell: pwsh
+        run: |
+          dotnet build src/DeskSpace/DeskSpace.csproj -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R306 DeskSpace WPF app failed to compile'}
+      - name: Regression native Deck geometry and touchpad
+        shell: pwsh
+        run: |
+          dotnet run --project r304/Tests/DeckForegroundTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R306 foreground Deck regression failed'}
+          dotnet run --project r292/Tests/DeckNativeTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R306 below-circle Deck placement regression'}
+      - name: Check scoped stable patch against previous Deck implementation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force DeskSpace_Windows_R1/DeskSpace | Out-Null
+          $s=Get-Content src/DeskSpace/DeskSpaceDropShelfV15.cs -Raw
+          $old=$s.Replace('    // Deck is permanently expanded while visible. No auto/header-only state.'+ [Environment]::NewLine+'    private bool deckDismissed,appRenderPending;',
+            '    private bool deckMinimized,deckDismissed,appRenderPending;')
+          if($old -eq $s){throw 'Cannot check R306 source parity'}
+          # Versioned file and canonical production WPF implementation are equal
+          $v=(Get-FileHash r306/DeskSpaceDropShelfAlwaysExpandedV306.cs -Algorithm SHA256).Hash
+          $c=(Get-FileHash src/DeskSpace/DeskSpaceDropShelfV15.cs -Algorithm SHA256).Hash
+          if($v -ne $c){throw 'R306 versioned/canonical Deck code mismatch'}
+          Write-Host 'R306 source parity PASS'
