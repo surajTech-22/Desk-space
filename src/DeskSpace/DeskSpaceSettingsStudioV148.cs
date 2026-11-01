@@ -595,14 +595,20 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
         var accent=DeskSpaceAppearanceV148.TryColor(draft.Accent,out var a)?a:Colors.MediumPurple;
         var dark=DeskSpaceAppearanceV148.IsDarkFor(draft);
         var backdrop=dark?Color.FromRgb(32,34,49):Colors.White;
-        double blend=draft.Style=="Material"?.78:.88;
+        double blend=draft.Style=="Modern"?.70:
+            draft.Style=="Material"?.78:.88;
         blend=Math.Clamp(blend+(draft.Softness-16)*.003,.67,.94);
-        var pale=DeskSpaceAppearanceV148.Mix(accent,backdrop,blend);
+        var pale=DeskSpaceAppearanceV148.Mix(accent,
+            draft.Style=="Modern"?Color.FromRgb(29,43,75):backdrop,blend);
         var second=DeskSpaceAppearanceV148.Mix(accent,
-            dark?Color.FromRgb(41,43,56):Colors.White,
-            draft.Style=="Material"?.68:.80);
-        donut.Background=new SolidColorBrush(dark?Color.FromRgb(27,29,43):
-            Color.FromRgb(246,246,252));
+            draft.Style=="Modern"?Color.FromRgb(18,29,51):
+                dark?Color.FromRgb(41,43,56):Colors.White,
+            draft.Style=="Modern"?.84:
+                draft.Style=="Material"?.68:.80);
+        donut.Background=DeskSpaceDesignV283.Solid(
+            draft.Style=="Modern"?Color.FromRgb(13,23,41):
+                dark?Color.FromRgb(27,29,43):
+                    Color.FromRgb(246,246,252));
         double radius=126*Math.Clamp(draft.Scale,.75,1.25);
         for(int i=0;i<12;i++)
         {
@@ -613,7 +619,10 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             var path=new System.Windows.Shapes.Path{
                 Data=Wedge(145,inner,outerRadius,angle+1,angle+58),
                 Fill=new SolidColorBrush(i%2==0?pale:second),
-                Stroke=Brushes.White,StrokeThickness=2};
+                Stroke=dark?
+                    DeskSpaceDesignV283.Solid(Color.FromRgb(58,75,107)):
+                    Brushes.White,
+                StrokeThickness=2};
             donut.Children.Add(path);
             var pos=Polar(145,145,(inner+outerRadius)/2,angle+29);
             var label=new TextBlock{Text=Modules[i],FontSize=outer?10:9,
@@ -624,7 +633,16 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             donut.Children.Add(label);
         }
         var centre=new Ellipse{Width=radius*.65,Height=radius*.65,
-            Fill=new SolidColorBrush(accent),Stroke=Brushes.White,StrokeThickness=3};
+            Fill=draft.Style=="Modern"?
+                DeskSpaceDesignV283.Gradient(
+                    DeskSpaceAppearanceV148.Mix(
+                        accent,Color.FromRgb(37,58,102),.55),
+                    Color.FromRgb(16,27,50),125):
+                new SolidColorBrush(accent),
+            Stroke=draft.Style=="Modern"?
+                DeskSpaceDesignV283.Solid(Color.FromRgb(114,140,205)):
+                Brushes.White,
+            StrokeThickness=3};
         Canvas.SetLeft(centre,145-radius*.325);Canvas.SetTop(centre,145-radius*.325);
         donut.Children.Add(centre);
         var centerText=new TextBlock{Text="DeskSpace",Width=radius*.65,
