@@ -16,7 +16,7 @@ foreach($key in @(
  'internal static void Button(Button button,bool primary=false,',
  'internal static void Input(TextBox text,Palette? palette=null)',
  'SystemParameters.HighContrast',
- 'Template=border',
+ 'button.Template=template;',
  'internal static Brush WidgetFace()',
  'public string Style {get;set;}="Modern";',
  'item.Style is "Modern" or "Material" or "Soft"',
