@@ -191,7 +191,6 @@ jobs:
             'r230/apply-tests-r230.ps1',
             'r231/apply-tests-r231.ps1',
             'r233/apply-tests-r233.ps1',
-            'r235/apply-tests-r235.ps1',
             'r236/apply-tests-r236.ps1',
             'r237/apply-tests-r237.ps1',
             'r238/apply-tests-r238.ps1',
