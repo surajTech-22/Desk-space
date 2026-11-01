@@ -138,6 +138,94 @@ internal static class DeskSpaceSearchIndexV13
             }
         }
     }
+
+    // Search isn't the recent-files watcher: asking to find files should
+    // include existing user documents even when those files are not eligible
+    // for the Deck's auto-watch or clipboard recommendations.
+    internal static bool IsSearchableFileV288(string path)
+    {
+        try
+        {
+            if(string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+            var name=Path.GetFileName(path);
+            if(name.Length==0 || name.StartsWith(".",StringComparison.Ordinal))
+                return false;
+            var flags=File.GetAttributes(path);
+            return (flags&(FileAttributes.Hidden|FileAttributes.System|
+                FileAttributes.ReparsePoint|FileAttributes.Directory|
+                FileAttributes.Temporary))==0;
+        }
+        catch(Exception e) when(e is IOException or
+            UnauthorizedAccessException or ArgumentException or
+            System.Security.SecurityException or NotSupportedException)
+        {return false;}
+    }
+
+    // Before a full multi-drive crawl completes, ordinary files in the
+    // user's common directories should still be discoverable. Read names
+    // only. Depth, visit budget, no reparse and cancellation bound the work.
+    internal static IReadOnlyList<SearchHit> QuickFilesV288(
+        string root,string term,CancellationToken cancellation,
+        int maxEntries=2200,int maxDepth=3)
+    {
+        var hits=new List<SearchHit>();
+        if(term.Length<2 || string.IsNullOrWhiteSpace(root) ||
+           !Directory.Exists(root))return hits;
+        var queue=new Queue<(string Path,int Depth)>();
+        queue.Enqueue((root,0));
+        int visited=0;
+        maxEntries=Math.Clamp(maxEntries,1,6000);
+        maxDepth=Math.Clamp(maxDepth,0,5);
+        while(queue.Count>0 && visited<maxEntries && hits.Count<72)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            var (parent,depth)=queue.Dequeue();
+            string[] children;
+            try{children=Directory.GetFileSystemEntries(parent);}
+            catch(Exception e) when(e is IOException or
+                UnauthorizedAccessException or ArgumentException or
+                System.Security.SecurityException){continue;}
+            foreach(var path in children)
+            {
+                if(++visited>maxEntries)break;
+                if((visited&63)==0)cancellation.ThrowIfCancellationRequested();
+                FileAttributes attrs;
+                try{attrs=File.GetAttributes(path);}
+                catch(Exception e) when(e is IOException or
+                    UnauthorizedAccessException or ArgumentException or
+                    System.Security.SecurityException){continue;}
+                if((attrs&(FileAttributes.ReparsePoint|FileAttributes.Hidden|
+                    FileAttributes.System))!=0)continue;
+                if((attrs&FileAttributes.Directory)!=0)
+                {
+                    if(depth<maxDepth)queue.Enqueue((path,depth+1));
+                    continue;
+                }
+                if(!Path.GetFileName(path).Contains(term,
+                    StringComparison.OrdinalIgnoreCase) ||
+                   !IsSearchableFileV288(path))continue;
+                hits.Add(new SearchHit{Category="Files",
+                    Name=Path.GetFileName(path),OpenTarget=path,Location=path});
+                if(hits.Count>=72)break;
+            }
+        }
+        return hits;
+    }
+
+    internal static IEnumerable<string> QuickRootsV288()
+    {
+        foreach(var root in new[]{
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.UserProfile),"Downloads"),
+            Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.UserProfile),"OneDrive")})
+            if(!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+                yield return root;
+    }
+
     public static void WarmStart()=>Start();
     public static void UnregisterLivePath(string path)
     {
@@ -153,7 +241,7 @@ internal static class DeskSpaceSearchIndexV13
         try
         {
             var full=Path.GetFullPath(path);
-            if(DeskSpaceNewFileWatchV53.IsOrdinaryUserFile(full))LivePaths.TryAdd(full,0);
+            if(IsSearchableFileV288(full))LivePaths.TryAdd(full,0);
         }
         catch(IOException){}
         catch(UnauthorizedAccessException){}
@@ -370,7 +458,7 @@ internal static class DeskSpaceSearchIndexV13
         foreach(var hit in indexed)
             if((!scoped || hit.OpenTarget.StartsWith(driveFilter!,StringComparison.OrdinalIgnoreCase)) &&
                (hit.Category!="Files" ||
-                DeskSpaceNewFileWatchV53.IsOrdinaryUserFile(hit.OpenTarget)))
+                IsSearchableFileV288(hit.OpenTarget)))
                 Add(hit);
         // Immediately searchable even if the full-drive scan is incomplete
         // or Windows Search has not indexed a newly created filename.
@@ -378,7 +466,7 @@ internal static class DeskSpaceSearchIndexV13
             foreach(var path in LivePaths.Keys)
             {
                 cancellation.ThrowIfCancellationRequested();
-                if(!DeskSpaceNewFileWatchV53.IsOrdinaryUserFile(path))
+                if(!IsSearchableFileV288(path))
                 {
                     LivePaths.TryRemove(path,out _);
                     continue;
@@ -388,30 +476,51 @@ internal static class DeskSpaceSearchIndexV13
                     Add(new SearchHit{Category="Files",Name=Path.GetFileName(path),
                         OpenTarget=path,Location=path});
             }
+        // A query should not return only matching folder names while files
+        // are still indexing. Search likely user locations on demand first.
+        if(fileQuery.Length>=2 &&
+           !fileQuery.StartsWith("content:",StringComparison.OrdinalIgnoreCase))
+        {
+            foreach(var root in QuickRootsV288())
+            {
+                cancellation.ThrowIfCancellationRequested();
+                if(scoped && !root.StartsWith(driveFilter!,
+                    StringComparison.OrdinalIgnoreCase))continue;
+                foreach(var file in QuickFilesV288(root,fileQuery,cancellation))
+                    Add(file);
+            }
+        }
         lock(Gate)
         {
-            var scanned=0;
-            // Protect cross-volume coverage: a crowded C: result set must not
-            // prevent matches from D:, E:, removable or network volumes.
-            var perVolume=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);
-            foreach(var item in Entries)
+            int scanned=0;
+            // Two passes are intentional: all FILES before directories.
+            // A folder-path query must not use up a volume's file quota.
+            for(int pass=0;pass<2;pass++)
             {
-                if((++scanned&4095)==0)cancellation.ThrowIfCancellationRequested();
-                if(fileQuery.StartsWith("content:",StringComparison.OrdinalIgnoreCase))continue;
-                if(scoped&&!item.Path.StartsWith(driveFilter!,StringComparison.OrdinalIgnoreCase))continue;
-                if(!Matches(item.Name,fileQuery) && !Matches(item.Path,fileQuery))continue;
-                // A deleted file must not linger in the old full-drive
-                // snapshot after the live watcher removed its path.
-                if(!item.Folder && !DeskSpaceNewFileWatchV53.IsOrdinaryUserFile(item.Path))continue;
-                if(item.Folder && !Directory.Exists(item.Path))continue;
-                if(item.Name.EndsWith(".lnk",StringComparison.OrdinalIgnoreCase) ||
-                   item.Name.EndsWith(".url",StringComparison.OrdinalIgnoreCase))continue;
-                var volume=Path.GetPathRoot(item.Path)??"";
-                perVolume.TryGetValue(volume,out var already);
-                if(already>=48)continue;
-                if(Add(new SearchHit{Category="Files",
-                    Name=item.Name,OpenTarget=item.Path,Location=item.Path}))
-                    perVolume[volume]=already+1;
+                var perVolume=new Dictionary<string,int>(
+                    StringComparer.OrdinalIgnoreCase);
+                foreach(var item in Entries)
+                {
+                    if((++scanned&4095)==0)cancellation.ThrowIfCancellationRequested();
+                    if(fileQuery.StartsWith("content:",
+                        StringComparison.OrdinalIgnoreCase))continue;
+                    if(item.Folder != (pass==1))continue;
+                    if(scoped&&!item.Path.StartsWith(driveFilter!,
+                        StringComparison.OrdinalIgnoreCase))continue;
+                    if(!Matches(item.Name,fileQuery) &&
+                       !Matches(item.Path,fileQuery))continue;
+                    if(!item.Folder && !IsSearchableFileV288(item.Path))continue;
+                    if(item.Folder && !Directory.Exists(item.Path))continue;
+                    if(item.Name.EndsWith(".lnk",StringComparison.OrdinalIgnoreCase) ||
+                       item.Name.EndsWith(".url",StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var volume=Path.GetPathRoot(item.Path)??"";
+                    perVolume.TryGetValue(volume,out int already);
+                    if(already>=(item.Folder?12:48))continue;
+                    if(Add(new SearchHit{Category="Files",
+                        Name=item.Name,OpenTarget=item.Path,Location=item.Path}))
+                        perVolume[volume]=already+1;
+                }
             }
         }
         return ranked.Finish();
