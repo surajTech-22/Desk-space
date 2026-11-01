@@ -116,7 +116,9 @@ internal static class DeskSpaceDesignV283
         button.Padding=new Thickness(13,9,13,9);
         button.MinHeight=Math.Max(button.MinHeight,34);
         button.Cursor=System.Windows.Input.Cursors.Hand;
-        var border=new FrameworkElementFactory(typeof(Border));
+        var border=new FrameworkElementFactory(typeof(Border)){
+            Name="Chrome"
+        };
         border.SetValue(Border.CornerRadiusProperty,new CornerRadius(10));
         border.SetBinding(Border.BackgroundProperty,
             new System.Windows.Data.Binding(nameof(Control.Background))
@@ -143,6 +145,22 @@ internal static class DeskSpaceDesignV283
         {
             VisualTree=border
         };
+        // Keyboard focus and hover must be visible even with custom chrome.
+        // Trigger is on the existing native Button, never a mouse-only layer.
+        var keyboard=new Trigger{
+            Property=UIElement.IsKeyboardFocusedProperty,Value=true
+        };
+        keyboard.Setters.Add(new Setter(Border.BorderBrushProperty,
+            Solid(p.Accent),"Chrome"));
+        keyboard.Setters.Add(new Setter(Border.BorderThicknessProperty,
+            new Thickness(2),"Chrome"));
+        template.Triggers.Add(keyboard);
+        var hovered=new Trigger{
+            Property=UIElement.IsMouseOverProperty,Value=true
+        };
+        hovered.Setters.Add(new Setter(Border.BorderBrushProperty,
+            Solid(p.Accent),"Chrome"));
+        template.Triggers.Add(hovered);
         button.Template=template;
         if(string.IsNullOrEmpty(AutomationProperties.GetName(button)) &&
            button.Content is string label)
