@@ -77,7 +77,7 @@ $method=@'
             !Safe("",5678,"HwndWrapper") &&
             !Safe("Changed",1234,"HwndWrapper") &&
             !Safe("",1234,"OtherClass") &&
-            (string)display.Invoke(null,new object[]{noTitle})!="Unnamed app",
+            (string)display.Invoke(null,new object[]{noTitle})=="Unnamed app",
             "R282 untitled window controls must recheck its HWND PID and class");
         var work=new System.Drawing.Rectangle(0,0,340,255);
         var widget=new System.Drawing.Rectangle(90,78,160,145);
