@@ -1,0 +1,51 @@
+name: R304 DeskSpace visibility and compact Deck scroll Windows acceptance
+on:
+  push:
+    branches: [fix/r304-deck-visibility-touch-scroll]
+    paths:
+      - r304/**
+      - src/DeskSpace/DeskSpaceDropShelfV15.cs
+      - src/DeskSpace/DeskSpaceDeckVisibilityV304.cs
+      - .github/workflows/test-r304-deck-visibility.yml
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile complete WPF DeskSpace app
+        shell: pwsh
+        run: |
+          dotnet build src/DeskSpace/DeskSpace.csproj -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R304 app compile error'}
+      - name: Real Windows popup foreground, scrollbar and monitor test
+        shell: pwsh
+        run: |
+          dotnet run --project r304/Tests/DeckForegroundTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R304 Deck hidden/clipped regression'}
+      - name: Previous native Deck collision and touchpad tests
+        shell: pwsh
+        run: |
+          dotnet run --project r292/Tests/DeckNativeTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R304 Deck collided with owner'}
+          dotnet run --project r289/Tests/DeckTouchpadTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R304 touchpad regression'}
+      - name: Test stable patch applied to original shipping files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='DeskSpace_Windows_R1/DeskSpace'
+          New-Item -ItemType Directory $root -Force | Out-Null
+          Copy-Item 'r298/DeskSpaceDropShelfV298.cs' "$root/DeskSpaceDropShelfV15.cs"
+          Copy-Item 'r298/DeskSpaceMonitorDockV298.cs' "$root/DeskSpaceMonitorDockV190.cs"
+          ./r304/apply-r304.ps1
+          $s=Get-Content "$root/DeskSpaceDropShelfV15.cs" -Raw
+          if(!$s.Contains('DeskSpaceDeckVisibilityV304.Attach(host,popup,panel);')){
+            throw 'R304 missing in actual installed popup'
+          }
+          Write-Host 'R304 PASS: exact Stable Deck patch can be reconstructed.'
