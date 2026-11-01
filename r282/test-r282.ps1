@@ -18,7 +18,6 @@ foreach($token in @(
  'DeskSpaceRunningAppsV88.DisplayTitleV282(selected)',
  'internal static Rectangle AvoidWidgetV282(',
  'internal static double ScrollHeightV282(',
- 'scroll.MaxHeight=Math.Min(Math.Min(520,h),',
  'owner.LocationChanged+=(_,_)=>{Refresh();RepairLater();};',
  'if(safe.Location!=current.Location)',
  'TestRunningAppCountAndDeckClearanceV282();',
@@ -30,6 +29,19 @@ foreach($token in @(
   throw ('R282 count/Deck safety not present: '+$token)
  }
 }
+# R289 constrains the viewport strictly to room below its own clock.
+if($dock.Contains('CalculateBelowV289('))
+{
+ if(!$dock.Contains('int availableBelow=Math.Max(1,bounds.Bottom-widgetRect.Bottom-22);') -or
+    !$dock.Contains('scroll.MaxHeight=Math.Max(12,Math.Min(')){
+  throw 'R289 below-only Deck lost its monitor-bound scrolling viewport'
+ }
+}
+elseif(!$dock.Contains('scroll.MaxHeight=Math.Min(Math.Min(520,h),'))
+{
+ throw 'R282 legacy scroll viewport missing'
+}
+
 foreach($bad in @('Process.Kill(','Clipboard.SetText(')){
  if($apps.Contains($bad) -or $dock.Contains($bad)){
   throw ('R282 must not terminate running apps or modify clipboard: '+$bad)
