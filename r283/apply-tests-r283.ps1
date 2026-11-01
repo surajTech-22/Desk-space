@@ -94,11 +94,11 @@ $method=@'
                 "R283 modern appearance must be persistable and supported");
             appearance.GetProperty("Style")!.SetValue(data,"Soft");
             Assert((string)appearance.GetProperty("Style")!.GetValue(
-                    sanitize.Invoke(null,new[]{data})!)!=="Soft",
+                    sanitize.Invoke(null,new[]{data})!)== "Soft",
                 "R283 old Soft appearance presets must remain compatible");
             appearance.GetProperty("Style")!.SetValue(data,"Material");
             Assert((string)appearance.GetProperty("Style")!.GetValue(
-                    sanitize.Invoke(null,new[]{data})!)!=="Material",
+                    sanitize.Invoke(null,new[]{data})!)== "Material",
                 "R283 old Material presets must remain compatible");
             Console.WriteLine("R283 PASS: real WPF rounded buttons, "+
                 "Deck chrome, themes, high contrast, keyboard targets "+
