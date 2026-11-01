@@ -314,15 +314,40 @@ try {
     # remains intentionally alive. -Wait then never returns, leaving the
     # installation supervisor mutex locked forever (observed 01-Nov-2026).
     # Wait on ONLY the direct verified installer process handle instead.
+    $innoLogStartedUtc=[DateTime]::UtcNow
     $setup=Start-Process -FilePath $Installer -ArgumentList $arguments -PassThru -ErrorAction Stop
     if(!$setup.WaitForExit(240000)){
         $installerStillRunning=$true
         Report ('R312 direct installer still running after 240s; leaving process and snapshot untouched. PID='+$setup.Id)
         throw 'R312 verified installer is still executing; no second installation and no rollback while live'
     }
-    $installerStillRunning=$false
     if($setup.ExitCode -ne 0){throw ('R185 installer exited '+$setup.ExitCode)}
-    Report 'R312 direct installer process exited; descendant widget host does not block mutex release.'
+    # Inno Setup may spawn an elevated helper which outlives the parent.
+    # The direct process exit alone is NOT enough: require the CURRENT
+    # transaction's Setup log to record a successful installation.
+    $innoSuccess=$false
+    $logDeadline=[DateTime]::UtcNow.AddSeconds(120)
+    while([DateTime]::UtcNow -lt $logDeadline) {
+        try {
+            if(Test-Path -LiteralPath $setupLog -PathType Leaf) {
+                $logFile=Get-Item -LiteralPath $setupLog -ErrorAction Stop
+                if($logFile.LastWriteTimeUtc -ge $innoLogStartedUtc.AddSeconds(-2)) {
+                    $lastLines=Get-Content -LiteralPath $setupLog -Tail 80 -ErrorAction Stop
+                    if($lastLines -match 'Installation process succeeded[.]') {
+                        $innoSuccess=$true;break
+                    }
+                }
+            }
+        } catch { }
+        Start-Sleep -Milliseconds 500
+    }
+    if(!$innoSuccess) {
+        $installerStillRunning=$true
+        Report 'R312 Inno Setup success not confirmed for current transaction; no unsafe rollback/relaunch.'
+        throw 'R312 installer completion cannot be verified; snapshot retained'
+    }
+    $installerStillRunning=$false
+    Report 'R312 direct installer exited and current Inno Setup log reports successful installation.'
     if(!(Test-Path -LiteralPath $TargetExe -PathType Leaf)){
         throw 'R185 installer succeeded but new executable is absent'
     }
