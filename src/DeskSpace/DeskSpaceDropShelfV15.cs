@@ -233,7 +233,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         DeskSpaceDeckVisibilityV89.Changed+=DeckVisibilityChanged;
         popup=new Popup {
             PlacementTarget=host,Placement=PlacementMode.Custom,
-            HorizontalOffset=0,VerticalOffset=5,StaysOpen=true,
+            HorizontalOffset=0,VerticalOffset=0,StaysOpen=true,
             AllowsTransparency=true,PopupAnimation=PopupAnimation.Fade,
             Child=panel
         };
@@ -356,7 +356,10 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
     public void SetMediaOffset(double offset)
     {
         if(disposed)return;
-        popup.VerticalOffset=Math.Max(5,offset);
+        // Media controls share the same Deck and must NEVER displace its
+        // physical Popup upward or into the circular widget. Ignore legacy
+        // vertical popup offsets; native placement owns Y.
+        if(popup.VerticalOffset!=0)popup.VerticalOffset=0;
     }
     private void DeckVisibilityChanged(bool visible)
     {
