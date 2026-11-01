@@ -8,7 +8,7 @@ foreach($needle in @(
  'internal static bool CanControlV279(',
  'internal static bool RequestStateV279(',
  'ShowWindowAsync(entry.Handle,minimize?Minimise:Restore);',
- 'CanControlV279(entry,true,WindowText(entry.Handle))',
+ 'IsSameLiveWindowV282(entry)',
  'internal static Button MakeStateButtonV279(',
  'MakeStateButtonV279(selected,true)',
  'MakeStateButtonV279(selected,false)',
