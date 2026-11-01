@@ -240,6 +240,7 @@ $pending=Join-Path $post 'pending.json'
 $ready=Join-Path $post 'ready.json'
 $hadSnapshot=$false
 $installerStarted=$false
+$installerStillRunning=$false
 $complete=$false
 $ownsMutex=$false
 $mutex=$null
@@ -308,8 +309,20 @@ try {
     $arguments='/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /DIR="'+$install+'" /LOG="'+$setupLog+'"'
     Report 'R185 launching verified installer over original directory.'
     $installerStarted=$true
-    $setup=Start-Process -FilePath $Installer -ArgumentList $arguments -Wait -PassThru -ErrorAction Stop
+    # R312: PowerShell Start-Process -Wait tracks the spawned PROCESS TREE.
+    # Inno Setup may exit successfully but its DeskSpace widget-host child
+    # remains intentionally alive. -Wait then never returns, leaving the
+    # installation supervisor mutex locked forever (observed 01-Nov-2026).
+    # Wait on ONLY the direct verified installer process handle instead.
+    $setup=Start-Process -FilePath $Installer -ArgumentList $arguments -PassThru -ErrorAction Stop
+    if(!$setup.WaitForExit(240000)){
+        $installerStillRunning=$true
+        Report ('R312 direct installer still running after 240s; leaving process and snapshot untouched. PID='+$setup.Id)
+        throw 'R312 verified installer is still executing; no second installation and no rollback while live'
+    }
+    $installerStillRunning=$false
     if($setup.ExitCode -ne 0){throw ('R185 installer exited '+$setup.ExitCode)}
+    Report 'R312 direct installer process exited; descendant widget host does not block mutex release.'
     if(!(Test-Path -LiteralPath $TargetExe -PathType Leaf)){
         throw 'R185 installer succeeded but new executable is absent'
     }
@@ -355,7 +368,7 @@ try {
 }
 catch {
     Report ('R185 FAILED: '+$_.Exception.GetType().Name+': '+$_.Exception.Message)
-    if($hadSnapshot -and $installerStarted){
+    if($hadSnapshot -and $installerStarted -and !$installerStillRunning){
         try{
             $live=@(Get-CimInstance Win32_Process -Filter "Name='DeskSpace.exe'" -ErrorAction SilentlyContinue |
                 Where-Object {$_.ExecutablePath -and $_.ExecutablePath.Equals($original,[StringComparison]::OrdinalIgnoreCase)})
@@ -368,7 +381,7 @@ catch {
             Report ('R185 manual recovery required, snapshot retained: '+$_.Exception.GetType().Name)
         }
     }
-    if($ownsMutex -and !$exitBlocked){
+    if($ownsMutex -and !$exitBlocked -and !$installerStillRunning){
         try{
             $visible=@(Get-CimInstance Win32_Process -Filter "Name='DeskSpace.exe'" -ErrorAction SilentlyContinue |
                 Where-Object {$_.ExecutablePath -and

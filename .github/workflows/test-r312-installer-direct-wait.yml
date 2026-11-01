@@ -1,0 +1,36 @@
+name: R312 native installer direct-process completion / mutex recovery
+on:
+  push:
+    branches: [fix/r312-supervisor-waits-direct-installer-only]
+    paths:
+      - src/DeskSpace/DeskSpaceUpdateSupervisor.ps1
+      - r312/**
+      - .github/workflows/test-r312-installer-direct-wait.yml
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify direct installer completion with long-lived child process
+        shell: powershell
+        run: |
+          ./r312/test-r312.ps1
+          if(!$?){throw 'R312 direct process wait regression'}
+      - name: Compile DeskSpace WPF app and supervisor embedded resource
+        shell: pwsh
+        run: |
+          dotnet build src/DeskSpace/DeskSpace.csproj -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R312 WPF shipping app failed'}
+      - name: Check versioned supervisor source matches canonical
+        shell: pwsh
+        run: |
+          $a=(Get-FileHash 'src/DeskSpace/DeskSpaceUpdateSupervisor.ps1' -Algorithm SHA256).Hash
+          $b=(Get-FileHash 'r312/DeskSpaceUpdateSupervisorV312.ps1' -Algorithm SHA256).Hash
+          if($a -ne $b){throw 'R312 production supervisor differs from versioned source'}
+          Write-Host 'R312 native installer process completion and supervisor source parity passed'
