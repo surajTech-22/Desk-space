@@ -1,0 +1,47 @@
+name: R310 native supervisor busy-deferred update regression
+on:
+  push:
+    branches: [fix/r310-update-supervisor-busy-retry]
+    paths:
+      - src/DeskSpace/DeskSpacePublicUpdaterV44.cs
+      - r310/**
+      - .github/workflows/test-r310-busy-supervisor.yml
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile real WPF updater and DeskSpace app
+        shell: pwsh
+        run: |
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R310 WPF shipping update source fails compilation'}
+      - name: Verify native cross-thread Windows installation mutex contention
+        shell: pwsh
+        run: |
+          dotnet run --project 'r310/Tests/SupervisorBusyTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R310 duplicate supervisor guard regression'}
+      - name: Check cached retry and informational UX without unsafe bypass
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $src=Get-Content 'src/DeskSpace/DeskSpacePublicUpdaterV44.cs' -Raw
+          foreach($token in @('SupervisorBusyV310Exception',
+             'catch(SupervisorBusyV310Exception)',
+             'DeskSpace update in progress',
+             'DeskSpaceVerifiedUpdateQueueV191.Stage(',
+             'DeskSpaceVerifiedUpdateQueueV191.IsStillVerified(pending)')){
+            if(!$src.Contains($token)){throw ('R310 cache and safety contract missing: '+$token)}
+          }
+          if(!$src.Contains('existing.WaitOne(0)') -or
+             !$src.Contains('if(!free)')){throw 'Native mutex preflight missing'}
+          $bytes=(Get-FileHash 'r310/DeskSpacePublicUpdaterV310.cs' -Algorithm SHA256).Hash
+          $actual=(Get-FileHash 'src/DeskSpace/DeskSpacePublicUpdaterV44.cs' -Algorithm SHA256).Hash
+          if($bytes -ne $actual){throw 'Versioned updater and real app have different bytes'}
+          Write-Host 'R310 PASS: cached verified installer preserved, real mutex blocks duplicate handoff, benign status not false install failure.'
