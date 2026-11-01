@@ -9,10 +9,26 @@ foreach($needle in @(
  'border.ContextMenu=deckContext;',
  'Reposition();',
  'var deckX=Math.Clamp(result.X+shift.X,screen.Left,',
- 'var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,'
-)){
+ )){
  if(!$s.Contains($needle)){throw ('R234 missing monitor-specific reset: '+$needle)}
 }
+# R289 replaces the legacy movable Y offset: vertical placement is
+# locked below the owning widget and can never be manually shifted above.
+if($s.Contains('CalculateBelowV289('))
+{
+ if(!$s.Contains('var safe=RepairBelowV289(') -or
+    !$s.Contains('EnsureBelowV289()') -or
+    $s.Contains('var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,')){
+  throw 'R289 Deck must remain below its circle regardless of saved Y offset'
+ }
+}
+else
+{
+ if(!$s.Contains('var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,')){
+   throw 'Legacy R228 per-monitor Deck vertical offset missing'
+ }
+}
+
 $start=$s.IndexOf('resetDeckThisMonitor.Click+=')
 $end=$s.IndexOf('var deckContext=', $start)
 if($start -lt 0 -or $end -le $start){throw 'R234 reset click handler missing'}
