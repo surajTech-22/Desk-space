@@ -15,6 +15,14 @@
 | Authoritative source and repeatable Windows build | R267 committed `src/DeskSpace` and requires exact regenerated source SHA parity, independent build and a verified archive. CI #540 PASS | Final signed build and identical Stable/Tester deliverables after acceptance |
 | Strict Excel paste transaction | R107/R139–R147, R242/R251/R252/R266/R268 implement full-range gate, formula+format transaction, SaveCopyAs receipt, formula readback/rollback structure | Three real Windows Microsoft Excel workbooks with COM, tables, formulas, dates and deliberate failure/rollback. No Office installation in current GH runner |
 
+## P0 — additional R285 source audit: actual process DPI mode
+
+Microsoft's WPF/Windows guidance distinguishes system-DPI-aware apps from Per-Monitor V2 apps. Prior to R285, `DeskSpace.csproj` had no `ApplicationManifest`, even though the source positions widget/Deck HWNDs in native monitor coordinates.
+
+R285 declares **PerMonitorV2** with a real application manifest and adds `--dpi-audit`, which runs the **actual DeskSpace.exe** without constructing a widget or tray. CI must confirm that Windows reports PMv2 on the built application, not merely on a synthetic geometry test. The existing Displays settings page gains a manual *Save actual monitor / DPI diagnostic to Downloads* button so real mixed-DPI setup can later be audited. This remains **development**, not physical multi-monitor acceptance.
+
+Further app improvement opportunities are tracked in [R285 source audit](R285_PMv2_AND_RESEARCH_AUDIT.md), prioritized as real updater rollback, Excel COM acceptance, mixed-DPI hardware, high-contrast/light-theme consistency, Running Apps physical UI and sustained performance profiling. Defer unrelated P2/P3 additions.
+
 ## P1 — finish existing modules before adding utilities
 
 | Requirement from plan | Actual source status | Required next work/evidence |
