@@ -1,0 +1,77 @@
+name: DeskSpace resend verified v1.5.1109 release notice to Stable and Tester
+on:
+  push:
+    branches: [release/stable-deck-hotfix-r301]
+    paths:
+      - .github/workflows/resend-r302-release-hint.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deskspace-r302-release-event-resend
+  cancel-in-progress: false
+jobs:
+  resend-notice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify real published Stable and Tester releases and identical SHA256
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,urllib.request
+          base='https://api.github.com/repos/surajTech-22/Desk-space/releases/tags/'
+          ids=('v1.5.1109','tester-v1.5.1109')
+          releases=[]
+          for tag in ids:
+              req=urllib.request.Request(base+tag,headers={
+                  'Accept':'application/vnd.github+json',
+                  'User-Agent':'DeskSpace-release-notice-verifier'})
+              with urllib.request.urlopen(req,timeout=15) as response:
+                  release=json.load(response)
+              assert release['tag_name']==tag and not release['draft'],tag
+              assert bool(release['prerelease'])==(tag.startswith('tester-')),tag
+              assets={a['name']:a for a in release['assets']}
+              for name in ('DeskSpace_Setup.exe','DeskSpace_Setup.sha256.txt',
+                           'Update.exe','Update.sha256.txt'):
+                  assert name in assets,(tag,name)
+              assert assets['DeskSpace_Setup.exe']['digest']==assets['Update.exe']['digest'],tag
+              digest=assets['DeskSpace_Setup.exe']['digest']
+              assert digest=='sha256:ff216b19feb065568da632b49a469ab22f8b126bf6111dc7760ffbda2744fcd4',(tag,digest)
+              assert assets['DeskSpace_Setup.exe']['size']>10_000_000,tag
+              releases.append(release)
+          a=releases[0]['assets'];b=releases[1]['assets']
+          assert {x['name']:x['digest'] for x in a}=={x['name']:x['digest'] for x in b},'Stable/Tester assets differ'
+          print('PASS: both official v1.5.1109 channels have the identical SHA256-verified Windows installer')
+          PY
+      - name: Send independent update hints to both channels through the existing DeskSpace relay
+        shell: bash
+        run: |
+          set -euo pipefail
+          relay=https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f
+          for hint in 'stable|v1.5.1109' 'tester|tester-v1.5.1109'; do
+            printf '%s' "$hint" | curl --fail --show-error --silent --retry 2 \
+              --connect-timeout 10 --max-time 20 \
+              --header 'Content-Type: text/plain; charset=utf-8' \
+              --header 'Title: DeskSpace verified update available' \
+              --data-binary @- "$relay" > response.json
+            python3 - <<'PY'
+          import json
+          j=json.load(open('response.json',encoding='utf-8'))
+          assert j.get('event')=='message','ntfy did not acknowledge the message'
+          assert j.get('topic')=='deskspace-verified-release-r133-20261026-9a6c412f'
+          PY
+            printf 'Release hint sent and acknowledged: %s\n' "$hint"
+          done
+      - name: Verify live official latest stable release still matches notification
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(curl --fail --silent --show-error --location \
+            --header 'User-Agent: DeskSpace-release-notice-verifier' \
+            https://api.github.com/repos/surajTech-22/Desk-space/releases/latest |
+            python3 -c 'import json,sys;print(json.load(sys.stdin)["tag_name"])')"
+          test "$actual" = v1.5.1109 || { echo "Stable changed; verify notification manually"; exit 1; }
+          echo "SUCCESS: both DeskSpace 1.5.1109 release-event notifications sent; official update channels unchanged."
