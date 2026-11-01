@@ -19,8 +19,9 @@ foreach($needle in @(
  'popup.PlacementTarget=owner;',
  'var deckX=Math.Clamp(result.X+shift.X,screen.Left,',
  'var deckY=Math.Clamp(result.Y+shift.Y,screen.Top,',
- '(deckX-ownerBounds.Left)/sx',
- '(deckY-ownerBounds.Top)/sy'
+ 'AvoidWidgetV282(',
+ '(safe.Left-ownerBounds.Left)/sx',
+ '(safe.Top-ownerBounds.Top)/sy'
 )){
  if(!$dock.Contains($needle)){throw ("R228 Deck display binding missing "+$needle)}
 }
