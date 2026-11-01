@@ -43,7 +43,7 @@
       "title": "One canonical buildable source",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R248 repeatable independent build from R221 per-file-verified source ZIP, external manifest and SHA receipt; canonical source migration to committed editable tree pending."
+      "evidence": "R267 checked-in canonical src/DeskSpace with deterministic R201-R284 patch reconstruction, exact SHA parity and independent .NET WPF rebuild; Windows CI #615 PASS. Signing and installed machine acceptance remain."
     },
     {
       "id": "UPD-02",
@@ -268,7 +268,7 @@
       "title": "Settings crash resilience and clear navigation",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R255 Features-initiated Settings/tool-launch error containment and secret-redacted status; standalone Widget Settings dialog, real installed Windows and full navigation accessibility still pending."
+      "evidence": "R283 modern Settings Studio navigation rail, selected-page hierarchy, appearance preview and original five settings pages; R284 scrollable Widget Options + styled pinned-app dialog preserve existing controls. Native Windows CI #615 PASS. Physical settings crash/keyboard acceptance pending."
     },
     {
       "id": "UI-02",
@@ -276,7 +276,15 @@
       "title": "Full keyboard and screen-reader accessibility",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R207 root donut key model + R199 Ctrl+K existing; R246 F1 help with 10 scoped verified shortcuts and accessible WPF close. Screen-reader/keyboard-only full flow still pending."
+      "evidence": "R207 root donut key model and R199 Ctrl+K retained. R283 modern native Controls, explicit accessible names, keyboard focus in Workspace; R284 visible keyboard-focus/hover template triggers, real WPF preferences/pinned-dialog checks. CI #615 PASS. Full NVDA/Narrator/keyboard-only physical acceptance pending."
+    },
+    {
+      "id": "DESIGN-01",
+      "priority": "P1",
+      "title": "Modern visual system across DeskSpace Workspace, donut, Deck, settings and core dialogs",
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R283 coherent modern visual palette/high-contrast support, Workspace navigation, dark gradient widget, Deck, Settings, Action Palette, Feature Hub. R284 extends to Widget Options, Pinned Apps, Details, Running Apps hover and Smart Context cards; native focus and dialog tests PASS CI #615. Full legacy surface consistency and physical mixed-DPI/screen-reader screenshot acceptance outstanding."
     },
     {
       "id": "PERF-01",
@@ -290,8 +298,9 @@
       "id": "TEST-01",
       "priority": "P0",
       "title": "CI, safe release gate, physical test evidence",
-      "status": "planned",
-      "release_eligible": false
+      "status": "in-progress",
+      "release_eligible": false,
+      "evidence": "R283-R284 modern UI canonical source compiled, native WPF R201-R284 passed, exact reconstructed SHA parity and independent build success in CI #615. Physical multi-monitor, Excel COM, updater rollback, signing pending; no release."
     }
   ]
 }
