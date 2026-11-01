@@ -1,0 +1,42 @@
+name: R308 Default-expanded Deck with all header buttons Windows regression
+on:
+  push:
+    branches: [fix/r308-deck-default-expanded-buttons]
+    paths:
+      - src/DeskSpace/DeskSpaceDropShelfV15.cs
+      - r308/**
+      - .github/workflows/test-r308-deck-buttons.yml
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify minimize, preview and close; standard expanded
+        shell: pwsh
+        run: |
+          ./r308/test-r308.ps1
+      - name: Compile canonical DeskSpace WPF application
+        shell: pwsh
+        run: |
+          dotnet build src/DeskSpace/DeskSpace.csproj -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R308 production Deck source compilation failed'}
+      - name: Native popup foreground, monitor and touchpad regression
+        shell: pwsh
+        run: |
+          dotnet run --project r304/Tests/DeckForegroundTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R308 Deck foreground regression'}
+          dotnet run --project r292/Tests/DeckNativeTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R308 Deck native window placement regression'}
+      - name: Exact versioned Deck source parity
+        shell: pwsh
+        run: |
+          $a=(Get-FileHash src/DeskSpace/DeskSpaceDropShelfV15.cs -Algorithm SHA256).Hash
+          $b=(Get-FileHash r308/DeskSpaceDropShelfDefaultExpandedV308.cs -Algorithm SHA256).Hash
+          if($a -ne $b){throw 'R308 canonical WPF source differs from versioned source'}
+          Write-Host 'R308 app source parity verified.'

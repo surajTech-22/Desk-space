@@ -91,8 +91,9 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         new(StringComparer.OrdinalIgnoreCase);
     private bool disposed;
     private bool heldExpanded=true,recentExpanded=true;
-    // Deck is permanently expanded while visible. No auto/header-only state.
-    private bool deckDismissed,appRenderPending;
+    // Standard view is ALWAYS expanded on startup and when reopened.
+    // The minimize button may collapse only on explicit user click.
+    private bool deckMinimized,deckDismissed,appRenderPending;
     private bool searchActiveV225;
     // Foreground Search hides ONLY this widget's Deck HWND; source data,
     // retained staged files and other displays stay untouched.
@@ -381,6 +382,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         }
         else
         {
+            deckMinimized=false; // New show action resets to standard expanded view.
             deckDismissed=false;
             runningAppsTimer.Start();
             RefreshRunningApps();
@@ -402,6 +404,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         bool contents=held.Count+detected.Count+runningApps.Count+
             excelMatchesV122.Count>0 ||
             DeskSpaceMediaV18.ActiveV123?.DeckVisibleV123==true;
+        if((bool)e.NewValue)deckMinimized=false;
         popup.IsOpen=!deckDismissed &&
             DeskSpaceSearchDeckLayoutV225.ShowDeck(
                 DeskSpaceDeckVisibilityV89.Visible,(bool)e.NewValue,
@@ -1308,6 +1311,9 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             popup.IsOpen=false;
             return;
         }
+        // A genuine closed->open transition always restores the expanded
+        // standard view. Re-render while open preserves only user minimize.
+        if(!popup.IsOpen)deckMinimized=false;
         // Slim header is part of the existing floating deck. No second panel.
         var title=new DockPanel{
             Margin=new Thickness(1,0,1,3),
@@ -1332,9 +1338,16 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             });
         DockPanel.SetDock(previewMode,Dock.Right);
         title.Children.Add(previewMode);
-        // R306: Keep the full Deck content expanded at all times.
-        // No minimise/collapse control or hidden header-only layout.
-        // Close remains an explicit dismiss action, not a collapse.
+        // Restore all three original header actions. Minimize changes state
+        // only when clicked; regular opening, refresh and restart are expanded.
+        var minimise=DeckHeaderButton(deckMinimized?"▢":"−",
+            deckMinimized?"Expand deck":"Minimise deck to header",()=>{
+                deckMinimized=!deckMinimized;
+                if(deckMinimized)deckPreview?.Close();
+                Render();
+            });
+        DockPanel.SetDock(minimise,Dock.Right);
+        title.Children.Add(minimise);
         var heading=Text(
             DeskSpaceDeckHeaderV226.Format(busy,runningApps.Count,
                 held.Count,detected.Count),11,Brushes.White);
@@ -1346,16 +1359,22 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // cap header text separately from the Deck's three right buttons.
         // Ellipsis prevents the title from pushing an owned Popup across
         // the source monitor when data counts grow.
-        // Two header actions remain: preview and dismiss. Reserve their widths.
-        heading.MaxWidth=Math.Max(70,panel.MaxWidth-79);
+        // Three header actions: minimize/expand, preview and dismiss.
+        heading.MaxWidth=Math.Max(70,panel.MaxWidth-103);
         heading.MinWidth=0;
         heading.TextTrimming=TextTrimming.CharacterEllipsis;
         heading.ToolTip="Running applications / held copies / recent files";
         title.Children.Add(heading);
         list.Children.Add(title);
-        // Running Apps always remains in the expanded Deck. First hover
-        // reveals app icons, and app hover shows its additional windows.
-        // then app hover shows any additional windows.
+        // Only an EXPLICIT user minimize click may hide Deck contents.
+        // Never automatically collapse due to app changes or hover/focus.
+        if(deckMinimized)
+        {
+            deckPreview?.Close();
+            popup.IsOpen=host.IsVisible;
+            return;
+        }
+        // Running Apps is hover-only; the full Deck is standard view.
         DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
             (appsNow,windowsNow)=>{
                 if(disposed)return;
