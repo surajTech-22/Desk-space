@@ -19,7 +19,7 @@
       "title": "Real two-monitor mixed DPI and seam regression",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "Existing R236 100/125/150/200% synthetic native DPI geometries and R278 independent cross-process saved positions passed Windows CI #540; physical two-display hotplug, dragging/expansion/seams remain unverified."
+      "evidence": "R285 embeds genuine Windows PerMonitorV2 app.manifest and adds an opt-in actual DeskSpace.exe --dpi-audit + Settings Displays report to Downloads; Windows process proof in CI pending. R236 synthetic mixed-DPI matrix remains. Physical two-display hover/drag/expansion/hotplug is NOT verified."
     },
     {
       "id": "MON-03",
@@ -27,7 +27,7 @@
       "title": "Explicit docking and popup containment",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R190/R228/R234/R264 contain monitor-local Dock geometry, popup bounds and Deck reset. R278 corrects widget positions but real seam and explicit dock physical tests remain pending."
+      "evidence": "R190/R228/R234/R264 independent dock/Popup placement; R278 protects saved widget locations; R282 avoids clock overlap; R285 explicitly declares PerMonitorV2. Physical seam/dock and high-DPI mouse behavior remain pending."
     },
     {
       "id": "MON-04",
@@ -300,7 +300,7 @@
       "title": "CI, safe release gate, physical test evidence",
       "status": "in-progress",
       "release_eligible": false,
-      "evidence": "R283-R284 modern UI canonical source compiled, native WPF R201-R284 passed, exact reconstructed SHA parity and independent build success in CI #615. Physical multi-monitor, Excel COM, updater rollback, signing pending; no release."
+      "evidence": "R283-R284 Windows WPF and exact canonical SHA parity CI #617 passed. R285 now requires an actual compiled DeskSpace.exe PerMonitorV2 audit and Downloads screen metadata in CI; that run is pending. Still missing real two-display, installed updater rollback, Office COM and signing acceptance."
     }
   ]
 }
