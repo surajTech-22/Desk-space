@@ -25,17 +25,28 @@ internal static class DeskSpaceDuplicateInspectorV339
         var byLength=new Dictionary<long,List<string>>();
         var dirs=new Stack<string>();dirs.Push(folder);
         int seen=0;
+        int examined=0;
+        int maximumEntries=maxFiles*2;
         while(dirs.Count!=0)
         {
             ct.ThrowIfCancellationRequested();
             var dir=dirs.Pop();
             IEnumerable<string> paths;
-            try{paths=Directory.EnumerateFileSystemEntries(dir).ToArray();}
+            try{
+                // Never allocate an unbounded directory snapshot, even in
+                // a folder containing millions of files or subfolders.
+                int remaining=Math.Max(1,maximumEntries-examined+1);
+                paths=Directory.EnumerateFileSystemEntries(dir)
+                    .Take(remaining).ToArray();
+            }
             catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
                 or System.Security.SecurityException){continue;}
             foreach(var path in paths)
             {
                 ct.ThrowIfCancellationRequested();
+                if(++examined>maximumEntries)
+                    throw new InvalidOperationException(
+                        "Scan stopped after 40,000 file/folder entries to limit RAM and disk activity.");
                 FileAttributes attributes;
                 try{attributes=File.GetAttributes(path);}
                 catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
