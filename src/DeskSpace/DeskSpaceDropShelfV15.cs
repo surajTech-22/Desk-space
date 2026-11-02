@@ -253,7 +253,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // and WPF could flip/clip the dock onto the adjacent monitor.
         // Keep independent dock HWNDs on their OWN monitor, with a scrollable
         // viewport. Staged content remains shared across all dock views.
-        DeskSpaceMonitorDockV190.Attach(host,popup,panel);
+        DeskSpaceMonitorDockV190.Attach(host,popup,panel,()=>deckMinimized);
         DeskSpaceMonitorFenceV153.TrackPopup(host,popup,
             (proposed,work)=>DeskSpaceMonitorDockV190.ConstrainBeforePaintV298(
                 host,proposed,work));
@@ -1345,6 +1345,8 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 deckMinimized=!deckMinimized;
                 if(deckMinimized)deckPreview?.Close();
                 Render();
+                if(!deckMinimized)
+                    DeskSpaceMonitorDockV190.RequestReflowV314(panel,true);
             });
         DockPanel.SetDock(minimise,Dock.Right);
         title.Children.Add(minimise);
@@ -1605,9 +1607,13 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             };
             (item.AutoDetected?recentGroup:heldGroup).Children.Add(row);
         }
+        bool openingV314=!popup.IsOpen;
         popup.IsOpen=DeskSpaceSearchDeckLayoutV225.ShowDeck(
             DeskSpaceDeckVisibilityV89.Visible,host.IsVisible,
             searchActiveV225,true);
+        // Force sizing from all rendered content; scrollbar and header were
+        // previously stuck at the OLD collapsed viewport height.
+        DeskSpaceMonitorDockV190.RequestReflowV314(panel,openingV314);
     }
     public void Dispose()
     {
