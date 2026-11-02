@@ -128,10 +128,20 @@ $scan=@'
     }
 '@
 $s=$s.Substring(0,$start)+$scan.Replace($crlf,$lf)+$s.Substring($end)
-$searchStart=$s.LastIndexOf('        lock(Gate)'+$lf+'        {'+$lf+'            int scanned=0;')
-$searchEnd=$s.IndexOf('        return ranked.Finish();',$searchStart)
-if($searchStart -lt 0 -or $searchEnd -lt $searchStart){
- throw 'R330 unbounded in-memory search loop not identified'
+$marker=$s.LastIndexOf('foreach(var item in Entries)')
+if($marker -lt 0){
+ $candidates=($s -split $lf | Where-Object {$_ -match 'Entries|foreach|SearchHit'}| Select-Object -Last 35) -join $lf
+ throw ("R330 cannot find in-memory Entries search; candidate lines: "+$candidates)
+}
+$searchStart=$s.LastIndexOf('        lock(Gate)',$marker)
+if($searchStart -lt 0){$searchStart=$s.LastIndexOf('        lock (Gate)',$marker)}
+if($searchStart -lt 0){
+ $a=[Math]::Max(0,$marker-450)
+ throw ("R330 old search loop has no lock anchor: "+$s.Substring($a,[Math]::Min(1300,$s.Length-$a)))
+}
+$searchEnd=$s.IndexOf('        return ranked.Finish();',$marker)
+if($searchEnd -lt $marker){
+ throw ("R330 old indexed search has no finishing result marker: "+$s.Substring($marker,[Math]::Min(600,$s.Length-$marker)))
 }
 $replacement=@'
         // The old search enumerated the entire growing Entries list on
