@@ -26,7 +26,7 @@ internal static class Program
             var entry=existing.GetNestedType("WindowEntry",F)!;
             var profile=existing.GetNestedType("Profile",F)!;
             var planner=asm.GetType("DeskSpace.DeskSpaceMonitorRestoreV343",true)!;
-            var entryCtor=entry.GetConstructors(F).Single();
+            var entryCtor=entry.GetConstructors(F).Single(c=>c.GetParameters().Length==8);
             var listType=typeof(System.Collections.Generic.List<>).MakeGenericType(entry);
             var entries=(IList)Activator.CreateInstance(listType)!;
             entries.Add(entryCtor.Invoke(new object[]{
@@ -35,7 +35,7 @@ internal static class Program
                 "explorer","hash2",0,@"\\.\DISPLAY2",0.15,0.22,0.5,0.3}));
             entries.Add(entryCtor.Invoke(new object[]{
                 "chrome","hash3",0,@"\\.\DISPLAY1",0.25,0.35,0.3,0.3}));
-            var profileCtor=profile.GetConstructors(F).Single();
+            var profileCtor=profile.GetConstructors(F).Single(c=>c.GetParameters().Length==2);
             object all=profileCtor.Invoke(new object[]{"Accounting",entries});
             var select=planner.GetMethod("Select",F)!;
             var summarize=planner.GetMethod("Describe",F)!;
