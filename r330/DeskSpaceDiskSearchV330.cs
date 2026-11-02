@@ -49,7 +49,8 @@ internal static class DeskSpaceDiskSearchV330
         var connection=new SqliteConnection(builder.ToString());
         connection.Open();
         using var pragmas=connection.CreateCommand();
-        pragmas.CommandText="PRAGMA busy_timeout=10000; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE;";
+        // A busy writer must not hold live search for 10 seconds per volume.
+        pragmas.CommandText="PRAGMA busy_timeout=250; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE;";
         pragmas.ExecuteNonQuery();
         return connection;
     }
@@ -261,25 +262,30 @@ internal static class DeskSpaceDiskSearchV330
         var result=new List<Item>(Math.Min(max,64));
         using var connection=Connect();
         using var command=connection.CreateCommand();
+        command.CommandTimeout=1;
         string search=(term??"").Trim();
         if(search.Length!=0)
         {
             // FTS5 trigram accelerates arbitrary filename and path substrings
             // of 3+ characters; shorter search terms use the normal table.
             var useTrigrams=search.Length>=3;
+            // Ordinary queries search filenames only. An explicit slash
+            // or drive fragment permits searching the complete path.
+            bool searchPath=search.IndexOfAny(new[]{'\\','/',':'})>=0;
             command.CommandText=useTrigrams?
                 @"SELECT e.name,e.path,e.folder,e.volume FROM names_fts f
                   JOIN entries e ON e.id=f.rowid
-                  WHERE (f.name LIKE $search OR f.path LIKE $search)
+                  WHERE (f.name LIKE $search OR ($path=1 AND f.path LIKE $search))
                     AND ($drive='' OR e.volume=$drive)
                     AND ($folders IS NULL OR e.folder=$folders)
-                  ORDER BY e.folder ASC LIMIT $max;":
+                  LIMIT $max;":
                 @"SELECT name,path,folder,volume FROM entries
-                  WHERE (name LIKE $search OR path LIKE $search)
+                  WHERE (name LIKE $search OR ($path=1 AND path LIKE $search))
                     AND ($drive='' OR volume=$drive)
                     AND ($folders IS NULL OR folder=$folders)
-                  ORDER BY folder ASC LIMIT $max;";
+                  LIMIT $max;";
             command.Parameters.AddWithValue("$search","%"+search+"%");
+            command.Parameters.AddWithValue("$path",searchPath?1:0);
         }
         else
         {
@@ -316,4 +322,8 @@ internal static class DeskSpaceDiskSearchV330
     // Test hook does NOT modify the user's catalog: environment is scoped
     // to the throwaway test account via LOCALAPPDATA.
     internal static int PendingCount=>Volatile.Read(ref pendingCount);
+    // Health counter only: never store the user's queries or paths.
+    private static long queryFailures;
+    internal static long QueryFailures=>Interlocked.Read(ref queryFailures);
+    internal static void NoteQueryFailure()=>Interlocked.Increment(ref queryFailures);
 }
