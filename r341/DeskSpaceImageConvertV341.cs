@@ -70,7 +70,7 @@ internal static class DeskSpaceImageConvertV341
                     using var read=new FileStream(item.Source,FileMode.Open,
                         FileAccess.Read,FileShare.Read);
                     var decoder=BitmapDecoder.Create(read,BitmapCreateOptions.DelayCreation,
-                        BitmapCacheOption.OnLoad);
+                        BitmapCacheOption.None);
                     var frame=decoder.Frames[0];
                     if((long)frame.PixelWidth*frame.PixelHeight>MaximumPixels)
                         throw new InvalidOperationException(
@@ -191,7 +191,8 @@ internal static class DeskSpaceImageConvertV341
             {status.Text=ex.Message;}
             finally{
                 busy=false;choose.IsEnabled=true;destination.IsEnabled=true;
-                cancel.IsEnabled=false;pending?.Dispose();pending=null;Invalidate();
+                cancel.IsEnabled=false;pending?.Dispose();pending=null;
+                candidate=null;convert.IsEnabled=false;
             }
         };
         cancel.Click+=(_,_)=>pending?.Cancel();
