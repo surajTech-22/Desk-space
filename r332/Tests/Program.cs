@@ -53,7 +53,7 @@ internal static class Program
                 "index did not exclude its own SQLite WAL/SHM path");
             int before=(int)disk.GetProperty("PendingCount",Static)!.GetValue(null)!;
             disk.GetMethod("Enqueue",Static)!.Invoke(null,new object?[]{internalCache,true});
-            Assert((int)disk.GetProperty("PendingCount",Static)!.GetValue(null)!==before,
+            Assert((int)disk.GetProperty("PendingCount",Static)!.GetValue(null)! == before,
                 "SQLite index's own writes still generate queued watcher updates");
             var ws=new DeskSpace.Workspace();
             List<DeskSpace.SearchHit> Search(string text)=>
