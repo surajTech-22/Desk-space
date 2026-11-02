@@ -60,14 +60,20 @@ internal static class Program
                 "second monitor Deck escaped its own display");
             Check(shiftedRight.X>=right.Left && shiftedRight.Left!=shiftedLeft.Left,
                 "two physical monitors shared a display placement point");
-            var seamRight=Plan(d,new Rectangle(1930,250,112,112),
-                right,260,80,-1000);
-            Check(seamRight.X==right.Left && right.Contains(seamRight),
-                "negative saved X offset crossed monitor seam");
-            var seamLeft=Plan(d,new Rectangle(1790,250,112,112),
-                left,260,80,1000);
-            Check(seamLeft.Right==left.Right && left.Contains(seamLeft),
-                "positive saved X offset crossed monitor seam");
+            var nearRightWidget=new Rectangle(1930,250,112,112);
+            var baseRight=Plan(d,nearRightWidget,right,260,80,0);
+            var seamRight=Plan(d,nearRightWidget,right,260,80,-1000);
+            Check(right.Contains(seamRight) &&
+                  Math.Abs(baseRight.X-seamRight.X)<=110 &&
+                  seamRight.Right>nearRightWidget.Left,
+                "saved negative shift should remain near its widget, not move to monitor edge");
+            var nearLeftWidget=new Rectangle(1790,250,112,112);
+            var baseLeft=Plan(d,nearLeftWidget,left,260,80,0);
+            var seamLeft=Plan(d,nearLeftWidget,left,260,80,1000);
+            Check(left.Contains(seamLeft) &&
+                  Math.Abs(baseLeft.X-seamLeft.X)<=110 &&
+                  seamLeft.Left<nearLeftWidget.Right,
+                "saved positive shift should remain near its widget, not move to monitor edge");
 
             var screen=System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
             host=new Window{
