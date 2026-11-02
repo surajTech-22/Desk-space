@@ -5,6 +5,8 @@ on:
     paths:
       - .github/workflows/test-r322-deck-tether.yml
       - r322/**
+      - r234/test-r234.ps1
+      - r320/Tests/Program.cs
       - r312/**
       - r310/**
 
