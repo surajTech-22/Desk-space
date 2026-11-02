@@ -90,7 +90,12 @@ internal static class Program
             using(var cancelled=new CancellationTokenSource())
             {
                 cancelled.Cancel();
-                try{SHAWithCancel(a,cancelled.Token);throw new Exception("expected cancelled hash");}
+                try{
+                    var cancelledTask=(Task<string>)getHash.Invoke(null,
+                        new object?[]{a,cancelled.Token,null})!;
+                    cancelledTask.GetAwaiter().GetResult();
+                    throw new Exception("expected cancelled hash");
+                }
                 catch(OperationCanceledException){}
             }
             Check(File.ReadAllBytes(a).SequenceEqual(content) &&
@@ -150,10 +155,5 @@ internal static class Program
         {
             try{Directory.Delete(root,true);}catch(Exception){}
         }
-    }
-    static void SHAWithCancel(string filename,CancellationToken cancellation)
-    {
-        // Cancellation before starting a long hash must be honoured.
-        cancellation.ThrowIfCancellationRequested();
     }
 }
