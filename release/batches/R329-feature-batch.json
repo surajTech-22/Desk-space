@@ -1,0 +1,140 @@
+{
+  "schema": "deskspace-ten-feature-release-v1",
+  "batch_id": "R329",
+  "baseline_release": "v1.5.1120",
+  "target_release": "next-feature-batch",
+  "minimum_verified_features": 10,
+  "release_authorized": false,
+  "last_review_date": "2026-11-02",
+  "release_policy": "Only a separately verified, user-visible capability counts. Refactors, duplicate functionality, tests, docs, and bug-fix-only commits never increase the feature count. No feature release below ten. Emergency security/data-loss fixes use a separate documented hotfix approval.",
+  "features": [
+    {
+      "id": "R329-01",
+      "area": "Search",
+      "title": "Persistent low-memory filename index",
+      "acceptance": "After restart, filenames on accessible ready drives are searchable without a full fresh crawl; deletions and renames remain correct.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "not-required",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-02",
+      "area": "Search",
+      "title": "Saved searches and presets",
+      "acceptance": "User can save, rename, select and remove an advanced query; its filters are restored without running external actions.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "not-required",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-03",
+      "area": "Search",
+      "title": "Unified result action menu",
+      "acceptance": "Search result offers Open, Copy Path and Open Containing Folder with path revalidation and blocked destructive actions.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "not-required",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-04",
+      "area": "Files",
+      "title": "SHA-256 file verification",
+      "acceptance": "User chooses a file, sees its SHA-256, compares optional expected digest, and receives a clear pass/fail without uploading contents.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "not-required",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-05",
+      "area": "Files",
+      "title": "Read-only duplicate file inspector",
+      "acceptance": "User chooses folders and previews equal-hash duplicate groups with size/paths, without auto-deleting or modifying files.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "not-required",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-06",
+      "area": "Files",
+      "title": "Safe batch image conversion",
+      "acceptance": "User selects images, previews output format and destination, converts with no-overwrite default, and can cancel safely.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "not-required",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-07",
+      "area": "Clipboard",
+      "title": "Opt-in local snippets",
+      "acceptance": "User explicitly saves, searches, pins and deletes text snippets; history capture is disabled by default and sensitive windows can be excluded.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "not-required",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-08",
+      "area": "Capture",
+      "title": "On-demand screen text extraction",
+      "acceptance": "User selects a region, previews local OCR and manually copies accepted text; no automatic screen reading or upload.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "pending",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-09",
+      "area": "Excel",
+      "title": "Verified mapping and paste preview",
+      "acceptance": "Captured Sheet/Mappings use existing engine; preview validates target range, formulas and backup/readback before user-approved paste.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "pending",
+      "release_evidence": ""
+    },
+    {
+      "id": "R329-10",
+      "area": "Workspace",
+      "title": "Monitor-aware session restore preview",
+      "acceptance": "User sees a preview of apps/windows/monitor placement, reviews unavailable applications, and explicitly approves restore.",
+      "status": "planned",
+      "implementation_paths": [],
+      "test_paths": [],
+      "windows_test_run": "",
+      "on_device_acceptance": "pending",
+      "release_evidence": ""
+    }
+  ],
+  "acceptance_gates": [
+    "Ten distinct features each verified from their actual shipped source and integrated UI.",
+    "All historical Windows native, deck, search, updater and data-integrity regressions passing.",
+    "Three real Office workbook scenarios and real two-monitor checks for the flagged features.",
+    "No destructive operation without preview/confirmation; saved DeskSpace data remains intact.",
+    "Same SHA-256 installer on Stable and Tester; updater/rollback tests pass.",
+    "No publication from a development branch or an unverified/stale baseline."
+  ]
+}
