@@ -35,8 +35,29 @@ internal static class DeskSpaceDiskSearchV330
                 Environment.SpecialFolder.LocalApplicationData),
                 "DeskSpace","Search");
             Directory.CreateDirectory(baseFolder);
-            return Path.Combine(baseFolder,"filenames-v330.sqlite");
+            return Path.Combine(baseFolder,"filenames-v336.sqlite");
         }
+    }
+
+    // R335: exclude the filename index's OWN SQLite, WAL, SHM and journal
+    // files from both scanner and watcher. Otherwise indexing writes raise
+    // more watcher events, which write again and create a feedback loop.
+    internal static bool IsOwnIndexPathV335(string? path)
+    {
+        if(string.IsNullOrWhiteSpace(path))return false;
+        try
+        {
+            var directory=Path.GetDirectoryName(DatabaseFile);
+            if(string.IsNullOrEmpty(directory))return false;
+            var prefix=Path.TrimEndingDirectorySeparator(directory)+
+                Path.DirectorySeparatorChar;
+            var absolute=Path.GetFullPath(path);
+            return absolute.StartsWith(prefix,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
+            or ArgumentException or NotSupportedException
+            or System.Security.SecurityException){return false;}
     }
 
     private static SqliteConnection Connect()
@@ -49,7 +70,8 @@ internal static class DeskSpaceDiskSearchV330
         var connection=new SqliteConnection(builder.ToString());
         connection.Open();
         using var pragmas=connection.CreateCommand();
-        pragmas.CommandText="PRAGMA busy_timeout=10000; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE;";
+        // A busy writer must not hold live search for 10 seconds per volume.
+        pragmas.CommandText="PRAGMA busy_timeout=250; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE;";
         pragmas.ExecuteNonQuery();
         return connection;
     }
@@ -78,18 +100,19 @@ internal static class DeskSpaceDiskSearchV330
                   scan_epoch INTEGER NOT NULL DEFAULT 0);
                 CREATE INDEX IF NOT EXISTS idx_entries_volume ON entries(volume);
                 CREATE VIRTUAL TABLE IF NOT EXISTS names_fts USING fts5(
-                  name,path,content='entries',content_rowid='id',tokenize='trigram');
+                  name,content='entries',content_rowid='id',tokenize='trigram');
                 CREATE TRIGGER IF NOT EXISTS entries_ai AFTER INSERT ON entries BEGIN
-                  INSERT INTO names_fts(rowid,name,path) VALUES(new.id,new.name,new.path);
+                  INSERT INTO names_fts(rowid,name) VALUES(new.id,new.name);
                 END;
                 CREATE TRIGGER IF NOT EXISTS entries_ad AFTER DELETE ON entries BEGIN
-                  INSERT INTO names_fts(names_fts,rowid,name,path)
-                    VALUES('delete',old.id,old.name,old.path);
+                  INSERT INTO names_fts(names_fts,rowid,name)
+                    VALUES('delete',old.id,old.name);
                 END;
-                CREATE TRIGGER IF NOT EXISTS entries_au AFTER UPDATE ON entries BEGIN
-                  INSERT INTO names_fts(names_fts,rowid,name,path)
-                    VALUES('delete',old.id,old.name,old.path);
-                  INSERT INTO names_fts(rowid,name,path) VALUES(new.id,new.name,new.path);
+                CREATE TRIGGER IF NOT EXISTS entries_au AFTER UPDATE ON entries
+                    WHEN old.name<>new.name BEGIN
+                  INSERT INTO names_fts(names_fts,rowid,name)
+                    VALUES('delete',old.id,old.name);
+                  INSERT INTO names_fts(rowid,name) VALUES(new.id,new.name);
                 END;";
             command.ExecuteNonQuery();
             Volatile.Write(ref initialized,1);
@@ -111,6 +134,7 @@ internal static class DeskSpaceDiskSearchV330
         try
         {
             path=Path.GetFullPath(path);
+            if(IsOwnIndexPathV335(path))return;
             if(Interlocked.Increment(ref pendingCount)>MaximumPending)
             {
                 Interlocked.Decrement(ref pendingCount);
@@ -257,29 +281,39 @@ internal static class DeskSpaceDiskSearchV330
         CancellationToken cancellation,int max=MaximumReturned,bool? folders=null)
     {
         cancellation.ThrowIfCancellationRequested();
+        if(SimulateReadFailureForTestV332)
+            throw new IOException("R332 synthetic search-index read failure");
         max=Math.Clamp(max,1,MaximumReturned);
         var result=new List<Item>(Math.Min(max,64));
         using var connection=Connect();
         using var command=connection.CreateCommand();
+        command.CommandTimeout=1;
         string search=(term??"").Trim();
         if(search.Length!=0)
         {
             // FTS5 trigram accelerates arbitrary filename and path substrings
             // of 3+ characters; shorter search terms use the normal table.
             var useTrigrams=search.Length>=3;
-            command.CommandText=useTrigrams?
+            // Ordinary queries search filenames only. An explicit slash
+            // or drive fragment permits searching the complete path.
+            bool searchPath=search.IndexOfAny(new[]{'\\','/',':'})>=0;
+            // Path trigrams previously caused multi-gigabyte cache growth.
+            // Normal filename queries use a small name-only FTS; explicit
+            // path queries use the ordinary path column instead.
+            command.CommandText=useTrigrams && !searchPath ?
                 @"SELECT e.name,e.path,e.folder,e.volume FROM names_fts f
                   JOIN entries e ON e.id=f.rowid
-                  WHERE (f.name LIKE $search OR f.path LIKE $search)
+                  WHERE f.name LIKE $search
                     AND ($drive='' OR e.volume=$drive)
                     AND ($folders IS NULL OR e.folder=$folders)
-                  ORDER BY e.folder ASC LIMIT $max;":
+                  LIMIT $max;":
                 @"SELECT name,path,folder,volume FROM entries
-                  WHERE (name LIKE $search OR path LIKE $search)
+                  WHERE (name LIKE $search OR ($path=1 AND path LIKE $search))
                     AND ($drive='' OR volume=$drive)
                     AND ($folders IS NULL OR folder=$folders)
-                  ORDER BY folder ASC LIMIT $max;";
+                  LIMIT $max;";
             command.Parameters.AddWithValue("$search","%"+search+"%");
+            command.Parameters.AddWithValue("$path",searchPath?1:0);
         }
         else
         {
@@ -315,5 +349,10 @@ internal static class DeskSpaceDiskSearchV330
 
     // Test hook does NOT modify the user's catalog: environment is scoped
     // to the throwaway test account via LOCALAPPDATA.
+    internal static bool SimulateReadFailureForTestV332;
     internal static int PendingCount=>Volatile.Read(ref pendingCount);
+    // Health counter only: never store the user's queries or paths.
+    private static long queryFailures;
+    internal static long QueryFailures=>Interlocked.Read(ref queryFailures);
+    internal static void NoteQueryFailure()=>Interlocked.Increment(ref queryFailures);
 }
