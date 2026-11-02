@@ -41,8 +41,17 @@ One @'
         // screen coordinate. Only small movements relative to THIS clock.
         int limit=MaxAttachedShiftV322(plan.Widget.Width,plan.Deck.Width);
         int attachedShift=Math.Clamp(shiftX,-limit,limit);
-        int x=Math.Clamp(plan.Deck.Left+attachedShift,work.Left,
-            Math.Max(work.Left,work.Right-plan.Deck.Width));
+        // A monitor-edge clamp can consume part of the original centering
+        // offset. Enforce actual widget/deck overlap AFTER both screen and
+        // saved-shift constraints; otherwise a left-edge secondary monitor
+        // can still detach 80px despite the bounded relative shift.
+        int overlap=Math.Min(Math.Max(1,plan.Widget.Width),80);
+        int left=Math.Max(work.Left,
+            plan.Widget.Left+overlap-plan.Deck.Width);
+        int right=Math.Min(work.Right-plan.Deck.Width,
+            plan.Widget.Right-overlap);
+        if(left>right)return Rectangle.Empty;
+        int x=Math.Clamp(plan.Deck.Left+attachedShift,left,right);
         return new Rectangle(x,plan.Deck.Top,plan.Deck.Width,plan.Deck.Height);
     }
 '@ 'relative tether not monitor-wide'
