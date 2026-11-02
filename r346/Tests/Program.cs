@@ -22,18 +22,26 @@ internal static class Program
             var baseline=inspect.Invoke(null,new object?[]{temp})!;
             Check(!(bool)baseline.GetType().GetProperty("CurrentAvailable")!.GetValue(baseline)!,
                 "empty Search directory reported a persistent index");
+            // An orphan WAL consumes space but cannot imply a healthy index.
+            File.WriteAllBytes(Path.Combine(temp,"filenames-v336.sqlite-wal"),new byte[3072]);
+            var orphan=inspect.Invoke(null,new object?[]{temp})!;
+            Check(!(bool)orphan.GetType().GetProperty("CurrentAvailable")!.GetValue(orphan)! &&
+                (long)orphan.GetType().GetProperty("CurrentBytes")!.GetValue(orphan)! == 3072,
+                "orphan WAL must count toward footprint without claiming an available index");
             File.WriteAllBytes(Path.Combine(temp,"filenames-v336.sqlite"),new byte[2500]);
+            File.WriteAllBytes(Path.Combine(temp,"filenames-v336.sqlite-shm"),new byte[8192]);
             File.WriteAllBytes(Path.Combine(temp,"filenames-v330.sqlite"),new byte[10000]);
+            File.WriteAllBytes(Path.Combine(temp,"filenames-v330.sqlite-wal"),new byte[2048]);
             var report=inspect.Invoke(null,new object?[]{temp})!;
             Check((bool)report.GetType().GetProperty("CurrentAvailable")!.GetValue(report)!,
                 "compact persistent cache not recognized");
-            Check((long)report.GetType().GetProperty("CurrentBytes")!.GetValue(report)! ==2500 &&
-                (long)report.GetType().GetProperty("LegacyBytes")!.GetValue(report)! ==10000,
+            Check((long)report.GetType().GetProperty("CurrentBytes")!.GetValue(report)! ==13764 &&
+                (long)report.GetType().GetProperty("LegacyBytes")!.GetValue(report)! ==12048,
                 "persistent index or old-cache size report incorrect");
             var text=(string)describe.Invoke(null,new object[]{report})!;
             Check(text.Contains("Compact filename cache")&&
                 text.Contains("Previous full-path cache")&&
-                text.Contains("not modified"),
+                text.Contains("not modified")&&text.Contains("WAL/SHM sidecars"),
                 "index health must disclose old cache without deletion");
             Check(!(bool)oversized.Invoke(null,new object[]{536870911L})! &&
                 (bool)oversized.Invoke(null,new object[]{536870912L})!,
@@ -45,7 +53,9 @@ internal static class Program
                 "read-only cache health UI not available");
             window.Close();app.Shutdown();
             Check(File.Exists(Path.Combine(temp,"filenames-v330.sqlite")) &&
-                File.Exists(Path.Combine(temp,"filenames-v336.sqlite")),
+                File.Exists(Path.Combine(temp,"filenames-v336.sqlite")) &&
+                File.Exists(Path.Combine(temp,"filenames-v336.sqlite-wal")) &&
+                File.Exists(Path.Combine(temp,"filenames-v336.sqlite-shm")),
                 "health view deleted existing index files");
             Console.WriteLine("R346 PASS: persistent cache metadata, legacy oversized warning, "+
                 "no document reads, no cache deletion and WPF health display.");

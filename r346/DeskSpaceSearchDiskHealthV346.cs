@@ -25,7 +25,14 @@ internal static class DeskSpaceSearchDiskHealthV346
         if(!Directory.Exists(folder))
             return new Report(Array.Empty<Cache>(),false,0,0);
         var items=new List<Cache>();
-        foreach(var name in new[]{"filenames-v336.sqlite","filenames-v330.sqlite"})
+        // SQLite WAL mode stores uncheckpointed index pages in -wal and
+        // allocates a -shm coordination file. Ignoring them underreports disk
+        // usage, especially while an index build is in progress.
+        const string currentDatabase="filenames-v336.sqlite";
+        const string oldDatabase="filenames-v330.sqlite";
+        foreach(var name in new[]{
+            currentDatabase,currentDatabase+"-wal",currentDatabase+"-shm",
+            oldDatabase,oldDatabase+"-wal",oldDatabase+"-shm"})
         {
             var filename=Path.Combine(folder,name);
             try
@@ -34,12 +41,15 @@ internal static class DeskSpaceSearchDiskHealthV346
                 if(!info.Exists ||
                     (info.Attributes&FileAttributes.ReparsePoint)!=0)continue;
                 items.Add(new Cache(name,info.Length,
-                    string.Equals(name,"filenames-v336.sqlite",StringComparison.Ordinal)));
+                    name.StartsWith(currentDatabase,StringComparison.Ordinal)));
             }
             catch(Exception ex)when(ex is IOException or UnauthorizedAccessException
                 or System.Security.SecurityException){}
         }
-        return new Report(items,items.Any(x=>x.Current&&x.Bytes>0),
+        // A stray -wal/-shm without its database must not be reported as a
+        // healthy persisted index, although its footprint is still counted.
+        return new Report(items,items.Any(x=>
+                x.Current && x.File==currentDatabase && x.Bytes>0),
             items.Where(x=>x.Current).Sum(x=>x.Bytes),
             items.Where(x=>!x.Current).Sum(x=>x.Bytes));
     }
@@ -57,7 +67,13 @@ internal static class DeskSpaceSearchDiskHealthV346
         string warning=Oversized(report.CurrentBytes)?
             " WARNING: the current index exceeds 512 MB. Check indexing health before restarting or rebuilding.":
             " The compact cache is below the 512 MB warning threshold.";
-        return current+Environment.NewLine+old+Environment.NewLine+warning+
+        long sidecarBytes=report.Caches
+            .Where(x=>x.File.EndsWith("-wal",StringComparison.Ordinal)||
+                      x.File.EndsWith("-shm",StringComparison.Ordinal))
+            .Sum(x=>x.Bytes);
+        return current+Environment.NewLine+old+Environment.NewLine+
+            $" SQLite WAL/SHM sidecars included: {sidecarBytes/1048576.0:N1} MB."+
+            Environment.NewLine+warning+
             Environment.NewLine+
             "This view reads only cache metadata. No filenames, documents, or search queries are displayed. "+
             "Files are never deleted from this tool.";
