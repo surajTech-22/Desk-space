@@ -8,6 +8,10 @@ $utf=[Text.UTF8Encoding]::new($false)
 $u=[IO.File]::ReadAllText($updater).Replace(([string][char]13+[string][char]10),[string][char]10)
 $p=[IO.File]::ReadAllText($supervisor).Replace(([string][char]13+[string][char]10),[string][char]10)
 function One([string]$old,[string]$new,[string]$name,[string]$target){
+  $crlf=([string][char]13+[string][char]10)
+  $lf=[string][char]10
+  $old=$old.Replace($crlf,$lf)
+  $new=$new.Replace($crlf,$lf)
   $contents=Get-Variable -Name $target -ValueOnly
   $count=([regex]::Matches($contents,[regex]::Escape($old))).Count
   if($count -ne 1){throw "R316 unexpected $name anchor count: $count"}
