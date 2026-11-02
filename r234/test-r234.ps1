@@ -20,7 +20,9 @@ if($s.Contains('CanonicalDeckRectV320('))
  if(!$s.Contains('var safe=CanonicalDeckRectV320(ownerBounds,screen,') -or
     !$s.Contains('var corrected=CanonicalDeckRectV320(Owner(owner,screen),') -or
     !$s.Contains('var plan=FitBelowV292(widget,work,width,height);') -or
-    !$s.Contains('plan.Deck.Left+shiftX') -or
+    !$s.Contains('plan.Deck.Left+attachedShift') -or
+    !$s.Contains('MaxAttachedShiftV322(plan.Widget.Width,plan.Deck.Width)') -or
+    !$s.Contains('return CanonicalDeckRectV320(fit.Widget,work,') -or
     !$s.Contains('shift=new DeskSpaceDeckOffsetV228.Offset(0,0);')){
     throw 'R320 WPF and native repair must share the same per-monitor below-only placement'
  }
