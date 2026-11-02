@@ -105,18 +105,15 @@ $q=$q.Replace($old,'while (queue.Count > 0 && interactiveClockV334.ElapsedMillis
 
 # Prevent the all-volume scanner from indexing the SQLite DB it is
 # actively writing. The watcher side is excluded in DiskSearch.Enqueue.
-$scan='            foreach(var path in EnumerateTree(root))'
+$scan='            foreach(var path in EnumerateTree(root))'+$lf+
+      '            {'
 if(([regex]::Matches($s,[regex]::Escape($scan))).Count -ne 1){
- throw 'R335 expected one disk scan loop in assembled shipping source'
+    throw 'R335 must find one complete foreach opening brace'
 }
 $s=$s.Replace($scan,$scan+$lf+
-    '            {'+$lf+
-    '                if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;'+$lf)
-# The replacement above inserts a new opening brace before the old
-# opening brace; remove the redundant old brace to retain C# structure.
-$s=$s.Replace('if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;'+$lf+
-    '            {'+$lf,
-    'if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;'+$lf)
+    '                if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;')
+# Do not add/remove an extra opening brace: earlier patch compiled with
+# CS1513 because two braces opened and only one was closed.
 
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 if($s.Contains('var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);') -or
