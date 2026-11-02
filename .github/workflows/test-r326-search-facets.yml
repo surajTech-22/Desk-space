@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/test-r326-search-facets.yml
       - r326/**
+      - r328/**
       - r312/**
       - r310/**
 
@@ -141,6 +142,8 @@ jobs:
           }
           & ./r326/apply-r326.ps1
           if(!$?){throw 'R326 shared file-search filter patch failed'}
+          & ./r328/apply-r328.ps1
+          if(!$?){throw 'R328 text comparison Action Palette integration failed'}
           & ./r301/apply-stable-deck-hotfix-r301.ps1
           if($LASTEXITCODE -ne 0){throw 'R301 scoped stable Deck patch failed'}
           & ./r304/apply-r304.ps1
@@ -314,3 +317,5 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R324 all-computer filename search missed hidden/deep/new/renamed files or failed live updates'}
           dotnet run --project 'r326/StableTests/AdvancedSearchFiltersTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R326 advanced file-search facets failed on real Windows files'}
+          dotnet run --project 'r328/StableTests/TextCompareTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R328 text comparison WPF, clear and Action Palette regression failed'}
