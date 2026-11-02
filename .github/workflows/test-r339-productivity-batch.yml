@@ -9,6 +9,7 @@ on:
       - r341/**
       - r342/**
       - r343/**
+      - r344/**
       - release/batches/R329-feature-batch.json
       - r337/**
       - r330/DeskSpaceDiskSearchV330.cs
@@ -173,6 +174,8 @@ jobs:
           if(!$?){throw 'R257 detailed redacted window restore preview baseline missing'}
           & ./r343/apply-r343.ps1
           if(!$?){throw 'R343 monitor-specific preview/restore patch failed'}
+          & ./r344/apply-r344.ps1
+          if(!$?){throw 'R344 screen-text OCR action patch failed'}
           & ./r301/apply-stable-deck-hotfix-r301.ps1
           if($LASTEXITCODE -ne 0){throw 'R301 scoped stable Deck patch failed'}
           & ./r304/apply-r304.ps1
@@ -377,5 +380,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R342 shared donut/Workspace menu or stale file path revalidation regression'}
           dotnet run --project 'r343/StableTests/MonitorScopedRestoreTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R343 monitor scope, disconnected monitor or preview UI acceptance failed'}
+          dotnet run --project 'r344/StableTests/ScreenTextTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R344 native Windows screen OCR, capture safety or cancellation regression'}
           & ./scripts/assert-ten-feature-release.ps1 -Mode Validate
           if(!$?){throw 'R329 feature batch manifest validation failed'}
