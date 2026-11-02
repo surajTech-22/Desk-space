@@ -201,9 +201,17 @@ internal static class DeskSpaceScreenTextV344
                 // removed before copying actual screen pixels.
                 await Task.Delay(180,current.Token);
                 byte[] image=CaptureRegion(rectangle.Value);
-                status.Text="Recognizing text locally with Windows OCR…";
-                text.Text=await RecognizeAsync(image,current.Token);
-                Array.Clear(image);
+                try
+                {
+                    status.Text="Recognizing text locally with Windows OCR…";
+                    text.Text=await RecognizeAsync(image,current.Token);
+                }
+                finally
+                {
+                    // OCR may throw or be cancelled: always erase the raw
+                    // screenshot buffer, not only after a successful read.
+                    Array.Clear(image,0,image.Length);
+                }
                 status.Text=text.Text.Length>0?
                     "Unverified text ready. Correct it before copying.":
                     "No recognizable text in the selected region.";
