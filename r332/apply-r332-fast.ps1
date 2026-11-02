@@ -18,7 +18,6 @@ $before='        // R332: disk search is an OPTIONAL source'
 $after='        int fileMatchesV334=0;'+$lf+$before
 if(!$block.Contains($before)){throw 'R334 bad optional disk block anchor'}
 $block=$block.Replace($before,$after)
-$before='''            if(Add(new SearchHit{Category="Files",Name=item.Name,'
 # Preserve the existing conditional exactly, adding a counter only when a
 # real indexed file passed existence checks and the ranking collector.
 $old=@'
