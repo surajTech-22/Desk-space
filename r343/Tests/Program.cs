@@ -42,7 +42,7 @@ internal static class Program
             var options=planner.GetMethod("Options",F)!;
             object screen1=select.Invoke(null,new object?[]{all,@"\\.\DISPLAY1"})!;
             object screen2=select.Invoke(null,new object?[]{all,@"\\.\DISPLAY2"})!;
-            int Count(object p)=((IEnumerable)p.GetType().GetProperty("Windows")!.GetValue(p)!).Cast<object>().Count();
+            int Count(object p)=>((IEnumerable)p.GetType().GetProperty("Windows")!.GetValue(p)!).Cast<object>().Count();
             Check(Count(all)==3&&Count(screen1)==2&&Count(screen2)==1,
                 "monitor filter should exclude other display's windows without mutating saved profile");
             Check(Count(select.Invoke(null,new object?[]{all,"MISSING-MONITOR"})!)==0,
@@ -53,8 +53,8 @@ internal static class Program
             Check(names.Length==3&&names[0]=="All saved monitors",
                 "monitor options must start with all and list each saved monitor once");
             var summary=summarize.Invoke(null,new object[]{all,screen2})!;
-            Check((int)summary.GetType().GetProperty("Selected")!.GetValue(summary)!==1 &&
-                (int)summary.GetType().GetProperty("Excluded")!.GetValue(summary)!==2,
+            Check((int)summary.GetType().GetProperty("Selected")!.GetValue(summary)! == 1 &&
+                (int)summary.GetType().GetProperty("Excluded")!.GetValue(summary)! == 2,
                 "preview didn't disclose excluded windows");
             var application=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};
             var owner=new Window();
