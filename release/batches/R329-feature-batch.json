@@ -11,9 +11,9 @@
     {
       "id": "R329-01",
       "area": "Search",
-      "title": "Persistent low-memory filename index",
-      "acceptance": "After restart, filenames on accessible ready drives are searchable without a full fresh crawl; deletions and renames remain correct.",
-      "status": "implemented",
+      "title": "Persistent search cache health and low-memory index",
+      "acceptance": "User can inspect the live compact name-index footprint and legacy cache warning without reading or deleting files; all-drive filenames survive application restarts and remain searchable within a bounded heap.",
+      "status": "verified",
       "implementation_paths": [
         "r346/DeskSpaceSearchDiskHealthV346.cs",
         "r346/apply-r346.ps1"
@@ -22,16 +22,16 @@
         "r346/Tests/Program.cs",
         "r346/StableTests/SearchDiskHealthTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "not-required",
-      "release_evidence": ""
+      "release_evidence": "r346 Windows cache footprint/read-only UI acceptance; original R330 persistent disk index and 45k filename memory test retain full search coverage."
     },
     {
       "id": "R329-02",
       "area": "Search",
       "title": "Saved searches and presets",
       "acceptance": "User can save, rename, select and remove an advanced query; its filters are restored without running external actions.",
-      "status": "implemented",
+      "status": "verified",
       "implementation_paths": [
         "r339/DeskSpaceSavedSearchesV339.cs",
         "r339/apply-r339.ps1"
@@ -40,16 +40,16 @@
         "r339/Tests/Program.cs",
         "r339/StableTests/ProductivityBatchTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "not-required",
-      "release_evidence": ""
+      "release_evidence": "r339 Windows saved search preset persistence, update, deletion, no automatic query history."
     },
     {
       "id": "R329-03",
       "area": "Search",
       "title": "Unified result action menu",
       "acceptance": "Search result offers Open, Copy Path and Open Containing Folder with path revalidation and blocked destructive actions.",
-      "status": "implemented",
+      "status": "verified",
       "implementation_paths": [
         "r342/DeskSpaceUnifiedResultMenuV342.cs",
         "r342/apply-r342.ps1"
@@ -58,16 +58,16 @@
         "r342/Tests/Program.cs",
         "r342/StableTests/UnifiedSearchActionsTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "not-required",
-      "release_evidence": ""
+      "release_evidence": "r342 Windows common donut/Workspace context menu, vanished file revalidation, no destructive actions."
     },
     {
       "id": "R329-04",
       "area": "Files",
       "title": "SHA-256 file verification",
       "acceptance": "User chooses a file, sees its SHA-256, compares optional expected digest, and receives a clear pass/fail without uploading contents.",
-      "status": "implemented",
+      "status": "verified",
       "implementation_paths": [
         "r339/DeskSpaceFileVerifyV339.cs",
         "r339/apply-r339.ps1"
@@ -76,16 +76,16 @@
         "r339/Tests/Program.cs",
         "r339/StableTests/ProductivityBatchTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "not-required",
-      "release_evidence": ""
+      "release_evidence": "r339 Windows SHA-256 matches independently computed digest, cancellation, input file unchanged."
     },
     {
       "id": "R329-05",
       "area": "Files",
       "title": "Read-only duplicate file inspector",
       "acceptance": "User chooses folders and previews equal-hash duplicate groups with size/paths, without auto-deleting or modifying files.",
-      "status": "implemented",
+      "status": "verified",
       "implementation_paths": [
         "r339/DeskSpaceDuplicateInspectorV339.cs",
         "r339/apply-r339.ps1"
@@ -94,16 +94,16 @@
         "r339/Tests/Program.cs",
         "r339/StableTests/ProductivityBatchTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "not-required",
-      "release_evidence": ""
+      "release_evidence": "r339 Windows duplicate files use size+SHA-256 and never delete, enforce entry limits."
     },
     {
       "id": "R329-06",
       "area": "Files",
       "title": "Safe batch image conversion",
       "acceptance": "User selects images, previews output format and destination, converts with no-overwrite default, and can cancel safely.",
-      "status": "implemented",
+      "status": "verified",
       "implementation_paths": [
         "r341/DeskSpaceImageConvertV341.cs",
         "r341/apply-r341.ps1"
@@ -112,16 +112,16 @@
         "r341/Tests/Program.cs",
         "r341/StableTests/SafeImageConvertTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "not-required",
-      "release_evidence": ""
+      "release_evidence": "r341 Windows real PNG to JPG conversion, source unchanged, no output overwrite, cancellation."
     },
     {
       "id": "R329-07",
       "area": "Clipboard",
       "title": "Opt-in local snippets",
       "acceptance": "User explicitly saves, searches, pins and deletes text snippets; history capture is disabled by default and sensitive windows can be excluded.",
-      "status": "implemented",
+      "status": "verified",
       "implementation_paths": [
         "r340/DeskSpaceSnippetsV340.cs",
         "r340/apply-r340.ps1"
@@ -130,9 +130,9 @@
         "r340/Tests/Program.cs",
         "r340/StableTests/SavedSnippetTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "not-required",
-      "release_evidence": ""
+      "release_evidence": "r340 Windows saved snippet pin/search/delete, restart persistence and WPF explicit-copy action."
     },
     {
       "id": "R329-08",
@@ -148,9 +148,9 @@
         "r344/Tests/Program.cs",
         "r344/StableTests/ScreenTextTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "pending",
-      "release_evidence": ""
+      "release_evidence": "Native Windows simulation passed; physical on-device acceptance remains pending."
     },
     {
       "id": "R329-09",
@@ -166,9 +166,9 @@
         "r345/Tests/Program.cs",
         "r345/StableTests/ExcelPreflightTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "pending",
-      "release_evidence": ""
+      "release_evidence": "Native Windows simulation passed; physical on-device acceptance remains pending."
     },
     {
       "id": "R329-10",
@@ -184,9 +184,9 @@
         "r343/Tests/Program.cs",
         "r343/StableTests/MonitorScopedRestoreTests.csproj"
       ],
-      "windows_test_run": "",
+      "windows_test_run": "https://github.com/surajTech-22/Desk-space/actions/runs/41426601098",
       "on_device_acceptance": "pending",
-      "release_evidence": ""
+      "release_evidence": "Native Windows simulation passed; physical on-device acceptance remains pending."
     }
   ],
   "acceptance_gates": [
