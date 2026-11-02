@@ -1,0 +1,45 @@
+name: DeskSpace R329 Ten Feature Release Policy Checks
+on:
+  push:
+    branches:
+      - feat/r329-ten-feature-batch-policy
+    paths:
+      - release/batches/**
+      - scripts/assert-ten-feature-release.ps1
+      - scripts/test-ten-feature-release.ps1
+      - docs/R329_TEN_FEATURE_BATCH_POLICY.md
+      - .github/workflows/check-r329-ten-feature-release.yml
+  pull_request:
+    branches:
+      - release/stable-deck-hotfix-r301
+    paths:
+      - release/batches/**
+      - scripts/assert-ten-feature-release.ps1
+      - scripts/test-ten-feature-release.ps1
+      - docs/R329_TEN_FEATURE_BATCH_POLICY.md
+
+permissions:
+  contents: read
+
+jobs:
+  ten-feature-gate:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout batch manifest and source
+        uses: actions/checkout@v4
+      - name: Validate ten-feature plan and prove early publication blocked
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./scripts/test-ten-feature-release.ps1
+          if(!$?){throw 'R329 release guard test failed'}
+      - name: Summarize release eligibility
+        shell: pwsh
+        run: |
+          $m=Get-Content 'release/batches/R329-feature-batch.json' -Raw|ConvertFrom-Json
+          $done=@($m.features | Where-Object {$_.status -eq 'verified'}).Count
+          "### DeskSpace Feature Batch R329" >> $env:GITHUB_STEP_SUMMARY
+          "Verified user-visible features: **$done / $($m.minimum_verified_features)**" >> $env:GITHUB_STEP_SUMMARY
+          "Release authorized: **$($m.release_authorized)**" >> $env:GITHUB_STEP_SUMMARY
+          "No Stable/Tester feature release until all ten complete and are verified." >> $env:GITHUB_STEP_SUMMARY
