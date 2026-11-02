@@ -19,7 +19,7 @@ function ReplaceOne([string]$old,[string]$new,[string]$name)
  if($count -ne 1){throw ('R314 shelf '+$name+' anchor count='+$count)}
  $script:s=$script:s.Replace($old,$new)
 }
-ReplaceOne 'DeskSpaceMonitorDockV190.Attach(host,popup,panel);' 'DeskSpaceMonitorDockV190.Attach(host,popup,panel,()=>deckMinimized);' 'monitor-local minimize callback'
+ReplaceOne 'DeskSpaceMonitorDockV190.Attach(host,popup,panel);' ('DeskSpaceMonitorDockV190.RegisterMinimizedV314(panel,()=>deckMinimized);'+$nl+'        DeskSpaceMonitorDockV190.Attach(host,popup,panel);') 'monitor-local minimize callback'
 ReplaceOne ('                if(deckMinimized)deckPreview?.Close();'+$nl+
              '                Render();'+$nl+
              '            });'+$nl+
