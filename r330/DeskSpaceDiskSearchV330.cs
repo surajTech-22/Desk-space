@@ -258,6 +258,8 @@ internal static class DeskSpaceDiskSearchV330
         CancellationToken cancellation,int max=MaximumReturned,bool? folders=null)
     {
         cancellation.ThrowIfCancellationRequested();
+        if(SimulateReadFailureForTestV332)
+            throw new IOException("R332 synthetic search-index read failure");
         max=Math.Clamp(max,1,MaximumReturned);
         var result=new List<Item>(Math.Min(max,64));
         using var connection=Connect();
@@ -321,6 +323,7 @@ internal static class DeskSpaceDiskSearchV330
 
     // Test hook does NOT modify the user's catalog: environment is scoped
     // to the throwaway test account via LOCALAPPDATA.
+    internal static bool SimulateReadFailureForTestV332;
     internal static int PendingCount=>Volatile.Read(ref pendingCount);
     // Health counter only: never store the user's queries or paths.
     private static long queryFailures;
