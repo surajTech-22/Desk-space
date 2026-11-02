@@ -169,6 +169,8 @@ jobs:
           if(!$?){throw 'R341 batch image converter patch failed'}
           & ./r342/apply-r342.ps1
           if(!$?){throw 'R342 unified safe search results menu failed to apply'}
+          & ./r257/apply-r257.ps1
+          if(!$?){throw 'R257 detailed redacted window restore preview baseline missing'}
           & ./r343/apply-r343.ps1
           if(!$?){throw 'R343 monitor-specific preview/restore patch failed'}
           & ./r301/apply-stable-deck-hotfix-r301.ps1
