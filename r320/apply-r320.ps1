@@ -127,4 +127,5 @@ foreach($req in @('DeskSpaceMonitorDockV190.Attach(host,popup,panel);',
 }
 [IO.File]::WriteAllText($dock,$d,$utf)
 [IO.File]::WriteAllText($shelf,$s,$utf)
+# The updated R234 regression asserts the SAME calculated X/Y in both WPF and native repair.
 Write-Host 'R320: one canonical Deck position; keep monitor-local X offset in WPF and native repair; remove obsolete second placement callback.'
