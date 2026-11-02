@@ -29,7 +29,7 @@ internal sealed class DeskSpaceSavedSearchesV339
             {
                 var found=JsonSerializer.Deserialize<List<Preset>>(
                     File.ReadAllText(file))??new();
-                return found.Where(x=>Valid(x.Name,x.Query))
+                return found.Where(x=>x!=null&&Valid(x.Name,x.Query))
                     .GroupBy(x=>x.Name,StringComparer.OrdinalIgnoreCase)
                     .Select(g=>g.First()).Take(MaximumPresets).ToArray();
             }
