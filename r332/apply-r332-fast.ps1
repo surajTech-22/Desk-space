@@ -18,8 +18,6 @@ $before='        // R332: disk search is an OPTIONAL source'
 $after='        int fileMatchesV334=0;'+$lf+$before
 if(!$block.Contains($before)){throw 'R334 bad optional disk block anchor'}
 $block=$block.Replace($before,$after)
-# Preserve the existing conditional exactly, adding a counter only when a
-# real indexed file passed existence checks and the ranking collector.
 $old=@'
                         if(Add(new SearchHit{Category="Files",Name=item.Name,
                             OpenTarget=item.Path,Location=item.Path}))
@@ -37,42 +35,54 @@ if(!$block.Contains($old.Replace($crlf,$lf))){
  throw 'R334 could not locate indexed acceptance counter'
 }
 $block=$block.Replace($old.Replace($crlf,$lf),$new.Replace($crlf,$lf))
-# Cut old late disk query, insert before other providers, to return fast.
 $s=$s.Remove($begin,$end-$begin)
+# The accepted R221 shipping source uses quickFiles.Concat(indexed).
+# The quickFiles declaration is an expensive fallback before Windows Search.
+$match=[regex]::Match($s,'(?m)^[ \t]*var[ \t]+quickFiles[ \t]*=')
+$quickStart=if($match.Success){$match.Index}else{-1}
 $indexed=$s.IndexOf('        var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);')
 if($indexed -lt 0){throw 'R334 Windows provider anchor disappeared'}
+$insert=if($quickStart -ge 0 -and $quickStart -lt $indexed){
+ $quickStart
+}else{$indexed}
+$s=$s.Substring(0,$insert)+$block+$s.Substring($insert)
+if($match.Success)
+{
+ $match=[regex]::Match($s,'(?m)^[ \t]*var[ \t]+quickFiles[ \t]*=')
+ $startExpr=$match.Index+$match.Length
+ $endExpr=$s.IndexOf(';',$startExpr)
+ if($endExpr -lt $startExpr){throw 'R334 quickFiles expression is not a normal statement'}
+ $expression=$s.Substring($startExpr,$endExpr-$startExpr).Trim()
+ if($expression.Length -eq 0){throw 'R334 empty quickFiles expression'}
+ $s=$s.Substring(0,$startExpr)+
+    'fileMatchesV334>0 ? new List<SearchHit>() : ('+$expression+')'+
+    $s.Substring($endExpr)
+}
+else
+{
+ $quickRoot=$s.IndexOf('foreach(var root in QuickRootsV288())')
+ if($quickRoot -ge 0)
+ {
+  $quickIf=$s.LastIndexOf('if(fileQuery.Length>=2',$quickRoot)
+  if($quickIf -ge 0)
+   { $s=$s.Substring(0,$quickIf)+'if(fileMatchesV334==0 && fileQuery.Length>=2'+
+       $s.Substring($quickIf+'if(fileQuery.Length>=2'.Length) }
+ }
+}
+$original='        var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);'
+if(([regex]::Matches($s,[regex]::Escape($original))).Count -ne 1){
+ throw 'R334 Windows Search provider must appear exactly once'
+}
 $provider=@'
-        // Filename and path searches use the local disk catalog first.
-        // Synchronous ADODB/Windows Search can block for >15 seconds on a
-        // busy or unindexed PC. Retain it only for explicitly requested
-        // document content searches; the name index and quick fallback
-        // are the ordinary file-search providers.
         var indexed=fileQuery.StartsWith("content:",
             StringComparison.OrdinalIgnoreCase)
             ?DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation)
             :new List<SearchHit>();
 '@
-$s=$s.Substring(0,$indexed)+$block+$provider.Replace($crlf,$lf)+
-    $s.Substring($indexed+
-    '        var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);'.Length)
-# The fast directory crawl is valuable when the local index has no results.
-# But never make a user wait for it after the exact indexed filename matches.
-$quickRoot=$s.IndexOf('            foreach(var root in QuickRootsV288())')
-if($quickRoot -lt 0){throw 'R334 cannot locate the existing bounded quick-root fallback'}
-$quickStart=$s.LastIndexOf('        if(',$quickRoot)
-if($quickStart -lt 0){throw 'R334 quick fallback conditional has no if'}
-$header=$s.Substring($quickStart,$quickRoot-$quickStart)
-if(!$header.Contains('fileQuery.Length>=2') -or
-   !$header.Contains('content:')){
- throw 'R334 unexpected quick fallback condition'
-}
-$newHeader=$header.Replace('if(fileQuery.Length>=2',
-    'if(fileMatchesV334==0 && fileQuery.Length>=2')
-if($newHeader -eq $header){throw 'R334 could not prepend fast-file short circuit'}
-$s=$s.Substring(0,$quickStart)+$newHeader+$s.Substring($quickRoot)
+$s=$s.Replace($original,$provider.Replace($crlf,$lf))
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 if($s.Contains('var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);') -or
-   !$s.Contains('fileMatchesV334==0') -or
+   !$s.Contains('fileMatchesV334') -or
    !$s.Contains('int fileMatchesV334=0;')){
  throw 'R334 file-search fast-first invariants are not satisfied'
 }
