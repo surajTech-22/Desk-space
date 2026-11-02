@@ -235,7 +235,9 @@ jobs:
               throw 'R333 cannot safely set authentic Windows EXE file metadata'
           }
           $metadata='<PropertyGroup><Version>'+$version+'</Version><FileVersion>'+$version+'.0</FileVersion></PropertyGroup>'
-          $projectText=$projectText.Replace('<PropertyGroup>',$metadata,1)
+          $offset=$projectText.IndexOf('<PropertyGroup>')
+          $projectText=$projectText.Substring(0,$offset)+$metadata+
+              $projectText.Substring($offset+'<PropertyGroup>'.Length)
           [IO.File]::WriteAllText($proj,$projectText,[Text.UTF8Encoding]::new($false))
           [IO.File]::WriteAllText('.release-r232/version.txt',$version,[Text.Encoding]::ASCII)
           Write-Host "DeskSpace scoped Stable Deck hotfix candidate: $version"
