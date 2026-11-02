@@ -1,0 +1,30 @@
+name: DeskTouch offline probe (isolated)
+on:
+  push:
+    branches: [prototype/offline-desktouch-touchpad]
+    paths:
+      - 'prototypes/DeskTouch/**'
+      - '.github/workflows/desktouch-offline-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout prototype
+        uses: actions/checkout@v4
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile self-contained offline Windows EXE
+        run: dotnet publish prototypes/DeskTouch/DeskTouch.Probe/DeskTouch.Probe.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+      - name: Upload offline executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskTouch-OfflineProbe-win-x64
+          path: prototypes/DeskTouch/DeskTouch.Probe/bin/Release/net8.0-windows/win-x64/publish/DeskTouch.Probe.exe
+          if-no-files-found: error
