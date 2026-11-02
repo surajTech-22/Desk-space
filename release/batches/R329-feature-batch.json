@@ -43,9 +43,15 @@
       "area": "Search",
       "title": "Unified result action menu",
       "acceptance": "Search result offers Open, Copy Path and Open Containing Folder with path revalidation and blocked destructive actions.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r342/DeskSpaceUnifiedResultMenuV342.cs",
+        "r342/apply-r342.ps1"
+      ],
+      "test_paths": [
+        "r342/Tests/Program.cs",
+        "r342/StableTests/UnifiedSearchActionsTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "not-required",
       "release_evidence": ""
