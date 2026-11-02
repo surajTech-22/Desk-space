@@ -91,9 +91,15 @@
       "area": "Files",
       "title": "Safe batch image conversion",
       "acceptance": "User selects images, previews output format and destination, converts with no-overwrite default, and can cancel safely.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r341/DeskSpaceImageConvertV341.cs",
+        "r341/apply-r341.ps1"
+      ],
+      "test_paths": [
+        "r341/Tests/Program.cs",
+        "r341/StableTests/SafeImageConvertTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "not-required",
       "release_evidence": ""
