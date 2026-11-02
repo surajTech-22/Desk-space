@@ -18,7 +18,7 @@ internal static class Program
         for(int i=0;i<VisualTreeHelper.GetChildrenCount(obj);i++)
             foreach(var e in Walk<T>(VisualTreeHelper.GetChild(obj,i)))yield return e;
     }
-    static int Main()
+    [STAThread] static int Main()
     {
         try
         {
