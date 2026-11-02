@@ -35,7 +35,7 @@ internal static class DeskSpaceDiskSearchV330
                 Environment.SpecialFolder.LocalApplicationData),
                 "DeskSpace","Search");
             Directory.CreateDirectory(baseFolder);
-            return Path.Combine(baseFolder,"filenames-v330.sqlite");
+            return Path.Combine(baseFolder,"filenames-v336.sqlite");
         }
     }
 
@@ -100,18 +100,19 @@ internal static class DeskSpaceDiskSearchV330
                   scan_epoch INTEGER NOT NULL DEFAULT 0);
                 CREATE INDEX IF NOT EXISTS idx_entries_volume ON entries(volume);
                 CREATE VIRTUAL TABLE IF NOT EXISTS names_fts USING fts5(
-                  name,path,content='entries',content_rowid='id',tokenize='trigram');
+                  name,content='entries',content_rowid='id',tokenize='trigram');
                 CREATE TRIGGER IF NOT EXISTS entries_ai AFTER INSERT ON entries BEGIN
-                  INSERT INTO names_fts(rowid,name,path) VALUES(new.id,new.name,new.path);
+                  INSERT INTO names_fts(rowid,name) VALUES(new.id,new.name);
                 END;
                 CREATE TRIGGER IF NOT EXISTS entries_ad AFTER DELETE ON entries BEGIN
-                  INSERT INTO names_fts(names_fts,rowid,name,path)
-                    VALUES('delete',old.id,old.name,old.path);
+                  INSERT INTO names_fts(names_fts,rowid,name)
+                    VALUES('delete',old.id,old.name);
                 END;
-                CREATE TRIGGER IF NOT EXISTS entries_au AFTER UPDATE ON entries BEGIN
-                  INSERT INTO names_fts(names_fts,rowid,name,path)
-                    VALUES('delete',old.id,old.name,old.path);
-                  INSERT INTO names_fts(rowid,name,path) VALUES(new.id,new.name,new.path);
+                CREATE TRIGGER IF NOT EXISTS entries_au AFTER UPDATE ON entries
+                    WHEN old.name<>new.name BEGIN
+                  INSERT INTO names_fts(names_fts,rowid,name)
+                    VALUES('delete',old.id,old.name);
+                  INSERT INTO names_fts(rowid,name) VALUES(new.id,new.name);
                 END;";
             command.ExecuteNonQuery();
             Volatile.Write(ref initialized,1);
@@ -296,10 +297,13 @@ internal static class DeskSpaceDiskSearchV330
             // Ordinary queries search filenames only. An explicit slash
             // or drive fragment permits searching the complete path.
             bool searchPath=search.IndexOfAny(new[]{'\\','/',':'})>=0;
-            command.CommandText=useTrigrams?
+            // Path trigrams previously caused multi-gigabyte cache growth.
+            // Normal filename queries use a small name-only FTS; explicit
+            // path queries use the ordinary path column instead.
+            command.CommandText=useTrigrams && !searchPath ?
                 @"SELECT e.name,e.path,e.folder,e.volume FROM names_fts f
                   JOIN entries e ON e.id=f.rowid
-                  WHERE (f.name LIKE $search OR ($path=1 AND f.path LIKE $search))
+                  WHERE f.name LIKE $search
                     AND ($drive='' OR e.volume=$drive)
                     AND ($folders IS NULL OR e.folder=$folders)
                   LIMIT $max;":
