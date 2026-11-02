@@ -43,6 +43,29 @@ internal static class Program
             rows.Add(item);
             disk.GetMethod("WriteBatch",Static)!
                 .Invoke(null,new object[]{volume,epoch,rows});
+            // R336: verify the installed backend uses the fresh compact
+            // filename-only catalog, never the older 6GB path-trigram DB.
+            string cacheFolder=Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData),"DeskSpace","Search");
+            string newIndex=Path.Combine(cacheFolder,"filenames-v336.sqlite");
+            Assert(File.Exists(newIndex),"v336 replacement filename cache was not created");
+            using(var conn=new Microsoft.Data.Sqlite.SqliteConnection(
+                "Data Source="+newIndex))
+            {
+                conn.Open();
+                using var schema=conn.CreateCommand();
+                schema.CommandText="SELECT sql FROM sqlite_master WHERE name='names_fts';";
+                var sql=Convert.ToString(schema.ExecuteScalar())??"";
+                Assert(sql.Contains("tokenize='trigram'",StringComparison.OrdinalIgnoreCase) &&
+                       !sql.Contains("name,path",StringComparison.OrdinalIgnoreCase),
+                    "R336 still indexes full paths in expensive trigram FTS");
+                using var trigger=conn.CreateCommand();
+                trigger.CommandText="SELECT sql FROM sqlite_master WHERE name='entries_au';";
+                var updateSql=Convert.ToString(trigger.ExecuteScalar())??"";
+                Assert(updateSql.Contains("old.name<>new.name",
+                    StringComparison.OrdinalIgnoreCase),
+                    "R336 repeatedly reindexes unchanged filenames on scan updates");
+            }
             var isOwn=disk.GetMethod("IsOwnIndexPathV335",Static)!;
             var internalCache=Path.Combine(Environment.GetFolderPath(
                 Environment.SpecialFolder.LocalApplicationData),
