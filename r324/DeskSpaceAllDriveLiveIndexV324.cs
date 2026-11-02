@@ -35,6 +35,12 @@ internal static class DeskSpaceAllDriveLiveIndexV324
         }
     }
 
+    // Native tests exercise the real watcher without scanning a developer PC.
+    internal static void StartForTest(Action<string,bool> onChange)
+    {
+        lock(Gate){changed=onChange;newVolume=_=>{};running=true;}
+    }
+
     internal static bool WatchRoot(string root,bool scanNewVolume)
     {
         if(string.IsNullOrWhiteSpace(root)||!Directory.Exists(root))return false;
