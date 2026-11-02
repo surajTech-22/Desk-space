@@ -34,7 +34,14 @@ internal static class Program
             var testStart=monitor.GetMethod("StartForTest",Flags)!;
             var watch=monitor.GetMethod("WatchRoot",Flags)!;
             var quick=fast.GetMethod("Find",Flags)!;
-            var entries=(IEnumerable)index.GetField("Entries",Flags)!.GetValue(null)!;
+            var disk=asm.GetType("DeskSpace.DeskSpaceDiskSearchV330",true)!;
+            var query=disk.GetMethod("Query",Flags)!;
+            var flush=disk.GetMethod("FlushPending",Flags)!;
+            string[] DbPaths(string word,string volume)=>
+                ((IEnumerable)query.Invoke(null,new object?[]{
+                    word,volume,CancellationToken.None,640,false})!)
+                .Cast<object>().Select(x=>(string)x.GetType()
+                    .GetProperty("Path")!.GetValue(x)!).ToArray();
             string fileA=Path.Combine(a,"report_unique_mars_2026.xlsx");
             string folder=Path.Combine(b,"FolderHidden");
             Directory.CreateDirectory(folder);
@@ -58,11 +65,11 @@ internal static class Program
             File.WriteAllText(deepest,"deep");
             scan.Invoke(null,new object[]{a});
             scan.Invoke(null,new object[]{b});
-            var paths=entries.Cast<object>().Select(entry=>
-                (string)entry.GetType().GetProperty("Path")!.GetValue(entry)!).ToArray();
-            Require(paths.Contains(fileA,StringComparer.OrdinalIgnoreCase) &&
-                paths.Contains(hidden,StringComparer.OrdinalIgnoreCase) &&
-                paths.Contains(deepest,StringComparer.OrdinalIgnoreCase),
+            var pathsA=DbPaths("unique_mars",a);
+            var pathsB=DbPaths("unique_mars",b);
+            Require(pathsA.Contains(fileA,StringComparer.OrdinalIgnoreCase) &&
+                pathsB.Contains(hidden,StringComparer.OrdinalIgnoreCase) &&
+                pathsB.Contains(deepest,StringComparer.OrdinalIgnoreCase),
                 "uncapped catalog failed to index real XLSX/PDF/deep DOCX across two roots");
             var fastHits=((IEnumerable)quick.Invoke(null,new object?[]{
                 "unique_mars",CancellationToken.None,null,new[]{a,b}})!)
@@ -76,9 +83,14 @@ internal static class Program
             testStart.Invoke(null,new object[]{change});
             Require((bool)watch.Invoke(null,new object[]{a,false})!,
                 "FileSystemWatcher cannot monitor a temporary Windows drive folder");
-            var livePaths=index.GetField("LivePaths",Flags)!.GetValue(null)!;
-            var tryContains=livePaths.GetType().GetMethod("ContainsKey")!;
-            bool Has(string p)=>(bool)tryContains.Invoke(livePaths,new object[]{p})!;
+            // New disk-backed search no longer retains all event paths
+            // in an unbounded managed ConcurrentDictionary.
+            bool Has(string p)
+            {
+                flush.Invoke(null,null);
+                return DbPaths(Path.GetFileName(p),Path.GetPathRoot(p)!)
+                    .Contains(p,StringComparer.OrdinalIgnoreCase);
+            }
             var newFile=Path.Combine(a,"after_start_unique_mars.pptx");
             File.WriteAllText(newFile,"new file");
             Require(SpinWait.SpinUntil(()=>Has(newFile),5000),
@@ -96,7 +108,7 @@ internal static class Program
             Require(monitor.GetMethod("NotifyForTest",Flags)!=null &&
                     monitor.GetMethod("Start",Flags)!=null,
                 "live watcher repair path disconnected from main catalog");
-            Console.WriteLine("R324 PASS: uncapped multi-root all-file index; hidden accessible PDF; deep DOCX/XLSX; new, rename and delete watcher updates; no document contents searched.");
+            Console.WriteLine("R324+R330 PASS: disk-backed multi-root all-file index, hidden accessible PDF, deep DOCX/XLSX, new/rename/delete watcher events, no unbounded heap inventory.");
             return 0;
         }
         catch(Exception ex){Console.Error.WriteLine(ex);return 1;}
