@@ -43,6 +43,18 @@ internal static class Program
             rows.Add(item);
             disk.GetMethod("WriteBatch",Static)!
                 .Invoke(null,new object[]{volume,epoch,rows});
+            var isOwn=disk.GetMethod("IsOwnIndexPathV335",Static)!;
+            var internalCache=Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData),
+                "DeskSpace","Search","filenames-v330.sqlite");
+            bool Own(string p)=>(bool)isOwn.Invoke(null,new object?[]{p})!;
+            Assert(Own(internalCache)&&Own(internalCache+"-wal")&&
+                Own(internalCache+"-shm")&&!Own(file),
+                "index did not exclude its own SQLite WAL/SHM path");
+            int before=(int)disk.GetProperty("PendingCount",Static)!.GetValue(null)!;
+            disk.GetMethod("Enqueue",Static)!.Invoke(null,new object?[]{internalCache,true});
+            Assert((int)disk.GetProperty("PendingCount",Static)!.GetValue(null)!==before,
+                "SQLite index's own writes still generate queued watcher updates");
             var ws=new DeskSpace.Workspace();
             List<DeskSpace.SearchHit> Search(string text)=>
                 (List<DeskSpace.SearchHit>)read.Invoke(null,new object[]{
@@ -88,7 +100,7 @@ internal static class Program
             repeat.Stop();
             Assert(repeat.ElapsedMilliseconds<16000,
                 "12 repeated searches exceeded expected latency budget");
-            Console.WriteLine("R332 PASS: real shipping Search() finds indexed XLSX in "+
+            Console.WriteLine("R332+R335 PASS: SQLite cache events excluded; real shipping Search() finds indexed XLSX in "+
                 clock.ElapsedMilliseconds+"ms, remains functional with an injected SQLite "+
                 "failure (Settings and Notes visible), and survives 12 repeated searches.");
             return 0;
