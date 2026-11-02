@@ -144,36 +144,7 @@ Once @'
     public void Dispose()
 '@ 'stop search watchdog when widget search closes'
 [IO.File]::WriteAllText($ui,$s,[Text.UTF8Encoding]::new($false))
-$w=[IO.File]::ReadAllText($universal).Replace($crlf,$lf)
-$old=@'
-        searchCancel=new CancellationTokenSource();
-        var token=searchCancel.Token;
-'@
-$new=@'
-        searchCancel=new CancellationTokenSource();
-        // Prevent old results windows remaining forever on Searching...
-        // when a drive or shell provider is slow. New input cancels old work.
-        searchCancel.CancelAfter(TimeSpan.FromSeconds(9));
-        var token=searchCancel.Token;
-'@
-if(([regex]::Matches($w,[regex]::Escape($old))).Count -ne 1){
- throw 'R337 Universal Search cancellation deadline anchor changed'
-}
-$w=$w.Replace($old,$new.Replace($crlf,$lf))
-$old='        catch(OperationCanceledException){}'
-$new=@'
-        catch(OperationCanceledException)
-        {
-            if(sequence==requestSequence && !IsClosedV337)
-                status.Text="Search timed out. Try a filename or narrower folder.";
-        }
-'@
-# Only one catch in UniversalSearch. A closed window is guarded by the
-# monotonic request sequence in Closed handler: no extra IsClosed variable.
-$new=$new.Replace(' && !IsClosedV337','')
-if(([regex]::Matches($w,[regex]::Escape($old))).Count -ne 1){
- throw 'R337 Universal Search cancellation message anchor changed'
-}
-$w=$w.Replace($old,$new.Replace($crlf,$lf))
-[IO.File]::WriteAllText($universal,$w,[Text.UTF8Encoding]::new($false))
-Write-Host 'R337: Index refresh no longer cancels a running donut query; one coalesced refresh, 7s visible watchdog, 9s Workspace timeout, dispose cleanup.'
+# The donut spinner is the observed failure. Older source snapshots have
+# different UniversalSearch implementations. Do not risk a second unrelated
+# UI patch in this urgent release.
+Write-Host 'R337: Index refresh no longer cancels a running donut query; one coalesced refresh, 7s visible watchdog, dispose cleanup.'
