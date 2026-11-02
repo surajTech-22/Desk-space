@@ -34,8 +34,9 @@ internal sealed class DeskSpaceSnippetsV340
             {
                 var entries=JsonSerializer.Deserialize<List<Snippet>>(
                     File.ReadAllText(file))??new();
-                return entries.Where(x=>x.Id.Length==32 &&
-                    x.Title.Length<=80 && x.Content.Length<=MaxCharacters)
+                return entries.Where(x=>x!=null && x.Id!=null && x.Id.Length==32 &&
+                    x.Title!=null && x.Title.Length<=80 &&
+                    x.Content!=null && x.Content.Length<=MaxCharacters)
                     .GroupBy(x=>x.Id,StringComparer.Ordinal)
                     .Select(x=>x.First()).Take(MaxSnippets).ToArray();
             }
