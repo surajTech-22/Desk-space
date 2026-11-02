@@ -103,6 +103,21 @@ if(([regex]::Matches($q,[regex]::Escape($old))).Count -ne 1){
 $q=$q.Replace($old,'while (queue.Count > 0 && interactiveClockV334.ElapsedMilliseconds<1200 && scanned < MaximumDirectories &&')
 [IO.File]::WriteAllText($quickPath,$q,[Text.UTF8Encoding]::new($false))
 
+# Prevent the all-volume scanner from indexing the SQLite DB it is
+# actively writing. The watcher side is excluded in DiskSearch.Enqueue.
+$scan='            foreach(var path in EnumerateTree(root))'
+if(([regex]::Matches($s,[regex]::Escape($scan))).Count -ne 1){
+ throw 'R335 expected one disk scan loop in assembled shipping source'
+}
+$s=$s.Replace($scan,$scan+$lf+
+    '            {'+$lf+
+    '                if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;'+$lf)
+# The replacement above inserts a new opening brace before the old
+# opening brace; remove the redundant old brace to retain C# structure.
+$s=$s.Replace('if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;'+$lf+
+    '            {'+$lf,
+    'if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;'+$lf)
+
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 if($s.Contains('var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);') -or
    !$s.Contains('fileMatchesV334') -or
