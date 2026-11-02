@@ -25,9 +25,15 @@
       "area": "Search",
       "title": "Saved searches and presets",
       "acceptance": "User can save, rename, select and remove an advanced query; its filters are restored without running external actions.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r339/DeskSpaceSavedSearchesV339.cs",
+        "r339/apply-r339.ps1"
+      ],
+      "test_paths": [
+        "r339/Tests/Program.cs",
+        "r339/StableTests/ProductivityBatchTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "not-required",
       "release_evidence": ""
@@ -49,9 +55,15 @@
       "area": "Files",
       "title": "SHA-256 file verification",
       "acceptance": "User chooses a file, sees its SHA-256, compares optional expected digest, and receives a clear pass/fail without uploading contents.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r339/DeskSpaceFileVerifyV339.cs",
+        "r339/apply-r339.ps1"
+      ],
+      "test_paths": [
+        "r339/Tests/Program.cs",
+        "r339/StableTests/ProductivityBatchTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "not-required",
       "release_evidence": ""
@@ -61,9 +73,15 @@
       "area": "Files",
       "title": "Read-only duplicate file inspector",
       "acceptance": "User chooses folders and previews equal-hash duplicate groups with size/paths, without auto-deleting or modifying files.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r339/DeskSpaceDuplicateInspectorV339.cs",
+        "r339/apply-r339.ps1"
+      ],
+      "test_paths": [
+        "r339/Tests/Program.cs",
+        "r339/StableTests/ProductivityBatchTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "not-required",
       "release_evidence": ""
