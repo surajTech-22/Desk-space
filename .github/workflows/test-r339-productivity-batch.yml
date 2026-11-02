@@ -6,6 +6,7 @@ on:
       - .github/workflows/test-r339-productivity-batch.yml
       - r339/**
       - r340/**
+      - r341/**
       - release/batches/R329-feature-batch.json
       - r337/**
       - r330/DeskSpaceDiskSearchV330.cs
@@ -162,6 +163,8 @@ jobs:
           if(!$?){throw 'R339 productivity batch patch failed'}
           & ./r340/apply-r340.ps1
           if(!$?){throw 'R340 saved snippets patch failed'}
+          & ./r341/apply-r341.ps1
+          if(!$?){throw 'R341 batch image converter patch failed'}
           & ./r301/apply-stable-deck-hotfix-r301.ps1
           if($LASTEXITCODE -ne 0){throw 'R301 scoped stable Deck patch failed'}
           & ./r304/apply-r304.ps1
@@ -360,5 +363,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R339 saved search, hash verification or duplicate inspector Windows regression'}
           dotnet run --project 'r340/StableTests/SavedSnippetTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R340 manual saved snippet WPF, persistence, pin or deletion regression'}
+          dotnet run --project 'r341/StableTests/SafeImageConvertTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R341 safe image conversion altered source or failed no-overwrite WPF tests'}
           & ./scripts/assert-ten-feature-release.ps1 -Mode Validate
           if(!$?){throw 'R329 feature batch manifest validation failed'}
