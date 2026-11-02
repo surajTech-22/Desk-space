@@ -57,18 +57,19 @@ $s=$s.Substring(0,$indexed)+$block+$provider.Replace($crlf,$lf)+
     '        var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);'.Length)
 # The fast directory crawl is valuable when the local index has no results.
 # But never make a user wait for it after the exact indexed filename matches.
-$quick=@'
-        if(fileQuery.Length>=2 &&
-           !fileQuery.StartsWith("content:",StringComparison.OrdinalIgnoreCase))
-'@
-$fastQuick=@'
-        if(fileMatchesV334==0 && fileQuery.Length>=2 &&
-           !fileQuery.StartsWith("content:",StringComparison.OrdinalIgnoreCase))
-'@
-if(([regex]::Matches($s,[regex]::Escape($quick.Replace($crlf,$lf)))).Count -ne 1){
- throw 'R334 quick-file fallback conditional changed'
+$quickRoot=$s.IndexOf('            foreach(var root in QuickRootsV288())')
+if($quickRoot -lt 0){throw 'R334 cannot locate the existing bounded quick-root fallback'}
+$quickStart=$s.LastIndexOf('        if(',$quickRoot)
+if($quickStart -lt 0){throw 'R334 quick fallback conditional has no if'}
+$header=$s.Substring($quickStart,$quickRoot-$quickStart)
+if(!$header.Contains('fileQuery.Length>=2') -or
+   !$header.Contains('content:')){
+ throw 'R334 unexpected quick fallback condition'
 }
-$s=$s.Replace($quick.Replace($crlf,$lf),$fastQuick.Replace($crlf,$lf))
+$newHeader=$header.Replace('if(fileQuery.Length>=2',
+    'if(fileMatchesV334==0 && fileQuery.Length>=2')
+if($newHeader -eq $header){throw 'R334 could not prepend fast-file short circuit'}
+$s=$s.Substring(0,$quickStart)+$newHeader+$s.Substring($quickRoot)
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 if($s.Contains('var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);') -or
    !$s.Contains('fileMatchesV334==0') -or
