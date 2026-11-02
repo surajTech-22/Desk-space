@@ -157,9 +157,15 @@
       "area": "Workspace",
       "title": "Monitor-aware session restore preview",
       "acceptance": "User sees a preview of apps/windows/monitor placement, reviews unavailable applications, and explicitly approves restore.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r343/DeskSpaceMonitorRestoreV343.cs",
+        "r343/apply-r343.ps1"
+      ],
+      "test_paths": [
+        "r343/Tests/Program.cs",
+        "r343/StableTests/MonitorScopedRestoreTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "pending",
       "release_evidence": ""
