@@ -36,7 +36,6 @@ One $old $new 'supervisor arguments' 'u'
 $old=@'
         if(Process.Start(child)==null)
             throw new IOException("Cannot start update supervisor");
-        Log("Verified "+tag+" handed to independent installer supervisor");
 '@
 $new=@'
         using var supervisorV316=Process.Start(child)
