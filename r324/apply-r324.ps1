@@ -71,13 +71,10 @@ One s @'
                    (flags&FileAttributes.ReparsePoint)==0)stack.Push(path);
                 yield return path;
 '@ 'do not recurse into junctions'
-# The accepted R232 baseline may contain small formatting differences
-# from the cached R288 source, so replace ONLY the exact method by signature.
+# Some accepted R221/R232 shipping snapshots precede R288. Supply a
+# stable eligibility method if absent, or replace it by method signature
+# without assuming new repository source had already been copied to the EXE.
 $methodStart=$s.IndexOf('    internal static bool IsSearchableFileV288(string path)')
-$methodEnd=$s.IndexOf('    // Before a full multi-drive crawl', $methodStart)
-if($methodStart -lt 0 -or $methodEnd -le $methodStart){
- throw 'R324 cannot locate existing file-search eligibility method'
-}
 $method=@'
     internal static bool IsSearchableFileV288(string path)
     {
@@ -87,8 +84,8 @@ $method=@'
                 return false;
             var name=Path.GetFileName(path);
             if(name.Length==0)return false;
-            // Include hidden/system/temp/dotfiles the account can access.
-            // Never read their contents; directories remain separate hits.
+            // All accessible names, including hidden, system, temporary,
+            // dotfiles and file links; never open document contents.
             var flags=File.GetAttributes(path);
             return (flags&FileAttributes.Directory)==0;
         }
@@ -98,8 +95,31 @@ $method=@'
     }
 
 '@
-$s=$s.Substring(0,$methodStart)+$method.Replace($crlf,$lf)+$s.Substring($methodEnd)
-
+$method=$method.Replace($crlf,$lf)
+if($methodStart -lt 0)
+{
+ $insert=$s.IndexOf('    private static void ScanVolume(string root)')
+ if($insert -lt 0){throw 'R324 shipping source contains no ScanVolume insertion point'}
+ $s=$s.Insert($insert,$method)
+}
+else
+{
+ $methodEnd=$s.IndexOf('    // Before a full multi-drive crawl', $methodStart)
+ if($methodEnd -lt 0){
+    $methodEnd=$s.IndexOf('    internal static ', $methodStart+20)
+ }
+ if($methodEnd -lt 0){
+    $methodEnd=$s.IndexOf('    private static void ScanVolume(string root)', $methodStart+20)
+ }
+ if($methodEnd -le $methodStart){throw 'R324 cannot find end of old file predicate'}
+ $s=$s.Substring(0,$methodStart)+$method+$s.Substring($methodEnd)
+}
+# The R221 catalog reused the recent-file watcher filter. Search is not
+# the recently-modified files deck: all accessible files must be eligible.
+$s=$s.Replace('DeskSpaceNewFileWatchV53.IsOrdinaryUserFile(item.Path)',
+              'IsSearchableFileV288(item.Path)')
+$s=$s.Replace('DeskSpaceNewFileWatchV53.IsOrdinaryUserFile(full)',
+              'IsSearchableFileV288(full)')
 One s @'
         _=Task.Run(BuildIndex);
 '@ @'
