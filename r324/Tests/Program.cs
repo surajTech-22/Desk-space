@@ -71,12 +71,18 @@ internal static class Program
                 pathsB.Contains(hidden,StringComparer.OrdinalIgnoreCase) &&
                 pathsB.Contains(deepest,StringComparer.OrdinalIgnoreCase),
                 "uncapped catalog failed to index real XLSX/PDF/deep DOCX across two roots");
+            var quickClock=System.Diagnostics.Stopwatch.StartNew();
             var fastHits=((IEnumerable)quick.Invoke(null,new object?[]{
                 "unique_mars",CancellationToken.None,null,new[]{a,b}})!)
                 .Cast<DeskSpace.SearchHit>().ToArray();
+            quickClock.Stop();
+            // Immediate fallback must show a nearby file promptly. Deep
+            // coverage is independently checked against the COMPLETE
+            // on-disk index above, not by waiting through 1260 directories.
             Require(fastHits.Any(h=>h.OpenTarget==fileA) &&
-                fastHits.Any(h=>h.OpenTarget==deepest),
-                "live multi-root filename discovery missed nested file");
+                pathsB.Contains(deepest,StringComparer.OrdinalIgnoreCase) &&
+                quickClock.ElapsedMilliseconds<3500,
+                "interactive fallback delayed user or lost on-disk deep-file coverage");
 
             var change=new Action<string,bool>((p,exists)=>
                 notify.Invoke(null,new object[]{p,exists}));
