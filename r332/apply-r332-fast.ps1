@@ -80,6 +80,29 @@ $provider=@'
             :new List<SearchHit>();
 '@
 $s=$s.Replace($original,$provider.Replace($crlf,$lf))
+# The R221 quickFiles fallback historically crawled up to 2400
+# directories synchronously. Cap ONLY this best-effort interactive crawl;
+# deep files remain indexed by the uncapped R330 disk catalog.
+$quickPath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceFileQuickSearchV233.cs'
+$q=[IO.File]::ReadAllText($quickPath).Replace($crlf,$lf)
+$quickScanOld='        int scanned = 0;'
+$quickScanNew=@'
+        // R334: keep a responsive search UI even on inaccessible/network
+        // directories; the disk-backed index remains the complete provider.
+        var interactiveClockV334=System.Diagnostics.Stopwatch.StartNew();
+        int scanned = 0;
+'@
+if(([regex]::Matches($q,[regex]::Escape($quickScanOld))).Count -ne 1){
+ throw 'R334 cannot locate bounded quick scan count'
+}
+$q=$q.Replace($quickScanOld,$quickScanNew.Replace($crlf,$lf).TrimEnd($lf.ToCharArray()))
+$old='while (queue.Count > 0 && scanned < MaximumDirectories &&'
+if(([regex]::Matches($q,[regex]::Escape($old))).Count -ne 1){
+ throw 'R334 cannot locate quick crawler guard'
+}
+$q=$q.Replace($old,'while (queue.Count > 0 && interactiveClockV334.ElapsedMilliseconds<1200 && scanned < MaximumDirectories &&')
+[IO.File]::WriteAllText($quickPath,$q,[Text.UTF8Encoding]::new($false))
+
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 if($s.Contains('var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);') -or
    !$s.Contains('fileMatchesV334') -or
