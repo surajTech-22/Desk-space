@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -17,6 +18,30 @@ namespace DeskSpace;
 // then converts each widget's coordinates to its own WPF DPI scale.
 internal static class DeskSpaceMonitorDockV190
 {
+    // Per-physical-Deck callbacks. Never share another monitor's visual
+    // bounds or scroll position; weak keys allow closed widgets to collect.
+    private static readonly ConditionalWeakTable<Border,Action<bool>> ReflowV314=new();
+    internal static void RequestReflowV314(Border border,bool resetScroll=false)
+    {
+        if(ReflowV314.TryGetValue(border,out var reflow))reflow(resetScroll);
+    }
+
+    // Measure the CONTENT without the ScrollViewer's previous MaxHeight.
+    // The old code measured border.ActualHeight (already clipped), feeding
+    // its 30-40px strip back as the NEXT max height forever.
+    internal static double DesiredDeckHeightV314(
+        FrameworkElement? content,double widthDip,bool minimized)
+    {
+        if(minimized)return 42;
+        if(content==null)return 156;
+        content.InvalidateMeasure();
+        content.Measure(new System.Windows.Size(
+            Math.Max(90,widthDip-16),double.PositiveInfinity));
+        var natural=content.DesiredSize.Height+12;
+        return Math.Clamp(Math.Max(156,
+            double.IsFinite(natural)?natural:156),156,520);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect { public int Left,Top,Right,Bottom; }
 
@@ -232,7 +257,7 @@ internal static class DeskSpaceMonitorDockV190
         return fallback;
     }
 
-    internal static void Attach(Window owner,Popup popup,Border border)
+    internal static void Attach(Window owner,Popup popup,Border border,Func<bool>? isMinimizedV314=null)
     {
         // Existing Deck generations use different content containers:
         // some place StackPanel directly in Border, newer versions already
@@ -277,10 +302,14 @@ internal static class DeskSpaceMonitorDockV190
             // Size for the entire live popup, not just a fixed scroll height.
             // A large initial popup must be reduced before WPF can clamp it
             // into the circular clock's physical rectangle.
-            var measured=border.ActualHeight>1?
-                border.ActualHeight:
-                border.DesiredSize.Height>1?border.DesiredSize.Height:260;
-            int desired=Math.Max(42,(int)Math.Ceiling(Math.Min(520,measured)*sy));
+            // Never measure the clamped border/scroll HWND as the desired
+            // content. That created a self-sustaining 40px collapsed strip,
+            // with the title and buttons scrolled out of view.
+            bool minimized=isMinimizedV314?.Invoke()==true;
+            double availableDip=Math.Max(100,Math.Min(310,(work.Width-8)/sx));
+            double desiredDip=DesiredDeckHeightV314(
+                scroll.Content as FrameworkElement,availableDip,minimized);
+            int desired=(int)Math.Ceiling(desiredDip*sy);
             int width=Math.Max(1,Math.Min(work.Width,
                 (int)Math.Ceiling(Math.Min(310,work.Width/sx)*sx)));
             var plan=FitBelowV292(widget,work,width,desired);
@@ -295,6 +324,12 @@ internal static class DeskSpaceMonitorDockV190
             // The border includes a 1px outline on each edge; reserve four
             // extra pixels for WPF DPI rounding and native popup margins.
             double max=(plan.Deck.Height-6)/sy;
+            // A standard expanded Deck always has a usable viewport, even
+            // when only Running Apps currently has data. Explicit manual
+            // minimize is still allowed to shrink to the normal header.
+            scroll.MinHeight=minimized?0:Math.Min(132,Math.Max(0,max-4));
+            border.MinHeight=minimized?0:Math.Min(136,
+                Math.Max(0,plan.Deck.Height/sy-6));
             scroll.MaxHeight=Math.Max(20,max);
             border.MaxHeight=Math.Max(22,plan.Deck.Height/sy);
             scroll.InvalidateMeasure();
@@ -374,6 +409,17 @@ internal static class DeskSpaceMonitorDockV190
             }
             finally{enforcing=false;}
         }
+        // Explicit reflow on Render: a newly added title/group must expand
+        // the Deck even if the native popup is still at its previous size,
+        // and there is consequently no SizeChanged event to wake the layout.
+        ReflowV314.Remove(border);
+        ReflowV314.Add(border,resetScroll=>{
+            AdjustBounds();
+            if(resetScroll)scroll.ScrollToTop();
+            if(popup.IsOpen){Reposition();RepairLater();}
+        });
+        owner.Closed+=(_,_)=>ReflowV314.Remove(border);
+        popup.Opened+=(_,_)=>scroll.ScrollToTop();
         owner.Loaded+=(_,_)=>LoadPosition();
         // Run on opening rather than moving a hidden or manually positioned
         // widget continuously. The shift is limited to this widget's HWND.
