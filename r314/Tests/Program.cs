@@ -6,6 +6,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Application=System.Windows.Application;
+using Brushes=System.Windows.Media.Brushes;
 
 internal static class Program
 {
