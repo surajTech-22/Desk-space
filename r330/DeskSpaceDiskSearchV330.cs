@@ -39,6 +39,27 @@ internal static class DeskSpaceDiskSearchV330
         }
     }
 
+    // R335: exclude the filename index's OWN SQLite, WAL, SHM and journal
+    // files from both scanner and watcher. Otherwise indexing writes raise
+    // more watcher events, which write again and create a feedback loop.
+    internal static bool IsOwnIndexPathV335(string? path)
+    {
+        if(string.IsNullOrWhiteSpace(path))return false;
+        try
+        {
+            var directory=Path.GetDirectoryName(DatabaseFile);
+            if(string.IsNullOrEmpty(directory))return false;
+            var prefix=Path.TrimEndingDirectorySeparator(directory)+
+                Path.DirectorySeparatorChar;
+            var absolute=Path.GetFullPath(path);
+            return absolute.StartsWith(prefix,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
+            or ArgumentException or NotSupportedException
+            or System.Security.SecurityException){return false;}
+    }
+
     private static SqliteConnection Connect()
     {
         Initialize();
@@ -112,6 +133,7 @@ internal static class DeskSpaceDiskSearchV330
         try
         {
             path=Path.GetFullPath(path);
+            if(IsOwnIndexPathV335(path))return;
             if(Interlocked.Increment(ref pendingCount)>MaximumPending)
             {
                 Interlocked.Decrement(ref pendingCount);
