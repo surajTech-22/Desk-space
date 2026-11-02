@@ -203,7 +203,7 @@ One @'
 # when a full-drive disk scan is running. The expression is bounded and
 # non-nested; allow a more realistic compiled-pattern first-use budget.
 $filtersPath=Join-Path $root 'DeskSpaceSearchFiltersV326.cs'
-$f=[IO.File]::ReadAllText($filtersPath)
+$f=[IO.File]::ReadAllText($filtersPath).Replace($crlf,$lf)
 $before='RegexOptions.Compiled|RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,'+$lf+
         '        TimeSpan.FromMilliseconds(100));'
 $after='RegexOptions.Compiled|RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,'+$lf+
