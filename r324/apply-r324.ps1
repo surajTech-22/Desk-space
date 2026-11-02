@@ -202,11 +202,13 @@ One s @'
         }
     }
 '@ 'replace stale one-shot all-drive scan with safe root rescan'
-One s @'
-        // A query should not return only matching folder names while files
-'@ @'
-        // Live folder rename/new-folder events become searchable without
-        // requiring an application restart or a full-drive rescan.
+# R221 has no R288 "matching folders" comment. Place live-folder
+# results just before the final ranked return, not inside the old scan loop.
+$lastResult=$s.LastIndexOf('        return ranked.Finish();')
+if($lastResult -lt 0){throw 'R324 result collector return missing'}
+$folderMerge=@'
+        // Live folder changes appear in both the donut and Workspace
+        // search without waiting for another full drive crawl.
         if(!fileQuery.StartsWith("content:",StringComparison.OrdinalIgnoreCase))
             foreach(var path in LiveFoldersV324.Keys)
             {
@@ -223,8 +225,9 @@ One s @'
                     Add(new SearchHit{Category="Files",Name=Path.GetFileName(path),
                         OpenTarget=path,Location=path});
             }
-        // A query should not return only matching folder names while files
-'@ 'merge new folders'
+'@
+$s=$s.Insert($lastResult,$folderMerge.Replace($crlf,$lf))
+
 # Existing R288 quick file crawler silently skips hidden/system paths, and
 # caps immediate discovery to 1,200 dirs; full index handles deep coverage.
 $quick=Join-Path $root 'DeskSpaceFileQuickSearchV233.cs'
