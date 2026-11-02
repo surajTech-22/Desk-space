@@ -139,15 +139,23 @@ internal sealed class DeskSpaceSnippetsV340
         var footer=new TextBlock{Text="No clipboard history is collected.",
             Foreground=Brushes.DimGray,Margin=new Thickness(0,7,0,0)};
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
+        var filter=new TextBox{MinHeight=28,Margin=new Thickness(0,0,0,6),
+            ToolTip="Search saved snippet titles and text"};
+        DockPanel.SetDock(filter,Dock.Top);root.Children.Add(filter);
         var list=new ListBox{DisplayMemberPath="Title"};
         root.Children.Add(list);
         void Reload()
         {
+            var term=filter.Text.Trim();
             var items=storage.Load()
+                .Where(x=>term.Length==0 ||
+                    x.Title.Contains(term,StringComparison.OrdinalIgnoreCase) ||
+                    x.Content.Contains(term,StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(x=>x.Pinned).ThenBy(x=>x.Title,
                     StringComparer.OrdinalIgnoreCase).ToArray();
             list.ItemsSource=items;
         }
+        filter.TextChanged+=(_,_)=>Reload();
         save.Click+=(_,_)=>{
             try{storage.Save(title.Text,editor.Text);title.Clear();editor.Clear();
                 Reload();footer.Text="Snippet saved locally.";}
