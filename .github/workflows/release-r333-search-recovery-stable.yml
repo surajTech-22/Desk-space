@@ -150,6 +150,8 @@ jobs:
           if(!$?){throw 'R330 bounded on-disk search hotfix failed to apply'}
           & ./r332/apply-r332.ps1
           if(!$?){throw 'R332 fail-open indexed search patch failed'}
+          & ./r332/apply-r332-fast.ps1
+          if(!$?){throw 'R334 fast-first indexed search patch failed'}
           & ./r301/apply-stable-deck-hotfix-r301.ps1
           if($LASTEXITCODE -ne 0){throw 'R301 scoped stable Deck patch failed'}
           & ./r304/apply-r304.ps1
