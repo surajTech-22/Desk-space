@@ -81,7 +81,8 @@ internal static class Program
             var commands=(System.Collections.IEnumerable)actions.GetField("Commands",
                 BindingFlags.NonPublic|BindingFlags.Static)!.GetValue(null)!;
             Check(commands.Cast<object>().Any(x=>
-                (string)x.GetType().GetProperty("Id")!.GetValue(x)!=="textcompare"),
+                string.Equals((string?)x.GetType().GetProperty("Id")!.GetValue(x),
+                    "textcompare",StringComparison.Ordinal)),
                 "comparison feature not exposed in existing Action Palette");
             Console.WriteLine("R328 PASS: real WPF paste/compare/clear; bounded LCS, no passive clipboard reads; Action Palette command available.");
             return 0;
