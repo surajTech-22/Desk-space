@@ -1,4 +1,4 @@
-name: DeskSpace R327 Productivity Batch: Search Filters + Text Compare — Stable and Tester
+name: DeskSpace R327 Search Filters and Text Compare — Stable and Tester
 on:
   push:
     branches: [release/stable-deck-hotfix-r301]
