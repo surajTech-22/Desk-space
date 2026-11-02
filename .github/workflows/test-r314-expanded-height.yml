@@ -1,0 +1,60 @@
+name: R314 Deck expanded visual height and header recovery
+on:
+  push:
+    branches: [fix/r314-deck-expanded-height-and-header]
+    paths:
+      - src/DeskSpace/DeskSpaceMonitorDockV190.cs
+      - src/DeskSpace/DeskSpaceDropShelfV15.cs
+      - r314/**
+      - .github/workflows/test-r314-expanded-height.yml
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile complete live DeskSpace WPF application
+        shell: pwsh
+        run: |
+          dotnet build src/DeskSpace/DeskSpace.csproj -c Release --nologo -p:ContinuousIntegrationBuild=true
+          if($LASTEXITCODE -ne 0){throw 'R314 real DeskSpace WPF compilation failed'}
+      - name: Reproduce screenshot 34px clipped Deck and prove full viewport restoration
+        shell: pwsh
+        run: |
+          dotnet run --project r314/Tests/DeckExpandedLayoutTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R314 Deck still collapsed/clipped after reflow'}
+      - name: Preserve native below-circle, foreground and touchpad behavior
+        shell: pwsh
+        run: |
+          dotnet run --project r292/Tests/DeckNativeTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R314 Deck overlap regression'}
+          dotnet run --project r304/Tests/DeckForegroundTests.csproj -c Release
+          if($LASTEXITCODE -ne 0){throw 'R314 Deck foreground or touchpad regression'}
+          ./r308/test-r308.ps1
+          if(!$?){throw 'R314 minimize, preview, close buttons/default expanded regression'}
+      - name: Reconstruct exact scoped Stable source change
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='DeskSpace_Windows_R1/DeskSpace'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          Copy-Item r298/DeskSpaceMonitorDockV298.cs "$root/DeskSpaceMonitorDockV190.cs" -Force
+          Copy-Item r308/DeskSpaceDropShelfDefaultExpandedV308.cs "$root/DeskSpaceDropShelfV15.cs" -Force
+          ./r314/apply-r314.ps1
+          if(!$?){throw 'R314 canonical Stable source patch failed'}
+          $dock=(Get-FileHash "$root/DeskSpaceMonitorDockV190.cs" -Algorithm SHA256).Hash
+          $expected=(Get-FileHash r314/DeskSpaceMonitorDockV314.cs -Algorithm SHA256).Hash
+          if($dock -ne $expected){throw 'R314 different monitor geometry shipped'}
+          $s=Get-Content "$root/DeskSpaceDropShelfV15.cs" -Raw
+          foreach($token in @('RequestReflowV314(panel,openingV314)',
+             'RegisterMinimizedV314(panel,()=>deckMinimized)',
+             'title.Children.Add(minimise);','title.Children.Add(close);',
+             'title.Children.Add(previewMode);')){
+            if(!$s.Contains($token)){throw ('R314 Stable source missing '+$token)}
+          }
+          Write-Host 'R314 PASS: Stable package has full Deck, original three buttons, native monitor constraints and header scroll reset.'
