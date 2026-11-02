@@ -234,7 +234,7 @@ jobs:
           if(!$projectText.Contains('<PropertyGroup>') -or $projectText.Contains('<FileVersion>')){
               throw 'R333 cannot safely set authentic Windows EXE file metadata'
           }
-          $metadata='<PropertyGroup><Version>'+$version+'</Version><FileVersion>'+$version+'.0</FileVersion></PropertyGroup>'
+          $metadata='<PropertyGroup><Version>'+$version+'</Version><FileVersion>'+$version+'.0</FileVersion>'
           $offset=$projectText.IndexOf('<PropertyGroup>')
           $projectText=$projectText.Substring(0,$offset)+$metadata+
               $projectText.Substring($offset+'<PropertyGroup>'.Length)
