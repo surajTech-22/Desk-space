@@ -41,7 +41,7 @@ internal static class Program
                 "unchanged index triggered a duplicate refresh");
             Check(!Call("Finish"),"repeated refresh generated another work item");
             Check(Call("Begin"),"user typed a new filename but query could not begin");
-            Call("QueueUserChange");
+            type.GetMethod("QueueUserChange",F)!.Invoke(gate,Array.Empty<object>());
             Check(Call("Finish"),"latest user input was not replayed");
             Check(Call("Begin"),"new query after cancellation could not run");
             Check(!Call("Finish"),"no queued request should remain");
