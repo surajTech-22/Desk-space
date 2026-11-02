@@ -75,7 +75,8 @@ internal static class Program
             var palette=asm.GetType("DeskSpace.DeskSpaceActionPaletteV197",true)!;
             var commands=((IEnumerable)palette.GetField("Commands",Flags)!
                 .GetValue(null)!).Cast<object>().ToArray();
-            Check(commands.Any(x=>(string)x.GetType().GetProperty("Id")!.GetValue(x)!=="snippets"),
+            Check(commands.Any(x=>string.Equals((string?)x.GetType().GetProperty("Id")!.GetValue(x),
+                "snippets",StringComparison.Ordinal)),
                 "saved snippets not accessible from existing Action Palette");
             window.Close();application.Shutdown();
             Console.WriteLine("R340 PASS: opt-in manual local snippets, atomic storage, restart, "+
