@@ -1,0 +1,61 @@
+name: DeskTouch Vision - Windows app and installer
+on:
+  push:
+    branches:
+      - prototype/desktouch-vision-app
+      - main
+    tags:
+      - 'v*'
+    paths:
+      - 'DeskTouchVision/**'
+      - '.github/workflows/desktouch-vision.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish self-contained app
+        shell: pwsh
+        run: |
+          dotnet publish DeskTouchVision/DeskTouchVision.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o DeskTouchVision/dist/app
+      - name: Build installation package with checksum
+        shell: pwsh
+        run: |
+          Copy-Item DeskTouchVision/Install-DeskTouch.ps1 DeskTouchVision/dist/
+          Copy-Item DeskTouchVision/INSTALL_DESKTOUCH.cmd DeskTouchVision/dist/
+          New-Item -ItemType Directory -Force DeskTouchVision/published | Out-Null
+          Compress-Archive -Path DeskTouchVision/dist/* -DestinationPath DeskTouchVision/published/DeskTouchVision-win-x64.zip -CompressionLevel Optimal
+          $zip = 'DeskTouchVision/published/DeskTouchVision-win-x64.zip'
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText("$zip.sha256", "$hash  DeskTouchVision-win-x64.zip" + [Environment]::NewLine, [Text.Encoding]::ASCII)
+          if (-not (Test-Path 'DeskTouchVision/dist/app/DeskTouchVision.exe')) { throw "Missing executable" }
+      - name: Upload verified installer archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskTouchVision-Installer-win-x64
+          path: DeskTouchVision/published/*
+          if-no-files-found: error
+      # This cannot create or release to a different repository:
+      # it activates AFTER sources are moved to the dedicated DeskTouch-Vision repo.
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && github.event.repository.name == 'DeskTouch-Vision'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create "${{ github.ref_name }}" DeskTouchVision/published/DeskTouchVision-win-x64.zip DeskTouchVision/published/DeskTouchVision-win-x64.zip.sha256 --title "DeskTouch Vision ${{ github.ref_name }}" --notes "Experimental offline webcam calibration preview. Does not yet simulate disconnected keyboard or mouse input." --verify-tag
+      - name: Send release event to installed apps
+        if: startsWith(github.ref, 'refs/tags/v') && github.event.repository.name == 'DeskTouch-Vision'
+        shell: pwsh
+        run: |
+          Invoke-RestMethod -Method Post -Uri 'https://ntfy.sh/desktouch-vision-surajtech22-qrp9f4x2' -Body 'desktouch-release:${{ github.ref_name }}' -ContentType 'text/plain'
