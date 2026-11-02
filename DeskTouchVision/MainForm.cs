@@ -92,6 +92,7 @@ public sealed class MainForm : Form
         _updates.Click += async (_, _) => await UpdateClient.CheckManuallyAsync(this);
         _preview.MouseClick += PreviewClick;
         FormClosing += (_, _) => StopCamera();
+        Shown += (_, _) => UpdateClient.StartEventUpdates(this);
         LoadCalibration();
         RefreshStatus();
     }
