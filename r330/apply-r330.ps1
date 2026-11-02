@@ -199,6 +199,21 @@ One @'
             DeskSpaceDiskSearchV330.Enqueue(full,false);
         }
 '@ 'remove deleted manual live entry'
+# R326's cold-start regex timeout of only 100 ms intermittently fails
+# when a full-drive disk scan is running. The expression is bounded and
+# non-nested; allow a more realistic compiled-pattern first-use budget.
+$filtersPath=Join-Path $root 'DeskSpaceSearchFiltersV326.cs'
+$f=[IO.File]::ReadAllText($filtersPath)
+$before='RegexOptions.Compiled|RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,'+$lf+
+        '        TimeSpan.FromMilliseconds(100));'
+$after='RegexOptions.Compiled|RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,'+$lf+
+       '        TimeSpan.FromSeconds(2));'
+if(([regex]::Matches($f,[regex]::Escape($before))).Count -ne 1){
+ throw 'R330 R326 search regex cold-start guard changed'
+}
+[IO.File]::WriteAllText($filtersPath,$f.Replace($before,$after),
+    [Text.UTF8Encoding]::new($false))
+
 $cs=[IO.File]::ReadAllText($project)
 if($cs.Contains('Microsoft.Data.Sqlite')){throw 'R330 project already references SQLite, avoid duplicate dependency'}
 $needle='  <ItemGroup>'+$crlf
