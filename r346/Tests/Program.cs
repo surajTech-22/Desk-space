@@ -26,7 +26,7 @@ internal static class Program
             File.WriteAllBytes(Path.Combine(temp,"filenames-v336.sqlite-wal"),new byte[3072]);
             var orphan=inspect.Invoke(null,new object?[]{temp})!;
             Check(!(bool)orphan.GetType().GetProperty("CurrentAvailable")!.GetValue(orphan)! &&
-                (long)orphan.GetType().GetProperty("CurrentBytes")!.GetValue(orphan)!==3072,
+                (long)orphan.GetType().GetProperty("CurrentBytes")!.GetValue(orphan)! == 3072,
                 "orphan WAL must count toward footprint without claiming an available index");
             File.WriteAllBytes(Path.Combine(temp,"filenames-v336.sqlite"),new byte[2500]);
             File.WriteAllBytes(Path.Combine(temp,"filenames-v336.sqlite-shm"),new byte[8192]);
