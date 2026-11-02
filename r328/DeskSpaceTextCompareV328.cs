@@ -95,11 +95,11 @@ internal static class DeskSpaceTextCompareV328
         DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
         var footer=new StackPanel{Orientation=Orientation.Horizontal,
             Margin=new Thickness(0,9,0,0)};
-        var compare=new Button{Content="Compare",Padding=new Thickness(13,7),
+        var compare=new Button{Content="Compare",Padding=new Thickness(13,7,13,7),
             MinWidth=92,Margin=new Thickness(0,0,8,0)};
-        var copy=new Button{Content="Copy comparison",Padding=new Thickness(13,7),
+        var copy=new Button{Content="Copy comparison",Padding=new Thickness(13,7,13,7),
             Margin=new Thickness(0,0,8,0),IsEnabled=false};
-        var clear=new Button{Content="Clear all",Padding=new Thickness(13,7)};
+        var clear=new Button{Content="Clear all",Padding=new Thickness(13,7,13,7)};
         var status=new TextBlock{Margin=new Thickness(12,7,0,0),
             Foreground=Brushes.DimGray,Text="Ready"};
         footer.Children.Add(compare);footer.Children.Add(copy);
