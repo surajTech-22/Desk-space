@@ -7,6 +7,7 @@ on:
       - r332/**
       - r330/DeskSpaceDiskSearchV330.cs
       - r324/Tests/Program.cs
+      - r324/Tests/Program.cs
       - docs/R330_SEARCH_MEMORY_HOTFIX.md
       - r312/**
       - r310/**
