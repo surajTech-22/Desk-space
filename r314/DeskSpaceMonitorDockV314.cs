@@ -21,6 +21,12 @@ internal static class DeskSpaceMonitorDockV190
     // Per-physical-Deck callbacks. Never share another monitor's visual
     // bounds or scroll position; weak keys allow closed widgets to collect.
     private static readonly ConditionalWeakTable<Border,Action<bool>> ReflowV314=new();
+    private static readonly ConditionalWeakTable<Border,Func<bool>> MinimizedV314=new();
+    internal static void RegisterMinimizedV314(Border border,Func<bool> getter)
+    {
+        MinimizedV314.Remove(border);
+        MinimizedV314.Add(border,getter);
+    }
     internal static void RequestReflowV314(Border border,bool resetScroll=false)
     {
         if(ReflowV314.TryGetValue(border,out var reflow))reflow(resetScroll);
@@ -257,7 +263,7 @@ internal static class DeskSpaceMonitorDockV190
         return fallback;
     }
 
-    internal static void Attach(Window owner,Popup popup,Border border,Func<bool>? isMinimizedV314=null)
+    internal static void Attach(Window owner,Popup popup,Border border)
     {
         // Existing Deck generations use different content containers:
         // some place StackPanel directly in Border, newer versions already
@@ -305,7 +311,7 @@ internal static class DeskSpaceMonitorDockV190
             // Never measure the clamped border/scroll HWND as the desired
             // content. That created a self-sustaining 40px collapsed strip,
             // with the title and buttons scrolled out of view.
-            bool minimized=isMinimizedV314?.Invoke()==true;
+            bool minimized=MinimizedV314.TryGetValue(border,out var state) && state();
             double availableDip=Math.Max(100,Math.Min(310,(work.Width-8)/sx));
             double desiredDip=DesiredDeckHeightV314(
                 scroll.Content as FrameworkElement,availableDip,minimized);
@@ -418,7 +424,7 @@ internal static class DeskSpaceMonitorDockV190
             if(resetScroll)scroll.ScrollToTop();
             if(popup.IsOpen){Reposition();RepairLater();}
         });
-        owner.Closed+=(_,_)=>ReflowV314.Remove(border);
+        owner.Closed+=(_,_)=>{ReflowV314.Remove(border);MinimizedV314.Remove(border);};
         popup.Opened+=(_,_)=>scroll.ScrollToTop();
         owner.Loaded+=(_,_)=>LoadPosition();
         // Run on opening rather than moving a hidden or manually positioned
