@@ -183,6 +183,14 @@ internal static class DeskSpaceDiskSearchV330
                 string? root=Path.GetPathRoot(eventItem.Path);
                 if(!string.IsNullOrEmpty(root))DirtyVolumes[root]=0;
             }
+            // A failure after dequeuing a transaction must not silently
+            // lose events that were already removed from PendingChanges.
+            // Recover every currently mounted volume conservatively.
+            foreach(var drive in DriveInfo.GetDrives())
+            {
+                try{if(drive.IsReady)DirtyVolumes[drive.RootDirectory.FullName]=0;}
+                catch(Exception){}
+            }
         }
         finally
         {
@@ -246,7 +254,7 @@ internal static class DeskSpaceDiskSearchV330
     }
 
     internal static IReadOnlyList<Item> Query(string? term,string? drive,
-        CancellationToken cancellation,int max=MaximumReturned)
+        CancellationToken cancellation,int max=MaximumReturned,bool? folders=null)
     {
         cancellation.ThrowIfCancellationRequested();
         max=Math.Clamp(max,1,MaximumReturned);
@@ -264,19 +272,25 @@ internal static class DeskSpaceDiskSearchV330
                   JOIN entries e ON e.id=f.rowid
                   WHERE (f.name LIKE $search OR f.path LIKE $search)
                     AND ($drive='' OR e.volume=$drive)
+                    AND ($folders IS NULL OR e.folder=$folders)
                   ORDER BY e.folder ASC LIMIT $max;":
                 @"SELECT name,path,folder,volume FROM entries
                   WHERE (name LIKE $search OR path LIKE $search)
                     AND ($drive='' OR volume=$drive)
+                    AND ($folders IS NULL OR folder=$folders)
                   ORDER BY folder ASC LIMIT $max;";
-            command.Parameters.AddWithValue("$search","%"+search.Replace("%","\\%").Replace("_","\\_")+"%");
+            command.Parameters.AddWithValue("$search","%"+search+"%");
         }
         else
         {
             command.CommandText=@"SELECT name,path,folder,volume FROM entries
-                WHERE ($drive='' OR volume=$drive) ORDER BY folder ASC LIMIT $max;";
+                WHERE ($drive='' OR volume=$drive)
+                  AND ($folders IS NULL OR folder=$folders)
+                  ORDER BY folder ASC LIMIT $max;";
         }
         command.Parameters.AddWithValue("$drive",drive??"");
+        command.Parameters.AddWithValue("$folders",folders.HasValue?
+            (object)(folders.Value?1:0):DBNull.Value);
         command.Parameters.AddWithValue("$max",max);
         using var reader=command.ExecuteReader();
         while(reader.Read())
