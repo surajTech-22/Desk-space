@@ -83,20 +83,19 @@ $newEnd=@'
                 indexRefresh=new DispatcherTimer {Interval=TimeSpan.FromSeconds(3.5)};
 '@
 Once $catchEnd $newEnd 'finish work and coalesce refreshes'
-Once @'
+# R324 already changed this timer to a revision-based implementation;
+# replacing the actual timer block is safer than assuming the R221 text.
+$refreshBegin=$s.IndexOf('        indexRefresh.Tick+=(_,_)=>{')
+$refreshFinish=$s.IndexOf('        field.TextChanged+=(_,_)=>{',$refreshBegin)
+if($refreshBegin -lt 0 -or $refreshFinish -le $refreshBegin){
+ throw 'R337 cannot locate indexRefresh handler boundaries in shipping source'
+}
+$handler=@'
         indexRefresh.Tick+=(_,_)=>{
             if(disposed || string.IsNullOrWhiteSpace(field.Text))
             {indexRefresh.Stop();return;}
-            // One final refresh is required after the index completes.
-            debounce.Stop();debounce.Start();
-            if(!DeskSpaceSearchIndexV13.IsIndexing)indexRefresh.Stop();
-        };
-'@ @'
-        indexRefresh.Tick+=(_,_)=>{
-            if(disposed || string.IsNullOrWhiteSpace(field.Text))
-            {indexRefresh.Stop();return;}
-            // Only actual index changes warrant a refresh. A running search
-            // is NEVER interrupted by the refresh timer.
+            // Never restart an in-flight search because a file index batch
+            // completed. All pending index revisions coalesce into one query.
             if(searchGateV337.RefreshTick(DeskSpaceSearchIndexV13.RevisionV324))
             {
                 debounce.Stop();debounce.Start();
@@ -104,7 +103,10 @@ Once @'
             if(!DeskSpaceSearchIndexV13.IsIndexing &&
                 !searchGateV337.Active)indexRefresh.Stop();
         };
-'@ 'prevent index polling from permanently cancelling searches'
+'@
+$s=$s.Substring(0,$refreshBegin)+$handler.Replace($crlf,$lf)+
+    $s.Substring($refreshFinish)
+
 Once @'
         field.TextChanged+=(_,_)=>{
             debounce.Stop();debounce.Start();
