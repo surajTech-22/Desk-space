@@ -1,10 +1,11 @@
-name: DeskSpace R327 Shared Advanced File Search Filters — Stable and Tester
+name: DeskSpace R327 Productivity Batch: Search Filters + Text Compare — Stable and Tester
 on:
   push:
     branches: [release/stable-deck-hotfix-r301]
     paths:
       - .github/workflows/release-r327-advanced-file-search-stable.yml
       - r326/**
+      - r328/**
       - r312/**
       - r310/**
 
@@ -141,6 +142,8 @@ jobs:
           }
           & ./r326/apply-r326.ps1
           if(!$?){throw 'R326 shared file-search filter patch failed'}
+          & ./r328/apply-r328.ps1
+          if(!$?){throw 'R328 text comparison Action Palette integration failed'}
           & ./r301/apply-stable-deck-hotfix-r301.ps1
           if($LASTEXITCODE -ne 0){throw 'R301 scoped stable Deck patch failed'}
           & ./r304/apply-r304.ps1
@@ -314,6 +317,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R324 all-computer filename search missed hidden/deep/new/renamed files or failed live updates'}
           dotnet run --project 'r326/StableTests/AdvancedSearchFiltersTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R326 advanced file-search facets failed on real Windows files'}
+          dotnet run --project 'r328/StableTests/TextCompareTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R328 text comparison WPF, clear and Action Palette regression failed'}
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -364,7 +369,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1120 unified advanced filename search. R326 applies ext/type/location/date/size facets BEFORE ranking, so irrelevant results cannot exhaust search quotas. Both circular donut Search and Workspace Universal Search use the one multi-volume R324 backend. Supported syntax: invoice ext:pdf, type:sheet, type:folder, in:Downloads, in:quoted paths, after:YYYY-MM-DD, before:YYYY-MM-DD, min:1mb, max:20mb. Filters inspect filename, file metadata and accessible paths only, never document contents. Windows native tests cover actual XLSX/PDF, hidden XLSM, size and last-write time, quoted paths, invalid filters and unfiltered application search. Includes existing Deck tether and safe update supervisor. Owner PC acceptance pending; unsigned as before."
+              $notes="DeskSpace 1.5.1120 unified advanced filename search. R326 applies ext/type/location/date/size facets BEFORE ranking, so irrelevant results cannot exhaust search quotas. Both circular donut Search and Workspace Universal Search use the one multi-volume R324 backend. Supported syntax: invoice ext:pdf, type:sheet, type:folder, in:Downloads, in:quoted paths, after:YYYY-MM-DD, before:YYYY-MM-DD, min:1mb, max:20mb. Filters inspect filename, file metadata and accessible paths only, never document contents. Windows native tests cover actual XLSX/PDF, hidden XLSM, size and last-write time, quoted paths, invalid filters and unfiltered application search. Also includes R328 local-only Compare Text Action Palette tool: manual paste, bounded line-level diff, compare/copy/clear, no automatic clipboard capture or saving. Includes existing Deck tether and safe update supervisor. Owner PC acceptance pending; unsigned as before."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Deck overlap hotfix" --notes $notes
               }else{
