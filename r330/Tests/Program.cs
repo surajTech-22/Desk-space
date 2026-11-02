@@ -85,10 +85,9 @@ internal static class Program
             Check(rereadMb<35.0,$"120 repeated searches leaked {rereadMb:F1} MiB");
             // Stress watcher input without writing all events to SQLite.
             for(int i=0;i<20000;i++)
-                notify.Invoke(null,new object[]{"C:\\DeskSpaceSynthetic\\"+i+".txt",true});
+                notify.Invoke(null,new object[]{"R:\\DeskSpaceSynthetic\\"+i+".txt",true});
             int pending=(int)disk.GetProperty("PendingCount",Flags)!.GetValue(null)!;
             Check(pending<=4096,"watcher event backlog exceeded fixed 4096 cap");
-            flush.Invoke(null,null);
             Console.WriteLine("R330 PASS: 45,000 indexed paths; rare deep XLSX substring found; "+
                 $"managed rise {riseMb:F1} MiB; 120 searches retained {rereadMb:F1} MiB; "+
                 "legacy full-drive heap list empty; event backlog <=4096.");
@@ -101,8 +100,7 @@ internal static class Program
             // test rows are isolated by unique fake volume prefix.
             try
             {
-                var cleanup=disk.GetMethod("RemoveVolumeForTest",Flags);
-                cleanup?.Invoke(null,new object[]{testDrive});
+                finish.Invoke(null,new object[]{testDrive,long.MaxValue});
             }
             catch(Exception){}
         }
