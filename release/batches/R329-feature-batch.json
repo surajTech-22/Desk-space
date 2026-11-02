@@ -103,9 +103,15 @@
       "area": "Clipboard",
       "title": "Opt-in local snippets",
       "acceptance": "User explicitly saves, searches, pins and deletes text snippets; history capture is disabled by default and sensitive windows can be excluded.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r340/DeskSpaceSnippetsV340.cs",
+        "r340/apply-r340.ps1"
+      ],
+      "test_paths": [
+        "r340/Tests/Program.cs",
+        "r340/StableTests/SavedSnippetTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "not-required",
       "release_evidence": ""
