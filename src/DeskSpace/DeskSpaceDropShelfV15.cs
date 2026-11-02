@@ -253,7 +253,8 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // and WPF could flip/clip the dock onto the adjacent monitor.
         // Keep independent dock HWNDs on their OWN monitor, with a scrollable
         // viewport. Staged content remains shared across all dock views.
-        DeskSpaceMonitorDockV190.Attach(host,popup,panel,()=>deckMinimized);
+        DeskSpaceMonitorDockV190.RegisterMinimizedV314(panel,()=>deckMinimized);
+        DeskSpaceMonitorDockV190.Attach(host,popup,panel);
         DeskSpaceMonitorFenceV153.TrackPopup(host,popup,
             (proposed,work)=>DeskSpaceMonitorDockV190.ConstrainBeforePaintV298(
                 host,proposed,work));
