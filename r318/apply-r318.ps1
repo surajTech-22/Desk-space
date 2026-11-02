@@ -13,7 +13,7 @@ function Replace-R318([string]$old,[string]$replacement,[string]$label) {
     $old=$old.Replace($crlf,$lf)
     $replacement=$replacement.Replace($crlf,$lf)
     $hits=([regex]::Matches($script:contents,[regex]::Escape($old))).Count
-    if($hits -ne 1){throw "R318 $label: expected one verified source anchor, found $hits"}
+    if($hits -ne 1){throw "R318 ${label}: expected one verified source anchor, found $hits"}
     $script:contents=$script:contents.Replace($old,$replacement)
 }
 Replace-R318 @'
