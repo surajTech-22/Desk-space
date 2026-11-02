@@ -71,21 +71,35 @@ One s @'
                    (flags&FileAttributes.ReparsePoint)==0)stack.Push(path);
                 yield return path;
 '@ 'do not recurse into junctions'
-One s @'
-            if(name.Length==0 || name.StartsWith(".",StringComparison.Ordinal))
+# The accepted R232 baseline may contain small formatting differences
+# from the cached R288 source, so replace ONLY the exact method by signature.
+$methodStart=$s.IndexOf('    internal static bool IsSearchableFileV288(string path)')
+$methodEnd=$s.IndexOf('    // Before a full multi-drive crawl', $methodStart)
+if($methodStart -lt 0 -or $methodEnd -le $methodStart){
+ throw 'R324 cannot locate existing file-search eligibility method'
+}
+$method=@'
+    internal static bool IsSearchableFileV288(string path)
+    {
+        try
+        {
+            if(string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                 return false;
-            var flags=File.GetAttributes(path);
-            return (flags&(FileAttributes.Hidden|FileAttributes.System|
-                FileAttributes.ReparsePoint|FileAttributes.Directory|
-                FileAttributes.Temporary))==0;
-'@ @'
+            var name=Path.GetFileName(path);
             if(name.Length==0)return false;
-            // Search all names that this Windows account can access, even
-            // hidden, system, temporary and dotfiles. This is ONLY name
-            // discovery; protected files remain inaccessible to Windows.
+            // Include hidden/system/temp/dotfiles the account can access.
+            // Never read their contents; directories remain separate hits.
             var flags=File.GetAttributes(path);
             return (flags&FileAttributes.Directory)==0;
-'@ 'search ALL accessible files not just ordinary watcher files'
+        }
+        catch(Exception e) when(e is IOException or UnauthorizedAccessException
+            or ArgumentException or System.Security.SecurityException
+            or NotSupportedException){return false;}
+    }
+
+'@
+$s=$s.Substring(0,$methodStart)+$method.Replace($crlf,$lf)+$s.Substring($methodEnd)
+
 One s @'
         _=Task.Run(BuildIndex);
 '@ @'
