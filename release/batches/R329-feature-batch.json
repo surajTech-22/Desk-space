@@ -2,7 +2,7 @@
   "schema": "deskspace-ten-feature-release-v1",
   "batch_id": "R329",
   "baseline_release": "v1.5.1120",
-  "target_release": "next-feature-batch",
+  "target_release": "pending-final-ten-feature-acceptance",
   "minimum_verified_features": 10,
   "release_authorized": false,
   "last_review_date": "2026-11-02",
@@ -13,9 +13,15 @@
       "area": "Search",
       "title": "Persistent low-memory filename index",
       "acceptance": "After restart, filenames on accessible ready drives are searchable without a full fresh crawl; deletions and renames remain correct.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r346/DeskSpaceSearchDiskHealthV346.cs",
+        "r346/apply-r346.ps1"
+      ],
+      "test_paths": [
+        "r346/Tests/Program.cs",
+        "r346/StableTests/SearchDiskHealthTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "not-required",
       "release_evidence": ""
@@ -151,9 +157,15 @@
       "area": "Excel",
       "title": "Verified mapping and paste preview",
       "acceptance": "Captured Sheet/Mappings use existing engine; preview validates target range, formulas and backup/readback before user-approved paste.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r345/DeskSpaceExcelPreflightV345.cs",
+        "r345/apply-r345.ps1"
+      ],
+      "test_paths": [
+        "r345/Tests/Program.cs",
+        "r345/StableTests/ExcelPreflightTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "pending",
       "release_evidence": ""
