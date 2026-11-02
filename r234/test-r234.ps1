@@ -13,7 +13,19 @@ foreach($needle in @(
 }
 # R289 replaces the legacy movable Y offset: vertical placement is
 # locked below the owning widget and can never be manually shifted above.
-if($s.Contains('FitBelowV292('))
+if($s.Contains('CanonicalDeckRectV320('))
+{
+ # R320: WPF and native correction MUST consume one offset-aware plan.
+ # Reject any "fix" that merely removes the previous static tokens.
+ if(!$s.Contains('var safe=CanonicalDeckRectV320(ownerBounds,screen,') -or
+    !$s.Contains('var corrected=CanonicalDeckRectV320(Owner(owner,screen),') -or
+    !$s.Contains('var plan=FitBelowV292(widget,work,width,height);') -or
+    !$s.Contains('plan.Deck.Left+shiftX') -or
+    !$s.Contains('shift=new DeskSpaceDeckOffsetV228.Offset(0,0);')){
+    throw 'R320 WPF and native repair must share the same per-monitor below-only placement'
+ }
+}
+elseif($s.Contains('FitBelowV292('))
 {
  if(!$s.Contains('var deckX=Math.Clamp(plan.Deck.Left+shift.X,screen.Left,') -or
     !$s.Contains('NativeCorrectionV292(')){
