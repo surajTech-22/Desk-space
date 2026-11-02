@@ -31,13 +31,11 @@ ReplaceOne $palette @'
         new("downloads","Open Downloads folder","Show the ordinary Windows Downloads folder","Files")
 '@ 'new commands in existing Action Palette'
 ReplaceOne $palette @'
-            case "previewfile":
-                DeskSpacePreviewChooserV273.Show(owner);
-                break;
+        switch(command.Id)
+        {
 '@ @'
-            case "previewfile":
-                DeskSpacePreviewChooserV273.Show(owner);
-                break;
+        switch(command.Id)
+        {
             case "filehash":
                 DeskSpaceFileVerifyV339.Show(owner);
                 break;
