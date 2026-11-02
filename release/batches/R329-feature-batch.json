@@ -133,9 +133,15 @@
       "area": "Capture",
       "title": "On-demand screen text extraction",
       "acceptance": "User selects a region, previews local OCR and manually copies accepted text; no automatic screen reading or upload.",
-      "status": "planned",
-      "implementation_paths": [],
-      "test_paths": [],
+      "status": "implemented",
+      "implementation_paths": [
+        "r344/DeskSpaceScreenTextV344.cs",
+        "r344/apply-r344.ps1"
+      ],
+      "test_paths": [
+        "r344/Tests/Program.cs",
+        "r344/StableTests/ScreenTextTests.csproj"
+      ],
       "windows_test_run": "",
       "on_device_acceptance": "pending",
       "release_evidence": ""
