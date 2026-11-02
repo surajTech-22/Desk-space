@@ -60,8 +60,9 @@ internal static class Program
             var asm=typeof(DeskSpace.WeatherReading).Assembly;
             var dock=asm.GetType("DeskSpace.DeskSpaceMonitorDockV190",true)!;
             var attach=dock.GetMethod("Attach",Static)!;
-            attach.Invoke(null,new object?[]{host,popup,panel,
-                new Func<bool>(()=>min)});
+            dock.GetMethod("RegisterMinimizedV314",Static)!.Invoke(null,
+                new object?[]{panel,new Func<bool>(()=>min)});
+            attach.Invoke(null,new object?[]{host,popup,panel});
             var refresh=dock.GetMethod("RequestReflowV314",Static)!;
             var measure=dock.GetMethod("DesiredDeckHeightV314",Static)!;
             var desired=(double)measure.Invoke(null,
