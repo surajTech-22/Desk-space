@@ -10,6 +10,8 @@ on:
       - r342/**
       - r343/**
       - r344/**
+      - r345/**
+      - r346/**
       - release/batches/R329-feature-batch.json
       - r337/**
       - r330/DeskSpaceDiskSearchV330.cs
@@ -176,6 +178,10 @@ jobs:
           if(!$?){throw 'R343 monitor-specific preview/restore patch failed'}
           & ./r344/apply-r344.ps1
           if(!$?){throw 'R344 screen-text OCR action patch failed'}
+          & ./r345/apply-r345.ps1
+          if(!$?){throw 'R345 exact Excel preflight review patch failed'}
+          & ./r346/apply-r346.ps1
+          if(!$?){throw 'R346 search cache health UI patch failed'}
           & ./r301/apply-stable-deck-hotfix-r301.ps1
           if($LASTEXITCODE -ne 0){throw 'R301 scoped stable Deck patch failed'}
           & ./r304/apply-r304.ps1
@@ -382,5 +388,9 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R343 monitor scope, disconnected monitor or preview UI acceptance failed'}
           dotnet run --project 'r344/StableTests/ScreenTextTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R344 native Windows screen OCR, capture safety or cancellation regression'}
+          dotnet run --project 'r345/StableTests/ExcelPreflightTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R345 immutable Excel review or WPF approval gate failed'}
+          dotnet run --project 'r346/StableTests/SearchDiskHealthTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R346 persistent search index size/old-cache warning UI failed'}
           & ./scripts/assert-ten-feature-release.ps1 -Mode Validate
           if(!$?){throw 'R329 feature batch manifest validation failed'}
