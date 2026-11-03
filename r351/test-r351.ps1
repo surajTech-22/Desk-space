@@ -37,6 +37,7 @@ try {
     # Older R351 erroneously labelled that valid staging asset unknown.
     $legacySupervisor=Join-Path $updates 'v1.5.1117\CompleteDeskSpaceUpdate.11111111111111111111111111111111.ps1'
     [IO.File]::WriteAllBytes($legacySupervisor,(New-Object byte[] 211))
+    (Get-Item -LiteralPath (Split-Path -Parent $legacySupervisor)).LastWriteTimeUtc=[DateTime]::UtcNow.AddDays(-12)
     $partial=Join-Path $updates 'tester-v1.5.1110\DeskSpace_Setup.exe.11111111111111111111111111111111.partial'
     [IO.File]::WriteAllBytes($partial,(New-Object byte[] 128))
     (Get-Item (Join-Path $updates 'tester-v1.5.1110')).LastWriteTimeUtc=
