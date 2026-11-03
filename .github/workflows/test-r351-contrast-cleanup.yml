@@ -32,7 +32,7 @@ jobs:
           $app=Get-Content 'DeskSpace_Windows_R1/DeskSpace/App.xaml.cs' -Raw
           $proj=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -Raw
           $script=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpacePostLaunchCleanupV351.ps1' -Raw
-          if(([regex]::Matches($app,'DeskSpaceStorageMaintenanceV351.Begin\\(')).Count -ne 2){throw 'R351 must run for both widget and workspace startup'}
+          if(([regex]::Matches($app,[regex]::Escape('DeskSpaceStorageMaintenanceV351.Begin('))).Count -ne 2){throw 'R351 must run for both widget and workspace startup'}
           if(!$proj.Contains('EmbeddedResource Include="DeskSpacePostLaunchCleanupV351.ps1"')){throw 'R351 embedded helper not shipped'}
           if(!$script.Contains('Invoke-R348StorageCleanup') -or !$script.Contains('Invoke-R351StagedInstallerRetention')){throw 'R351 safe helpers not bundled'}
           dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo
