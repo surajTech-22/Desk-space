@@ -60,7 +60,7 @@ function Invoke-R351StagedInstallerRetention {
         $protected[$item.FullName.ToUpperInvariant()]=$true
     }
     $result.Add(('R358 stage policy: installed={0}; keep latest 3 release folders; '+
-        'keep folders under 2h old; exclude future and unknown content' -f $InstalledVersion))
+        'keep folders under 2h old; exclude future and unknown content') -f $InstalledVersion)
     foreach($dir in $ordered){
         if($protected.ContainsKey($dir.FullName.ToUpperInvariant())){
             $skipped++;$result.Add('retained newest installer: '+$dir.Name);continue
