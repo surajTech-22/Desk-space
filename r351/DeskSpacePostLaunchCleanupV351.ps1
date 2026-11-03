@@ -93,7 +93,13 @@ try{
         if($records.Count -gt 0 -and
            (Test-Path -LiteralPath $downloads -PathType Container)){
             $output=Join-Path $downloads 'DeskSpace_StorageCleanup_R351_Report.txt'
-            [IO.File]::WriteAllLines($output,$records.ToArray())
+            # R358 append, do not replace previous cleanup evidence. The
+            # former single-run report showed 0 MiB after earlier cleanup
+            # already removed the old 6-GiB Search index.
+            Add-Content -LiteralPath $output -Encoding UTF8 -Value (
+                '--- DeskSpace storage maintenance completed '+
+                [DateTime]::UtcNow.ToString('O')+' ---')
+            Add-Content -LiteralPath $output -Encoding UTF8 -Value $records.ToArray()
         }
     }catch{}
     if($ownsMutex -and $maintenanceMutex){try{$maintenanceMutex.ReleaseMutex()}catch{}}
