@@ -8,6 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/DeskSpace/DeskSpaceFolderAppRecognitionV363.cs" Link="DeskSpaceFolderAppRecognitionV363.cs" />
-    <Compile Include="../DeskSpaceAccountingFileRecognitionV364.cs" Link="DeskSpaceAccountingFileRecognitionV364.cs" />
+    <Compile Include="../../src/DeskSpace/DeskSpaceAccountingFileRecognitionV364.cs" Link="DeskSpaceAccountingFileRecognitionV364.cs" />
   </ItemGroup>
 </Project>
