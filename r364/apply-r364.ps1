@@ -23,6 +23,42 @@ function One([string]$old,[string]$replacement,[string]$what){
     $script:s=$script:s.Replace($old,$replacement)
 }
 One @'
+        if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
+        e.Effects=(busy||disposed||held.Count>=25)?DragDropEffects.None:DragDropEffects.Copy;
+        e.Handled=true;
+    }
+    private void Receive
+'@ @'
+        if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
+        var direct=e.Data.GetData(DataFormats.FileDrop) as string[];
+        e.Effects=!disposed && direct?.Length==1 && File.Exists(direct[0])
+            ?DragDropEffects.Link:DragDropEffects.None;
+        e.Handled=true;
+    }
+    private void Receive
+'@ 'single file has Link drop effect, not Copy and does not consume shelf capacity'
+One @'
+        if(disposed||busy||held.Count>=25)
+        {
+            e.Effects=DragDropEffects.None;
+            e.Handled=true;
+            return;
+        }
+        e.Effects=DragDropEffects.Copy;
+        e.Handled=true;
+        var files=e.Data.GetData(DataFormats.FileDrop) as string[];
+'@ @'
+        if(disposed)
+        {
+            e.Effects=DragDropEffects.None;
+            e.Handled=true;
+            return;
+        }
+        e.Effects=DragDropEffects.None;
+        e.Handled=true;
+        var files=e.Data.GetData(DataFormats.FileDrop) as string[];
+'@ 'direct file open bypasses legacy clipboard queue/capacity'
+One @'
         if(files?.Length>0)_=StageFilesAsync(files);
 '@ @'
         if(files?.Length==1 && File.Exists(files[0]))
