@@ -90,7 +90,8 @@ try{
 }finally{
     try{
         $downloads=Join-Path $env:USERPROFILE 'Downloads'
-        if(Test-Path -LiteralPath $downloads -PathType Container){
+        if($records.Count -gt 0 -and
+           (Test-Path -LiteralPath $downloads -PathType Container)){
             $output=Join-Path $downloads 'DeskSpace_StorageCleanup_R351_Report.txt'
             [IO.File]::WriteAllLines($output,$records.ToArray())
         }
