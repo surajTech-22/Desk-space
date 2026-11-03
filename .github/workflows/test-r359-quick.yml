@@ -1,0 +1,35 @@
+name: R359 folder cancellation quick Windows source smoke
+on:
+  push:
+    branches: [fix/r359-folder-drag-cancel-restores-circle]
+    paths:
+      - r359/**
+      - .github/workflows/test-r359-quick.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quick:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Patch exact checked-in Windows WPF source without replacing other modules
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force 'DeskSpace_Windows_R1'|Out-Null
+          Copy-Item 'src/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace' -Recurse -Force
+          & ./r359/apply-r359.ps1
+          if(!$?){throw 'R359 cannot patch original WPF source'}
+          & ./r359/test-r359.ps1
+          if(!$?){throw 'R359 cancelled-folder-choice smoke failed'}
+      - name: Compile actual native WPF widget and Deck
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo
+          if($LASTEXITCODE -ne 0){throw 'WPF compile failure from R359'}
