@@ -21,7 +21,7 @@ foreach($handler in @('Closing="MainWindow_Closing"',
     Check ($xaml.Contains($handler)) ('existing functionality preserved '+$handler)
 }
 Check ($xaml.Contains('Your desktop. One clear space.')) 'new welcome hero'
-Check ($xaml.Contains('DESKSPACE / WORKSPACE')) 'product heading'
+Check ($xaml.Contains('DESKSPACE / CONTROL CENTER')) 'product heading'
 Check ($xaml.Contains('Launch pad')) 'grouped launch pad'
 Check ($xaml.Contains('CornerRadius="17" Padding="15"')) 'rounded panel'
 Check ($xaml.Contains('Property="IsKeyboardFocused" Value="True"')) 'keyboard focus trigger'
