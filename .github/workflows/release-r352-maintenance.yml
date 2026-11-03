@@ -1,0 +1,467 @@
+name: DeskSpace R352 Readable Settings and Complete Storage Cleanup — Stable and Tester
+on:
+  push:
+    branches: [release/stable-deck-hotfix-r301]
+    paths:
+      - .github/workflows/release-r352-maintenance.yml
+      - r351/**
+      - r348/**
+      - r349/**
+      - r337/**
+      - r330/DeskSpaceDiskSearchV330.cs
+      - r324/Tests/Program.cs
+      - r324/Tests/Program.cs
+      - docs/R330_SEARCH_MEMORY_HOTFIX.md
+      - r312/**
+      - r310/**
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: deskspace-r352-corrective-maintenance
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - name: Checkout exactly the authorized interim release recipe
+        uses: actions/checkout@v4
+      - name: Install .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify R232 combined Windows CI provenance and restore exact hashed source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='surajTech-22/Desk-space'
+          $pass=gh api "repos/$repo/actions/runs/41085251970"
+          if($LASTEXITCODE -ne 0){throw 'Cannot verify R222 Windows acceptance run'}
+          $check=($pass|Out-String)|ConvertFrom-Json
+          if($check.conclusion -ne 'success' -or
+             $check.head_sha -ne 'e96d3c6147af85ae324d2e2bfddda6b2b4253cb8'){
+             throw 'R232 canonical source was not successfully validated'
+          }
+          New-Item -ItemType Directory -Force '.release-r232/source'|Out-Null
+          gh run download 41085251970 -R $repo -n DeskSpace-R221-Consolidated-Verified-Source -D '.release-r232/source'
+          if($LASTEXITCODE -ne 0){throw 'Cannot retrieve verified R222 source'}
+          & ./r221/verify-single-source.ps1 -ArchivePath '.release-r232/source/DeskSpace-R221-Source.zip' -ManifestPath '.release-r232/source/DeskSpace-R221-Source.manifest.json' -ReceiptPath '.release-r232/source/DeskSpace-R221-Source.sha256.txt'
+          $m=Get-Content '.release-r232/source/DeskSpace-R221-Source.manifest.json' -Raw|ConvertFrom-Json
+          if($m.commit -ne 'e96d3c6147af85ae324d2e2bfddda6b2b4253cb8'){
+              throw 'R232 source provenance commit is different from accepted run'
+          }
+          New-Item -ItemType Directory -Force '.release-r232/base'|Out-Null
+          gh run download 41002762293 -R $repo -n DeskSpace-R195-Canonical-WPF-Source -D '.release-r232/base'
+          if($LASTEXITCODE -ne 0){throw 'Cannot retrieve verified installer tooling'}
+          $expected=((Get-Content '.release-r232/base/DeskSpace-Canonical-Source.sha256.txt' -Raw).Trim() -split '\s+')[0]
+          $actual=(Get-FileHash '.release-r232/base/DeskSpace-Canonical-Source.zip' -Algorithm SHA256).Hash
+          if(!$actual.Equals($expected,[StringComparison]::OrdinalIgnoreCase)){
+              throw 'Baseline installer build source checksum mismatch'
+          }
+          Expand-Archive '.release-r232/base/DeskSpace-Canonical-Source.zip' -DestinationPath '.release-r232/legacy'
+          # The original model test project is required by the canonical
+          # self-contained installer builder; it never reads user files.
+          $parts=for($i=1;$i -le 4;$i++){
+              (Get-Content -LiteralPath "assets/source.part$i.txt" -Raw).Trim()
+          }
+          $legacyTar='.release-r232/legacy-source.tar.xz'
+          [IO.File]::WriteAllBytes(
+              [IO.Path]::GetFullPath($legacyTar),[Convert]::FromBase64String($parts -join ''))
+          $tarhash=(Get-FileHash $legacyTar -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($tarhash -ne 'de852a020013de604cdb9b206e38f4ec1359e7f2169bc898e9ca60299a0249a3'){
+              throw 'Original model-test source checksum mismatch'
+          }
+          tar -xJf $legacyTar
+          if($LASTEXITCODE -ne 0){throw 'Cannot restore original unit test sources'}
+          if(!(Test-Path 'DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj')){
+              throw 'DeskSpace original model tests not restored'
+          }
+          # R222 application targets Windows SDK 19041. The original R1
+          # test project defaults to Windows 7 and cannot project-reference
+          # the newly verified app. Update the TEST TARGET only.
+          $testProject='DeskSpace_Windows_R1/DeskSpace.Tests/DeskSpace.Tests.csproj'
+          $tests=[IO.File]::ReadAllText($testProject)
+          $targetPattern='<TargetFramework>net8\.0-windows(?:[0-9.]+)?</TargetFramework>'
+          if(([regex]::Matches($tests,$targetPattern)).Count -ne 1){
+              throw 'Cannot align original test target with verified Windows app'
+          }
+          $tests=[regex]::Replace($tests,$targetPattern,
+              '<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>')
+          [IO.File]::WriteAllText($testProject,$tests,[Text.UTF8Encoding]::new($false))
+          Remove-Item -LiteralPath 'DeskSpace_Windows_R1/DeskSpace' -Recurse -Force
+          Expand-Archive '.release-r232/source/DeskSpace-R221-Source.zip' -DestinationPath '.release-r232/latest'
+          Move-Item '.release-r232/latest/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace'
+          New-Item -ItemType Directory -Force 'installer'|Out-Null
+          Copy-Item '.release-r232/legacy/installer/DeskSpace.iss' 'installer/DeskSpace.iss' -Force
+          Copy-Item '.release-r232/legacy/BUILD_DESKSPACE_SETUP.ps1' 'BUILD_DESKSPACE_SETUP.ps1' -Force
+          $code=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceVerifiedUpdateQueueV191.cs' -Raw
+          if(!$code.Contains('NormalizeOfficialChecksumV219')){
+              throw 'R219 updater checksum fix missing from verified source'
+          }
+          $atomic=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceAtomicInstallerV222.cs' -Raw
+          if(!$atomic.Contains('File.Move(partial,final,true)')){
+              throw 'R222 atomic installer handoff missing from verified source'
+          }
+          $exitCode=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceGracefulExitV230.cs' -Raw
+          if(!$exitCode.Contains('TryCloseInOrder(windows,Application.Current?.MainWindow)')){
+              throw 'R232 secondary-window-first normal shutdown absent from accepted source'
+          }
+          $widgetCode=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          if($widgetCode.Contains('if(IsNearScreenEdge())DockToEdge(manual:true)')){
+              throw 'R231 monitor magnet regression in shipping source'
+          }
+          Write-Host "Verified R232 baseline loaded; apply only reviewable incremental patches."
+          foreach($patch in @(
+              'r233/apply-r233.ps1',
+              'r234/apply-r234.ps1',
+              'r235/apply-r235.ps1',
+              'r237/apply-r237.ps1',
+              'r238/apply-r238.ps1',
+              'r239/apply-r239.ps1',
+              'fix-search-file-results-20261101/apply.ps1'
+          )){
+              & $patch
+              if($LASTEXITCODE -ne 0){throw "Patch failed: $patch"}
+          }
+          $fileClass=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceFileQuickSearchV233.cs' -Raw
+          $index=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
+          if(!$fileClass.Contains('Directory.GetFiles(directory)') -or
+             !$index.Contains('quickFiles.Concat(indexed)') -or
+             !$index.Contains('perVolumeFiles') -or
+             !$index.Contains('perVolumeFolders')){
+              throw 'Real-file Search code not connected to the installed source'
+          }
+          & ./r324/apply-r324.ps1
+          if(!$?){throw 'R324 all-drive live file search patch failed'}
+          $live=(Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw)
+          if(!$live.Contains('DeskSpaceAllDriveLiveIndexV324.Start(') -or
+             !$live.Contains('LiveFoldersV324') -or
+             !$live.Contains('RevisionV324')){
+             throw 'R324 live all-volume index missing from shipping source'
+          }
+          & ./r326/apply-r326.ps1
+          if(!$?){throw 'R326 shared file-search filter patch failed'}
+          & ./r328/apply-r328.ps1
+          if(!$?){throw 'R328 text comparison Action Palette integration failed'}
+          & ./r330/apply-r330.ps1
+          if(!$?){throw 'R330 bounded on-disk search hotfix failed to apply'}
+          & ./r332/apply-r332.ps1
+          if(!$?){throw 'R332 fail-open indexed search patch failed'}
+          & ./r332/apply-r332-fast.ps1
+          if(!$?){throw 'R334 fast-first indexed search patch failed'}
+          & ./r337/apply-r337.ps1
+          if(!$?){throw 'R337 search spinner single-flight UI patch failed'}
+          & ./r349/apply-r349.ps1
+          if(!$?){throw 'R349 actual shipping UI patch failed'}
+          & ./r351/apply-ui-r351.ps1
+          if(!$?){throw 'R351 actual Settings contrast fix failed'}
+          & ./r301/apply-stable-deck-hotfix-r301.ps1
+          if($LASTEXITCODE -ne 0){throw 'R301 scoped stable Deck patch failed'}
+          & ./r304/apply-r304.ps1
+          if($LASTEXITCODE -ne 0){throw 'R304 Deck topmost/scroll patch failed'}
+          & ./r306/apply-r306.ps1
+          if($LASTEXITCODE -ne 0){throw 'R306 legacy Deck state staging failed'}
+          & ./r308/apply-r308.ps1
+          if($LASTEXITCODE -ne 0){throw 'R308 restore header buttons/default expand failed'}
+          & ./r308/test-r308.ps1 -Source 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs'
+          if($LASTEXITCODE -ne 0){throw 'R308 Deck controls not correctly staged in installer source'}
+          & ./r314/apply-r314.ps1
+          if(!$?){throw 'R314 full Deck viewport/content reflow patch failed'}
+          & ./r318/apply-r318.ps1
+          if(!$?){throw 'R318 measured content deck patch failed'}
+          & ./r320/apply-r320.ps1
+          if(!$?){throw 'R320 competing Deck position correction failed'}
+          & ./r322/apply-r322.ps1
+          if(!$?){throw 'R322 deck tether-to-own-clock patch failed'}
+          $measured=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMonitorDockV190.cs' -Raw
+          if(!$measured.Contains('DesiredDeckHeightV314(') -or
+             !$measured.Contains('RequestReflowV314(') -or
+             $measured.Contains('var measured=border.ActualHeight>1?')){
+             throw 'R314 Deck is still constrained by its previously clipped ActualHeight'
+          }
+          # R310 patch runs against immutable verified R232 app source.
+          & ./r312/apply-r312.ps1
+          if(!$?){throw 'R312 supervisor direct process guard patch failed'}
+          & ./r310/apply-r310.ps1
+          if($LASTEXITCODE -ne 0){throw 'R310 safe supervisor busy handoff patch failed'}
+          & ./r316/apply-r316.ps1
+          if(!$?){throw 'R316 supervisor acknowledgement patch failed'}
+          & ./r348/apply-r348.ps1
+          if(!$?){throw 'R348 post-receipt storage cleanup patch failed'}
+          & ./r351/apply-startup-r351.ps1
+          if(!$?){throw 'R351 startup storage cleanup patch failed'}
+          $updater=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpacePublicUpdaterV44.cs' -Raw
+          foreach($guard in @('SupervisorBusyV310Exception','handoffNonceV316',
+                 'DeskSpaceVerifiedUpdateQueueV191.Stage(')){
+            if(!$updater.Contains($guard)){throw 'R310 updater is missing verified retry or benign concurrent handoff guard'}
+          }
+          $deckCode=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
+          if(!$deckCode.Contains('DeskSpaceDeckVisibilityV304.Attach(host,popup,panel);') -or
+             !$deckCode.Contains('Interval=TimeSpan.FromSeconds(5)')){
+             throw 'R304 must be in the actual shipping Running Apps Deck'
+          }
+          Write-Host "Verified R232 + R233-R239 Stable source plus R301 Deck collision hotfix."
+      - name: Assign upgrade version above previously published stable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $version='' # Determine the next version from the latest actual stable release
+          $stable=gh api 'repos/surajTech-22/Desk-space/releases/latest' --jq .tag_name
+          if($LASTEXITCODE -ne 0){throw 'Cannot read existing Stable release'}
+          $latest=[version](($stable|Out-String).Trim().TrimStart('v'))
+          if($latest.Major -ne 1 -or $latest.Minor -ne 5){
+              throw 'Unexpected DeskSpace stable version family'
+          }
+          $nextBuild=1125
+          $version="1.5.$nextBuild"
+          $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
+          if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
+          foreach($tag in @('v1.5.1125','tester-v1.5.1125')){
+            if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
+              throw ('Refuse to overwrite existing release: '+$tag)
+            }
+          }
+          if([version]$version -le [version](($stable|Out-String).Trim().TrimStart('v'))){
+              throw 'New version would be a downgrade'
+          }
+          $setup='installer/DeskSpace.iss'
+          $value=[IO.File]::ReadAllText($setup)
+          $old='#define AppVersion "1.5.1093"'
+          if(!$value.Contains($old)){throw 'Original installer version unexpected'}
+          [IO.File]::WriteAllText($setup,$value.Replace($old,'#define AppVersion "'+$version+'"'),[Text.UTF8Encoding]::new($false))
+          $updater='DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs'
+          $s=[IO.File]::ReadAllText($updater)
+          $old='private static readonly Version InstalledVersion = new(1, 5, 1093);'
+          if(!$s.Contains($old)){throw 'Original updater version unexpected'}
+          $s=$s.Replace($old,'private static readonly Version InstalledVersion = new(1, 5, '+$nextBuild+');')
+          [IO.File]::WriteAllText($updater,$s,[Text.UTF8Encoding]::new($false))
+          # The old EXE always showed 1.0.0.0 in Windows FileVersion.
+          # Stamp actual shipping binary metadata; updater's InstalledVersion
+          # and installer AppVersion are already set above.
+          $proj='DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj'
+          $projectText=[IO.File]::ReadAllText($proj)
+          if(!$projectText.Contains('<PropertyGroup>') -or $projectText.Contains('<FileVersion>')){
+              throw 'R333 cannot safely set authentic Windows EXE file metadata'
+          }
+          $metadata='<PropertyGroup><Version>'+$version+'</Version><FileVersion>'+$version+'.0</FileVersion>'
+          $offset=$projectText.IndexOf('<PropertyGroup>')
+          $projectText=$projectText.Substring(0,$offset)+$metadata+
+              $projectText.Substring($offset+'<PropertyGroup>'.Length)
+          [IO.File]::WriteAllText($proj,$projectText,[Text.UTF8Encoding]::new($false))
+          [IO.File]::WriteAllText('.release-r232/version.txt',$version,[Text.Encoding]::ASCII)
+          Write-Host "DeskSpace scoped Stable Deck hotfix candidate: $version"
+      - name: Run isolated synthetic updater and WPF acceptance on shipping source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r220/test-r220.ps1
+          ./r213/test-r213.ps1
+          ./r227/test-supervisor-r227.ps1
+          foreach($script in @(
+            'r201/apply-tests-r201-r202.ps1',
+            'r203/apply-tests-r203.ps1',
+            'r205/apply-tests-r205.ps1',
+            'r206/apply-tests-r206.ps1',
+            'r207/apply-tests-r207.ps1',
+            'r208/apply-tests-r208.ps1',
+            'r209/apply-tests-r209.ps1',
+            'r210/apply-tests-r210.ps1',
+            'r211/apply-tests-r211.ps1',
+            'r212/apply-tests-r212.ps1',
+            'r214/apply-tests-r214.ps1',
+            'r215/apply-tests-r215.ps1',
+            'r216/apply-tests-r216.ps1',
+            'r217/apply-tests-r217.ps1',
+            'r218/apply-tests-r218.ps1',
+            'r219/apply-tests-r219.ps1',
+            'r222/apply-tests-r222.ps1',
+            'r224/apply-tests-r224.ps1',
+            'r225/apply-tests-r225.ps1',
+            'r226/apply-tests-r226.ps1',
+            'r227/apply-tests-r227.ps1',
+            'r228/apply-tests-r228.ps1',
+            'r230/apply-tests-r230.ps1',
+            'r231/apply-tests-r231.ps1',
+            'r233/apply-tests-r233.ps1',
+            'r236/apply-tests-r236.ps1',
+            'r237/apply-tests-r237.ps1',
+            'r238/apply-tests-r238.ps1',
+            'r239/apply-tests-r239.ps1',
+            'fix-search-file-results-20261101/apply-tests.ps1'
+          )){ & $script }
+          # R228 native test registration is complete at this point.
+          # R230 and R231 are both present and re-tested from the
+          # immutable accepted source; never touch user workspace files.
+          # R228's historical static gate references an obsolete
+          # AvoidWidgetV282 symbol never present in the accepted R232
+          # immutable source. Validate the shipping R228 native deck
+          # clamp and independent per-monitor persistence instead.
+          $dock=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMonitorDockV190.cs' -Raw
+          $mon=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceMultiMonitorV151.cs' -Raw
+          foreach($require in @(
+             'DeskSpaceDeckOffsetV228.Read(Device())',
+             'DeskSpaceDeckOffsetV228.Save(Device(),shift)',
+             'ConstrainBeforePaintV298(',
+             'NativeCorrectionV292('
+          )){
+             if(!$dock.Contains($require)){throw "R228 shipping monitor Deck regression: $require"}
+          }
+          if(!$mon.Contains('DeskSpaceMonitorFenceV152.ClampNow(replica);')){
+             throw 'R228 independent monitor fence regression'
+          }
+          ./r230/test-r230.ps1
+          ./r231/test-r231.ps1
+          foreach($test in @(
+             'r233/test-r233.ps1','r234/test-r234.ps1',
+             'r235/test-r235.ps1','r236/test-r236.ps1',
+             'r237/test-r237.ps1','r238/test-r238.ps1',
+             'r239/test-r239.ps1'
+          )){ & $test }
+          dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo
+          if($LASTEXITCODE -ne 0){throw 'Shipping DeskSpace source failed compilation'}
+          ./r232/test-native-close-r232.ps1
+          New-Item -ItemType Directory -Force '.release-r232/evidence'|Out-Null
+          dotnet run --project 'r36/UiSmoke/UiSmoke.csproj' -c Release -- '.release-r232/evidence' '--r201-only'
+          if($LASTEXITCODE -ne 0){throw 'Interim release native WPF/updater tests failed'}
+          dotnet run --project 'r292/Tests/DeckNativeTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R301 stable native Deck collision test failed'}
+          dotnet run --project 'r304/StableTests/StableDeckForegroundTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R304 stable: Deck hidden behind Chrome, clipped or scrollbar inaccessible'}
+          & ./r308/test-r308.ps1 -Source 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs'
+          if($LASTEXITCODE -ne 0){throw 'R308 Stable Deck header/default-expanded regression failed'}
+          & ./r312/test-r312.ps1
+          if(!$?){throw 'R312 process wait regression failed'}
+          & ./r316/test-r316.ps1
+          if(!$?){throw 'R316 mutex-owner acceptance and PowerShell syntax regression failed'}
+          & ./r348/test-r348.ps1
+          if(!$?){throw 'R348 storage cleanup safety tests failed'}
+          & ./r351/test-r351.ps1
+          if(!$?){throw 'R351 staged installer retention safety tests failed'}
+          $ui=Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml' -Raw
+          foreach($required in @('TextElement.Foreground="#243F5C"','Foreground="#1B3A57"','Value="#BFDFF4"','Ready — Workspace loaded')){
+            if(!$ui.Contains($required)){throw ('R351 Settings screenshot contrast fix missing: '+$required)}
+          }
+          $app=Get-Content 'DeskSpace_Windows_R1/DeskSpace/App.xaml.cs' -Raw
+          if(([regex]::Matches($app,[regex]::Escape('DeskSpaceStorageMaintenanceV351.Begin('))).Count -ne 2){throw 'R351 startup must run from widget and Workspace'}
+          $resource=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpacePostLaunchCleanupV351.ps1' -Raw
+          if(!$resource.Contains('Invoke-R351StagedInstallerRetention')){throw 'R351 embedded cleanup missing'}
+          & ./r349/test-r349.ps1
+          if(!$?){throw 'R349 modern UI source acceptance failed'}
+          dotnet run --project 'r310/StableTests/SupervisorBusyStableTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R310 native Windows supervisor contention/duplicate handoff test failed'}
+          dotnet run --project 'r318/StableTests/DeckFitContentTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R318 shipping Deck does not fit to visible content or resize with additions/removals'}
+          dotnet run --project 'r320/StableTests/SingleDeckPositionTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R320 duplicate Deck display points or monitor-local drag placement regression'}
+          dotnet run --project 'r322/StableTests/DeckTetherTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R322 detached Deck screen-edge regression: widget near right/old -4096 offset'}
+          dotnet run --project 'r324/StableTests/AllDriveFileSearchTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R324 all-computer filename search missed hidden/deep/new/renamed files or failed live updates'}
+          dotnet run --project 'r326/StableTests/AdvancedSearchFiltersTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R326 advanced file-search facets failed on real Windows files'}
+          dotnet run --project 'r328/StableTests/TextCompareTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R328 text comparison WPF, clear and Action Palette regression failed'}
+          dotnet run --project 'r330/StableTests/DiskSearchMemoryTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R330 bounded memory + deep file discovery + watcher queue regression failed'}
+          dotnet run --project 'r332/StableTests/SearchRecoveryTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R332 actual Search() has no file results or suppresses Settings and Notes on index failure'}
+          dotnet run --project 'r337/StableTests/SearchSpinnerTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R337 search UI index-refresh starvation, cancellation or retained memory regression'}
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          if($LASTEXITCODE -ne 0){throw 'Inno Setup not available'}
+      - name: Build verified self-contained Windows installer
+        shell: pwsh
+        run: |
+          ./BUILD_DESKSPACE_SETUP.ps1
+          ./r220/normalize-release-checksum.ps1 -OutputDirectory release
+          ./r220/test-r220.ps1
+          $setup='release/DeskSpace_Setup.exe'
+          $sha=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::Copy([IO.Path]::GetFullPath($setup),
+              [IO.Path]::GetFullPath('release/Update.exe'),$true)
+          [IO.File]::WriteAllText('release/Update.sha256.txt',$sha,[Text.Encoding]::ASCII)
+          foreach($name in @('DeskSpace_Setup.exe','Update.exe')){
+              $actual=(Get-FileHash "release/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+              if($actual -ne $sha){throw 'The release binary bridge SHA256 diverged'}
+          }
+          if(([IO.File]::ReadAllBytes('release/DeskSpace_Setup.sha256.txt')).Length -ne 64){
+              throw 'Older updater compatibility checksum length invalid'
+          }
+          Write-Host "R232 verified installer SHA256: $sha"
+      - name: Prevent obsolete or changed-branch publication
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $current=gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/release/stable-deck-hotfix-r301" --jq '.object.sha'
+          if($LASTEXITCODE -ne 0 -or ($current|Out-String).Trim() -ne $env:GITHUB_SHA){
+              throw 'Interim release recipe has changed during the build; do not publish'
+          }
+      - name: Publish same verified installer to Tester and Stable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $version=Get-Content '.release-r232/version.txt' -Raw
+          $version=$version.Trim()
+          if($version -notmatch '^1\.5\.\d+$'){throw 'Invalid interim release version'}
+          $repo='surajTech-22/Desk-space'
+          $assets=@('release/DeskSpace_Setup.exe',
+              'release/DeskSpace_Setup.sha256.txt','release/Update.exe',
+              'release/Update.sha256.txt')
+          foreach($entry in @(
+              @{Tag='tester-v'+$version;Pre=$true},
+              @{Tag='v'+$version;Pre=$false}
+          )){
+              $tag=$entry.Tag
+              gh release view $tag -R $repo *> $null
+              if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
+              $notes="DeskSpace 1.5.1125 corrective maintenance release. R351 fixes unreadable Settings and inherited white-on-white TabItem text in the Control Center, preserves explicit privacy warning and improves status/channel contrast. Storage cleanup now runs once from both Workspace and circular-widget startup after manual or automatic installs, waiting for any active updater transaction and refusing uncertain paths, processes, locked files and current v336 Search index. R348 strict retention keeps current plus three previous verified rollback snapshots; R351 additionally prunes only old known downloaded staging installers and partials, retaining three recent packages, recovery files, custom folders, manual builds and user data. A dated cleanup summary is written to Downloads/DeskSpace_StorageCleanup_R351_Report.txt and update-status.log. All native Windows, updater, Search, Deck, Settings, WPF build and storage safety fixtures must pass; no unfinished experimental feature batch included. Same SHA256-verified installer published to Stable and Tester; user device cleanup still requires verification."
+              if($entry.Pre){
+                  gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Corrective cleanup and Settings" --notes $notes
+              }else{
+                  gh release create $tag @assets -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Stable Corrective cleanup and Settings" --notes $notes
+              }
+              if($LASTEXITCODE -ne 0){throw "Failed to publish $tag"}
+          }
+          foreach($tag in @("tester-v$version","v$version")){
+              $release=((gh api "repos/$repo/releases/tags/$tag")|Out-String)|ConvertFrom-Json
+              if($LASTEXITCODE -ne 0 -or $release.target_commitish -ne $env:GITHUB_SHA){
+                  throw "Published release target SHA mismatch for $tag"
+              }
+              $local=(Get-FileHash 'release/DeskSpace_Setup.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+              foreach($name in @('DeskSpace_Setup.exe','Update.exe')){
+                  $asset=@($release.assets | Where-Object {$_.name -eq $name})
+                  if($asset.Count -ne 1 -or $asset[0].digest -ne ('sha256:'+$local)){
+                      throw "Published installer checksum mismatch for $tag : $name"
+                  }
+              }
+          }
+          Write-Host "R352 maintenance cleanup/Settings release SUCCESS: same SHA256 installer published to Tester and Stable."
+      - name: Send fresh SHA256-verified v1.5.1125 notification hints to both installed channels
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
+          foreach($hint in @('stable|v1.5.1125','tester|tester-v1.5.1125')){
+            try{
+              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1125 available' }
+              if($response.event -ne 'message'){throw ('Relay rejected '+$hint)}
+              Write-Host ('ACKNOWLEDGED official release hint: '+$hint)
+            }catch{
+              Write-Warning ('Official version tags are published but notification relay failed for '+$hint+' : '+$_.Exception.Message)
+            }
+          }
+      - name: Record limited-scope release verdict
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host 'R232 includes verified R230 all-window normal exit, R231 monitor isolation and R232 real native close probe; remaining roadmap pending; final roadmap gate remains NOT READY.'
