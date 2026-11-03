@@ -48,6 +48,13 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             string.Equals(original,canonical,StringComparison.OrdinalIgnoreCase));
     }
     private static readonly HashSet<DeskSpaceDropShelfV15> Views=new();
+    // Application matches are session-only shared Deck suggestions.
+    // No folder contents are copied to this state, and no app is launched
+    // during a drag, hover, ZIP, Copy or automatic update.
+    private static IReadOnlyList<DeskSpaceFolderAppRecognitionV363.Suggestion>
+        recognizedFolderV363=Array.Empty<DeskSpaceFolderAppRecognitionV363.Suggestion>();
+    private static string? recognizedFolderErrorV363;
+    private static int recognizedFolderEpochV363;
     private static void RefreshViews()
     {
         foreach(var view in Views.ToArray())
@@ -115,7 +122,9 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         Array.Empty<DeskSpaceRunningAppsV88.Entry>();
     private string NonAppSignature()=>string.Join("\u001e",
         held.Concat(detected).Select(x=>x.StagedPath)
-            .Concat(excelMatchesV122.Select(x=>x.Id.ToString())));
+            .Concat(excelMatchesV122.Select(x=>x.Id.ToString()))
+            .Concat(recognizedFolderV363.Select(x=>
+                x.Folder+"|"+x.AppId+"|"+recognizedFolderEpochV363)));
     private IReadOnlyList<DeskSpaceRunningAppsV88.Entry> runningApps=
         Array.Empty<DeskSpaceRunningAppsV88.Entry>();
     private readonly DispatcherTimer runningAppsTimer=new(){
@@ -507,7 +516,10 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 e.Effects=approved?DragDropEffects.Copy:DragDropEffects.None;
                 e.Handled=true;
                 if(!busy && approved)
+                {
+                    SuggestFolderAppsV363(dropped);
                     _=CommitFolderDropAsync(dropped,zip);
+                }
                 return;
             }
         }
@@ -524,6 +536,45 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         e.Handled=true;
         var files=e.Data.GetData(DataFormats.FileDrop) as string[];
         if(files?.Length>0)_=StageFilesAsync(files);
+    }
+    private void SuggestFolderAppsV363(string[] dropped)
+    {
+        int epoch=Interlocked.Increment(ref recognizedFolderEpochV363);
+        recognizedFolderV363=
+            Array.Empty<DeskSpaceFolderAppRecognitionV363.Suggestion>();
+        recognizedFolderErrorV363=null;
+        if(dropped.Length!=1 || !Directory.Exists(dropped[0]))
+        {
+            RefreshViews();
+            return;
+        }
+        string folder=dropped[0];
+        _=Task.Run(()=>DeskSpaceFolderAppRecognitionV363.Recognize(folder))
+            .ContinueWith(task=>{
+                if(task.IsCanceled || task.IsFaulted)return;
+                try
+                {
+                    host.Dispatcher.BeginInvoke(new Action(()=>{
+                        if(disposed || epoch!=Volatile.Read(ref recognizedFolderEpochV363))
+                            return;
+                        recognizedFolderV363=task.Result.ToArray();
+                        RefreshViews();
+                    }),DispatcherPriority.Background);
+                }
+                catch(InvalidOperationException){}
+            },TaskScheduler.Default);
+    }
+    private void OpenRecognizedFolderV363(
+        DeskSpaceFolderAppRecognitionV363.Suggestion choice)
+    {
+        if(DeskSpaceFolderAppRecognitionV363.TryOpen(choice,out var error))
+        {
+            // A choice remains visible for another app or explicit dismiss.
+            recognizedFolderErrorV363=null;
+        }
+        else recognizedFolderErrorV363=
+            error??"Application could not open this folder.";
+        RefreshViews();
     }
     private void FolderDragEnter(object sender,DragEventArgs e)=>DragOver(sender,e);
 
@@ -1292,7 +1343,8 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         if(deckDismissed)
         {
             string currentNonApp=NonAppSignature();
-            if(held.Count+detected.Count>0 &&
+            if((held.Count+detected.Count>0 ||
+                recognizedFolderV363.Count>0) &&
                !string.Equals(currentNonApp,dismissedNonAppSignature,
                    StringComparison.Ordinal))
                 deckDismissed=false;
@@ -1306,7 +1358,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // on exactly the same below-circle Popup, without blocking the ring.
         detected.RemoveAll(x=>!File.Exists(x.StagedPath));
         if(held.Count+detected.Count+runningApps.Count+
-            excelMatchesV122.Count==0 &&
+            excelMatchesV122.Count==0 && recognizedFolderV363.Count==0 &&
             DeskSpaceMediaV18.ActiveV123?.DeckVisibleV123!=true && !busy)
         {
             popup.IsOpen=false;
@@ -1484,6 +1536,66 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 action.Click+=(_,_)=>ReviewExcelSuggestionV122(id);
                 suggestionGroup.Children.Add(action);
             }
+        // The existing Deck displays a compact action after a successful
+        // ZIP/Copy drop. The original two-part circle remains unchanged.
+        if(recognizedFolderV363.Count>0)
+        {
+            var match=recognizedFolderV363[0];
+            var folderActions=new StackPanel{
+                Margin=new Thickness(5,4,5,5)
+            };
+            var top=new DockPanel{LastChildFill=true};
+            var dismiss=new Button{
+                Content="×",FontSize=12,MinWidth=22,
+                ToolTip="Dismiss application suggestion; files are untouched",
+                Padding=new Thickness(2,0,2,0)
+            };
+            dismiss.Click+=(_,_)=>{
+                Interlocked.Increment(ref recognizedFolderEpochV363);
+                recognizedFolderV363=
+                    Array.Empty<DeskSpaceFolderAppRecognitionV363.Suggestion>();
+                recognizedFolderErrorV363=null;
+                RefreshViews();
+            };
+            DockPanel.SetDock(dismiss,Dock.Right);
+            top.Children.Add(dismiss);
+            var folderName=Path.GetFileName(match.Folder.TrimEnd(
+                Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
+            top.Children.Add(Text("Folder · "+folderName,11,Brushes.White));
+            folderActions.Children.Add(top);
+            folderActions.Children.Add(Text(
+                match.FolderKind+" · "+match.Evidence,10,Brushes.LightSteelBlue));
+            foreach(var choice in recognizedFolderV363.Take(3))
+            {
+                bool available=DeskSpaceFolderAppRecognitionV363.IsAvailable(choice);
+                var action=new Button{
+                    Content=choice.AppId=="Explorer"
+                        ?"Open folder in Explorer"
+                        :choice.AppId=="Default"
+                            ?"Open document with Windows default"
+                            :"Open with "+choice.AppName,
+                    IsEnabled=available,FontSize=11,
+                    HorizontalContentAlignment=HorizontalAlignment.Left,
+                    Padding=new Thickness(7,4,7,4),
+                    Margin=new Thickness(1,2,1,1),
+                    ToolTip=available
+                        ?"Open only when clicked; never executes folder contents automatically"
+                        :choice.AppName+" was not found on this computer"
+                };
+                action.Click+=(_,_)=>OpenRecognizedFolderV363(choice);
+                folderActions.Children.Add(action);
+            }
+            if(!string.IsNullOrWhiteSpace(recognizedFolderErrorV363))
+                folderActions.Children.Add(Text(
+                    recognizedFolderErrorV363,10,Brushes.OrangeRed));
+            list.Children.Add(new Border{
+                CornerRadius=new CornerRadius(8),
+                Background=new SolidColorBrush(Color.FromArgb(150,39,53,85)),
+                Padding=new Thickness(5),
+                Margin=new Thickness(2,3,2,4),
+                Child=folderActions
+            });
+        }
         var heldGroup=DeskSpaceShelfGroupsV88.Add(list,"Held Files",
             held.Count,heldExpanded,()=>{
                 heldExpanded=!heldExpanded;Render();
@@ -1621,6 +1733,13 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         if(disposed)return;
         disposed=true;
         Views.Remove(this);
+        if(Views.Count==0)
+        {
+            Interlocked.Increment(ref recognizedFolderEpochV363);
+            recognizedFolderV363=
+                Array.Empty<DeskSpaceFolderAppRecognitionV363.Suggestion>();
+            recognizedFolderErrorV363=null;
+        }
         DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
         if(Views.Count==0)DeskSpaceSmartContextDeckV280.Stop();
         // The media player stays inside the Deck until the FINAL widget
