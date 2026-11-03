@@ -39,25 +39,36 @@ One @'
             .Concat(recognizedFolderV363.Select(x=>
                 x.Folder+"|"+x.AppId+"|"+recognizedFolderEpochV363)));
 '@ 'folder open suggestion counts as a user-initiated non-app Deck action'
-# The shipping R232 branch may have a simpler folder Drop path.
-$receiveStart=$s.IndexOf('private void Receive(object sender,DragEventArgs e)')
-if($receiveStart -ge 0){
-    Write-Host 'R363 actual shipping Receive block (code only):'
-    Write-Host $s.Substring($receiveStart,[Math]::Min(3300,$s.Length-$receiveStart))
-}
-One @'
+# Published R232/R359 shipping and newer checked-in development source
+# have different, valid ZIP/Copy commits. Attach only at whichever is
+# actually present and never replace their existing authorization rules.
+if($s.Contains('if(!busy && approved)'))
+{
+    One @'
                 if(!busy && approved)
                     _=CommitFolderDropAsync(dropped,zip);
 '@ @'
                 if(!busy && approved)
                 {
-                    // Never inspect the folder on every DragOver event.
-                    // Only a completed and authorized original ZIP/Copy
-                    // drop schedules a bounded off-UI-thread recognition.
                     SuggestFolderAppsV363(dropped);
                     _=CommitFolderDropAsync(dropped,zip);
                 }
-'@ 'detect only after approved folder drop'
+'@ 'newer authorized ZIP/Copy drop'
+}
+elseif($s.Contains('if(!busy&&selected is bool zip && sources.Length>0)'))
+{
+    One @'
+                if(!busy&&selected is bool zip && sources.Length>0)
+                    _=CommitFolderDropAsync(sources,zip);
+'@ @'
+                if(!busy&&selected is bool zip && sources.Length>0)
+                {
+                    SuggestFolderAppsV363(sources);
+                    _=CommitFolderDropAsync(sources,zip);
+                }
+'@ 'published R232 ZIP/Copy drop'
+}
+else {throw 'R363 unrecognized shipping ZIP/Copy drop; no integration performed'}
 One @'
     private void FolderDragEnter(object sender,DragEventArgs e)=>DragOver(sender,e);
 '@ @'
@@ -196,9 +207,10 @@ One @'
         }
         DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
 '@ 'clear ephemeral suggestions after last widget exits'
-if(!$s.Contains('DeskSpaceFolderPreDropV256.Authorized(') -or
-   !$s.Contains('CommitFolderDropAsync(dropped,zip)') -or
-   !$s.Contains('folderLayer.Remove(folderAdorner)')){
+if(!$s.Contains('folderLayer.Remove(folderAdorner)') -or
+   !$s.Contains('SuggestFolderAppsV363(') -or
+   (!$s.Contains('CommitFolderDropAsync(dropped,zip)') -and
+    !$s.Contains('CommitFolderDropAsync(sources,zip)'))){
     throw 'R363 must preserve existing native ZIP/Copy drop and overlay lifecycle'
 }
 [IO.File]::WriteAllText($file,$s,[Text.UTF8Encoding]::new($false))
