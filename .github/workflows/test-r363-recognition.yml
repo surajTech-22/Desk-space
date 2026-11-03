@@ -4,6 +4,8 @@ on:
     branches: [feat/r363-folder-app-recognition]
     paths:
       - r363/**
+      - src/DeskSpace/DeskSpaceFolderAppRecognitionV363.cs
+      - src/DeskSpace/DeskSpaceDropShelfV15.cs
       - .github/workflows/test-r363-recognition.yml
   workflow_dispatch:
 permissions:
@@ -50,6 +52,12 @@ jobs:
             throw 'R363 unauthorized automatic app process launch'
           }
           Write-Host 'R363 PASS: no new standalone popup or post-drop ZIP/Copy override.'
+      - name: Compile original checked-in DeskSpace source without staging patches
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo
+          if($LASTEXITCODE -ne 0){throw 'R363 checked-in WPF Deck recognition failed compilation'}
       - name: Compile DeskSpace native WPF, Deck, Search and updater
         shell: powershell
         run: |
