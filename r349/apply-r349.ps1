@@ -190,7 +190,7 @@ var list=new ListBox{BorderThickness=new Thickness(1),
 '@ 'command results surface'
 One $palette 'var item=new ListBoxItem{Content=box,Tag=command,Padding=new Thickness(6)};' @'
 var item=new ListBoxItem{
-                    Content=box,Tag=command,Padding=new Thickness(12,9),
+                    Content=box,Tag=command,Padding=new Thickness(12,9,12,9),
                     Margin=new Thickness(3),
                     Background=new SolidColorBrush(Color.FromRgb(234,242,252)),
                     Foreground=new SolidColorBrush(Color.FromRgb(28,53,82))};
