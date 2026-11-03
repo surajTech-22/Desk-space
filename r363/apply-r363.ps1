@@ -39,6 +39,12 @@ One @'
             .Concat(recognizedFolderV363.Select(x=>
                 x.Folder+"|"+x.AppId+"|"+recognizedFolderEpochV363)));
 '@ 'folder open suggestion counts as a user-initiated non-app Deck action'
+# The shipping R232 branch may have a simpler folder Drop path.
+$receiveStart=$s.IndexOf('private void Receive(object sender,DragEventArgs e)')
+if($receiveStart -ge 0){
+    Write-Host 'R363 actual shipping Receive block (code only):'
+    Write-Host $s.Substring($receiveStart,[Math]::Min(3300,$s.Length-$receiveStart))
+}
 One @'
                 if(!busy && approved)
                     _=CommitFolderDropAsync(dropped,zip);
