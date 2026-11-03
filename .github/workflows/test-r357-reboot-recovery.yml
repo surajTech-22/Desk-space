@@ -26,7 +26,7 @@ jobs:
           $s=Get-Content $path -Raw
           foreach($required in @(
             "Get-FileHash -LiteralPath $",
-            'Expected',
+            '$expected =',
             'ONE-RESTART',
             'DeskSpace_Recovery1127',
             'Restore $state',
