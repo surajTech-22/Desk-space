@@ -72,10 +72,7 @@ try {
     Assert-R348 (Test-Path (Join-Path $search 'filenames-v330.sqlite')) 'pending update deleted v330'
     Remove-Item (Join-Path $root 'PostInstall\pending.json') -Force
 
-    Write-Host ('R348 SNAPSHOT fixture='+($snapshots|ForEach-Object {(Get-Item -LiteralPath $_).CreationTimeUtc.ToString('O')+' '+$_}|Out-String))
-    Write-Host ('R348 MANIFEST CHECK='+(Test-R348PlainFile (Join-Path $snapshots[0] 'verified-manifest.json'))+' exe='+(Test-R348PlainFile (Join-Path $snapshots[0] 'snapshot\DeskSpace.exe')))
     $preview=Invoke-R348StorageCleanup @common -Preview
-    Write-Host ('R348 PREVIEW messages='+($preview.Messages -join ' | '))
     Assert-R348 ($preview.ReclaimedBytes -eq 0) 'preview changed bytes'
     Assert-R348 (Test-Path -LiteralPath $snapshots[0]) 'preview deleted snapshot'
     Assert-R348 (Test-Path (Join-Path $search 'filenames-v330.sqlite')) 'preview deleted index'
@@ -96,7 +93,6 @@ try {
     } finally {$locked.Dispose()}
 
     $final=Invoke-R348StorageCleanup @common
-    Write-Host ('R348 DEBUG locked='+($lockedRun.Messages -join ' | ')+' final bytes='+$final.LegacyIndexBytes+' messages='+($final.Messages -join ' | ')+' legacyExists='+(Test-Path (Join-Path $search 'filenames-v330.sqlite'))+' walExists='+(Test-Path (Join-Path $search 'filenames-v330.sqlite-wal')))
     Assert-R348 ($final.LegacyIndexBytes -eq 34816) 'legacy size/count incorrect'
     Assert-R348 (!(Test-Path (Join-Path $search 'filenames-v330.sqlite'))) 'obsolete legacy index not cleaned'
     Assert-R348 (!(Test-Path (Join-Path $search 'filenames-v330.sqlite-wal'))) 'obsolete WAL not cleaned'
