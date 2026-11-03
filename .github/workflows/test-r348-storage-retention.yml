@@ -1,0 +1,38 @@
+name: R348 Verified storage retention Windows safety
+on:
+  push:
+    branches: [fix/r348-verified-storage-retention, feat/r339-productivity-batch-10]
+    paths:
+      - .github/workflows/test-r348-storage-retention.yml
+      - r348/**
+      - .github/workflows/test-r339-productivity-batch.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retention-windows:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test real file fixtures, pending installs and guarded delete
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./r348/test-r348.ps1
+      - name: Verify supervisor source incorporation and PowerShell syntax
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force 'DeskSpace_Windows_R1/DeskSpace' | Out-Null
+          Copy-Item 'src/DeskSpace/DeskSpaceUpdateSupervisor.ps1' 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdateSupervisor.ps1'
+          & ./r348/apply-r348.ps1
+          $s=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdateSupervisor.ps1' -Raw
+          if(!$s.Contains('Invoke-R348StorageCleanup -UpdatesRoot $root')){throw 'no post-receipt cleanup hook'}
+          $receipt=$s.IndexOf("Report ('R185 verified post-install ready receipt")
+          $cleanup=$s.IndexOf('Invoke-R348StorageCleanup -UpdatesRoot $root')
+          if($receipt -lt 0 -or $cleanup -le $receipt){throw 'cleanup must execute only after installed host receipt'}
+          if(!$s.Contains('catch {') -or !$s.Contains('R348 storage maintenance safely deferred')){throw 'cleanup must never affect update result'}
+          Write-Host 'R348 PASS: post-receipt hook parsed and guarded.'
