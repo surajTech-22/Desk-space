@@ -1,0 +1,58 @@
+name: R363 folder app recognition native Windows tests
+on:
+  push:
+    branches: [feat/r363-folder-app-recognition]
+    paths:
+      - r363/**
+      - .github/workflows/test-r363-recognition.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deskspace-r363-folder-recognition
+  cancel-in-progress: true
+jobs:
+  detect:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Test native Windows folder project signatures and explicit opening
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --project 'r363/Tests/FolderAppRecognitionTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R363 Windows recognition regression failed'}
+      - name: Inject app suggestions into existing DeskSpace Deck source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force 'DeskSpace_Windows_R1' | Out-Null
+          Copy-Item 'src/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace' -Recurse -Force
+          & ./r363/apply-r363.ps1
+          if(!$?){throw 'R363 folder app suggestion integration failed'}
+          $s=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
+          foreach($required in @(
+            'DeskSpaceFolderPreDropV256.Authorized(',
+            'CommitFolderDropAsync(dropped,zip)',
+            'DeskSpaceFolderAppRecognitionV363.Recognize(folder)',
+            'DeskSpaceFolderAppRecognitionV363.TryOpen(choice,out var error)',
+            'Open folder in Explorer',
+            'if(dropped.Length!=1'
+          )){
+            if(!$s.Contains($required)){throw ('R363 shipping Deck missing: '+$required)}
+          }
+          if($s.Contains('DragDrop.DoDragDrop(folder') -or
+             $s.Contains('Process.Start(dropped')) {
+            throw 'R363 unauthorized automatic app process launch'
+          }
+          Write-Host 'R363 PASS: no new standalone popup or post-drop ZIP/Copy override.'
+      - name: Compile DeskSpace native WPF, Deck, Search and updater
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo
+          if($LASTEXITCODE -ne 0){throw 'R363 WPF build failed'}
