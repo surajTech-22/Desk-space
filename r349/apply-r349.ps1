@@ -17,6 +17,8 @@ function One([string]$path,[string]$old,[string]$replacement,[string]$name) {
     $s=$s.Replace($old,$replacement)
     [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
 }
+Write-Host 'R349 SHIPPING XAML HEADER';Get-Content -LiteralPath $window -TotalCount 130 | ForEach-Object {Write-Host $_}
+Write-Host 'R349 SHIPPING PALETTE WINDOW';Select-String -LiteralPath $palette -Pattern 'Title=','DockPanel','Text="DeskSpace','var input=','item=new ListBoxItem' | ForEach-Object {Write-Host $_.Line}
 # Only presentation. XAML element names and Click/Closing handlers are preserved.
 One $window 'Title="DeskSpace — Workspace" Width="1120" Height="760" MinWidth="760" MinHeight="520"' 'Title="DeskSpace — Control Center" Width="1240" Height="810" MinWidth="780" MinHeight="560"' 'native resizable workspace dimensions'
 One $window 'Closing="MainWindow_Closing" Background="#101829"' 'Closing="MainWindow_Closing" Background="#0D1423"' 'deep navy canvas'
