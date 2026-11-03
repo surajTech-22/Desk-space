@@ -38,10 +38,10 @@ internal static class DeskSpaceAccountingFileRecognitionV364
     internal static bool IsVendor(string appId)=>appId is
         "TallyPrime" or "TallyERP" or "WinmanCAERP" or "WinmanGST" or "WinmanTDS";
 
-    private static readonly string[] PrimeExe={"TallyPrime.exe"};
+    private static readonly string[] PrimeExe={"Tally.exe"};
     private static readonly string[] ErpExe={"Tally.exe"};
     private static readonly string[] WinmanExe={"WinTax.exe"};
-    private static readonly string[] TdsExe={"TDS.exe"};
+    private static readonly string[] TdsExe={"WinTDS.exe"};
 
     internal static string[] AllowedExecutableNames(string appId)=>appId switch
     {
@@ -85,10 +85,10 @@ internal static class DeskSpaceAccountingFileRecognitionV364
         switch(appId)
         {
             case "TallyPrime":
-                yield return Path.Combine(pf,"TallyPrime","TallyPrime.exe");
-                yield return Path.Combine(pf86,"TallyPrime","TallyPrime.exe");
-                yield return Path.Combine(system,"TallyPrime","TallyPrime.exe");
-                yield return Path.Combine(system,"Tally","TallyPrime.exe");
+                yield return Path.Combine(pf,"TallyPrime","Tally.exe");
+                yield return Path.Combine(pf86,"TallyPrime","Tally.exe");
+                yield return Path.Combine(system,"TallyPrime","Tally.exe");
+                yield return Path.Combine(system,"Tally","Tally.exe");
                 break;
             case "TallyERP":
                 yield return Path.Combine(system,"Tally.ERP9","Tally.exe");
@@ -114,7 +114,7 @@ internal static class DeskSpaceAccountingFileRecognitionV364
                     Path.Combine(pf,"Winman","Winman TDS"),
                     Path.Combine(pf86,"Winman","Winman TDS")
                 })
-                    yield return Path.Combine(dir,"TDS.exe");
+                    yield return Path.Combine(dir,"WinTDS.exe");
                 break;
         }
     }
