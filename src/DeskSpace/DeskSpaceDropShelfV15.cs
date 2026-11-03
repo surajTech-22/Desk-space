@@ -473,7 +473,10 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             }
         }
         if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
-        e.Effects=(busy||disposed||held.Count>=25)?DragDropEffects.None:DragDropEffects.Copy;
+        var direct=e.Data.GetData(DataFormats.FileDrop) as string[];
+        // A file OPEN does not consume shelf capacity or need a copy slot.
+        e.Effects=!disposed && direct?.Length==1 && File.Exists(direct[0])
+            ?DragDropEffects.Link:DragDropEffects.None;
         e.Handled=true;
     }
     private void Receive(object sender,DragEventArgs e)
@@ -517,25 +520,112 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 e.Handled=true;
                 if(!busy && approved)
                 {
-                    SuggestFolderAppsV363(dropped);
-                    _=CommitFolderDropAsync(dropped,zip);
+                    // Opening a recognized vendor/project folder is a
+                    // separate direct-open action. When a folder has no
+                    // unambiguous file target, keep legacy ZIP/Copy exactly
+                    // as before rather than guessing or importing data.
+                    var opened=TryDirectOpenDroppedPathV365(dropped[0]);
+                    if(opened==DirectOpenV365.NotRecognized)
+                        _=CommitFolderDropAsync(dropped,zip);
+                    else e.Effects=opened==DirectOpenV365.Opened
+                        ?DragDropEffects.Link:DragDropEffects.None;
                 }
                 return;
             }
         }
         if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
-        // Never claim a drop succeeded if a copy is already in progress or
-        // the shelf is full. Leave the new-file suggestion available to retry.
-        if(disposed||busy||held.Count>=25)
+        // File OPEN is independent of ZIP/Copy shelf capacity. The drop
+        // never writes to the shelf, so do not block at 25 saved items.
+        if(disposed)
         {
             e.Effects=DragDropEffects.None;
             e.Handled=true;
             return;
         }
-        e.Effects=DragDropEffects.Copy;
+        e.Effects=DragDropEffects.None;
         e.Handled=true;
         var files=e.Data.GetData(DataFormats.FileDrop) as string[];
-        if(files?.Length>0)_=StageFilesAsync(files);
+        if(files?.Length==1 && File.Exists(files[0]))
+        {
+            // A file drop means OPEN with its recognized Windows app.
+            // No copying, queuing, ZIP, indexing or import side effect.
+            e.Effects=TryDirectOpenDroppedPathV365(files[0])==
+                DirectOpenV365.Opened?DragDropEffects.Link:DragDropEffects.None;
+            return;
+        }
+        // Multiple unrelated files have no unambiguous single document
+        // to open; do not fall through to clipboard/storage staging.
+        e.Effects=DragDropEffects.None;
+    }
+    private enum DirectOpenV365{NotRecognized,Opened,Blocked}
+    private DirectOpenV365 TryDirectOpenDroppedPathV365(string path)
+    {
+        try
+        {
+            var choices=DeskSpaceFolderAppRecognitionV363.RecognizePath(path);
+            var folder=Directory.Exists(path);
+            if(folder)
+            {
+                // For a folder containing exactly one Winman document,
+                // open that actual file through its registered handler.
+                // A directory with several accounts/companies is
+                // ambiguous: never arbitrarily choose a client file.
+                var vendor=choices.Where(x=>
+                    DeskSpaceAccountingFileRecognitionV364.IsVendor(x.AppId))
+                    .ToArray();
+                if(vendor.Length>0)
+                {
+                    if(vendor.Any(x=>x.AppId is "TallyPrime" or "TallyERP"))
+                    {
+                        System.Diagnostics.Debug.WriteLine(
+                            "R365: Tally company data is not a directly "+
+                            "openable Windows file; no command executed.");
+                        return DirectOpenV365.Blocked;
+                    }
+                    var supported=Directory.EnumerateFiles(path)
+                        .Take(257)
+                        .Where(x=>!DeskSpaceAccountingFileRecognitionV364
+                            .IsVendorBackup(x))
+                        .Select(x=>new{Path=x,Matches=
+                            DeskSpaceAccountingFileRecognitionV364
+                                .RecognizeVendorFile(x)})
+                        .Where(x=>x.Matches.Count>0).ToArray();
+                    if(supported.Length!=1)return DirectOpenV365.Blocked;
+                    choices=DeskSpaceFolderAppRecognitionV363
+                        .RecognizePath(supported[0].Path);
+                }
+                else if(choices.Count==1 ||
+                        choices.All(x=>x.AppId=="Explorer"))
+                {
+                    // A generic folder is not a file. It retains the
+                    // existing ZIP/Copy behavior of the widget.
+                    return DirectOpenV365.NotRecognized;
+                }
+            }
+            var selection=choices.FirstOrDefault(x=>
+                x.AppId!="Explorer" &&
+                DeskSpaceFolderAppRecognitionV363.IsAvailable(x));
+            if(selection==null)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "R365: No installed safe file opener for this drop.");
+                return DirectOpenV365.Blocked;
+            }
+            if(DeskSpaceFolderAppRecognitionV363.TryOpen(
+                selection,out var message))
+                return DirectOpenV365.Opened;
+            System.Diagnostics.Debug.WriteLine(
+                "R365: Direct file open unavailable: "+message);
+            return DirectOpenV365.Blocked;
+        }
+        catch(Exception ex) when(ex is IOException or
+            UnauthorizedAccessException or ArgumentException or
+            NotSupportedException)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "R365: Direct open did not proceed: "+ex.GetType().Name);
+            return DirectOpenV365.Blocked;
+        }
     }
     private void SuggestFolderAppsV363(string[] dropped)
     {
@@ -543,13 +633,14 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         recognizedFolderV363=
             Array.Empty<DeskSpaceFolderAppRecognitionV363.Suggestion>();
         recognizedFolderErrorV363=null;
-        if(dropped.Length!=1 || !Directory.Exists(dropped[0]))
+        if(dropped.Length!=1 ||
+           (!Directory.Exists(dropped[0]) && !File.Exists(dropped[0])))
         {
             RefreshViews();
             return;
         }
-        string folder=dropped[0];
-        _=Task.Run(()=>DeskSpaceFolderAppRecognitionV363.Recognize(folder))
+        string source=dropped[0];
+        _=Task.Run(()=>DeskSpaceFolderAppRecognitionV363.RecognizePath(source))
             .ContinueWith(task=>{
                 if(task.IsCanceled || task.IsFaulted)return;
                 try
@@ -1559,21 +1650,26 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             };
             DockPanel.SetDock(dismiss,Dock.Right);
             top.Children.Add(dismiss);
-            var folderName=Path.GetFileName(match.Folder.TrimEnd(
-                Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
-            top.Children.Add(Text("Folder · "+folderName,11,Brushes.White));
+            bool targetIsFile=!string.Equals(match.Target,match.Folder,
+                StringComparison.OrdinalIgnoreCase);
+            var sourceName=targetIsFile?Path.GetFileName(match.Target):
+                Path.GetFileName(match.Folder.TrimEnd(
+                    Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
+            top.Children.Add(Text((targetIsFile?"File · ":"Folder · ")+
+                sourceName,11,Brushes.White));
             folderActions.Children.Add(top);
             folderActions.Children.Add(Text(
                 match.FolderKind+" · "+match.Evidence,10,Brushes.LightSteelBlue));
-            foreach(var choice in recognizedFolderV363.Take(3))
+            // Keep Explorer visible even for mixed Tally + Winman folders.
+            foreach(var choice in recognizedFolderV363.Take(5))
             {
                 bool available=DeskSpaceFolderAppRecognitionV363.IsAvailable(choice);
                 var action=new Button{
                     Content=choice.AppId=="Explorer"
                         ?"Open folder in Explorer"
                         :choice.AppId=="Default"
-                            ?"Open document with Windows default"
-                            :"Open with "+choice.AppName,
+                            ?"Open with "+choice.AppName
+                            :"Open "+choice.AppName,
                     IsEnabled=available,FontSize=11,
                     HorizontalContentAlignment=HorizontalAlignment.Left,
                     Padding=new Thickness(7,4,7,4),

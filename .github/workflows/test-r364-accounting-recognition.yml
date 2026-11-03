@@ -1,0 +1,60 @@
+name: R364 Tally Winman and Windows file association native acceptance
+on:
+  push:
+    branches: [feat/r364-tally-winman-universal-openwith]
+    paths:
+      - r364/**
+      - r363/Tests/FolderAppRecognitionTests.csproj
+      - src/DeskSpace/DeskSpaceFolderAppRecognitionV363.cs
+      - src/DeskSpace/DeskSpaceAccountingFileRecognitionV364.cs
+      - src/DeskSpace/DeskSpaceDropShelfV15.cs
+      - .github/workflows/test-r364-accounting-recognition.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deskspace-r364-accounting-quick
+  cancel-in-progress: true
+jobs:
+  win:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify Tally and Winman data and backup recognition and launch safety
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --project 'r364/Tests/AccountingFileRecognitionTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R364 vendor/Windows association test failed'}
+      - name: Check existing project folder recognition is not broken
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --project 'r363/Tests/FolderAppRecognitionTests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R363 project recognition regression'}
+      - name: Compile checked-in DeskSpace WPF widget and Deck
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo
+          if($LASTEXITCODE -ne 0){throw 'R364 checked-in DeskSpace WPF build failed'}
+      - name: Verify scoped shipping patch and disabled executable association launch
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $s=Get-Content 'r364/apply-r364.ps1' -Raw
+          foreach($token in @('DeskSpaceFolderAppRecognitionV363.RecognizePath(source)','CommitFolderDropAsync(sources,zip)','TryDirectOpenDroppedPathV365(files[0])','Winman','DeskSpaceDropShelfV15.cs')){
+            if(!$s.Contains($token)){throw ('R364 shipping source anchor missing '+$token)}
+          }
+          $c=Get-Content 'src/DeskSpace/DeskSpaceAccountingFileRecognitionV364.cs' -Raw
+          foreach($blocked in @('".exe"','".bat"','".ps1"','".lnk"','".reg"')){
+            if(!$c.Contains($blocked)){throw ('Potentially active file extension not blocked: '+$blocked)}
+          }
+          if($s.Contains('Stop-Process') -or $s.Contains('Restart-Computer')){
+            throw 'R364 application recognition cannot terminate or restart apps'
+          }
+          Write-Host 'R364 PASS: no auto import, no installer release, no processes closed.'

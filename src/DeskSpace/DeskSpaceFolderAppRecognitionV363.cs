@@ -63,9 +63,16 @@ internal static class DeskSpaceFolderAppRecognitionV363
             void Add(string app,string name,string kind,string evidence,string target)=>
                 result.Add(new(full,target,app,name,kind,evidence));
 
-            // Strong project signals take priority over generic files.
+            // Tally and Winman data folders take precedence over generic
+            // documents. These are live databases, not importable files.
+            var vendor=DeskSpaceAccountingFileRecognitionV364
+                .RecognizeVendorFolder(full,files);
             var solution=FileMatching(".sln",".slnx");
-            if(solution!=null)
+            if(vendor.Count>0)
+            {
+                result.AddRange(vendor);
+            }
+            else if(solution!=null)
             {
                 Add("VisualStudio","Visual Studio","Visual Studio solution",
                     solution,Path.Combine(full,solution));
@@ -123,8 +130,18 @@ internal static class DeskSpaceFolderAppRecognitionV363
                 {
                     var file=docs[0];
                     var ext=Path.GetExtension(file).ToLowerInvariant();
-                    Add("Default","Windows default application",
+                    Add("Default",DeskSpaceAccountingFileRecognitionV364
+                        .AssociatedApplicationName(file),
                         "Document "+ext,file,Path.Combine(full,file));
+                }
+                else if(files.Count==1 &&
+                    DeskSpaceAccountingFileRecognitionV364.SafeAssociation(files[0]))
+                {
+                    var file=files[0];
+                    Add("Default",DeskSpaceAccountingFileRecognitionV364
+                        .AssociatedApplicationName(file),
+                        "Registered file type "+Path.GetExtension(file),
+                        file,Path.Combine(full,file));
                 }
             }
             // Explorer is always a safe fallback. It opens the FOLDER,
@@ -134,6 +151,42 @@ internal static class DeskSpaceFolderAppRecognitionV363
                 result.Count>0?result[0].Evidence:"No specific app signature",
                 full);
             return result;
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or
+            ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return Array.Empty<Suggestion>();
+        }
+    }
+
+    // A file drop is classified independently of folders. We never infer
+    // Tally or Winman from a generic XML/JSON (which may require importing
+    // through the vendor application, not double-clicking).
+    internal static IReadOnlyList<Suggestion> RecognizePath(string path)
+    {
+        if(string.IsNullOrWhiteSpace(path))return Array.Empty<Suggestion>();
+        try
+        {
+            var full=Path.GetFullPath(path);
+            if(Directory.Exists(full))return Recognize(full);
+            if(!File.Exists(full) ||
+               (File.GetAttributes(full)&FileAttributes.ReparsePoint)!=0)
+                return Array.Empty<Suggestion>();
+            var folder=Path.GetDirectoryName(full);
+            if(folder==null)return Array.Empty<Suggestion>();
+            var results=new List<Suggestion>();
+            results.AddRange(DeskSpaceAccountingFileRecognitionV364
+                .RecognizeVendorFile(full));
+            if(results.Count==0 &&
+                DeskSpaceAccountingFileRecognitionV364.SafeAssociation(full))
+                results.Add(new(folder,full,"Default",
+                    DeskSpaceAccountingFileRecognitionV364.AssociatedApplicationName(full),
+                    "File "+Path.GetExtension(full),
+                    Path.GetFileName(full)));
+            results.Add(new(folder,folder,"Explorer","File Explorer",
+                results.Count>0?results[0].FolderKind:"Unrecognized file",
+                Path.GetFileName(full)));
+            return results;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or
             ArgumentException or NotSupportedException or PathTooLongException)
@@ -212,6 +265,8 @@ internal static class DeskSpaceFolderAppRecognitionV363
 
     internal static string? FindInstalledApp(string appId)
     {
+        if(DeskSpaceAccountingFileRecognitionV364.IsVendor(appId))
+            return DeskSpaceAccountingFileRecognitionV364.FindInstalledVendor(appId);
         string? name=appId switch
         {
             "Code"=>"Code.exe",
@@ -232,6 +287,20 @@ internal static class DeskSpaceFolderAppRecognitionV363
         Func<string,string?>? resolver=null)
     {
         if(item.AppId is "Explorer" or "Default")return true;
+        if(item.AppId is "TallyPrime" or "TallyERP")return false;
+        if(DeskSpaceAccountingFileRecognitionV364.IsVendor(item.AppId))
+        {
+            if(item.Target.Equals(item.Folder,StringComparison.OrdinalIgnoreCase) ||
+               DeskSpaceAccountingFileRecognitionV364.IsVendorBackup(item.Target))
+                return false;
+            // Windows file registration, not an inferred WinTax command,
+            // determines whether this actual Winman file can be opened.
+            var associated=DeskSpaceAccountingFileRecognitionV364
+                .AssociatedExecutable(item.Target);
+            return associated!=null &&
+                DeskSpaceAccountingFileRecognitionV364
+                    .IsValidVendorExecutable(associated,item.AppId);
+        }
         return (resolver??FindInstalledApp)(item.AppId)!=null;
     }
 
@@ -240,7 +309,8 @@ internal static class DeskSpaceFolderAppRecognitionV363
     // no arbitrary command line is accepted, and targets are revalidated.
     internal static bool TryOpen(Suggestion item,out string? error,
         Func<string,string?>? resolver=null,
-        Func<ProcessStartInfo,Process?>? processLauncher=null)
+        Func<ProcessStartInfo,Process?>? processLauncher=null,
+        Func<string,string?>? associationResolver=null)
     {
         error=null;
         try
@@ -274,8 +344,54 @@ internal static class DeskSpaceFolderAppRecognitionV363
             }
             else if(item.AppId=="Default")
             {
-                if(isFolder || !DocumentExtensions.Contains(Path.GetExtension(target)))
-                    throw new IOException("Not a recognized document.");
+                if(isFolder ||
+                   !DeskSpaceAccountingFileRecognitionV364.SafeAssociation(target))
+                    throw new IOException("Unsafe or unsupported file association.");
+                var registered=(associationResolver??
+                    DeskSpaceAccountingFileRecognitionV364.AssociatedExecutable)(target);
+                if(string.IsNullOrWhiteSpace(registered) ||
+                   !File.Exists(registered))
+                    throw new IOException("No installed Windows file opener was found.");
+                // Windows owns the correct open verb, not a guessed
+                // command line. Drop only opens this selected source file.
+                info=new ProcessStartInfo(target){UseShellExecute=true};
+            }
+            else if(DeskSpaceAccountingFileRecognitionV364.IsVendor(item.AppId))
+            {
+                // The user's action is OPEN FILE, not LAUNCH APP or import.
+                // Tally company data are a multi-file database and Tally
+                // does not document a safe direct Windows "Open" handler
+                // for a Company.900/1800 shard. Never claim opening it
+                // succeeded or silently launch an unrelated company.
+                if(item.AppId is "TallyPrime" or "TallyERP")
+                    throw new IOException(
+                        "A Tally company database cannot be opened as a "+
+                        "single Windows file. Use Select Company in Tally.");
+                if(isFolder ||
+                   DeskSpaceAccountingFileRecognitionV364.IsVendorBackup(target))
+                    throw new IOException(
+                        "Winman backup/folder needs its own in-app file "+
+                        "selection. No data was changed.");
+                var signatures=RecognizePath(target);
+                if(!signatures.Any(x=>x.AppId==item.AppId))
+                    throw new IOException("The Winman file type changed.");
+                var associated=(associationResolver??
+                    DeskSpaceAccountingFileRecognitionV364.AssociatedExecutable)(target);
+                // The actual registered handler may be installed on D: or
+                // another user-chosen volume, not just a conventional C:
+                // program folder. The Windows association is authoritative.
+                var expected=resolver!=null?resolver(item.AppId):associated;
+                // Only the vendor's own registered Windows handler can
+                // open its file. Passing a .tax or .wgst to a guessed
+                // undocumented command line cannot be treated as success.
+                if(expected==null || associated==null ||
+                   !DeskSpaceAccountingFileRecognitionV364
+                       .IsValidVendorExecutable(expected,item.AppId) ||
+                   !Path.GetFullPath(expected).Equals(
+                       Path.GetFullPath(associated),
+                       StringComparison.OrdinalIgnoreCase))
+                    throw new IOException(
+                        "No verified Winman file-open association is installed.");
                 info=new ProcessStartInfo(target){UseShellExecute=true};
             }
             else
