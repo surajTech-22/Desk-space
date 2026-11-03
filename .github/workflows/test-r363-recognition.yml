@@ -32,10 +32,10 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          # The checked-in source already includes R363. The separate full
+          # shipping preflight runs the patch against the real R232 assembly.
           New-Item -ItemType Directory -Force 'DeskSpace_Windows_R1' | Out-Null
           Copy-Item 'src/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace' -Recurse -Force
-          & ./r363/apply-r363.ps1
-          if(!$?){throw 'R363 folder app suggestion integration failed'}
           $s=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
           foreach($required in @(
             'DeskSpaceFolderPreDropV256.Authorized(',
