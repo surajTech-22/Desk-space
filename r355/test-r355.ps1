@@ -24,7 +24,7 @@ Assert ($onExit -ge 0 -and $base -gt $onExit -and
     $authorised -gt $base -and $finished -gt $authorised) 'forced process completion before WPF OnExit'
 Assert ($app.Contains('if(widgetStarted)DeskSpaceStartupRecoveryV183.MarkCleanExit();')) 'startup safety marker not retained'
 Assert ($app.Contains('try {widgetMutex?.ReleaseMutex();}catch(ApplicationException){}')) 'mutex cleanup not retained'
-Assert ($grace.Contains('if(TryCloseWindows(windows))')) 'normal WPF close veto logic removed'
+Assert ($grace.Contains('if(TryCloseWindows(Application.Current.Windows.Cast<Window>().ToArray()))')) 'normal WPF close veto logic removed'
 Assert ($grace.Contains('updateExitAuthorized=true;') -and
     $grace.Contains('updateExitAuthorized=false;')) 'authorisation not revoked on veto'
 Assert ($grace.Contains('var ordered=windows.Where(w=>!ReferenceEquals(w,main))')) 'process main window is not closed last'
