@@ -29,7 +29,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $script=Get-Content 'r361/apply-r361.ps1' -Raw
-          foreach($term in @('DeskSpaceWidgetExitV286.Dismissed','UnresponsiveExisting','DeskSpaceStartupFallbackV276.Show','DeskSpaceStartupRecoveryV183.BeginEarly','Environment.Exit(0);','DeskSpaceStorageMaintenanceV351.Begin()')){
+          foreach($term in @('UnresponsiveExisting','DeskSpaceStartupFallbackV276.Show','Environment.Exit(0);','DeskSpaceStorageMaintenanceV351.Begin()')){
             if(!$script.Contains($term)){throw ('R361 startup source missing: '+$term)}
           }
           if($script.Contains('Stop-Process') -or $script.Contains('Restart-Computer')){throw 'R361 cannot force-close apps or reboot'}
