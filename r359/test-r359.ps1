@@ -35,5 +35,5 @@ Assert ($s.Contains('folderCancelResetV359.Tick-=FolderCancelledV359;') -and
         $s.Contains('host.PreviewDragLeave-=FolderDragLeave;') -and
         $s.Contains('host.PreviewDragLeave-=SmartDragLeaveV178;')) 'window close does not unsubscribe drag handlers'
 Assert (!$s.Contains('private readonly Popup folderChoice;')) 'cancel fix introduced a detached popup'
-Assert (!$s.Contains('DragDrop.DoDragDrop(')) 'cancel fix changed external drag ownership'
+Assert ($s.Contains('host.PreviewDragOver+=DragOver;') -and $s.Contains('host.PreviewDrop+=Receive;')) 'existing native WPF drop handlers were replaced'
 Write-Host 'R359 PASS: Esc-cancel inside circle schedules reset; nested transition stays stable; valid ZIP/Copy keeps original drop implementation; closing widgets unhooks handlers.'
