@@ -5,6 +5,10 @@ if(!(Test-Path -LiteralPath $path)){throw 'R359 missing real shipping Deck / dra
 $s=[IO.File]::ReadAllText($path)
 $lf=[string][char]10
 $s=$s.Replace(([string][char]13+$lf),$lf)
+# Log only source CODE landmarks (no local paths or user data), because the
+# canonical shipping source is reconstructed from a verified Windows artifact.
+$s.Split([char]10) | Where-Object {$_ -match 'pendingFolderDrop|hoverChoice|FolderDragLeave|HideFolderChoice|PreviewDragEnter|private void DragOver|private void Dispose'} |
+    Select-Object -First 35 | ForEach-Object {Write-Host ('R359 SHIPPING LANDMARK: '+$_.Trim())}
 function One([string]$from,[string]$to,[string]$why) {
     $from=$from.Replace(([string][char]13+$script:lf),$script:lf)
     $to=$to.Replace(([string][char]13+$script:lf),$script:lf)
