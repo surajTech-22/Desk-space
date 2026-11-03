@@ -7,8 +7,8 @@ $source=[IO.File]::ReadAllText('r348/DeskSpaceSafeStorageCleanupV348.ps1')
 $s=[IO.File]::ReadAllText($file)
 $anchor='function Report([string]$message) {'
 $success="    Report 'R185 SUCCESS: complete prior-install snapshot retained for recovery.'"
-if(($s.Split($anchor).Count-1) -ne 1){throw 'R348 expected exactly one supervisor function marker'}
-if(($s.Split($success).Count-1) -ne 1){throw 'R348 expected exactly one post-install success marker'}
+if(([regex]::Matches($s,[regex]::Escape($anchor))).Count -ne 1){throw 'R348 expected exactly one supervisor function marker'}
+if(([regex]::Matches($s,[regex]::Escape($success))).Count -ne 1){throw 'R348 expected exactly one post-install success marker'}
 if($s.Contains('Invoke-R348StorageCleanup')){throw 'R348 already applied; refusing duplicate hook'}
 $newline=[Environment]::NewLine
 $s=$s.Replace($anchor,$source+$newline+$anchor)
