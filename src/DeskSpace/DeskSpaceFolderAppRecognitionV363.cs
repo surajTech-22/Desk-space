@@ -295,7 +295,8 @@ internal static class DeskSpaceFolderAppRecognitionV363
     // no arbitrary command line is accepted, and targets are revalidated.
     internal static bool TryOpen(Suggestion item,out string? error,
         Func<string,string?>? resolver=null,
-        Func<ProcessStartInfo,Process?>? processLauncher=null)
+        Func<ProcessStartInfo,Process?>? processLauncher=null,
+        Func<string,string?>? associationResolver=null)
     {
         error=null;
         try
@@ -336,14 +337,38 @@ internal static class DeskSpaceFolderAppRecognitionV363
             }
             else if(DeskSpaceAccountingFileRecognitionV364.IsVendor(item.AppId))
             {
-                // Verify both the original source and its vendor signature
-                // again at click time; no stale or forged shell command.
-                var signatures=isFolder?Recognize(folder):RecognizePath(target);
+                // The user's action is OPEN FILE, not LAUNCH APP or import.
+                // Tally company data are a multi-file database and Tally
+                // does not document a safe direct Windows "Open" handler
+                // for a Company.900/1800 shard. Never claim opening it
+                // succeeded or silently launch an unrelated company.
+                if(item.AppId is "TallyPrime" or "TallyERP")
+                    throw new IOException(
+                        "A Tally company database cannot be opened as a "+
+                        "single Windows file. Use Select Company in Tally.");
+                if(isFolder ||
+                   DeskSpaceAccountingFileRecognitionV364.IsVendorBackup(target))
+                    throw new IOException(
+                        "Winman backup/folder needs its own in-app file "+
+                        "selection. No data was changed.");
+                var signatures=RecognizePath(target);
                 if(!signatures.Any(x=>x.AppId==item.AppId))
-                    throw new IOException("The vendor file signature changed.");
-                if(!DeskSpaceAccountingFileRecognitionV364.TryBuildVendorStart(
-                    item,resolver??FindInstalledApp,out info) || info==null)
-                    throw new IOException("The required Tally or Winman application is not installed.");
+                    throw new IOException("The Winman file type changed.");
+                var expected=(resolver??FindInstalledApp)(item.AppId);
+                var associated=(associationResolver??
+                    DeskSpaceAccountingFileRecognitionV364.AssociatedExecutable)(target);
+                // Only the vendor's own registered Windows handler can
+                // open its file. Passing a .tax or .wgst to a guessed
+                // undocumented command line cannot be treated as success.
+                if(expected==null || associated==null ||
+                   !DeskSpaceAccountingFileRecognitionV364
+                       .IsValidVendorExecutable(expected,item.AppId) ||
+                   !Path.GetFullPath(expected).Equals(
+                       Path.GetFullPath(associated),
+                       StringComparison.OrdinalIgnoreCase))
+                    throw new IOException(
+                        "No verified Winman file-open association is installed.");
+                info=new ProcessStartInfo(target){UseShellExecute=true};
             }
             else
             {
