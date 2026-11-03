@@ -130,14 +130,16 @@ internal static class DeskSpaceFolderAppRecognitionV363
                 {
                     var file=docs[0];
                     var ext=Path.GetExtension(file).ToLowerInvariant();
-                    Add("Default","Windows default application",
+                    Add("Default",DeskSpaceAccountingFileRecognitionV364
+                        .AssociatedApplicationName(file),
                         "Document "+ext,file,Path.Combine(full,file));
                 }
                 else if(files.Count==1 &&
                     DeskSpaceAccountingFileRecognitionV364.SafeAssociation(files[0]))
                 {
                     var file=files[0];
-                    Add("Default","Windows default application",
+                    Add("Default",DeskSpaceAccountingFileRecognitionV364
+                        .AssociatedApplicationName(file),
                         "Registered file type "+Path.GetExtension(file),
                         file,Path.Combine(full,file));
                 }
@@ -178,7 +180,7 @@ internal static class DeskSpaceFolderAppRecognitionV363
             if(results.Count==0 &&
                 DeskSpaceAccountingFileRecognitionV364.SafeAssociation(full))
                 results.Add(new(folder,full,"Default",
-                    "Windows default application",
+                    DeskSpaceAccountingFileRecognitionV364.AssociatedApplicationName(full),
                     "File "+Path.GetExtension(full),
                     Path.GetFileName(full)));
             results.Add(new(folder,folder,"Explorer","File Explorer",
