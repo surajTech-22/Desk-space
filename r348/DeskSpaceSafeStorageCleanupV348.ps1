@@ -72,9 +72,15 @@ function Invoke-R348StorageCleanup {
                 $manifest=Join-Path $dir.FullName 'verified-manifest.json'
                 $oldExe=Join-Path $dir.FullName 'snapshot\DeskSpace.exe'
                 $failed=Join-Path $dir.FullName 'failed-install'
-                if((Test-Path -LiteralPath $failed) -or
-                   !(Test-R348PlainFile $manifest) -or
-                   !(Test-R348PlainFile $oldExe)) {continue}
+                if(Test-Path -LiteralPath $failed){
+                    $messages.Add('retained recovery quarantine: '+$dir.Name)
+                    continue
+                }
+                if(!(Test-R348PlainFile $manifest) -or
+                   !(Test-R348PlainFile $oldExe)){
+                    $messages.Add('retained rollback without verified snapshot/manifest: '+$dir.Name)
+                    continue
+                }
                 try {
                     # Never descend through a junction, symbolic link or
                     # unrecognized item inside any prior installation snapshot.
@@ -82,7 +88,7 @@ function Invoke-R348StorageCleanup {
                     $links=@($entries|Where-Object {
                         ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
                     })
-                    if($links.Count -ne 0){continue}
+                    if($links.Count -ne 0){$messages.Add('retained linked rollback: '+$dir.Name);continue}
                     # Windows PowerShell 5.1 can return a JSON array as a
                     # single object from ConvertFrom-Json. Unwrap that array
                     # before looking at manifest record properties.
@@ -94,7 +100,10 @@ function Invoke-R348StorageCleanup {
                     }
                     if($hashes.Count -lt 1 -or
                        !$hashes[0].PSObject.Properties['Path'] -or
-                       !$hashes[0].PSObject.Properties['Sha']){continue}
+                       !$hashes[0].PSObject.Properties['Sha']){
+                        $messages.Add('retained rollback with unrecognized manifest: '+$dir.Name)
+                        continue
+                    }
                     [long]$bytes=0
                     foreach($entry in $entries){if(!$entry.PSIsContainer){$bytes+=[long]$entry.Length}}
                     [void]$verified.Add([pscustomobject]@{
@@ -104,19 +113,30 @@ function Invoke-R348StorageCleanup {
                     $messages.Add('skipped unverifiable rollback '+$dir.Name)
                 }
             }
-            # Always preserve THREE prior verified snapshots, plus the current
-            # transaction (excluded above). Never prune any snapshot younger
-            # than 48 hours. Failed-install quarantines are never candidates.
+            # R358: preserve THREE prior verified snapshots plus current.
+            # Retain the most recent 12h as an additional installation
+            # recovery window, even if there are many old backups.
+            # Failed-install quarantines, symlinks, and unknowns are protected.
             $older=@($verified|Sort-Object -Property TimeUtc -Descending)
             $count=$older.Count
+            $messages.Add(('R358 rollback policy: {0} verified prior snapshots; '+
+                'keep 3 prior + current; protect snapshots under 12h old' -f $count))
+            for($i=0;$i -lt [Math]::Min(3,$count);$i++){
+                $messages.Add('retained newest verified rollback: '+$older[$i].Dir.Name)
+            }
             for($i=3;$i -lt $count;$i++){
                 $candidate=$older[$i]
-                if($candidate.TimeUtc -gt [DateTime]::UtcNow.AddHours(-48)){continue}
+                if($candidate.TimeUtc -gt [DateTime]::UtcNow.AddHours(-12)){
+                    $messages.Add('retained recent rollback (<12h): '+$candidate.Dir.Name)
+                    continue
+                }
                 if($Preview){$messages.Add('PREVIEW rollback '+$candidate.Dir.Name);continue}
                 try {
                     Remove-Item -LiteralPath $candidate.Dir.FullName -Recurse -Force -ErrorAction Stop
                     $snapshots++
                     $recovered+=$candidate.Bytes
+                    $messages.Add(('deleted expired verified rollback {0}: {1} MiB' -f
+                        $candidate.Dir.Name,[Math]::Round($candidate.Bytes/1MB,1)))
                 } catch {
                     $messages.Add('retained locked rollback '+$candidate.Dir.Name)
                 }
