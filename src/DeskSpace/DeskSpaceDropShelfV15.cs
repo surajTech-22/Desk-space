@@ -535,7 +535,13 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         e.Effects=DragDropEffects.Copy;
         e.Handled=true;
         var files=e.Data.GetData(DataFormats.FileDrop) as string[];
-        if(files?.Length>0)_=StageFilesAsync(files);
+        if(files?.Length>0)
+        {
+            // File drags are analyzed too, not just ZIP/Copy folder drops.
+            // Staging and the original drop effect remain unchanged.
+            SuggestFolderAppsV363(files);
+            _=StageFilesAsync(files);
+        }
     }
     private void SuggestFolderAppsV363(string[] dropped)
     {
@@ -543,13 +549,14 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         recognizedFolderV363=
             Array.Empty<DeskSpaceFolderAppRecognitionV363.Suggestion>();
         recognizedFolderErrorV363=null;
-        if(dropped.Length!=1 || !Directory.Exists(dropped[0]))
+        if(dropped.Length!=1 ||
+           (!Directory.Exists(dropped[0]) && !File.Exists(dropped[0])))
         {
             RefreshViews();
             return;
         }
-        string folder=dropped[0];
-        _=Task.Run(()=>DeskSpaceFolderAppRecognitionV363.Recognize(folder))
+        string source=dropped[0];
+        _=Task.Run(()=>DeskSpaceFolderAppRecognitionV363.RecognizePath(source))
             .ContinueWith(task=>{
                 if(task.IsCanceled || task.IsFaulted)return;
                 try
@@ -1559,21 +1566,26 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             };
             DockPanel.SetDock(dismiss,Dock.Right);
             top.Children.Add(dismiss);
-            var folderName=Path.GetFileName(match.Folder.TrimEnd(
-                Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
-            top.Children.Add(Text("Folder · "+folderName,11,Brushes.White));
+            bool targetIsFile=!string.Equals(match.Target,match.Folder,
+                StringComparison.OrdinalIgnoreCase);
+            var sourceName=targetIsFile?Path.GetFileName(match.Target):
+                Path.GetFileName(match.Folder.TrimEnd(
+                    Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
+            top.Children.Add(Text((targetIsFile?"File · ":"Folder · ")+
+                sourceName,11,Brushes.White));
             folderActions.Children.Add(top);
             folderActions.Children.Add(Text(
                 match.FolderKind+" · "+match.Evidence,10,Brushes.LightSteelBlue));
-            foreach(var choice in recognizedFolderV363.Take(3))
+            // Keep Explorer visible even for mixed Tally + Winman folders.
+            foreach(var choice in recognizedFolderV363.Take(5))
             {
                 bool available=DeskSpaceFolderAppRecognitionV363.IsAvailable(choice);
                 var action=new Button{
                     Content=choice.AppId=="Explorer"
                         ?"Open folder in Explorer"
                         :choice.AppId=="Default"
-                            ?"Open document with Windows default"
-                            :"Open with "+choice.AppName,
+                            ?"Open with Windows default application"
+                            :"Open "+choice.AppName,
                     IsEnabled=available,FontSize=11,
                     HorizontalContentAlignment=HorizontalAlignment.Left,
                     Padding=new Thickness(7,4,7,4),
