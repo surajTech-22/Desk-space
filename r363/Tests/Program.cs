@@ -68,8 +68,8 @@ internal static class Program
             var many=NewFolder(root,"ambiguous","Budget.xlsx","Other.xlsx");
             Check(Ids(many).SequenceEqual(new[]{"Explorer"}),
                   "ambiguous multi-document folder never chooses one file arbitrarily");
-            var unsafe=NewFolder(root,"unknown-exe","setup.exe","install.cmd");
-            Check(Ids(unsafe).SequenceEqual(new[]{"Explorer"}),
+            var unsafeFolder=NewFolder(root,"unknown-exe","setup.exe","install.cmd");
+            Check(Ids(unsafeFolder).SequenceEqual(new[]{"Explorer"}),
                   "unknown EXE/CMD in a folder is never proposed for execution");
             var empty=NewFolder(root,"empty");
             Check(Ids(empty).SequenceEqual(new[]{"Explorer"}),
