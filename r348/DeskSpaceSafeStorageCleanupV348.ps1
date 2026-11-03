@@ -81,11 +81,14 @@ function Invoke-R348StorageCleanup {
                     # Never descend through a junction, symbolic link or
                     # unrecognized item inside any prior installation snapshot.
                     $entries=@(Get-ChildItem -LiteralPath $dir.FullName -Force -Recurse -ErrorAction Stop)
-                    if(@($entries|Where-Object {
+                    $links=@($entries|Where-Object {
                         ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
-                    }).Count -ne 0){continue}
+                    })
+                    if($Preview){$messages.Add('DEBUG entries='+$entries.Count+' links='+$links.Count)}
+                    if($links.Count -ne 0){continue}
                     $hashes=@(Get-Content -LiteralPath $manifest -Raw -ErrorAction Stop |
                         ConvertFrom-Json -ErrorAction Stop)
+                    if($Preview){$messages.Add('DEBUG hashes count='+$hashes.Count+' names='+($hashes[0].PSObject.Properties.Name -join ','))}
                     if($hashes.Count -lt 1 -or
                        !$hashes[0].PSObject.Properties['Path'] -or
                        !$hashes[0].PSObject.Properties['Sha']){continue}
