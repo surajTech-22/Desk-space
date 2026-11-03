@@ -18,10 +18,8 @@ function One([string]$from,[string]$to,[string]$why) {
 }
 One @'
     private string[]? pendingFolderDrop;
-    private DeskSpaceFolderPreDropV256.Choice hoverChoiceV256;
 '@ @'
     private string[]? pendingFolderDrop;
-    private DeskSpaceFolderPreDropV256.Choice hoverChoiceV256;
     // WPF OLE DragLeave is also raised when Esc cancels an external drag
     // while the pointer is STILL within the circle. A short deferred reset
     // allows nested-element transitions to receive a new DragOver first.
@@ -125,9 +123,13 @@ One @'
         host.PreviewDragOver-=DragOver;
         host.PreviewDrop-=Receive;
 '@ 'unregister all drag handlers to avoid stale widget state'
-if(!$s.Contains('DeskSpaceFolderPreDropV256.Authorized(') -or
-   !$s.Contains('CommitFolderDropAsync(dropped,zip)')){
-    throw 'R359 must retain original folder pre-drop authorization and ZIP / Copy actions'
+# The shipped R232/356 application retains the original R160 ZIP/Copy
+# authorization and completion path. R359 must not introduce a new drop
+# engine or mistake later development-only R256 code for published code.
+if(!$s.Contains('CommitFolderDropAsync(') -or
+   !$s.Contains('private void Receive(object sender,DragEventArgs e)') -or
+   !$s.Contains('folderLayer.Remove(folderAdorner)')){
+    throw 'R359 must retain original folder ZIP / Copy handling'
 }
 [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
 Write-Host 'R359: Esc / abandoned folder drag returns ZIP/Copy overlay to normal circle after deferred DragLeave; valid drops unchanged.'
