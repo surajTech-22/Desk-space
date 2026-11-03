@@ -111,6 +111,29 @@ jobs:
             $status=Get-Content (Join-Path $downloads 'DeskSpace_RebootRecovery1127_Status.txt') -Raw
             if(!$status.Contains('INSTALLATION VERIFIED: 1.5.1127.0')){throw 'Resume completion missing in status log'}
             Write-Host 'R357 PASS: official checksum, backup verification, staging, scoped RunOnce and successful automatic restoration.'
+            # Repeat using the actual verified Inno Setup payload rather than
+            # only a simulated upgrade. This is an ephemeral Windows runner
+            # installation under the test root, not the user's computer.
+            Remove-ItemProperty -LiteralPath $runOnce -Name 'DeskSpace_Recovery1127' -ErrorAction SilentlyContinue
+            Copy-Item (Join-Path $backup 'DeskSpace.exe') $exe -Force
+            if([version](Get-Item $exe).VersionInfo.FileVersion -ge [version]'1.5.1127.0'){
+              throw 'Old-version fixture was not restored for actual installer test'
+            }
+            function Read-Host {param([string]$Prompt) return 'ONE-RESTART'}
+            & $script
+            Remove-Item Function:\Read-Host
+            if(!(Test-Path $state)){throw 'Actual installer attempt did not stage state'}
+            $priorExeVersion=[version](Get-Item $exe).VersionInfo.FileVersion
+            if($priorExeVersion -ne [version]'1.5.1124.0'){throw 'Staging unexpectedly modified installed EXE'}
+            & $resume -Resume
+            $installed=[version](Get-Item $exe).VersionInfo.FileVersion
+            if($installed -lt [version]'1.5.1127.0'){throw ('Official Inno Setup did not install expected version: '+$installed)}
+            if(Test-Path $state){throw 'Actual installer left active recovery state'}
+            $restoredAfter=(Get-ItemProperty -LiteralPath $run -Name 'DeskSpaceWidget' -ErrorAction Stop).DeskSpaceWidget
+            if($restoredAfter -ne $originalValue){throw 'Real install lost original DeskSpace startup preference'}
+            $innoLogs=@(Get-ChildItem $downloads -File -Filter 'DeskSpace_RebootRecovery1127_Inno_*.log' -ErrorAction Stop)
+            if($innoLogs.Count -lt 1){throw 'Native Inno Setup install log missing'}
+            Write-Host 'R357 ACTUAL INSTALL PASS: verified Inno Setup installer upgraded old fixture, restored Run key and produced install log.'
           } finally {
             $env:USERPROFILE=$oldUser
             $env:LOCALAPPDATA=$oldLocal
