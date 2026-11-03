@@ -287,6 +287,20 @@ internal static class DeskSpaceFolderAppRecognitionV363
         Func<string,string?>? resolver=null)
     {
         if(item.AppId is "Explorer" or "Default")return true;
+        if(item.AppId is "TallyPrime" or "TallyERP")return false;
+        if(DeskSpaceAccountingFileRecognitionV364.IsVendor(item.AppId))
+        {
+            if(item.Target.Equals(item.Folder,StringComparison.OrdinalIgnoreCase) ||
+               DeskSpaceAccountingFileRecognitionV364.IsVendorBackup(item.Target))
+                return false;
+            // Windows file registration, not an inferred WinTax command,
+            // determines whether this actual Winman file can be opened.
+            var associated=DeskSpaceAccountingFileRecognitionV364
+                .AssociatedExecutable(item.Target);
+            return associated!=null &&
+                DeskSpaceAccountingFileRecognitionV364
+                    .IsValidVendorExecutable(associated,item.AppId);
+        }
         return (resolver??FindInstalledApp)(item.AppId)!=null;
     }
 
@@ -361,9 +375,12 @@ internal static class DeskSpaceFolderAppRecognitionV363
                 var signatures=RecognizePath(target);
                 if(!signatures.Any(x=>x.AppId==item.AppId))
                     throw new IOException("The Winman file type changed.");
-                var expected=(resolver??FindInstalledApp)(item.AppId);
                 var associated=(associationResolver??
                     DeskSpaceAccountingFileRecognitionV364.AssociatedExecutable)(target);
+                // The actual registered handler may be installed on D: or
+                // another user-chosen volume, not just a conventional C:
+                // program folder. The Windows association is authoritative.
+                var expected=resolver!=null?resolver(item.AppId):associated;
                 // Only the vendor's own registered Windows handler can
                 // open its file. Passing a .tax or .wgst to a guessed
                 // undocumented command line cannot be treated as success.
