@@ -91,8 +91,9 @@ One $app @'
             Environment.Exit(0);
         }
 '@ 'final cooperative process exit after normal App.OnExit'
-if([IO.File]::ReadAllText($app).Contains('Process.Kill') -or
-   [IO.File]::ReadAllText($close).Contains('Process.Kill')){
+# Reject executable Process.Kill() invocations, not safety comments.
+if(([regex]::Matches([IO.File]::ReadAllText($app),'(?m)^\\s*(?!//)[^\\r\\n]*\\bProcess\\.Kill\\s*\\(')).Count -gt 0 -or
+   ([regex]::Matches([IO.File]::ReadAllText($close),'(?m)^\\s*(?!//)[^\\r\\n]*\\bProcess\\.Kill\\s*\\(')).Count -gt 0){
     throw 'R355 forbids arbitrary process termination'
 }
 Write-Host 'R355: close consent and App.OnExit complete before any process exit; duplicate widget-host exits without user state.'
