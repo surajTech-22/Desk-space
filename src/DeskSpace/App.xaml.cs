@@ -45,9 +45,26 @@ public partial class App : Application
             widgetMutex=new Mutex(true,@"Local\DeskSpace.WidgetHost.v3",out var first);
             if(!first)
             {
-                try { using var client = new System.IO.Pipes.NamedPipeClientStream(".", "DeskSpace.Widget.V3", System.IO.Pipes.PipeDirection.Out); client.Connect(400); client.WriteByte(1); client.Flush(); } catch { }
-                Shutdown(); return;
+                var outcome=DeskSpaceWidgetStartupV361.ResolveExisting(
+                    widgetMutex,"DeskSpace.Widget.V3");
+                if(outcome!=DeskSpaceWidgetStartupV361.Outcome.BecameOwner)
+                {
+                    if(outcome==DeskSpaceWidgetStartupV361.Outcome.UnresponsiveExisting)
+                    {
+                        widgetMutex.Dispose();
+                        widgetMutex=null;
+                        DeskSpaceStartupFallbackV276.Show(
+                            "Another DeskSpace widget process is running "+
+                            "but did not respond to the startup command. "+
+                            "No running processes or saved data were changed.");
+                        return;
+                    }
+                    Shutdown(0);
+                    Environment.Exit(0);
+                    return;
+                }
             }
+            else DeskSpaceWidgetStartupV361.Audit("fresh widget mutex acquired");
             // Persist the short-start marker before widget/tray creation.
             // Failure in the constructor now contributes to safe recovery.
             DeskSpaceStartupRecoveryV183.BeginEarly();
@@ -56,6 +73,7 @@ public partial class App : Application
                 var window=new WidgetShellWindow();
                 MainWindow=window;
                 window.Show();
+                DeskSpaceWidgetStartupV361.Audit("widget window shown");
                 widgetStarted=true;
             }
             catch(Exception ex) when(ex is IOException or
@@ -67,6 +85,8 @@ public partial class App : Application
             {
                 Debug.WriteLine("DeskSpace widget early startup failed: "+
                     ex.GetType().Name);
+                DeskSpaceWidgetStartupV361.Audit(
+                    "widget construction failed: "+ex.GetType().Name);
                 // Keep a usable, single-instance recovery window and tray
                 // without deleting settings or entering a relaunch storm.
                 DeskSpaceStartupFallbackV276.Show(ex.GetType().Name);
