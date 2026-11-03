@@ -38,11 +38,11 @@ internal static class DeskSpaceStorageMaintenanceV351
             if (stream == null) return;
             using var reader = new StreamReader(stream, Encoding.UTF8);
             var source = reader.ReadToEnd();
-            if (!source.Contains("R351_GUARDED_HELPERS",
+            // The build replaces its source placeholder with reviewed
+            // helper definitions; validate the EMBEDDED functions themselves.
+            if (!source.Contains("function Invoke-R348StorageCleanup",
                     StringComparison.Ordinal) ||
-                !source.Contains("Invoke-R348StorageCleanup",
-                    StringComparison.Ordinal) ||
-                !source.Contains("Invoke-R351StagedInstallerRetention",
+                !source.Contains("function Invoke-R351StagedInstallerRetention",
                     StringComparison.Ordinal)) return;
             var folder = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
