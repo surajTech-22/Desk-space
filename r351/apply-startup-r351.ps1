@@ -19,7 +19,7 @@ $helper=([IO.File]::ReadAllText('r348/DeskSpaceSafeStorageCleanupV348.ps1'))+
 $joined=$original.Replace($marker,$helper)
 [IO.File]::WriteAllText($scriptFile,$joined,[Text.UTF8Encoding]::new($false))
 $tokens=$null;$errors=$null
-[void][Management.Automation.Language.Parser]::ParseFile($scriptFile,[ref]$tokens,[ref]$errors)
+[void][System.Management.Automation.Language.Parser]::ParseFile($scriptFile,[ref]$tokens,[ref]$errors)
 if($errors.Count -ne 0){throw ('R351 post-launch script syntax: '+($errors|Out-String))}
 Copy-Item 'r351/DeskSpaceStorageMaintenanceV351.cs' $worker -Force
 function One([string]$path,[string]$old,[string]$replacement,[string]$label){
