@@ -1,0 +1,126 @@
+name: R357 one-restart DeskSpace recovery Windows validation
+on:
+  push:
+    branches: [maintenance/r357-one-restart-recovery]
+    paths:
+      - maintenance/R357_OneRestart_Recovery_1127.ps1
+      - .github/workflows/test-r357-reboot-recovery.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recovery-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse exact Windows PowerShell 5.1 recovery script
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $path='maintenance/R357_OneRestart_Recovery_1127.ps1'
+          $tokens=$null;$errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path).Path,[ref]$tokens,[ref]$errors)
+          if($errors.Count){throw ($errors|Out-String)}
+          $s=Get-Content $path -Raw
+          foreach($required in @(
+            "Get-FileHash -LiteralPath $",
+            'Expected',
+            'ONE-RESTART',
+            'DeskSpace_Recovery1127',
+            'Restore $state',
+            'RunOnce',
+            "WaitForExit(240000)",
+            'No processes terminated. No reboot forced.'
+          )){
+            if(!$s.Contains($required)){throw ('R357 required safety gate missing: '+$required)}
+          }
+          if($s.Contains('Stop-Process') -or $s.Contains('Restart-Computer') -or
+             $s.Contains('taskkill.exe') -or $s.Contains('Process.Kill(')){
+            throw 'R357 must not force-end processes or forcibly restart Windows'
+          }
+          Write-Host 'R357 PASS: parsed with Windows PowerShell 5.1; scoped startup, no force termination/reboot.'
+      - name: End-to-end isolated staging and startup restoration without reboot
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $script=(Resolve-Path 'maintenance/R357_OneRestart_Recovery_1127.ps1').Path
+          $oldUser=$env:USERPROFILE
+          $oldLocal=$env:LOCALAPPDATA
+          $run='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          $runOnce='HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+          $prior=$null
+          $priorOnce=$null
+          if(Test-Path $run){$prior=Get-ItemProperty -LiteralPath $run -Name 'DeskSpaceWidget' -ErrorAction SilentlyContinue}
+          if(Test-Path $runOnce){$priorOnce=Get-ItemProperty -LiteralPath $runOnce -Name 'DeskSpace_Recovery1127' -ErrorAction SilentlyContinue}
+          $sandbox=Join-Path $env:RUNNER_TEMP ('R357-'+[guid]::NewGuid().ToString('N'))
+          try {
+            $env:USERPROFILE=Join-Path $sandbox 'User'
+            $env:LOCALAPPDATA=Join-Path $sandbox 'Local'
+            $program=Join-Path $env:LOCALAPPDATA 'Programs\DeskSpace'
+            $downloads=Join-Path $env:USERPROFILE 'Downloads'
+            $stage=Join-Path $env:LOCALAPPDATA 'DeskSpace\Updates\tester-v1.5.1127'
+            $backup=Join-Path $downloads 'DeskSpace_ProgramBackup_Pre1127_20261103-132246'
+            foreach($path in @($program,$downloads,$stage,$backup)){
+              New-Item -ItemType Directory -Force -Path $path|Out-Null
+            }
+            $exe=Join-Path $program 'DeskSpace.exe'
+            $vOld=@'
+          using System.Reflection;
+          [assembly: AssemblyVersion("1.5.1124.0")]
+          [assembly: AssemblyFileVersion("1.5.1124.0")]
+          public class Program { public static int Main(){return 0;} }
+          '@
+            Add-Type -TypeDefinition $vOld -OutputType ConsoleApplication -OutputAssembly $exe
+            Copy-Item $exe (Join-Path $backup 'DeskSpace.exe') -Force
+            $installer=Join-Path $stage 'DeskSpace_Setup.exe'
+            Invoke-WebRequest -Uri 'https://github.com/surajTech-22/Desk-space/releases/download/tester-v1.5.1127/DeskSpace_Setup.exe' -UseBasicParsing -OutFile $installer -TimeoutSec 300
+            $sha=(Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+            if($sha -ne '78b06e7188eda893f03ad780ad20f80364ab6ae0fba122a3b12c2bbd3ce9e309'){throw 'Official installer checksum mismatch'}
+            New-Item -Path $run -Force|Out-Null
+            $originalValue='"'+$exe+'" --widget-host'
+            New-ItemProperty -Path $run -Name 'DeskSpaceWidget' -PropertyType String -Value $originalValue -Force|Out-Null
+            function Read-Host {param([string]$Prompt) return 'ONE-RESTART'}
+            & $script
+            Remove-Item Function:\Read-Host
+            $state=Join-Path $env:LOCALAPPDATA 'DeskSpace\Maintenance\DeskSpace_1127_ResumeState.json'
+            if(!(Test-Path $state)){throw 'Recovery did not stage its private JSON state'}
+            if((Get-ItemProperty -LiteralPath $run -Name 'DeskSpaceWidget' -ErrorAction SilentlyContinue)){
+              throw 'Recovery did not temporarily suspend DeskSpace-only autostart'
+            }
+            $resume=Join-Path $env:LOCALAPPDATA 'DeskSpace\Maintenance\DeskSpace_1127_Resume.ps1'
+            if(!(Test-Path $resume)){throw 'Recovery staged script missing'}
+            $runOnceEntry=Get-ItemProperty -LiteralPath $runOnce -Name 'DeskSpace_Recovery1127' -ErrorAction Stop
+            if(!$runOnceEntry.DeskSpace_Recovery1127.Contains('-Resume')){throw 'Recovery RunOnce lacks resume action'}
+            # Simulate a fully upgraded program without invoking the real
+            # installer in the runner's user profile. Verify restoration logic.
+            $newExe=$exe+'.new'
+            $vNew=@'
+          using System.Reflection;
+          [assembly: AssemblyVersion("1.5.1127.0")]
+          [assembly: AssemblyFileVersion("1.5.1127.0")]
+          public class Program { public static int Main(){return 0;} }
+          '@
+            Add-Type -TypeDefinition $vNew -OutputType ConsoleApplication -OutputAssembly $newExe
+            Move-Item $newExe $exe -Force
+            & $resume -Resume
+            if(Test-Path $state){throw 'Successful resume left active recovery state'}
+            $restored=(Get-ItemProperty -LiteralPath $run -Name 'DeskSpaceWidget' -ErrorAction Stop).DeskSpaceWidget
+            if($restored -ne $originalValue){throw 'Original startup value not restored exactly'}
+            $status=Get-Content (Join-Path $downloads 'DeskSpace_RebootRecovery1127_Status.txt') -Raw
+            if(!$status.Contains('INSTALLATION VERIFIED: 1.5.1127.0')){throw 'Resume completion missing in status log'}
+            Write-Host 'R357 PASS: official checksum, backup verification, staging, scoped RunOnce and successful automatic restoration.'
+          } finally {
+            $env:USERPROFILE=$oldUser
+            $env:LOCALAPPDATA=$oldLocal
+            Remove-ItemProperty -LiteralPath $runOnce -Name 'DeskSpace_Recovery1127' -ErrorAction SilentlyContinue
+            Remove-ItemProperty -LiteralPath $run -Name 'DeskSpaceWidget' -ErrorAction SilentlyContinue
+            if($null -ne $prior -and $null -ne $prior.DeskSpaceWidget){
+              New-ItemProperty -Path $run -Name 'DeskSpaceWidget' -Value $prior.DeskSpaceWidget -Force|Out-Null
+            }
+            if($null -ne $priorOnce -and $null -ne $priorOnce.DeskSpace_Recovery1127){
+              New-ItemProperty -Path $runOnce -Name 'DeskSpace_Recovery1127' -Value $priorOnce.DeskSpace_Recovery1127 -Force|Out-Null
+            }
+            Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+          }
