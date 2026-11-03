@@ -371,7 +371,7 @@ jobs:
           dotnet run --project 'r363/Tests/FolderAppRecognitionTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R363 native folder application recognition tests failed'}
           $deck=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
-          foreach($required in @('SuggestFolderAppsV363(dropped)','DeskSpaceFolderAppRecognitionV363.Recognize(folder)','DeskSpaceFolderAppRecognitionV363.TryOpen(choice,out var error)','CommitFolderDropAsync(dropped,zip)')){
+          foreach($required in @('SuggestFolderAppsV363(sources)','DeskSpaceFolderAppRecognitionV363.Recognize(folder)','DeskSpaceFolderAppRecognitionV363.TryOpen(choice,out var error)','CommitFolderDropAsync(sources,zip)')){
             if(!$deck.Contains($required)){throw ('R363 missing from shipping WPF Deck: '+$required)}
           }
           $app=Get-Content 'DeskSpace_Windows_R1/DeskSpace/App.xaml.cs' -Raw
