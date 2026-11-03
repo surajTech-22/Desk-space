@@ -12,6 +12,7 @@ on:
       - r344/**
       - r345/**
       - r346/**
+      - r348/**
       - release/batches/R329-feature-batch.json
       - r337/**
       - r330/DeskSpaceDiskSearchV330.cs
@@ -213,6 +214,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R310 safe supervisor busy handoff patch failed'}
           & ./r316/apply-r316.ps1
           if(!$?){throw 'R316 supervisor acknowledgement patch failed'}
+          & ./r348/apply-r348.ps1
+          if(!$?){throw 'R348 post-install cache retention integration failed'}
           $updater=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpacePublicUpdaterV44.cs' -Raw
           foreach($guard in @('SupervisorBusyV310Exception','handoffNonceV316',
                  'DeskSpaceVerifiedUpdateQueueV191.Stage(')){
@@ -356,6 +359,8 @@ jobs:
           if(!$?){throw 'R312 process wait regression failed'}
           & ./r316/test-r316.ps1
           if(!$?){throw 'R316 mutex-owner acceptance and PowerShell syntax regression failed'}
+          & ./r348/test-r348.ps1
+          if(!$?){throw 'R348 cache/rollback retention tests failed'}
           dotnet run --project 'r310/StableTests/SupervisorBusyStableTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R310 native Windows supervisor contention/duplicate handoff test failed'}
           dotnet run --project 'r318/StableTests/DeckFitContentTests.csproj' -c Release
