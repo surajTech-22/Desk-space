@@ -101,7 +101,7 @@ internal static class Program
 
             ProcessStartInfo? docCommand=null;
             bool documentOpened=Recognizer.TryOpen(Pick(excel,"Default"),
-                out error,null,info=>{docCommand=info;return null;});
+                out error,null,info=>{docCommand=info;return null;},_=>dummy);
             Check(documentOpened&&docCommand!=null&&docCommand.UseShellExecute &&
                   docCommand.FileName==Path.Combine(excel,"Budget.xlsx"),
                   "explicit document action uses Windows default association");
