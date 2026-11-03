@@ -1,0 +1,42 @@
+name: R361 checked-in startup source native WPF build
+on:
+  push:
+    branches: [fix/r361-sync-checked-in-startup]
+    paths:
+      - src/DeskSpace/App.xaml.cs
+      - src/DeskSpace/DeskSpaceWidgetStartupV361.cs
+      - .github/workflows/test-r361-source-sync.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sync-check:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile normal DeskSpace source with startup fix
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build 'src/DeskSpace/DeskSpace.csproj' -c Release --nologo
+          if($LASTEXITCODE -ne 0){throw 'R361 direct WPF app source failed to compile'}
+      - name: Repeat Windows live mutex and named-pipe acceptance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --project 'r361/Tests/DeskSpaceWidgetStartupV361Tests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R361 kernel startup regression'}
+      - name: Preserve original user Exit and crash-loop safe-mode behavior
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $app=Get-Content 'src/DeskSpace/App.xaml.cs' -Raw
+          foreach($token in @('DeskSpaceWidgetExitV286.Dismissed','DeskSpaceStartupRecoveryV183.BeginEarly();','DeskSpaceStartupFallbackV276.Show','DeskSpaceWidgetStartupV361.ResolveExisting','widgetStarted=true;')){
+            if(!$app.Contains($token)){throw ('R361 source startup safety missing: '+$token)}
+          }
+          if($app.Contains('Stop-Process') -or $app.Contains('Process.GetCurrentProcess().Kill(')){throw 'R361 must not force-stop widget processes'}
+          Write-Host 'R361 PASS: original tray Exit, crash-loop and fallback retained in normal source.'
