@@ -160,7 +160,7 @@ internal static class Program
             var csv=Path.Combine(baseDir,"generic-csv","item.csv");
             started=null;
             Assert(Recognizer.TryOpen(Match(csv,"Default"),out err,null,
-                p=>{started=p;return null;}) &&
+                p=>{started=p;return null;},_=>ca) &&
                 started?.UseShellExecute==true&&started.FileName==csv,
                 "unknown but nonexecutable file passes only to Windows file association after click");
 
