@@ -64,7 +64,6 @@ function Invoke-R348StorageCleanup {
         $rootItem=Get-Item -LiteralPath $rb -Force
         if(($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
             $verified=New-Object System.Collections.ArrayList
-            if($Preview){$messages.Add('DEBUG found dirs '+@(Get-ChildItem -LiteralPath $rb -Force -Directory).Count)}
             foreach($dir in @(Get-ChildItem -LiteralPath $rb -Force -Directory -ErrorAction Stop)){
                 if($dir.Name -notmatch '^[0-9a-fA-F]{32}$' -or
                    ($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
@@ -73,7 +72,6 @@ function Invoke-R348StorageCleanup {
                 $manifest=Join-Path $dir.FullName 'verified-manifest.json'
                 $oldExe=Join-Path $dir.FullName 'snapshot\DeskSpace.exe'
                 $failed=Join-Path $dir.FullName 'failed-install'
-                if($Preview){$messages.Add('DEBUG candidate '+$dir.Name+' manifest='+(Test-R348PlainFile $manifest)+' exe='+(Test-R348PlainFile $oldExe)+' failed='+(Test-Path -LiteralPath $failed))}
                 if((Test-Path -LiteralPath $failed) -or
                    !(Test-R348PlainFile $manifest) -or
                    !(Test-R348PlainFile $oldExe)) {continue}
@@ -84,17 +82,21 @@ function Invoke-R348StorageCleanup {
                     $links=@($entries|Where-Object {
                         ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
                     })
-                    if($Preview){$messages.Add('DEBUG entries='+$entries.Count+' links='+$links.Count)}
                     if($links.Count -ne 0){continue}
-                    $hashes=@(Get-Content -LiteralPath $manifest -Raw -ErrorAction Stop |
-                        ConvertFrom-Json -ErrorAction Stop)
-                    if($Preview){$messages.Add('DEBUG hashes count='+$hashes.Count+' names='+($hashes[0].PSObject.Properties.Name -join ','))}
+                    # Windows PowerShell 5.1 can return a JSON array as a
+                    # single object from ConvertFrom-Json. Unwrap that array
+                    # before looking at manifest record properties.
+                    $parsed=Get-Content -LiteralPath $manifest -Raw -ErrorAction Stop |
+                        ConvertFrom-Json -ErrorAction Stop
+                    [object[]]$hashes=@($parsed)
+                    if($hashes.Count -eq 1 -and $hashes[0] -is [array]){
+                        $hashes=[object[]]$hashes[0]
+                    }
                     if($hashes.Count -lt 1 -or
                        !$hashes[0].PSObject.Properties['Path'] -or
                        !$hashes[0].PSObject.Properties['Sha']){continue}
                     [long]$bytes=0
                     foreach($entry in $entries){if(!$entry.PSIsContainer){$bytes+=[long]$entry.Length}}
-                    if($Preview){$messages.Add('DEBUG validated '+$dir.Name+' hashes='+$hashes.Count)}
                     [void]$verified.Add([pscustomobject]@{
                         Dir=$dir;Bytes=$bytes;TimeUtc=$dir.CreationTimeUtc
                     })
@@ -107,7 +109,6 @@ function Invoke-R348StorageCleanup {
             # than 48 hours. Failed-install quarantines are never candidates.
             $older=@($verified|Sort-Object -Property TimeUtc -Descending)
             $count=$older.Count
-            if($Preview){$messages.Add('DEBUG verified='+$count)}
             for($i=3;$i -lt $count;$i++){
                 $candidate=$older[$i]
                 if($candidate.TimeUtc -gt [DateTime]::UtcNow.AddHours(-48)){continue}
