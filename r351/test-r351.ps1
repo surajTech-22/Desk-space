@@ -11,7 +11,7 @@ try {
     $env:LOCALAPPDATA=$temp
     $updates=Join-Path $temp 'DeskSpace\Updates'
     $exe=Join-Path $temp 'Programs\DeskSpace\DeskSpace.exe'
-    New-Item -ItemType Directory -Force $updates,(Split-Path -Parent $exe)|Out-Null
+    New-Item -ItemType Directory -Force -Path @($updates,(Split-Path -Parent $exe)) | Out-Null
     [IO.File]::WriteAllText($exe,'fixture exe')
     $script:otherProcess=$false
     function Get-CimInstance {
@@ -79,8 +79,7 @@ try {
     Assert-R351 ($again.Bytes -eq 0 -and $again.Removed -eq 0) 'cleanup not idempotent'
     $wrong=$false
     try {
-        [void](Invoke-R351StagedInstallerRetention -UpdatesRoot
-            (Join-Path $temp 'Other\Updates') -CurrentExe $exe)
+        [void](Invoke-R351StagedInstallerRetention -UpdatesRoot (Join-Path $temp 'Other\Updates') -CurrentExe $exe)
     }catch{$wrong=$true}
     Assert-R351 $wrong 'wrong root accepted'
     Write-Host 'R351 PASS: pending update, foreign process, preview, old installers, partial downloads, custom/recovery/manual protections, scope and idempotence.'
