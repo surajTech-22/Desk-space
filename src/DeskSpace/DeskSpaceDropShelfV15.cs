@@ -1584,7 +1584,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                     Content=choice.AppId=="Explorer"
                         ?"Open folder in Explorer"
                         :choice.AppId=="Default"
-                            ?"Open with Windows default application"
+                            ?"Open with "+choice.AppName
                             :"Open "+choice.AppName,
                     IsEnabled=available,FontSize=11,
                     HorizontalContentAlignment=HorizontalAlignment.Left,
