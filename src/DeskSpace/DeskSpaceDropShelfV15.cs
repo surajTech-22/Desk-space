@@ -473,7 +473,10 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             }
         }
         if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
-        e.Effects=(busy||disposed||held.Count>=25)?DragDropEffects.None:DragDropEffects.Copy;
+        var direct=e.Data.GetData(DataFormats.FileDrop) as string[];
+        // A file OPEN does not consume shelf capacity or need a copy slot.
+        e.Effects=!disposed && direct?.Length==1 && File.Exists(direct[0])
+            ?DragDropEffects.Link:DragDropEffects.None;
         e.Handled=true;
     }
     private void Receive(object sender,DragEventArgs e)
@@ -531,15 +534,15 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             }
         }
         if(!e.Data.GetDataPresent(DataFormats.FileDrop))return;
-        // Never claim a drop succeeded if a copy is already in progress or
-        // the shelf is full. Leave the new-file suggestion available to retry.
-        if(disposed||busy||held.Count>=25)
+        // File OPEN is independent of ZIP/Copy shelf capacity. The drop
+        // never writes to the shelf, so do not block at 25 saved items.
+        if(disposed)
         {
             e.Effects=DragDropEffects.None;
             e.Handled=true;
             return;
         }
-        e.Effects=DragDropEffects.Copy;
+        e.Effects=DragDropEffects.None;
         e.Handled=true;
         var files=e.Data.GetData(DataFormats.FileDrop) as string[];
         if(files?.Length==1 && File.Exists(files[0]))
