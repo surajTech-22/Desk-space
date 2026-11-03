@@ -47,7 +47,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $s=Get-Content 'r364/apply-r364.ps1' -Raw
-          foreach($token in @('DeskSpaceFolderAppRecognitionV363.RecognizePath(source)','CommitFolderDropAsync(sources,zip)','SuggestFolderAppsV363(files)','Winman','DeskSpaceDropShelfV15.cs')){
+          foreach($token in @('DeskSpaceFolderAppRecognitionV363.RecognizePath(source)','CommitFolderDropAsync(sources,zip)','TryDirectOpenDroppedPathV365(files[0])','Winman','DeskSpaceDropShelfV15.cs')){
             if(!$s.Contains($token)){throw ('R364 shipping source anchor missing '+$token)}
           }
           $c=Get-Content 'src/DeskSpace/DeskSpaceAccountingFileRecognitionV364.cs' -Raw
