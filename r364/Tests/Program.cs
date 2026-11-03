@@ -101,33 +101,48 @@ internal static class Program
             var tallyExe=Path.Combine(vendorApps,"TallyPrime.exe");
             File.WriteAllBytes(tallyExe,new byte[]{0,1,2,3});
             var tallyChoice=Match(prime,"TallyPrime");
-            Assert(!Recognizer.IsAvailable(tallyChoice,_=>null),
-                "vendor action disabled when required application is not installed");
-            Assert(Recognizer.IsAvailable(tallyChoice,_=>tallyExe),
-                "vendor action enabled for an installed known EXE");
-            ProcessStartInfo? started=null;
-            Assert(Recognizer.TryOpen(tallyChoice,out var err,_=>tallyExe,
-                p=>{started=p;return null;})&&err==null,
-                "Tally choice launches only after explicit action");
-            Assert(started!=null&&started.FileName==tallyExe&&
-                started.ArgumentList.Count==0&&
-                started.WorkingDirectory==vendorApps&&!started.UseShellExecute,
-                "Tally launches without any raw company data path or import argument");
-            Assert(!Recognizer.TryOpen(tallyChoice,out err,_=>null,_=>null),
-                "Tally choice refuses to open when missing");
+            int launches=0;
+            Assert(!Recognizer.TryOpen(tallyChoice,out var err,_=>tallyExe,
+                p=>{launches++;return null;}) &&
+                launches==0 && err!.Contains("cannot be opened"),
+                "Tally database shard cannot pretend it was directly file-opened; no app launched");
 
+            // Windows itself handles a registered vendor file-open action.
+            // Inject the registered association and process launcher; tests
+            // never execute the fake Winman program or mutate the .tax file.
             var ca=Path.Combine(vendorApps,"WinTax.exe");
             File.WriteAllBytes(ca,new byte[]{1,2,3});
+            ProcessStartInfo? started=null;
+            var gstFile=Match(Path.Combine(winman,"GST_Client.wgst"),"WinmanGST");
+            Assert(Recognizer.TryOpen(gstFile,out err,_=>ca,
+                p=>{started=p;launches++;return null;},_=>ca) &&
+                err==null&&started?.UseShellExecute==true &&
+                started.FileName==gstFile.Target &&
+                started.ArgumentList.Count==0,
+                "Winman .wgst opens the ACTUAL file using verified Windows registered handler");
             started=null;
-            Assert(Recognizer.TryOpen(Match(winman,"WinmanGST"),out err,
-                _=>ca,p=>{started=p;return null;}) &&
-                started?.FileName==ca&&started.ArgumentList.Count==0,
-                "Winman GST opens vendor application without importing .wgst");
+            var taxFile=Match(Path.Combine(winman,"Customer.tax"),"WinmanCAERP");
+            Assert(Recognizer.TryOpen(taxFile,out err,_=>ca,
+                p=>{started=p;return null;},_=>ca) &&
+                started?.FileName==taxFile.Target &&
+                started.UseShellExecute,
+                "Winman .tax opens selected source file, not merely Winman main window");
+            Assert(!Recognizer.TryOpen(taxFile,out err,_=>ca,_=>null,_=>null) &&
+                err!.Contains("verified Winman file-open association"),
+                "unregistered Winman handler cannot be guessed or launched");
+            var badAssociation=Path.Combine(vendorApps,"Other.exe");
+            File.WriteAllBytes(badAssociation,new byte[]{1});
+            Assert(!Recognizer.TryOpen(taxFile,out err,_=>ca,_=>null,
+                _=>badAssociation),
+                "wrong Windows association cannot launch an unrelated application");
             started=null;
-            Assert(Recognizer.TryOpen(Match(backup,"WinmanCAERP"),out err,
-                _=>ca,p=>{started=p;return null;}) &&
-                started?.ArgumentList.Count==0,
-                "Winman backup action does not run restore/rename or pass .wb as an argument");
+            Assert(!Recognizer.TryOpen(Match(Path.Combine(backup,"Client.tax.wb"),
+                "WinmanCAERP"),out err,_=>ca,
+                p=>{started=p;return null;},_=>ca) &&
+                started==null,
+                "Winman backup cannot trigger a file-open/restore action");
+            Assert(!Recognizer.TryOpen(tallyChoice,out err,_=>null,_=>null),
+                "Tally company cannot silently import or launch in place of file opening");
             var wrongTds=Path.Combine(baseDir,"Unrelated Program","TDS.exe");
             Directory.CreateDirectory(Path.GetDirectoryName(wrongTds)!);
             File.WriteAllBytes(wrongTds,new byte[]{1,2,3});
