@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
 $window=Join-Path $root 'MainWindow.xaml'
 $palette=Join-Path $root 'DeskSpaceActionPaletteV197.cs'
-foreach($path in @($window,$palette)){
+foreach($path in @($window,$palette)) {
     if(!(Test-Path -LiteralPath $path)){throw ('R349 missing actual shipping source '+$path)}
 }
 $lf=[string][char]10
@@ -14,62 +14,150 @@ function One([string]$path,[string]$old,[string]$replacement,[string]$name) {
     $replacement=$replacement.Replace($crlf,$lf)
     $matches=([regex]::Matches($s,[regex]::Escape($old))).Count
     if($matches -ne 1){throw "R349 $name must match exactly once; found $matches"}
-    $s=$s.Replace($old,$replacement)
-    [IO.File]::WriteAllText($path,$s,[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($path,$s.Replace($old,$replacement),
+        [Text.UTF8Encoding]::new($false))
 }
-Write-Host 'R349 SHIPPING XAML HEADER';Get-Content -LiteralPath $window -TotalCount 130 | ForEach-Object {Write-Host $_}
-Write-Host 'R349 SHIPPING PALETTE WINDOW';Select-String -LiteralPath $palette -Pattern 'Title=','DockPanel','Text="DeskSpace','var input=','item=new ListBoxItem' | ForEach-Object {Write-Host $_.Line}
-# Only presentation. XAML element names and Click/Closing handlers are preserved.
-One $window 'Title="DeskSpace — Workspace" Width="1120" Height="760" MinWidth="760" MinHeight="520"' 'Title="DeskSpace — Control Center" Width="1240" Height="810" MinWidth="780" MinHeight="560"' 'native resizable workspace dimensions'
-One $window 'Closing="MainWindow_Closing" Background="#101829"' 'Closing="MainWindow_Closing" Background="#0D1423"' 'deep navy canvas'
-One $window '<Setter Property="Background" Value="#293A5C"/>' '<Setter Property="Background" Value="#233754"/>' 'button restyle'
-One $window '<Setter Property="BorderBrush" Value="#4F648A"/>' '<Setter Property="BorderBrush" Value="#496787"/>' 'button border'
-One $window '<Setter Property="MinHeight" Value="33"/>' '<Setter Property="MinHeight" Value="36"/>' 'button hit area'
-One $window '<Setter TargetName="chrome" Property="Background" Value="#3E5280"/>' '<Setter TargetName="chrome" Property="Background" Value="#385C83"/>' 'button pointer feedback'
-One $window '<Setter TargetName="chrome" Property="BorderBrush" Value="#A5B7FF"/>' '<Setter TargetName="chrome" Property="BorderBrush" Value="#89D6E9"/>' 'keyboard focus feedback'
-One $window '<Setter Property="Background" Value="#253550"/>' '<Setter Property="Background" Value="#1C2E49"/>' 'input surface'
-One $window '<Setter Property="Background" Value="#19253E"/>' '<Setter Property="Background" Value="#15233A"/>' 'list surface'
-One $window '<Border DockPanel.Dock="Top" Padding="23,15"
-            BorderBrush="#465A82" BorderThickness="0,0,0,1">' @'
-<Border DockPanel.Dock="Top" Padding="26,18"
-            BorderBrush="#36587E" BorderThickness="0,0,0,1">
-'@ 'masthead spacing and divider'
-One $window '<GradientStop Color="#172544" Offset="0"/>' '<GradientStop Color="#101D33" Offset="0"/>' 'masthead left'
-One $window '<GradientStop Color="#273B65" Offset=".66"/>' '<GradientStop Color="#1C3958" Offset=".66"/>' 'masthead center'
-One $window '<GradientStop Color="#352D66" Offset="1"/>' '<GradientStop Color="#263F63" Offset="1"/>' 'masthead right'
-One $window '<TextBlock Text="◈  DeskSpace" FontSize="25" FontWeight="Bold" Foreground="#F7FAFF"/>' '<TextBlock Text="◈  DeskSpace" FontSize="27" FontWeight="Bold" Foreground="#F7FBFF"/>' 'updated wordmark'
-One $window 'Text="YOUR WORKSPACE   /   PRIVATE BY DESIGN"' 'Text="YOUR DESKTOP   •   LOCAL FIRST   •   MADE TO FLOW"' 'brand strapline'
-One $window '<StatusBar DockPanel.Dock="Bottom" Background="#16223A"' '<StatusBar DockPanel.Dock="Bottom" Background="#111D30"' 'status chrome'
-One $window '<TabControl x:Name="MainTabs" Margin="14" Background="#16223A"' '<TabControl x:Name="MainTabs" Margin="16" Background="#121F33"' 'navigation layout'
-One $window '<Setter Property="MinWidth" Value="182"/>' '<Setter Property="MinWidth" Value="190"/>' 'navigation width'
-One $window '<Setter Property="Padding" Value="17,13"/>' '<Setter Property="Padding" Value="18,14"/>' 'navigation touch targets'
-One $window '<Setter Property="Background" Value="#1B2944"/>' '<Setter Property="Background" Value="#182940"/>' 'navigation default'
-One $window '<Setter Property="Background" Value="#445B95"/>' '<Setter Property="Background" Value="#315F88"/>' 'navigation active'
-One $window '<ScrollViewer><StackPanel Margin="24">
-          <TextBlock Text="Your Workspace" FontSize="30" FontWeight="Bold"/>' @'
-<ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="26">
-          <Border CornerRadius="20" Padding="26" Margin="0,0,0,22"
-                  Background="#1A304E" BorderBrush="#3B6383" BorderThickness="1">
+# Rework the EXACT R232 shipping Workspace, not the newer unshipped
+# r283 proof-of-concept. No handlers, routes or data files changed.
+One $window 'Title="DeskSpace — Workspace" Width="1120" Height="760" MinWidth="760" MinHeight="520"' 'Title="DeskSpace — Control Center" Width="1220" Height="800" MinWidth="780" MinHeight="550"' 'larger resizable workspace'
+One $window 'Closing="MainWindow_Closing" Background="#F3F6FB">' @'
+Closing="MainWindow_Closing" Background="#EEF3F9" Foreground="#1F344F"
+        FontFamily="Segoe UI Variable, Segoe UI"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+  <Window.Resources>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#E1ECF9"/>
+      <Setter Property="Foreground" Value="#163656"/>
+      <Setter Property="BorderBrush" Value="#A8BED8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="13,9"/>
+      <Setter Property="MinHeight" Value="36"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="ButtonChrome" CornerRadius="10"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                RecognizesAccessKey="True"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="ButtonChrome" Property="Background" Value="#D2E5F6"/>
+                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#5388B5"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#1679B4"/>
+                <Setter TargetName="ButtonChrome" Property="BorderThickness" Value="2"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="ButtonChrome" Property="Opacity" Value=".48"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#F9FBFF"/>
+      <Setter Property="Foreground" Value="#203A57"/>
+      <Setter Property="BorderBrush" Value="#A8BED7"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="10,7"/>
+      <Setter Property="CaretBrush" Value="#176C9D"/>
+    </Style>
+    <Style TargetType="ListBox">
+      <Setter Property="Background" Value="#F8FBFF"/>
+      <Setter Property="Foreground" Value="#203A57"/>
+      <Setter Property="BorderBrush" Value="#B5C9DE"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+  </Window.Resources>
+'@ 'accessible global controls and native keyboard focus'
+One $window '<Border DockPanel.Dock="Top" Background="#15263D" Padding="16,11">' @'
+<Border DockPanel.Dock="Top" Padding="24,17"
+            BorderBrush="#3D6084" BorderThickness="0,0,0,1">
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+          <GradientStop Color="#132642" Offset="0"/>
+          <GradientStop Color="#1D4162" Offset=".65"/>
+          <GradientStop Color="#245774" Offset="1"/>
+        </LinearGradientBrush>
+      </Border.Background>
+'@ 'gradient masthead'
+One $window '<TextBlock Text="▦  DeskSpace" FontSize="23" FontWeight="Bold" Foreground="White"/>' '<TextBlock Text="◈  DeskSpace" FontSize="27" FontWeight="Bold" Foreground="White"/>' 'updated brand'
+One $window 'Text="YOUR WORKSPACE  ·  PRIVATE LOCAL DATA  ·  NO PASSWORD VAULT YET"' 'Text="YOUR DESKTOP  ·  LOCAL FIRST  ·  ONE WORKSPACE"' 'masthead secondary text'
+One $window '<StatusBar DockPanel.Dock="Bottom"><TextBlock x:Name="StatusText"' '<StatusBar DockPanel.Dock="Bottom" Background="#DCE8F5" Foreground="#24435F" BorderBrush="#B0C7DB" BorderThickness="0,1,0,0"><TextBlock x:Name="StatusText"' 'status bar visual'
+One $window '<TabControl x:Name="MainTabs" Margin="10" Background="White" TabStripPlacement="Left">' '<TabControl x:Name="MainTabs" Margin="16" Background="#F9FBFE" Foreground="#1F3857" TabStripPlacement="Left">' 'side navigation canvas'
+One $window @'
+      <TabControl.ItemContainerStyle>
+        <Style TargetType="TabItem">
+          <Setter Property="MinWidth" Value="174"/>
+          <Setter Property="Padding" Value="12,11"/>
+          <Setter Property="FontSize" Value="14"/>
+          <Setter Property="Foreground" Value="#27394F"/>
+        </Style>
+      </TabControl.ItemContainerStyle>
+'@ @'
+      <TabControl.ItemContainerStyle>
+        <Style TargetType="TabItem">
+          <Setter Property="MinWidth" Value="190"/>
+          <Setter Property="Padding" Value="17,13"/>
+          <Setter Property="Margin" Value="3,3,8,3"/>
+          <Setter Property="MinHeight" Value="43"/>
+          <Setter Property="FontSize" Value="14"/>
+          <Setter Property="FontWeight" Value="SemiBold"/>
+          <Setter Property="Foreground" Value="#254463"/>
+          <Setter Property="Background" Value="#E8F1FB"/>
+          <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter Property="Foreground" Value="#FFFFFF"/>
+              <Setter Property="Background" Value="#2C6795"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="BorderBrush" Value="#4A98BC"/>
+            </Trigger>
+          </Style.Triggers>
+        </Style>
+      </TabControl.ItemContainerStyle>
+'@ 'modern navigational tab rail'
+One $window @'
+        <ScrollViewer><StackPanel Margin="24">
+          <TextBlock Text="Your Workspace" FontSize="30" FontWeight="Bold"/>
+'@ @'
+        <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="26">
+          <Border CornerRadius="20" Background="#173554"
+                  BorderBrush="#477999" BorderThickness="1"
+                  Padding="24" Margin="0,0,0,20">
             <StackPanel>
-              <TextBlock Text="DESKSPACE / WORKSPACE" FontSize="11" FontWeight="SemiBold"
-                         Foreground="#A6E2EE" Margin="0,0,0,9"/>
-              <TextBlock Text="Your desktop. One clear space." FontSize="30"
-                         FontWeight="Bold" Foreground="#F5F9FF" TextWrapping="Wrap"/>
-              <TextBlock Text="Find files, manage notes, move between apps and keep your tools close."
-                         FontSize="14" Foreground="#C6D8ED" TextWrapping="Wrap"
-                         Margin="0,8,0,0"/>
+              <TextBlock Text="DESKSPACE / CONTROL CENTER"
+                         FontSize="11" FontWeight="SemiBold"
+                         Foreground="#A4E0EC" Margin="0,0,0,10"/>
+              <TextBlock Text="Your desktop. One clear space."
+                         FontSize="30" FontWeight="Bold"
+                         Foreground="#FAFDFF" TextWrapping="Wrap"/>
+              <TextBlock Text="Search files, manage notes, switch apps and keep your essentials within reach."
+                         FontSize="14" Foreground="#D2E5F3" TextWrapping="Wrap"
+                         Margin="0,10,0,0"/>
             </StackPanel>
           </Border>
-          <TextBlock Text="Overview" FontSize="25" FontWeight="Bold"/>
-'@ 'new visible workspace welcome banner'
-One $window '<TextBlock Text="Quick Actions" FontSize="20" FontWeight="SemiBold"/>
-          <WrapPanel Margin="0,10,0,20">' @'
-<TextBlock Text="Launch pad" FontSize="20" FontWeight="SemiBold"
-                     Margin="0,4,0,12"/>
-          <Border Background="#16263F" BorderBrush="#355270" BorderThickness="1"
-                  CornerRadius="17" Padding="15" Margin="0,0,0,20">
+          <TextBlock Text="Overview" FontSize="26" FontWeight="Bold"/>
+'@ 'responsive welcome hero and overview'
+One $window @'
+          <TextBlock Text="Quick Actions" FontSize="20" FontWeight="SemiBold"/>
+          <WrapPanel Margin="0,10,0,20">
+'@ @'
+          <TextBlock Text="Launch pad" FontSize="20" FontWeight="SemiBold"
+                     Margin="0,7,0,12"/>
+          <Border Background="#FFFFFF" BorderBrush="#C5D6E7"
+                  BorderThickness="1" CornerRadius="17" Padding="15"
+                  Margin="0,0,0,20">
           <WrapPanel Margin="0,4,0,4">
-'@ 'action panel background and grouping'
+'@ 'grouped action tiles'
 One $window @'
           </WrapPanel>
           <TextBlock Text="Available today:
@@ -77,34 +165,38 @@ One $window @'
           </WrapPanel>
           </Border>
           <TextBlock Text="Available today:
-'@ 'action panel closure'
-# Update the existing Action Palette, not a second launcher or command engine.
-One $palette 'Title="DeskSpace actions",Width=530,Height=420,' 'Title="DeskSpace · Command Center",Width=610,Height=540,' 'command center window size'
-One $palette 'MinWidth=420,MinHeight=320,Owner=owner,' 'MinWidth=440,MinHeight=360,Owner=owner,' 'command center min size'
-One $palette 'var root=new DockPanel{Margin=new Thickness(16)};' 'var root=new DockPanel{Margin=new Thickness(24)};' 'command center spacing'
-One $palette 'Text="DeskSpace actions",FontSize=20,FontWeight=FontWeights.SemiBold,' 'Text="DESKSPACE / QUICK ACTIONS",FontSize=25,FontWeight=FontWeights.Bold,' 'command center heading'
-One $palette 'Margin=new Thickness(0,0,0,8)' 'Margin=new Thickness(0,0,0,10)' 'command center title spacing'
+'@ 'preserve footer and close grouped actions'
+# Modernize the actual pre-R283 native Action Palette. Preserve all commands.
+One $palette 'Title="DeskSpace actions",Width=530,Height=420,' 'Title="DeskSpace · Command Center",Width=610,Height=540,' 'command window'
+One $palette 'MinWidth=420,MinHeight=320,Owner=owner,' 'MinWidth=440,MinHeight=360,Owner=owner,' 'command window minimum'
+One $palette 'Background=Brushes.White,ShowInTaskbar=false,' 'Background=new SolidColorBrush(Color.FromRgb(244,248,253)),ShowInTaskbar=false,' 'command background'
+One $palette 'var root=new DockPanel{Margin=new Thickness(16)};' 'var root=new DockPanel{Margin=new Thickness(24)};' 'command spacing'
+One $palette 'Text="DeskSpace actions",FontSize=20,FontWeight=FontWeights.SemiBold,' 'Text="DESKSPACE / QUICK ACTIONS",FontSize=25,FontWeight=FontWeights.Bold,' 'command heading'
+One $palette 'Foreground=new SolidColorBrush(Color.FromRgb(36,27,65)),' 'Foreground=new SolidColorBrush(Color.FromRgb(24,52,82)),' 'command heading contrast'
 One $palette 'var input=new TextBox{FontSize=15,Padding=new Thickness(9),
             MinHeight=38,Margin=new Thickness(0,0,0,10)};' @'
-var input=new TextBox{FontSize=16,Padding=new Thickness(12),
-            MinHeight=43,Margin=new Thickness(0,0,0,12)};
-'@ 'larger action search field'
+var input=new TextBox{
+            FontSize=16,Padding=new Thickness(12),
+            MinHeight=42,Margin=new Thickness(0,0,0,12),
+            Background=Brushes.White,
+            Foreground=new SolidColorBrush(Color.FromRgb(25,57,85)),
+            BorderBrush=new SolidColorBrush(Color.FromRgb(151,183,211))};
+'@ 'larger search field'
+One $palette 'var list=new ListBox{BorderThickness=new Thickness(0),
+            Background=Brushes.White};' @'
+var list=new ListBox{BorderThickness=new Thickness(1),
+            BorderBrush=new SolidColorBrush(Color.FromRgb(198,215,233)),
+            Background=new SolidColorBrush(Color.FromRgb(248,251,255))};
+'@ 'command results surface'
 One $palette 'var item=new ListBoxItem{Content=box,Tag=command,Padding=new Thickness(6)};' @'
 var item=new ListBoxItem{
-                    Content=box,Tag=command,
-                    Padding=new Thickness(14,10,14,10),
-                    Margin=new Thickness(4),
-                    Background=new SolidColorBrush(Color.FromRgb(27,45,69)),
-                    Foreground=new SolidColorBrush(Color.FromRgb(242,248,255))};
-'@ 'action result cards'
-# Keep the active widget/Deck layout and geometry unchanged; do not
-# inject legacy style libraries into the R232 shipping installer.
-One $palette 'Background=Brushes.White,ShowInTaskbar=false,' 'Background=new SolidColorBrush(Color.FromRgb(12,22,38)),ShowInTaskbar=false,' 'command center canvas'
-One $palette 'Foreground=new SolidColorBrush(Color.FromRgb(36,27,65)),' 'Foreground=new SolidColorBrush(Color.FromRgb(240,247,255)),' 'command heading contrast'
-One $palette 'Foreground=Brushes.DimGray,FontSize=12,' 'Foreground=new SolidColorBrush(Color.FromRgb(176,196,224)),FontSize=12,' 'command helper contrast'
-One $palette 'Background=Brushes.White};' 'Background=new SolidColorBrush(Color.FromRgb(15,29,48))};' 'command result surface'
+                    Content=box,Tag=command,Padding=new Thickness(12,9),
+                    Margin=new Thickness(3),
+                    Background=new SolidColorBrush(Color.FromRgb(234,242,252)),
+                    Foreground=new SolidColorBrush(Color.FromRgb(28,53,82))};
+'@ 'command selection card'
 $tokens=$null;$errors=$null
-[void][System.Management.Automation.Language.Parser]::ParseFile('r349/apply-r349.ps1',[ref]$tokens,[ref]$errors)
+[void][System.Management.Automation.Language.Parser]::ParseFile(
+    'r349/apply-r349.ps1',[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ('R349 PowerShell syntax: '+($errors|Out-String))}
-# XML is fully parsed by the Windows WPF XAML compiler in the release test.
-Write-Host 'R349: modern Workspace hero/navigation/action cards and Command Center, without modifying Deck/widget geometry.'
+Write-Host 'R349: refreshed real R232 Workspace and Command Center; existing monitor/Deck/widget/Excel functionality untouched.'
