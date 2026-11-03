@@ -7,6 +7,13 @@ if(!(Test-Path -LiteralPath $app)){throw 'R361 actual shipping App.xaml.cs is mi
 if(!(Test-Path -LiteralPath 'r361/DeskSpaceWidgetStartupV361.cs')){
     throw 'R361 startup election source missing'
 }
+# Diagnostics print only shipping startup CODE; no user data or filesystem scans.
+$prior=[IO.File]::ReadAllText($app)
+$point=$prior.IndexOf('if(e.Args.Contains("--widget-host"')
+if($point -ge 0){
+    Write-Host "R361 ACTUAL SHIPPING APP STARTUP:"
+    Write-Host $prior.Substring($point,[Math]::Min(3400,$prior.Length-$point))
+}
 function One([string]$old,[string]$new,[string]$name){
     $current=[IO.File]::ReadAllText($app)
     $lf=[string][char]10
