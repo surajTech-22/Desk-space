@@ -63,9 +63,16 @@ internal static class DeskSpaceFolderAppRecognitionV363
             void Add(string app,string name,string kind,string evidence,string target)=>
                 result.Add(new(full,target,app,name,kind,evidence));
 
-            // Strong project signals take priority over generic files.
+            // Tally and Winman data folders take precedence over generic
+            // documents. These are live databases, not importable files.
+            var vendor=DeskSpaceAccountingFileRecognitionV364
+                .RecognizeVendorFolder(full,files);
             var solution=FileMatching(".sln",".slnx");
-            if(solution!=null)
+            if(vendor.Count>0)
+            {
+                result.AddRange(vendor);
+            }
+            else if(solution!=null)
             {
                 Add("VisualStudio","Visual Studio","Visual Studio solution",
                     solution,Path.Combine(full,solution));
@@ -126,6 +133,14 @@ internal static class DeskSpaceFolderAppRecognitionV363
                     Add("Default","Windows default application",
                         "Document "+ext,file,Path.Combine(full,file));
                 }
+                else if(files.Count==1 &&
+                    DeskSpaceAccountingFileRecognitionV364.SafeAssociation(files[0]))
+                {
+                    var file=files[0];
+                    Add("Default","Windows default application",
+                        "Registered file type "+Path.GetExtension(file),
+                        file,Path.Combine(full,file));
+                }
             }
             // Explorer is always a safe fallback. It opens the FOLDER,
             // never a copied source, script or arbitrary executable.
@@ -134,6 +149,42 @@ internal static class DeskSpaceFolderAppRecognitionV363
                 result.Count>0?result[0].Evidence:"No specific app signature",
                 full);
             return result;
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or
+            ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return Array.Empty<Suggestion>();
+        }
+    }
+
+    // A file drop is classified independently of folders. We never infer
+    // Tally or Winman from a generic XML/JSON (which may require importing
+    // through the vendor application, not double-clicking).
+    internal static IReadOnlyList<Suggestion> RecognizePath(string path)
+    {
+        if(string.IsNullOrWhiteSpace(path))return Array.Empty<Suggestion>();
+        try
+        {
+            var full=Path.GetFullPath(path);
+            if(Directory.Exists(full))return Recognize(full);
+            if(!File.Exists(full) ||
+               (File.GetAttributes(full)&FileAttributes.ReparsePoint)!=0)
+                return Array.Empty<Suggestion>();
+            var folder=Path.GetDirectoryName(full);
+            if(folder==null)return Array.Empty<Suggestion>();
+            var results=new List<Suggestion>();
+            results.AddRange(DeskSpaceAccountingFileRecognitionV364
+                .RecognizeVendorFile(full));
+            if(results.Count==0 &&
+                DeskSpaceAccountingFileRecognitionV364.SafeAssociation(full))
+                results.Add(new(folder,full,"Default",
+                    "Windows default application",
+                    "File "+Path.GetExtension(full),
+                    Path.GetFileName(full)));
+            results.Add(new(folder,folder,"Explorer","File Explorer",
+                results.Count>0?results[0].FolderKind:"Unrecognized file",
+                Path.GetFileName(full)));
+            return results;
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or
             ArgumentException or NotSupportedException or PathTooLongException)
@@ -212,6 +263,8 @@ internal static class DeskSpaceFolderAppRecognitionV363
 
     internal static string? FindInstalledApp(string appId)
     {
+        if(DeskSpaceAccountingFileRecognitionV364.IsVendor(appId))
+            return DeskSpaceAccountingFileRecognitionV364.FindInstalledVendor(appId);
         string? name=appId switch
         {
             "Code"=>"Code.exe",
@@ -274,9 +327,21 @@ internal static class DeskSpaceFolderAppRecognitionV363
             }
             else if(item.AppId=="Default")
             {
-                if(isFolder || !DocumentExtensions.Contains(Path.GetExtension(target)))
-                    throw new IOException("Not a recognized document.");
+                if(isFolder ||
+                   !DeskSpaceAccountingFileRecognitionV364.SafeAssociation(target))
+                    throw new IOException("Unsafe or unsupported file association.");
                 info=new ProcessStartInfo(target){UseShellExecute=true};
+            }
+            else if(DeskSpaceAccountingFileRecognitionV364.IsVendor(item.AppId))
+            {
+                // Verify both the original source and its vendor signature
+                // again at click time; no stale or forged shell command.
+                var signatures=isFolder?Recognize(folder):RecognizePath(target);
+                if(!signatures.Any(x=>x.AppId==item.AppId))
+                    throw new IOException("The vendor file signature changed.");
+                if(!DeskSpaceAccountingFileRecognitionV364.TryBuildVendorStart(
+                    item,resolver??FindInstalledApp,out info) || info==null)
+                    throw new IOException("The required Tally or Winman application is not installed.");
             }
             else
             {
