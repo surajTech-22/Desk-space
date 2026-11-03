@@ -3,45 +3,26 @@ Set-StrictMode -Version Latest
 $root='DeskSpace_Windows_R1/DeskSpace'
 $app=Join-Path $root 'App.xaml.cs'
 $worker=Join-Path $root 'DeskSpaceWidgetStartupV361.cs'
-if(!(Test-Path -LiteralPath $app)){throw 'R361 actual shipping App.xaml.cs is missing'}
-if(!(Test-Path -LiteralPath 'r361/DeskSpaceWidgetStartupV361.cs')){
-    throw 'R361 startup election source missing'
+$fallback=Join-Path $root 'DeskSpaceStartupFallbackV276.cs'
+if(!(Test-Path -LiteralPath $app)){throw 'R361 missing assembled shipping App.xaml.cs'}
+if(!(Test-Path -LiteralPath 'r361/DeskSpaceWidgetStartupV361.cs')){throw 'R361 source missing'}
+if(!(Test-Path -LiteralPath $fallback)){
+    # Use the existing tested fallback class, never a new UI flow.
+    Copy-Item 'src/DeskSpace/DeskSpaceStartupFallbackV276.cs' $fallback -Force
 }
-# Diagnostics print only shipping startup CODE; no user data or filesystem scans.
-$prior=[IO.File]::ReadAllText($app)
-$point=$prior.IndexOf('if(e.Args.Contains("--widget-host"')
-if($point -ge 0){
-    Write-Host "R361 ACTUAL SHIPPING APP STARTUP:"
-    Write-Host $prior.Substring($point,[Math]::Min(3400,$prior.Length-$point))
-}
-function One([string]$old,[string]$new,[string]$name){
-    $current=[IO.File]::ReadAllText($app)
+function One([string]$old,[string]$replacement,[string]$name){
     $lf=[string][char]10
-    $current=$current.Replace(([string][char]13+$lf),$lf)
+    $s=[IO.File]::ReadAllText($app).Replace(([string][char]13+$lf),$lf)
     $old=$old.Replace(([string][char]13+$lf),$lf)
-    $new=$new.Replace(([string][char]13+$lf),$lf)
-    $matches=([regex]::Matches($current,[regex]::Escape($old))).Count
-    if($matches -ne 1){throw ('R361 '+$name+' requires one exact shipping anchor; found '+$matches)}
-    [IO.File]::WriteAllText($app,$current.Replace($old,$new),
+    $replacement=$replacement.Replace(([string][char]13+$lf),$lf)
+    $matches=([regex]::Matches($s,[regex]::Escape($old))).Count
+    if($matches -ne 1){throw ("R361 $name expected one shipping anchor, got $matches")}
+    [IO.File]::WriteAllText($app,$s.Replace($old,$replacement),
         [Text.UTF8Encoding]::new($false))
 }
-One @'
-            if(DeskSpaceWidgetExitV286.Dismissed)
-            {
-                Shutdown(0);
-                return;
-            }
-'@ @'
-            if(DeskSpaceWidgetExitV286.Dismissed)
-            {
-                // An explicit tray Exit is still sovereign over automatic
-                // Run-entry and update relaunch. This is not a startup crash.
-                DeskSpaceWidgetStartupV361.Audit(
-                    "startup skipped: user previously selected Exit Widget");
-                Shutdown(0);
-                return;
-            }
-'@ 'respect tray Exit'
+# R360 published source has the older, minimal R232 app shell; it did NOT
+# include R286's tray-exit marker or R183's early-recovery methods.
+# Do not call unshipped methods or replace the entire App.xaml.cs.
 One @'
             widgetMutex=new Mutex(true,@"Local\DeskSpace.WidgetHost.v3",out var first);
             if(!first)
@@ -64,55 +45,60 @@ One @'
                 {
                     if(outcome==DeskSpaceWidgetStartupV361.Outcome.UnresponsiveExisting)
                     {
-                        // A process still holds the singleton but has no
-                        // responsive command pipe. Never kill it, open a
-                        // duplicate widget, or silently drop this startup.
+                        // A previous process still owns the singleton, but its
+                        // IPC pipe never became ready. Never kill it, silently
+                        // exit, or create a second functional widget.
                         widgetMutex.Dispose();
                         widgetMutex=null;
                         DeskSpaceStartupFallbackV276.Show(
-                            "A DeskSpace widget process is still running "+
-                            "but is not responding to the startup command. "+
-                            "No data or running processes were changed.");
+                            "Another DeskSpace widget process is running "+
+                            "but did not respond to the startup command. "+
+                            "No running processes or saved data were changed.");
                         return;
                     }
-                    // Existing host was notified successfully. We never
-                    // created a user window or tray; terminate this harmless
-                    // duplicate cleanly as in the tested R355 handoff.
+                    // The primary acknowledged this Show request. This
+                    // duplicate has no user windows, settings or tray.
                     Shutdown(0);
                     Environment.Exit(0);
                     return;
                 }
-                // If the named mutex object exists but is unowned (or its
-                // owner exits during the retry), WaitOne owns it here and
-                // this process legitimately becomes the primary widget.
+                // CreatedNew=false is not proof of a live owner. We now own
+                // this existing kernel mutex through WaitOne(0).
             }
-            else DeskSpaceWidgetStartupV361.Audit("acquired fresh primary mutex");
-'@ 'stale mutex ownership and slow named pipe startup'
+            else DeskSpaceWidgetStartupV361.Audit(
+                "fresh widget mutex acquired");
+'@ 'mutex ownership and IPC race fix'
 One @'
-                window.Show();
-                DeskSpaceStorageMaintenanceV351.Begin();
-                widgetStarted=true;
+            var window=new WidgetShellWindow();MainWindow=window;window.Show();
+                DeskSpaceStorageMaintenanceV351.Begin();return;
 '@ @'
+            try
+            {
+                var window=new WidgetShellWindow();
+                MainWindow=window;
                 window.Show();
-                DeskSpaceWidgetStartupV361.Audit("primary widget window shown");
+                DeskSpaceWidgetStartupV361.Audit("widget window shown");
                 DeskSpaceStorageMaintenanceV351.Begin();
-                widgetStarted=true;
-'@ 'widget startup completion log'
-One @'
-                Debug.WriteLine("DeskSpace widget early startup failed: "+
-                    ex.GetType().Name);
-'@ @'
-                Debug.WriteLine("DeskSpace widget early startup failed: "+
-                    ex.GetType().Name);
+            }
+            catch(Exception ex) when(ex is IOException or
+                UnauthorizedAccessException or InvalidOperationException or
+                System.ComponentModel.Win32Exception or
+                System.Runtime.InteropServices.COMException or
+                System.Windows.Markup.XamlParseException or
+                TypeInitializationException)
+            {
                 DeskSpaceWidgetStartupV361.Audit(
                     "widget construction failed: "+ex.GetType().Name);
-'@ 'startup fallback error audit'
+                DeskSpaceStartupFallbackV276.Show(ex.GetType().Name);
+            }
+            return;
+'@ 'log first paint or use existing recovery window on constructor error'
 Copy-Item 'r361/DeskSpaceWidgetStartupV361.cs' $worker -Force
-$src=[IO.File]::ReadAllText($app)
-if(!$src.Contains('DeskSpaceStartupRecoveryV183.BeginEarly();') -or
-   !$src.Contains('DeskSpaceGracefulExitV230.UpdateExitAuthorized') -or
-   !$src.Contains('DeskSpaceStorageMaintenanceV351.Begin();') -or
-   !$src.Contains('Environment.Exit(0);')){
-    throw 'R361 must preserve crash-loop, update handoff, and guarded cleanup'
+$appText=[IO.File]::ReadAllText($app)
+if(!$appText.Contains('DeskSpaceStorageMaintenanceV351.Begin();') -or
+   !$appText.Contains('DeskSpaceGracefulExitV230.UpdateExitAuthorized') -or
+   !$appText.Contains('Environment.Exit(0);') -or
+   !$appText.Contains('DeskSpaceWidgetStartupV361.ResolveExisting(')){
+    throw 'R361 lost existing shipping update/cleanup guards'
 }
-Write-Host 'R361: singleton handoff waits for slow pipe, recovers stale unowned mutex, logs startup and retains explicit tray Exit.'
+Write-Host 'R361: verified R360 release shell now resolves stale mutex, retries live pipe and displays guarded startup recovery without changing widget or user data.'
