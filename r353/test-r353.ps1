@@ -11,7 +11,7 @@ $end=$s.IndexOf('private static async Task<bool> ResumeVerifiedV191(', $start)
 Assert ($start -ge 0 -and $end -gt $start) 'verified supervisor and retry methods missing'
 $handoff=$s.Substring($start,$end-$start)
 Assert (!$handoff.Contains('timer?.Stop()')) 'the updater disabled all future checks before knowing install result'
-Assert ($handoff.Contains('R353 update supervisor handoff accepted; auto retry checks remain active')) 'handoff status log missing'
+Assert ($handoff.Contains('R353 update supervisor accepted; periodic update retry remains enabled')) 'handoff status log missing'
 Assert ($handoff.Contains('DeskSpace-UpdateSupervisor-V185')) 'existing supervisor ownership mutex removed'
 Assert ($s.Contains('DeskSpaceVerifiedUpdateQueueV191.Peek(Channel)')) 'verified cached installer retry removed'
 Assert ($s.Contains('DeskSpaceVerifiedUpdateQueueV191.IsStillVerified(pending)')) 'verified disk-cache hash guard removed'
