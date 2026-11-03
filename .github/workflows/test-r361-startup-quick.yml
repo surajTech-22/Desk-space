@@ -1,0 +1,36 @@
+name: R361 native Windows widget startup election tests
+on:
+  push:
+    branches: [fix/r361-widget-startup-election]
+    paths: [r361/**, .github/workflows/test-r361-startup-quick.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deskspace-r361-quick
+  cancel-in-progress: true
+jobs:
+  startup:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Real native Windows mutex and delayed named-pipe single-instance election
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --project 'r361/Tests/DeskSpaceWidgetStartupV361Tests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R361 Windows singleton startup failed'}
+      - name: Confirm strict shutdown, explicit Exit and startup failure audit in shipping patch
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $script=Get-Content 'r361/apply-r361.ps1' -Raw
+          foreach($term in @('UnresponsiveExisting','DeskSpaceStartupFallbackV276.Show','Environment.Exit(0);','DeskSpaceStorageMaintenanceV351.Begin()')){
+            if(!$script.Contains($term)){throw ('R361 startup source missing: '+$term)}
+          }
+          if($script.Contains('Stop-Process') -or $script.Contains('Restart-Computer')){throw 'R361 cannot force-close apps or reboot'}
+          Write-Host 'R361 PASS: preserve explicit tray Exit, crash-loop recovery, and no forced processes.'
