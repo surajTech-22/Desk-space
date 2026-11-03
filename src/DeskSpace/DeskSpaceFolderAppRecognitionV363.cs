@@ -333,6 +333,13 @@ internal static class DeskSpaceFolderAppRecognitionV363
                 if(isFolder ||
                    !DeskSpaceAccountingFileRecognitionV364.SafeAssociation(target))
                     throw new IOException("Unsafe or unsupported file association.");
+                var registered=(associationResolver??
+                    DeskSpaceAccountingFileRecognitionV364.AssociatedExecutable)(target);
+                if(string.IsNullOrWhiteSpace(registered) ||
+                   !File.Exists(registered))
+                    throw new IOException("No installed Windows file opener was found.");
+                // Windows owns the correct open verb, not a guessed
+                // command line. Drop only opens this selected source file.
                 info=new ProcessStartInfo(target){UseShellExecute=true};
             }
             else if(DeskSpaceAccountingFileRecognitionV364.IsVendor(item.AppId))
