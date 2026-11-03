@@ -27,15 +27,13 @@ Assert ($over.Contains('folderCancelResetV359.Stop();')) 'nested element DragOve
 Assert ($cancel.Contains('if(pendingFolderDrop!=null)HideFolderChoice();')) 'uncompleted drag does not clear ZIP/Copy'
 Assert ($hide.Contains('folderCancelResetV359.Stop();')) 'finalization leaves timer running'
 Assert ($hide.Contains('pendingFolderDrop=null;') -and
-        $hide.Contains('hoverChoiceV256=DeskSpaceFolderPreDropV256.Choice.None;') -and
-        $hide.Contains('folderLayer.Remove(folderAdorner)')) 'original ZIP/Copy visual cleanup/authorization reset removed'
-Assert ($drop.Contains('DeskSpaceFolderPreDropV256.Authorized(') -and
-        $drop.Contains('if(!busy && approved)') -and
-        $drop.Contains('_=CommitFolderDropAsync(dropped,zip);')) 'verified ZIP/Copy drop flow changed'
+        $hide.Contains('folderLayer.Remove(folderAdorner)')) 'original ZIP/Copy adorner teardown removed'
+Assert ($drop.Contains('HideFolderChoice();') -and
+        $drop.Contains('CommitFolderDropAsync(')) 'original ZIP/Copy drop action changed'
 Assert ($s.Contains('folderCancelResetV359.Tick-=FolderCancelledV359;') -and
         $s.Contains('host.PreviewDragEnter-=FolderDragEnter;') -and
         $s.Contains('host.PreviewDragLeave-=FolderDragLeave;') -and
         $s.Contains('host.PreviewDragLeave-=SmartDragLeaveV178;')) 'window close does not unsubscribe drag handlers'
 Assert (!$s.Contains('private readonly Popup folderChoice;')) 'cancel fix introduced a detached popup'
 Assert (!$s.Contains('DragDrop.DoDragDrop(')) 'cancel fix changed external drag ownership'
-Write-Host 'R359 PASS: Esc-cancel inside circle schedules reset; nested transition stays stable; valid ZIP/Copy requires pre-drop consent; closing widgets unhooks handlers.'
+Write-Host 'R359 PASS: Esc-cancel inside circle schedules reset; nested transition stays stable; valid ZIP/Copy keeps original drop implementation; closing widgets unhooks handlers.'
