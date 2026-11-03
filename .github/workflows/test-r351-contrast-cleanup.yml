@@ -1,0 +1,52 @@
+name: R351 DeskSpace Settings contrast and startup cleanup acceptance
+on:
+  push:
+    branches: [fix/r351-contrast-complete-cleanup]
+    paths: [r351/**, .github/workflows/test-r351-contrast-cleanup.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-safety:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify staged installer retention and native Windows access rules
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./r351/test-r351.ps1
+      - name: Compile actual WPF app startup with bundled one-shot cleanup
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory 'DeskSpace_Windows_R1' -Force|Out-Null
+          Copy-Item 'src/DeskSpace' 'DeskSpace_Windows_R1/DeskSpace' -Recurse -Force
+          & ./r351/apply-startup-r351.ps1
+          $app=Get-Content 'DeskSpace_Windows_R1/DeskSpace/App.xaml.cs' -Raw
+          $proj=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -Raw
+          $script=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpacePostLaunchCleanupV351.ps1' -Raw
+          if(([regex]::Matches($app,'DeskSpaceStorageMaintenanceV351.Begin\\(')).Count -ne 2){throw 'R351 must run for both widget and workspace startup'}
+          if(!$proj.Contains('EmbeddedResource Include="DeskSpacePostLaunchCleanupV351.ps1"')){throw 'R351 embedded helper not shipped'}
+          if(!$script.Contains('Invoke-R348StorageCleanup') -or !$script.Contains('Invoke-R351StagedInstallerRetention')){throw 'R351 safe helpers not bundled'}
+          dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo
+          if($LASTEXITCODE -ne 0){throw 'R351 WPF app startup compilation failed'}
+      - name: Check UI contrast patch source and PowerShell syntax
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $file='r351/apply-ui-r351.ps1'
+          $tokens=$null;$errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($file,[ref]$tokens,[ref]$errors)
+          if($errors.Count){throw ($errors|Out-String)}
+          $ui=Get-Content $file -Raw
+          foreach($s in @('SettingsVersionText','TextElement.Foreground="#243F5C"','Value="#BFDFF4"','UpdateChannelPickerV104','Ready — Workspace loaded')){
+            if(!$ui.Contains($s)){throw ('R351 contrast regression: '+$s)}
+          }
+          Write-Host 'R351 PASS: theme contrast, Settings labels, channel controls, startup hooks, and all Windows fixture tests.'
