@@ -33,15 +33,27 @@ One @'
 One '<TextBlock Text="Settings" FontSize="28" FontWeight="Bold" Margin="0,0,0,14"/>' '<TextBlock Text="Settings" FontSize="28" FontWeight="Bold" Foreground="#1B3A57" Margin="0,0,0,14"/>' 'Settings page header'
 One '<TextBlock x:Name="SettingsVersionText" FontSize="16" Margin="0,0,0,18"/>' '<TextBlock x:Name="SettingsVersionText" FontSize="16" Foreground="#496982" Margin="0,0,0,18"/>' 'installed version readability'
 One '<TextBlock Text="Update channel" FontSize="16" FontWeight="SemiBold" Margin="0,14,0,7"/>' '<TextBlock Text="Update channel" Foreground="#1B3A57" FontSize="16" FontWeight="SemiBold" Margin="0,14,0,7"/>' 'channel label'
-One @'
-          <TextBlock Text="Stable receives approved releases only. Tester receives separate opt-in prereleases and automatic updates every five minutes. Switching channels preserves your workspace data and does not downgrade your installation." TextWrapping="Wrap" Foreground="#A2B3D0" Margin="0,8,0,0"/>
-'@ @'
-          <TextBlock Text="Stable receives approved releases only. Tester receives separate opt-in prereleases and automatic updates every five minutes. Switching channels preserves your workspace data and does not downgrade your installation."
-                     TextWrapping="Wrap" Foreground="#41627F" Margin="0,12,0,0"/>
+# Shipping R232 and the newer XAML prototype use different helper
+# text colors. Select the exact Settings description by its unique text,
+# preserving its actual wording instead of matching a hardcoded palette.
+$descriptionPattern='<TextBlock\s+Text="Stable receives approved releases only\.[^"]*"[^>]*\/>'
+$descriptionMatches=[regex]::Matches($s,$descriptionPattern)
+if($descriptionMatches.Count -ne 1){
+    throw ('R351 Settings channel description expected exactly once, found '+$descriptionMatches.Count)
+}
+$description=$descriptionMatches[0].Value
+if($description -match 'Foreground="[^"]+"'){
+    $description=[regex]::Replace($description,'Foreground="[^"]+"','Foreground="#41627F"')
+}else{
+    $description=$description.Replace('/>','Foreground="#41627F"/>')
+}
+$description=$description.Replace('Margin="0,8,0,0"','Margin="0,12,0,0"')
+$privacy=@'
           <TextBlock Text="Privacy: local workspace files are not encrypted. Do not store passwords here."
                      TextWrapping="Wrap" Foreground="#526D87" FontSize="12"
                      Margin="0,24,0,0"/>
-'@ 'readable explanatory notes and retained privacy warning'
+'@
+$s=$s.Replace($descriptionMatches[0].Value,$description+$lf+$privacy)
 One 'Text="Ready — local data is not encrypted in this preview"' 'Text="Ready — Workspace loaded"' 'modern status bar'
 # Explicitly set Settings ComboBox text/background so its channels remain
 # legible even with Windows theme differences.
