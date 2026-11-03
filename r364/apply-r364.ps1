@@ -25,14 +25,31 @@ function One([string]$old,[string]$replacement,[string]$what){
 One @'
         if(files?.Length>0)_=StageFilesAsync(files);
 '@ @'
-        if(files?.Length>0)
+        if(files?.Length==1 && File.Exists(files[0]))
         {
-            // File drags are analyzed too, not just folder ZIP/Copy drops.
-            // The original file staging behavior is unchanged.
-            SuggestFolderAppsV363(files);
-            _=StageFilesAsync(files);
+            // Direct file open only. No stage, ZIP, copy or import.
+            e.Effects=TryDirectOpenDroppedPathV365(files[0])==
+                DirectOpenV365.Opened?DragDropEffects.Link:DragDropEffects.None;
+            return;
         }
-'@ 'standalone file drop recognition'
+        e.Effects=DragDropEffects.None;
+'@ 'standalone file drop direct-open only'
+One @'
+                if(!busy&&selected is bool zip && sources.Length>0)
+                {
+                    SuggestFolderAppsV363(sources);
+                    _=CommitFolderDropAsync(sources,zip);
+                }
+'@ @'
+                if(!busy&&selected is bool zip && sources.Length>0)
+                {
+                    var opened=TryDirectOpenDroppedPathV365(sources[0]);
+                    if(opened==DirectOpenV365.NotRecognized)
+                        _=CommitFolderDropAsync(sources,zip);
+                    else e.Effects=opened==DirectOpenV365.Opened
+                        ?DragDropEffects.Link:DragDropEffects.None;
+                }
+'@ 'recognized folder open instead of copy, preserve original unrecognized folder action'
 One @'
         if(dropped.Length!=1 || !Directory.Exists(dropped[0]))
         {
@@ -51,6 +68,15 @@ One @'
         string source=dropped[0];
         _=Task.Run(()=>DeskSpaceFolderAppRecognitionV363.RecognizePath(source))
 '@ 'detect safe registered single files and vendor formats'
+$sourceDeck=[IO.File]::ReadAllText('src/DeskSpace/DeskSpaceDropShelfV15.cs')
+$sourceDeck=$sourceDeck.Replace(([string][char]13+$lf),$lf)
+$begin=$sourceDeck.IndexOf('    private enum DirectOpenV365')
+$finish=$sourceDeck.IndexOf('    private void SuggestFolderAppsV363(',$begin)
+if($begin -lt 0 -or $finish -lt $begin){
+    throw 'R365 missing tested direct-open-only function in checked-in WPF source'
+}
+$directOpen=$sourceDeck.Substring($begin,$finish-$begin)
+One '    private void SuggestFolderAppsV363(string[] dropped)' ($directOpen+'    private void SuggestFolderAppsV363(string[] dropped)') 'direct-open helper in actual shipping widget'
 One @'
             var folderName=Path.GetFileName(match.Folder.TrimEnd(
                 Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
@@ -82,7 +108,9 @@ One @'
 if(!$s.Contains('CommitFolderDropAsync(sources,zip)') -or
    !$s.Contains('folderLayer.Remove(folderAdorner)') -or
    !$s.Contains('DeskSpaceFolderAppRecognitionV363.RecognizePath(source)') -or
-   !$s.Contains('DeskSpaceFolderAppRecognitionV363.TryOpen(choice,out var error)')){
+   !$s.Contains('DeskSpaceFolderAppRecognitionV363.TryOpen(choice,out var error)') -or
+   !$s.Contains('TryDirectOpenDroppedPathV365') -or
+   !$s.Contains('DirectOpenV365.Opened')){
     throw 'R364 lost shipping ZIP/Copy or recognized-application click handling'
 }
 [IO.File]::WriteAllText($file,$s,[Text.UTF8Encoding]::new($false))
