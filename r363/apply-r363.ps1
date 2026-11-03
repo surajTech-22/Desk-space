@@ -129,7 +129,7 @@ One @'
             excelMatchesV122.Count==0 && recognizedFolderV363.Count==0 &&
 '@ 'recognized folder keeps the shared Deck visible'
 One @'
-        // Session-only Smart Context appears in THIS Deck and is shared
+        var heldGroup=DeskSpaceShelfGroupsV88.Add(list,"Held Files",
 '@ @'
         // The existing Deck displays a compact action after a successful
         // ZIP/Copy drop. The original two-part circle remains unchanged.
@@ -191,7 +191,7 @@ One @'
                 Child=folderActions
             });
         }
-        // Session-only Smart Context appears in THIS Deck and is shared
+        var heldGroup=DeskSpaceShelfGroupsV88.Add(list,"Held Files",
 '@ 'render local app choice within current Deck, no new window'
 One @'
         Views.Remove(this);
