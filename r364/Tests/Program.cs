@@ -98,7 +98,7 @@ internal static class Program
             // process launcher. Neither Tally nor Winman is ever executed.
             var vendorApps=Path.Combine(baseDir,"Vendor Install");
             Directory.CreateDirectory(vendorApps);
-            var tallyExe=Path.Combine(vendorApps,"TallyPrime.exe");
+            var tallyExe=Path.Combine(vendorApps,"Tally.exe");
             File.WriteAllBytes(tallyExe,new byte[]{0,1,2,3});
             var tallyChoice=Match(prime,"TallyPrime");
             int launches=0;
@@ -143,19 +143,19 @@ internal static class Program
                 "Winman backup cannot trigger a file-open/restore action");
             Assert(!Recognizer.TryOpen(tallyChoice,out err,_=>null,_=>null),
                 "Tally company cannot silently import or launch in place of file opening");
-            var wrongTds=Path.Combine(baseDir,"Unrelated Program","TDS.exe");
+            var wrongTds=Path.Combine(baseDir,"Unrelated Program","WinTDS.exe");
             Directory.CreateDirectory(Path.GetDirectoryName(wrongTds)!);
             File.WriteAllBytes(wrongTds,new byte[]{1,2,3});
             Assert(!Vendor.IsValidVendorExecutable(wrongTds,"WinmanTDS"),
-                "TDS.exe in an unrelated product folder is not assumed to be Winman TDS");
+                "WinTDS.exe in an unrelated product folder is not assumed to be Winman TDS");
             Assert(!Recognizer.TryOpen(Match(winman,"WinmanTDS"),out err,
                 _=>wrongTds,_=>null),
-                "refuse to launch ambiguous unrelated TDS.exe");
-            var validTds=Path.Combine(baseDir,"Winman TDS","TDS.exe");
+                "refuse to launch ambiguous unrelated WinTDS.exe");
+            var validTds=Path.Combine(baseDir,"Winman TDS","WinTDS.exe");
             Directory.CreateDirectory(Path.GetDirectoryName(validTds)!);
             File.WriteAllBytes(validTds,new byte[]{1,2,3});
             Assert(Vendor.IsValidVendorExecutable(validTds,"WinmanTDS"),
-                "Winman-specific TDS.exe location passes installed application check");
+                "Winman-specific WinTDS.exe location passes installed application check");
 
             var csv=Path.Combine(baseDir,"generic-csv","item.csv");
             started=null;
