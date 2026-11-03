@@ -521,8 +521,11 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                     // separate direct-open action. When a folder has no
                     // unambiguous file target, keep legacy ZIP/Copy exactly
                     // as before rather than guessing or importing data.
-                    if(!TryDirectOpenDroppedPathV365(dropped[0]))
+                    var opened=TryDirectOpenDroppedPathV365(dropped[0]);
+                    if(opened==DirectOpenV365.NotRecognized)
                         _=CommitFolderDropAsync(dropped,zip);
+                    else e.Effects=opened==DirectOpenV365.Opened
+                        ?DragDropEffects.Link:DragDropEffects.None;
                 }
                 return;
             }
@@ -543,15 +546,16 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         {
             // A file drop means OPEN with its recognized Windows app.
             // No copying, queuing, ZIP, indexing or import side effect.
-            e.Effects=TryDirectOpenDroppedPathV365(files[0])
-                ?DragDropEffects.Link:DragDropEffects.None;
+            e.Effects=TryDirectOpenDroppedPathV365(files[0])==
+                DirectOpenV365.Opened?DragDropEffects.Link:DragDropEffects.None;
             return;
         }
         // Multiple unrelated files have no unambiguous single document
         // to open; do not fall through to clipboard/storage staging.
         e.Effects=DragDropEffects.None;
     }
-    private bool TryDirectOpenDroppedPathV365(string path)
+    private enum DirectOpenV365{NotRecognized,Opened,Blocked}
+    private DirectOpenV365 TryDirectOpenDroppedPathV365(string path)
     {
         try
         {
@@ -573,7 +577,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                         System.Diagnostics.Debug.WriteLine(
                             "R365: Tally company data is not a directly "+
                             "openable Windows file; no command executed.");
-                        return true;
+                        return DirectOpenV365.Blocked;
                     }
                     var supported=Directory.EnumerateFiles(path)
                         .Take(257)
@@ -583,7 +587,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                             DeskSpaceAccountingFileRecognitionV364
                                 .RecognizeVendorFile(x)})
                         .Where(x=>x.Matches.Count>0).ToArray();
-                    if(supported.Length!=1)return true;
+                    if(supported.Length!=1)return DirectOpenV365.Blocked;
                     choices=DeskSpaceFolderAppRecognitionV363
                         .RecognizePath(supported[0].Path);
                 }
@@ -592,7 +596,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 {
                     // A generic folder is not a file. It retains the
                     // existing ZIP/Copy behavior of the widget.
-                    return false;
+                    return DirectOpenV365.NotRecognized;
                 }
             }
             var selection=choices.FirstOrDefault(x=>
@@ -602,15 +606,14 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             {
                 System.Diagnostics.Debug.WriteLine(
                     "R365: No installed safe file opener for this drop.");
-                return true;
+                return DirectOpenV365.Blocked;
             }
-            if(!DeskSpaceFolderAppRecognitionV363.TryOpen(
+            if(DeskSpaceFolderAppRecognitionV363.TryOpen(
                 selection,out var message))
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    "R365: Direct file open unavailable: "+message);
-            }
-            return true;
+                return DirectOpenV365.Opened;
+            System.Diagnostics.Debug.WriteLine(
+                "R365: Direct file open unavailable: "+message);
+            return DirectOpenV365.Blocked;
         }
         catch(Exception ex) when(ex is IOException or
             UnauthorizedAccessException or ArgumentException or
@@ -618,7 +621,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         {
             System.Diagnostics.Debug.WriteLine(
                 "R365: Direct open did not proceed: "+ex.GetType().Name);
-            return true;
+            return DirectOpenV365.Blocked;
         }
     }
     private void SuggestFolderAppsV363(string[] dropped)
