@@ -366,7 +366,7 @@ jobs:
           dotnet run --project 'r361/Tests/DeskSpaceWidgetStartupV361Tests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R361 Windows single-instance startup tests failed'}
           $app=Get-Content 'DeskSpace_Windows_R1/DeskSpace/App.xaml.cs' -Raw
-          foreach($x in @('DeskSpaceWidgetStartupV361.ResolveExisting','DeskSpaceWidgetExitV286.Dismissed','DeskSpaceStartupFallbackV276.Show','DeskSpaceStartupRecoveryV183.BeginEarly')){
+          foreach($x in @('DeskSpaceWidgetStartupV361.ResolveExisting','DeskSpaceStartupFallbackV276.Show','DeskSpaceStorageMaintenanceV351.Begin()','DeskSpaceGracefulExitV230.UpdateExitAuthorized')){
             if(!$app.Contains($x)){throw ('R361 shipping source omitted startup path: '+$x)}
           }
           $ui=Get-Content 'DeskSpace_Windows_R1/DeskSpace/MainWindow.xaml' -Raw
