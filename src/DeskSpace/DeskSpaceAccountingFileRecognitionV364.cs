@@ -259,6 +259,32 @@ internal static class DeskSpaceAccountingFileRecognitionV364
         return "Windows default application";
     }
 
+    internal static string? AssociatedExecutable(string path)
+    {
+        if(!SafeAssociation(path))return null;
+        try
+        {
+            var output=new StringBuilder(1024);
+            uint length=(uint)output.Capacity;
+            // ASSOCSTR_EXECUTABLE=2, READ-ONLY. No shell execution here.
+            int hr=AssocQueryString(0,2,Path.GetExtension(path),"open",
+                output,ref length);
+            var candidate=output.ToString().Trim().Trim('"');
+            return hr==0 && Path.IsPathFullyQualified(candidate) &&
+                File.Exists(candidate)?Path.GetFullPath(candidate):null;
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or
+            DllNotFoundException or EntryPointNotFoundException or
+            ArgumentException or NotSupportedException){return null;}
+    }
+
+    internal static bool IsVendorBackup(string path)
+    {
+        return path.EndsWith(".tax.wb",StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".wgst.wb",StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".wt",StringComparison.OrdinalIgnoreCase);
+    }
+
     internal static bool IsRegisteredDocument(string path)=>
         SafeAssociation(path);
 
