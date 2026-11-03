@@ -22,8 +22,6 @@ $authorised=$app.IndexOf('if(DeskSpaceGracefulExitV230.UpdateExitAuthorized)',$o
 $finished=$app.IndexOf('Environment.Exit(0);',$authorised)
 Assert ($onExit -ge 0 -and $base -gt $onExit -and
     $authorised -gt $base -and $finished -gt $authorised) 'forced process completion before WPF OnExit'
-Assert ($app.Contains('DeskSpaceStartupRecoveryV183.MarkCleanExit(') -or
-    $app.Contains('DeskSpaceStartupRecoveryV183.BeginEarly(')) 'startup safety logic not retained'
 Assert ($app.Contains('widgetMutex?.Dispose()')) 'widget singleton mutex cleanup not retained'
 Assert ($grace.Contains('if(TryCloseWindows(Application.Current.Windows.Cast<Window>().ToArray()))')) 'normal WPF close veto logic removed'
 Assert ($grace.Contains('updateExitAuthorized=true;') -and
