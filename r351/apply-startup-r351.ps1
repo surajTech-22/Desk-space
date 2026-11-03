@@ -39,12 +39,13 @@ var main=new MainWindow();MainWindow=main;main.Show();
 '@ 'normal Workspace startup'
 # Widget-only automatic updater restarts must trigger cleanup too, without
 # opening or changing the user's full Workspace.
-One $app @'
-                window.Show();
-                widgetStarted=true;
-'@ @'
-                window.Show();
-                widgetStarted=true;
-                DeskSpaceStorageMaintenanceV351.Begin();
-'@ 'widget-host startup'
+$widgetText=[IO.File]::ReadAllText($app)
+$widgetShow='window.Show();'
+$widgetCount=([regex]::Matches($widgetText,[regex]::Escape($widgetShow))).Count
+if($widgetCount -ne 1 -or !$widgetText.Contains('--widget-host')){
+    throw ('R351 widget-host Show() anchor missing or repeated: '+$widgetCount)
+}
+$widgetText=$widgetText.Replace($widgetShow,$widgetShow+
+    [Environment]::NewLine+'                DeskSpaceStorageMaintenanceV351.Begin();')
+[IO.File]::WriteAllText($app,$widgetText,[Text.UTF8Encoding]::new($false))
 Write-Host 'R351: postlaunch cleanup embedded into real DeskSpace.exe and triggered by both Workspace and widget host.'
