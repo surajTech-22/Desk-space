@@ -60,7 +60,7 @@ internal static class DeskSpaceAccountingFileRecognitionV364
                     StringComparer.OrdinalIgnoreCase) || !File.Exists(path) ||
                 (File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0)
                 return false;
-            // TDS.exe is a generic filename used by unrelated software.
+            // WinTDS.exe belongs in the Winman installation, not unrelated locations.
             // For Winman TDS, the application must also live in a Winman
             // install directory, never the dropped folder or an arbitrary
             // unrelated product installation.
