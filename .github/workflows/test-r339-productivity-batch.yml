@@ -1,7 +1,7 @@
 name: R339 Productivity batch premerge Windows acceptance
 on:
   push:
-    branches: [feat/r339-productivity-batch-10]
+    branches: [feat/r339-productivity-batch-10, feat/r349-modern-workspace-revamp]
     paths:
       - .github/workflows/test-r339-productivity-batch.yml
       - r339/**
@@ -13,6 +13,7 @@ on:
       - r345/**
       - r346/**
       - r348/**
+      - r349/**
       - release/batches/R329-feature-batch.json
       - r337/**
       - r330/DeskSpaceDiskSearchV330.cs
@@ -183,6 +184,8 @@ jobs:
           if(!$?){throw 'R345 exact Excel preflight review patch failed'}
           & ./r346/apply-r346.ps1
           if(!$?){throw 'R346 search cache health UI patch failed'}
+          & ./r349/apply-r349.ps1
+          if(!$?){throw 'R349 modern Workspace/Command Center source patch failed'}
           & ./r301/apply-stable-deck-hotfix-r301.ps1
           if($LASTEXITCODE -ne 0){throw 'R301 scoped stable Deck patch failed'}
           & ./r304/apply-r304.ps1
@@ -361,6 +364,8 @@ jobs:
           if(!$?){throw 'R316 mutex-owner acceptance and PowerShell syntax regression failed'}
           & ./r348/test-r348.ps1
           if(!$?){throw 'R348 cache/rollback retention tests failed'}
+          & ./r349/test-r349.ps1
+          if(!$?){throw 'R349 native Workspace and Command Center visual/binding tests failed'}
           dotnet run --project 'r310/StableTests/SupervisorBusyStableTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R310 native Windows supervisor contention/duplicate handoff test failed'}
           dotnet run --project 'r318/StableTests/DeckFitContentTests.csproj' -c Release
