@@ -50,6 +50,10 @@ jobs:
           )){
             if(!$s.Contains($expected)){throw ('Bundled R358 cleanup missing: '+$expected)}
           }
+          if($s.Contains('[IO.File]::WriteAllLines($output') -or
+             !$s.Contains('Add-Content -LiteralPath $output -Encoding UTF8 -Value $records.ToArray()')){
+            throw 'R358 must append cumulative cleanup evidence, not replace it'
+          }
           if($s.Contains('Stop-Process') -or $s.Contains('Restart-Computer')){
             throw 'R358 must not stop apps or restart the user computer'
           }
