@@ -58,10 +58,9 @@ One $close @'
             }
             // If any window refused, keep the app and saved state intact.
 '@ @'
-            var windows=Application.Current.Windows.Cast<Window>().ToArray();
-            LogR355("update exit signal observed; windows="+windows.Length);
+            LogR355("update exit signal observed; windows="+Application.Current.Windows.Count);
             updateExitAuthorized=true;
-            if(TryCloseWindows(windows))
+            if(TryCloseWindows(Application.Current.Windows.Cast<Window>().ToArray()))
             {
                 LogR355("all WPF windows accepted graceful Close; requesting App.OnExit");
                 timer.Stop();
