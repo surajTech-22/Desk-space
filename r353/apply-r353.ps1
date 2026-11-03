@@ -3,27 +3,21 @@ Set-StrictMode -Version Latest
 $path='DeskSpace_Windows_R1/DeskSpace/DeskSpacePublicUpdaterV44.cs'
 if(!(Test-Path -LiteralPath $path)){throw 'R353 cannot find shipping updater'}
 $s=[IO.File]::ReadAllText($path)
-$old=@'
-        Log("Verified "+tag+" handed to independent installer supervisor");
-        timer?.Stop();
-        // Do not forcibly shut down only the updater owner here; R230's
-'@
+$old='        timer?.Stop();'
 $new=@'
-        Log("Verified "+tag+" handed to independent installer supervisor");
-        // R353: Do NOT stop automatic checks until the actual app exits.
-        // The supervisor is independent and may fail to close an existing
-        // Workspace, or may exit before installation. Stopping the timer here
-        // permanently stranded that still-running app with no retry.
+        // R353: Do NOT stop automatic checks when the external supervisor
+        // accepts the verified installer handoff. An aborted WPF shutdown,
+        // installer failure, or unacknowledged ready receipt can otherwise
+        // strand this still-running DeskSpace process without any future
+        // update checks. The process itself ends on successful installation.
+        //
         // R191 cached verified bytes plus the R310 supervisor mutex make
-        // subsequent ticks safe: while supervisor is running they defer,
-        // and once it exits unsuccessfully the next tick retries the handoff
-        // WITHOUT downloading another untrusted installer.
-        // On successful exit, the app process/timer naturally terminate.
-        Log("R353 update supervisor handoff accepted; auto retry checks remain active until normal app exit.");
-        // Do not forcibly shut down only the updater owner here; R230's
+        // repeated ticks safe: concurrent attempts defer until the owner
+        // finishes and a subsequent tick retries only the trusted candidate.
+        Log("R353 update supervisor accepted; periodic update retry remains enabled until normal app exit.");
 '@
 if(([regex]::Matches($s,[regex]::Escape($old))).Count -ne 1){
-    throw 'R353 exact updater timer stop anchor missing or repeated'
+    throw 'R353 expected exactly one automatic timer stop in actual shipping supervisor'
 }
 $s=$s.Replace($old,$new)
 if($s.Contains('timer?.Stop()')){throw 'R353 updater still stops automatic checks after supervisor launch'}
