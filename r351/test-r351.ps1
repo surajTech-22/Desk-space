@@ -72,6 +72,7 @@ try {
     $script:otherProcess=$false
 
     $result=Invoke-R351StagedInstallerRetention @args
+    Write-Host ('R358 TEST DIAGNOSTIC: removed='+$result.Removed+' bytes='+$result.Bytes+' skipped='+$result.Skipped+' reasons='+($result.Messages -join ' || '))
     Assert-R351 ($result.Removed -eq 3) 'not exactly three old staged installer folders'
     Assert-R351 ($result.Bytes -eq (3*1024+128+211)) 'reclaimed staged bytes incorrect'
     Assert-R351 (!(Test-Path (Join-Path $updates 'tester-v1.5.1110'))) 'old partial remnants not cleaned'
