@@ -35,6 +35,8 @@ jobs:
           if(([regex]::Matches($app,[regex]::Escape('DeskSpaceStorageMaintenanceV351.Begin('))).Count -ne 2){throw 'R351 must run for both widget and workspace startup'}
           if(!$proj.Contains('EmbeddedResource Include="DeskSpacePostLaunchCleanupV351.ps1"')){throw 'R351 embedded helper not shipped'}
           if(!$script.Contains('Invoke-R348StorageCleanup') -or !$script.Contains('Invoke-R351StagedInstallerRetention')){throw 'R351 safe helpers not bundled'}
+          $worker=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceStorageMaintenanceV351.cs' -Raw
+          if($worker.Contains('R351_GUARDED_HELPERS') -or !$worker.Contains('function Invoke-R348StorageCleanup') -or !$worker.Contains('function Invoke-R351StagedInstallerRetention')){throw 'R351 runtime loader would reject the assembled cleanup resource'}
           dotnet build 'DeskSpace_Windows_R1/DeskSpace/DeskSpace.csproj' -c Release --nologo
           if($LASTEXITCODE -ne 0){throw 'R351 WPF app startup compilation failed'}
       - name: Check UI contrast patch source and PowerShell syntax
