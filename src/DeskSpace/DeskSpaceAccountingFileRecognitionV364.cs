@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32;
 
 namespace DeskSpace;
@@ -228,6 +230,33 @@ internal static class DeskSpaceAccountingFileRecognitionV364
         else return Array.Empty<DeskSpaceFolderAppRecognitionV363.Suggestion>();
         return new[]{new DeskSpaceFolderAppRecognitionV363.Suggestion(
             directory,full,id,app,kind,name)};
+    }
+
+    // Windows is the authority for arbitrary third-party file associations.
+    // Read-only display-name lookup; never rewrite defaults or invoke their
+    // shell handler until the user explicitly clicks the existing Deck action.
+    [DllImport("shlwapi.dll",CharSet=CharSet.Unicode)]
+    private static extern int AssocQueryString(uint flags,uint assocStr,
+        string pszAssoc,string? pszExtra,StringBuilder output,ref uint length);
+
+    internal static string AssociatedApplicationName(string path)
+    {
+        if(!SafeAssociation(path))return "Windows default application";
+        try
+        {
+            var extension=Path.GetExtension(path);
+            var output=new StringBuilder(512);
+            uint length=(uint)output.Capacity;
+            // ASSOCSTR_FRIENDLYAPPNAME = 4; Windows uses current user
+            // defaults, OpenWith and registered file type handlers.
+            int hr=AssocQueryString(0,4,extension,"open",output,ref length);
+            string label=output.ToString().Trim();
+            if(hr==0&&label.Length>0&&label.Length<=120)
+                return label;
+        }
+        catch(Exception ex) when(ex is DllNotFoundException or
+            EntryPointNotFoundException or ArgumentException){}
+        return "Windows default application";
     }
 
     internal static bool IsRegisteredDocument(string path)=>
