@@ -195,7 +195,6 @@ One @'
 '@ 'render local app choice within current Deck, no new window'
 One @'
         Views.Remove(this);
-        DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
 '@ @'
         Views.Remove(this);
         if(Views.Count==0)
@@ -205,7 +204,6 @@ One @'
                 Array.Empty<DeskSpaceFolderAppRecognitionV363.Suggestion>();
             recognizedFolderErrorV363=null;
         }
-        DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
 '@ 'clear ephemeral suggestions after last widget exits'
 if(!$s.Contains('folderLayer.Remove(folderAdorner)') -or
    !$s.Contains('SuggestFolderAppsV363(') -or
