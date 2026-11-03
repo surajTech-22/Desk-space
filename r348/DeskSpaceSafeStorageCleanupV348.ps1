@@ -163,9 +163,12 @@ function Invoke-R348StorageCleanup {
             } else {
                 foreach($item in $legacy) {
                     try {
+                        # Windows FileInfo may report Length=0 AFTER the
+                        # file is removed. Capture exact bytes before delete.
+                        [long]$length=$item.Length
                         Remove-Item -LiteralPath $item.FullName -Force -ErrorAction Stop
-                        $legacyBytes+=[long]$item.Length
-                        $recovered+=[long]$item.Length
+                        $legacyBytes+=$length
+                        $recovered+=$length
                     } catch {$messages.Add('legacy index delete deferred: '+$item.Name)}
                 }
             }
