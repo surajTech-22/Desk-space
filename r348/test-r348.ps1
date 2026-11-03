@@ -93,7 +93,7 @@ try {
     } finally {$locked.Dispose()}
 
     $final=Invoke-R348StorageCleanup @common
-    Write-Host ('R348 DEBUG final bytes='+$final.LegacyIndexBytes+' messages='+($final.Messages -join ' | '))
+    Write-Host ('R348 DEBUG locked='+($lockedRun.Messages -join ' | ')+' final bytes='+$final.LegacyIndexBytes+' messages='+($final.Messages -join ' | ')+' legacyExists='+(Test-Path (Join-Path $search 'filenames-v330.sqlite'))+' walExists='+(Test-Path (Join-Path $search 'filenames-v330.sqlite-wal')))
     Assert-R348 ($final.LegacyIndexBytes -eq 34816) 'legacy size/count incorrect'
     Assert-R348 (!(Test-Path (Join-Path $search 'filenames-v330.sqlite'))) 'obsolete legacy index not cleaned'
     Assert-R348 (!(Test-Path (Join-Path $search 'filenames-v330.sqlite-wal'))) 'obsolete WAL not cleaned'
