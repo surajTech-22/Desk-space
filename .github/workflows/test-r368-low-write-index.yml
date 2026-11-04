@@ -4,6 +4,7 @@ on:
     branches: [fix/r368-incremental-search-low-cpu]
     paths:
       - .github/workflows/test-r368-low-write-index.yml
+      - r324/**
       - r330/**
       - r366/**
       - r367/**
