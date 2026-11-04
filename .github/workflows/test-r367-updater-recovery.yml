@@ -214,6 +214,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
+          ./r353/apply-r353.ps1
+          if(!$?){throw 'R367 shipping test must retain R353 recovery timer'}
           ./r367/apply-r367.ps1
           if(!$?){throw 'R367 shipping release/download recovery source patch failed'}
           ./r367/test-r367.ps1
