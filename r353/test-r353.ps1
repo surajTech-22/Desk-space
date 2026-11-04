@@ -16,7 +16,10 @@ Assert ($handoff.Contains('DeskSpace-UpdateSupervisor-V185')) 'existing supervis
 Assert ($s.Contains('DeskSpaceVerifiedUpdateQueueV191.Peek(Channel)')) 'verified cached installer retry removed'
 Assert ($s.Contains('DeskSpaceVerifiedUpdateQueueV191.IsStillVerified(pending)')) 'verified disk-cache hash guard removed'
 Assert ($s.Contains('catch(SupervisorBusyV310Exception)')) 'safe active-supervisor defer removed'
-Assert ($s.Contains('timer.Tick+=async (_,_)=>await CheckAsync(owner,true)')) 'existing periodic release checks missing'
+# R367 extends the existing timer callback to reacquire release-listener
+# ownership before the same CheckAsync call; preserve both formats.
+Assert ($s.Contains('timer.Tick+=async') -and
+    $s.Contains('await CheckAsync(owner,true)')) 'existing periodic release checks missing'
 Assert ($s.Contains('DeskSpaceReleasePushV133.Start(owner)')) 'immediate signed-recheck release notifications removed'
 Assert ($s.Contains('DeskSpaceVerifiedUpdateQueueV191.Stage(')) 'trusted installer staging removed'
 Assert ($s.Contains('DeskSpaceVerifiedUpdateQueueV191.Clear(pending)')) 'verification cleanup removed'
