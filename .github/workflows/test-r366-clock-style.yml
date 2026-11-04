@@ -29,5 +29,5 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          dotnet run --project r366/Tests/ClockStyleCacheTests.csproj -c Release --no-restore
+          dotnet run --project r366/Tests/ClockStyleCacheTests.csproj -c Release
           if($LASTEXITCODE -ne 0){throw 'R366 clock visual regression failed'}
