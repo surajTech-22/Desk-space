@@ -6,6 +6,7 @@ on:
       - .github/workflows/test-r368-low-write-index.yml
       - r324/**
       - r330/**
+      - r332/**
       - r366/**
       - r367/**
       - r368/**
