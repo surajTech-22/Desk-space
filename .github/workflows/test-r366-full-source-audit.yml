@@ -1,0 +1,26 @@
+name: DeskSpace R366 Whole Source Recurring Work Inventory
+on:
+  push:
+    branches: [fix/r366-background-activity-audit]
+    paths:
+      - r366/audit-background.ps1
+      - .github/workflows/test-r366-full-source-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Count all checked-in background work patterns
+        shell: pwsh
+        run: |
+          ./r366/audit-background.ps1
+      - name: Retain full source inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskSpace-R366-background-static-inventory
+          path: r366/background-static-inventory.json
+          retention-days: 14
