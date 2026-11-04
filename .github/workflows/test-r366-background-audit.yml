@@ -199,7 +199,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           ./r366/apply-r366.ps1
-          if($LASTEXITCODE -ne 0){throw 'R366 shipping clock patch failed'}
+          if(!$?){throw 'R366 shipping clock patch failed'}
           $h=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
           $c=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWeatherContrastV64.cs' -Raw
           if(!$h.Contains('ApplyWeatherContrast();') -or
