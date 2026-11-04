@@ -2,7 +2,7 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 # R366 exhaustive static inventory of checked-in application C# sources.
 # This classifies recurring activity for review; a match is NOT proof of a bug.
-$root=Join-Path $PSScriptRoot '..\src\DeskSpace'
+$root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\src\DeskSpace'))
 $files=@(Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*.cs' |
   Where-Object { $_.FullName -notmatch '[\\/](obj|bin)[\\/]' })
 $patterns=[ordered]@{
