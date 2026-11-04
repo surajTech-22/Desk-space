@@ -34,6 +34,14 @@ internal static class Program
         string testDrive="R330-TEST:"+Guid.NewGuid().ToString("N")+"\\";
         try
         {
+            var own=disk.GetMethod("IsOwnIndexPathV335",Flags)!;
+            string ownRoot=Path.Combine(appData,"filenames-v336.sqlite");
+            foreach(var path in new[]{ownRoot,ownRoot+"-wal",ownRoot+"-shm"})
+                Check((bool)own.Invoke(null,new object?[]{path})!,
+                    "search SQLite cache/write-ahead log not excluded from indexing");
+            Check(!(bool)own.Invoke(null,new object?[]{
+                Path.Combine(Path.GetTempPath(),"MyReport.xlsx")})!,
+                "ordinary user filename incorrectly excluded");
             GC.Collect(2,GCCollectionMode.Forced,true,true);
             long start=GC.GetTotalMemory(true);
             long epoch=(long)begin.Invoke(null,null)!;
