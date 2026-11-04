@@ -19,6 +19,11 @@ internal static class DeskSpaceAllDriveLiveIndexV324
     private static Action<string>? newVolume;
     private static Timer? volumeCheck;
     private static bool running;
+    // R368: BuildIndex already crawls every ready volume at startup. Do not
+    // request a duplicate full crawl when FileSystemWatcher first attaches.
+    // A volume connected AFTER startup still needs its own initial crawl.
+    private static readonly HashSet<string> ReadyAtStartupV368=
+        new(StringComparer.OrdinalIgnoreCase);
 
     internal static void Start(Action<string,bool> onChange,Action<string> onNewVolume)
     {
@@ -28,6 +33,16 @@ internal static class DeskSpaceAllDriveLiveIndexV324
             running=true;
             changed=onChange;
             newVolume=onNewVolume;
+            foreach(var drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if(drive.IsReady)
+                        ReadyAtStartupV368.Add(drive.RootDirectory.FullName);
+                }
+                catch(Exception e) when(e is IOException or UnauthorizedAccessException
+                    or System.Security.SecurityException){}
+            }
             // Watchers detect changes during or after the full catalog crawl.
             // The slow safety check only discovers drives connected later.
             volumeCheck=new Timer(_=>CheckVolumes(),null,
@@ -90,7 +105,7 @@ internal static class DeskSpaceAllDriveLiveIndexV324
                 try{ready=drive.IsReady;root=drive.RootDirectory.FullName;}
                 catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
                     or System.Security.SecurityException){continue;}
-                if(ready)WatchRoot(root,true);
+                if(ready)WatchRoot(root,!ReadyAtStartupV368.Contains(root));
             }
         }
         catch(Exception){}
