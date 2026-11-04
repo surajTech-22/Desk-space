@@ -252,6 +252,113 @@ internal static class DeskSpaceDiskSearchV330
         }
     }
 
+    // R368: keep the unchanged catalog rows untouched during full
+    // reconciliation. The previous scan_epoch strategy rewrote every
+    // existing row, generating huge SQLite WAL/disk I/O on each startup.
+    // A temporary compact row-id set tracks which records were seen. Only
+    // new/changed rows modify the durable database; only safely completed
+    // scans may delete missing rows. Live watcher rows (epoch 0) are kept.
+    internal sealed class FullScanSessionV368 : IDisposable
+    {
+        private readonly SqliteConnection db;
+        private readonly SqliteCommand addOrUpdate;
+        private readonly SqliteCommand markSeen;
+        private readonly string root;
+        private readonly long epoch;
+        private int batches;
+        private bool finished;
+
+        internal FullScanSessionV368(string root)
+        {
+            this.root=root;
+            epoch=Interlocked.Increment(ref epochSequence);
+            db=Connect();
+            try
+            {
+                using(var create=db.CreateCommand())
+                {
+                    create.CommandText=@"CREATE TEMP TABLE seen_v368(
+                        id INTEGER PRIMARY KEY);";
+                    create.ExecuteNonQuery();
+                }
+                addOrUpdate=db.CreateCommand();
+                addOrUpdate.CommandText=@"INSERT INTO entries(
+                    path,name,folder,volume,scan_epoch)
+                    VALUES($path,$name,$folder,$root,$epoch)
+                    ON CONFLICT(path) DO UPDATE SET
+                        name=excluded.name,folder=excluded.folder,
+                        volume=excluded.volume
+                    WHERE entries.name<>excluded.name
+                       OR entries.folder<>excluded.folder
+                       OR entries.volume<>excluded.volume;";
+                addOrUpdate.Parameters.Add("$path",SqliteType.Text);
+                addOrUpdate.Parameters.Add("$name",SqliteType.Text);
+                addOrUpdate.Parameters.Add("$folder",SqliteType.Integer);
+                addOrUpdate.Parameters.AddWithValue("$root",root);
+                addOrUpdate.Parameters.AddWithValue("$epoch",epoch);
+                markSeen=db.CreateCommand();
+                markSeen.CommandText=@"INSERT OR IGNORE INTO temp.seen_v368(id)
+                    SELECT id FROM entries WHERE path=$path;";
+                markSeen.Parameters.Add("$path",SqliteType.Text);
+            }
+            catch{db.Dispose();throw;}
+        }
+        internal void WriteBatch(IReadOnlyList<Item> batch)
+        {
+            if(finished)throw new InvalidOperationException("Scan already complete.");
+            if(batch.Count==0)return;
+            using var tx=db.BeginTransaction();
+            addOrUpdate.Transaction=tx;
+            markSeen.Transaction=tx;
+            var path=addOrUpdate.Parameters["$path"];
+            var name=addOrUpdate.Parameters["$name"];
+            var folder=addOrUpdate.Parameters["$folder"];
+            var seenPath=markSeen.Parameters["$path"];
+            foreach(var item in batch)
+            {
+                path.Value=item.Path;
+                name.Value=item.Name;
+                folder.Value=item.Folder?1:0;
+                seenPath.Value=item.Path;
+                addOrUpdate.ExecuteNonQuery();
+                markSeen.ExecuteNonQuery();
+            }
+            tx.Commit();
+            // Keep all-drive coverage and live updates, but let other
+            // processes and the UI breathe during background reconciliation.
+            if((++batches&1)==0)Thread.Sleep(12);
+        }
+        internal void Complete()
+        {
+            if(finished)throw new InvalidOperationException("Scan already complete.");
+            using(var cmd=db.CreateCommand())
+            {
+                cmd.CommandTimeout=120;
+                cmd.CommandText=@"DELETE FROM entries
+                    WHERE volume=$root AND scan_epoch<>0
+                    AND NOT EXISTS(
+                      SELECT 1 FROM temp.seen_v368 s WHERE s.id=entries.id);";
+                cmd.Parameters.AddWithValue("$root",root);
+                cmd.ExecuteNonQuery();
+            }
+            using(var checkpoint=db.CreateCommand())
+            {
+                checkpoint.CommandText="PRAGMA wal_checkpoint(PASSIVE);";
+                checkpoint.ExecuteNonQuery();
+            }
+            finished=true;
+        }
+        public void Dispose()
+        {
+            addOrUpdate?.Dispose();
+            markSeen?.Dispose();
+            db.Dispose();
+        }
+    }
+
+    internal static FullScanSessionV368 BeginLowWriteScanV368(string root)=>
+        new(root);
+
     internal static long BeginScan()
     {
         Initialize();
