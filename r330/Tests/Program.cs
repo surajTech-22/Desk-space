@@ -83,6 +83,16 @@ internal static class Program
             GC.Collect(2,GCCollectionMode.Forced,true,true);
             double rereadMb=(GC.GetTotalMemory(true)-after)/1048576.0;
             Check(rereadMb<35.0,$"120 repeated searches leaked {rereadMb:F1} MiB");
+            // R366: 50,000 notifications for the SAME path must occupy one
+            // queue slot. The latest event remains authoritative at flush.
+            string repeated=Path.Combine(Path.GetTempPath(),
+                "DeskSpace-R366-Notification-"+Guid.NewGuid().ToString("N")+".txt");
+            int beforeBurst=(int)disk.GetProperty("PendingCount",Flags)!.GetValue(null)!;
+            for(int i=0;i<50000;i++)
+                notify.Invoke(null,new object[]{repeated,(i&1)==0});
+            int afterBurst=(int)disk.GetProperty("PendingCount",Flags)!.GetValue(null)!;
+            Check(afterBurst==beforeBurst+1,
+                "50,000 same-path watcher events created redundant backlog entries");
             // Stress watcher input without writing all events to SQLite.
             for(int i=0;i<20000;i++)
                 notify.Invoke(null,new object[]{"R:\\DeskSpaceSynthetic\\"+i+".txt",true});
