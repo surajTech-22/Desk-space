@@ -201,6 +201,8 @@ jobs:
           if(!$?){throw 'R367 updater release-listener/download recovery patch failed'}
           & ./r367/test-r367.ps1
           if(!$?){throw 'R367 official installer safety and recovery guards failed'}
+          & ./r353/test-r353.ps1
+          if(!$?){throw 'R353/R367 persistent automatic retry regression failed'}
           $disk=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDiskSearchV330.cs' -Raw
           $index=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSearchIndexV13.cs' -Raw
           $clock=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWeatherContrastV64.cs' -Raw
