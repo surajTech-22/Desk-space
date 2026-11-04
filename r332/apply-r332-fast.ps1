@@ -105,15 +105,26 @@ $q=$q.Replace($old,'while (queue.Count > 0 && interactiveClockV334.ElapsedMillis
 
 # Prevent the all-volume scanner from indexing the SQLite DB it is
 # actively writing. The watcher side is excluded in DiskSearch.Enqueue.
-$scan='            foreach(var path in EnumerateTree(root))'+$lf+
-      '            {'
-if(([regex]::Matches($s,[regex]::Escape($scan))).Count -ne 1){
-    throw 'R335 must find one complete foreach opening brace'
+# R368 uses a single metadata-aware enumerator that already excludes
+# its own SQLite cache directory before descending. Keep legacy R335 support.
+$iterStart=$s.IndexOf('EnumerateCatalogEntriesV368(string root)')
+$iterEnd=if($iterStart -ge 0){$s.IndexOf('    private static void ScanVolume(string root)', $iterStart)}else{-1}
+if($iterStart -ge 0 -and $iterEnd -gt $iterStart){
+    $iteratorBody=$s.Substring($iterStart,$iterEnd-$iterStart)
+    if(!$iteratorBody.Contains('DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path)')){
+        throw 'R335/R368 full-drive scanner own-cache exclusion missing'
+    }
+    Write-Host 'R335 own-cache exclusion preserved in R368 enumerator.'
 }
-$s=$s.Replace($scan,$scan+$lf+
-    '                if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;')
-# Do not add/remove an extra opening brace: earlier patch compiled with
-# CS1513 because two braces opened and only one was closed.
+else {
+    $scan='            foreach(var path in EnumerateTree(root))'+$lf+
+          '            {'
+    if(([regex]::Matches($s,[regex]::Escape($scan))).Count -ne 1){
+        throw 'R335 must find one complete foreach opening brace'
+    }
+    $s=$s.Replace($scan,$scan+$lf+
+        '                if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;')
+}
 
 [IO.File]::WriteAllText($p,$s,[Text.UTF8Encoding]::new($false))
 if($s.Contains('var indexed=DeskSpaceWindowsSearchV18.Query(fileQuery,cancellation);') -or
