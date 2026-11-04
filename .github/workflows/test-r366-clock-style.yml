@@ -1,0 +1,33 @@
+name: DeskSpace R366 Idle Clock Native Windows Regression
+on:
+  push:
+    branches: [fix/r366-background-activity-audit]
+    paths:
+      - src/DeskSpace/DeskSpaceWeatherContrastV64.cs
+      - r64/DeskSpaceWeatherContrastV64.cs
+      - r366/Tests/**
+      - .github/workflows/test-r366-clock-style.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  clock:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile checked-in Windows DeskSpace source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/DeskSpace/DeskSpace.csproj -c Release --nologo
+          if($LASTEXITCODE -ne 0){throw 'Checked-in DeskSpace WPF build failed'}
+      - name: Verify identical clock palette and no idle resource churn
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --project r366/Tests/ClockStyleCacheTests.csproj -c Release --no-restore
+          if($LASTEXITCODE -ne 0){throw 'R366 clock visual regression failed'}
