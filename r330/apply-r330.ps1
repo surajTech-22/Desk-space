@@ -74,6 +74,42 @@ if($start -lt 0 -or $end -le $start){
  throw 'R330 full-volume scan method boundaries changed'
 }
 $scan=@'
+    // R368: read the metadata returned by a directory listing once.
+    // EnumerateTree previously fetched attributes for navigation and then
+    // ScanVolume fetched the SAME attributes a second time for every path.
+    // Keep the same reparse-point exclusion and full-drive coverage.
+    private static IEnumerable<DeskSpaceDiskSearchV330.Item>
+        EnumerateCatalogEntriesV368(string root)
+    {
+        if(string.IsNullOrWhiteSpace(root)||!Directory.Exists(root))yield break;
+        var stack=new Stack<string>();
+        stack.Push(root);
+        while(stack.Count!=0)
+        {
+            var directory=stack.Pop();
+            FileSystemInfo[] nodes;
+            try{nodes=new DirectoryInfo(directory).GetFileSystemInfos();}
+            catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
+                or ArgumentException or System.Security.SecurityException
+                or NotSupportedException){continue;}
+            foreach(var node in nodes)
+            {
+                FileAttributes flags;
+                try{flags=node.Attributes;}
+                catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
+                    or ArgumentException or System.Security.SecurityException
+                    or NotSupportedException){continue;}
+                if((flags&FileAttributes.ReparsePoint)!=0)continue;
+                string path=node.FullName;
+                if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;
+                bool folder=(flags&FileAttributes.Directory)!=0;
+                if(folder)stack.Push(path);
+                yield return new DeskSpaceDiskSearchV330.Item(
+                    node.Name,path,folder,root);
+            }
+        }
+    }
+
     private static void ScanVolume(string root)
     {
         if(!ScanningRootsV324.TryAdd(root,0))return;
@@ -91,17 +127,9 @@ $scan=@'
             // A TEMP row-id set replaces durable scan_epoch churn.
             using var session=DeskSpaceDiskSearchV330.BeginLowWriteScanV368(root);
             long found=0;
-            foreach(var path in EnumerateTree(root))
+            foreach(var item in EnumerateCatalogEntriesV368(root))
             {
-                if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;
-                FileAttributes flags;
-                try{flags=File.GetAttributes(path);}
-                catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
-                    or ArgumentException or System.Security.SecurityException
-                    or NotSupportedException){continue;}
-                batch.Add(new DeskSpaceDiskSearchV330.Item(
-                    Path.GetFileName(path),path,
-                    (flags&FileAttributes.Directory)!=0,root));
+                batch.Add(item);
                 if(batch.Count<DeskSpaceDiskSearchV330.BatchSize)continue;
                 session.WriteBatch(batch);
                 found+=batch.Count;
