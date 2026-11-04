@@ -88,6 +88,9 @@ $scan=@'
             long found=0;
             foreach(var path in EnumerateTree(root))
             {
+                // R366: internal index/WAL activity must never become a
+                // searchable input to the same catalog being written.
+                if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;
                 FileAttributes flags;
                 try{flags=File.GetAttributes(path);}
                 catch(Exception ex) when(ex is IOException or UnauthorizedAccessException

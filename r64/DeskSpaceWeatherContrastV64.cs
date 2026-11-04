@@ -32,32 +32,50 @@ internal static class DeskSpaceWeatherContrastV64
         LightScene(weather,showWeather)
             ?Colors.White:Color.FromRgb(2,8,28);
 
+    // R366: widget clock updates once per second. Reuse immutable WPF
+    // resources instead of allocating brushes and blur effects each tick.
+    // The same light/dark palette and child styling remain unchanged.
+    private static readonly Brush LightInk=FrozenInk(Color.FromRgb(12,29,53));
+    private static readonly Brush DarkInk=FrozenInk(Colors.White);
+    private static readonly Effect LightOutline=FrozenOutline(Colors.White);
+    private static readonly Effect DarkOutline=FrozenOutline(Color.FromRgb(2,8,28));
+
+    private static Brush FrozenInk(Color color)
+    {
+        var brush=new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+    private static Effect FrozenOutline(Color color)
+    {
+        var effect=new DropShadowEffect{Color=color,BlurRadius=3.5,
+            ShadowDepth=0,Opacity=.95};
+        effect.Freeze();
+        return effect;
+    }
     internal static void Apply(DependencyObject? element,
         WeatherReading? weather,bool showWeather)
     {
         if(element==null)return;
-        var foreground=new SolidColorBrush(ClockColor(weather,showWeather));
-        var stroke=EdgeColor(weather,showWeather);
-        // A crisp, zero-distance edge around the glyph maintains readable
-        // boundaries when animated clouds/rain cross the clock text.
+        bool light=LightScene(weather,showWeather);
+        var foreground=light?LightInk:DarkInk;
         Effect? outline=showWeather&&weather!=null
-            ?new DropShadowEffect{Color=stroke,BlurRadius=3.5,
-                ShadowDepth=0,Opacity=.95}:null;
+            ?(light?LightOutline:DarkOutline):null;
         Visit(element,foreground,outline);
     }
     private static void Visit(DependencyObject parent,Brush ink,Effect? outline)
     {
         if(parent is TextBlock text)
         {
-            text.Foreground=ink;
-            text.Effect=outline;
+            if(!ReferenceEquals(text.Foreground,ink))text.Foreground=ink;
+            if(!ReferenceEquals(text.Effect,outline))text.Effect=outline;
             foreach(Inline item in text.Inlines)
-                item.Foreground=ink;
+                if(!ReferenceEquals(item.Foreground,ink))item.Foreground=ink;
         }
         else if(parent is Control control)
         {
-            control.Foreground=ink;
-            control.Effect=outline;
+            if(!ReferenceEquals(control.Foreground,ink))control.Foreground=ink;
+            if(!ReferenceEquals(control.Effect,outline))control.Effect=outline;
         }
         // A time/date widget may use independent TextBlocks inside an element;
         // unlike inherited Foreground this overrides their prior local colors.

@@ -1895,18 +1895,21 @@ public sealed class WidgetShellWindow : Window
              DeskSpaceWeather.Latest!=null ? 29 : (prefs.CenterMode=="Notes"?30:32));
         var sky=DeskSpaceWeather.Latest;
         var hasSky=prefs.CenterMode=="Clock" && prefs.ShowWeather && sky!=null;
-        content.Foreground=hasSky && sky!.IsDay && sky.Code<=1
-            ? new SolidColorBrush(Color.FromRgb(24,31,60)) : Brushes.White;
-        content.Effect=hasSky
-            ? new System.Windows.Media.Effects.DropShadowEffect{
-                Color=sky!.IsDay && sky.Code<=1
-                    ? Color.FromArgb(160,255,250,233):Color.FromArgb(200,10,17,40),
-                BlurRadius=4,ShadowDepth=0,Opacity=.85}
-            : null;
-
         var progress=DeskSpaceUpdateProgress.Snapshot();
         if (progress.Active)
         {
+            // The normal clock's final styling comes from ApplyWeatherContrast.
+            // Only the temporary update-progress display requires this
+            // separate original weather palette. Avoid allocating a brush
+            // and blur effect just to replace both every idle clock tick.
+            content.Foreground=hasSky && sky!.IsDay && sky.Code<=1
+                ? new SolidColorBrush(Color.FromRgb(24,31,60)) : Brushes.White;
+            content.Effect=hasSky
+                ? new System.Windows.Media.Effects.DropShadowEffect{
+                    Color=sky!.IsDay && sky.Code<=1
+                        ? Color.FromArgb(160,255,250,233):Color.FromArgb(200,10,17,40),
+                    BlurRadius=4,ShadowDepth=0,Opacity=.85}
+                : null;
             var message = "UPDATE\n" + progress.Label +
                 (progress.Percent.HasValue ? "\n" + progress.Percent.Value + "%" : "");
             if (content.Text != message) content.Text = message;
