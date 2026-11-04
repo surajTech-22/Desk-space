@@ -10,7 +10,7 @@ if(!(Test-Path -LiteralPath $hostPath) -or
 }
 $crlf=[string][char]13+[string][char]10
 $lf=[string][char]10
-$host=[IO.File]::ReadAllText($hostPath).Replace($crlf,$lf)
+$hostSource=[IO.File]::ReadAllText($hostPath).Replace($crlf,$lf)
 $old=@'
         content.Foreground=hasSky && sky!.IsDay && sky.Code<=1
             ? new SolidColorBrush(Color.FromRgb(24,31,60)) : Brushes.White;
@@ -43,13 +43,13 @@ $new=@'
 '@
 $old=$old.Replace($crlf,$lf)
 $new=$new.Replace($crlf,$lf)
-$hits=([regex]::Matches($host,[regex]::Escape($old))).Count
+$hits=([regex]::Matches($hostSource,[regex]::Escape($old))).Count
 if($hits -ne 1){throw "R366 idle widget effect expected exactly one anchor; found $hits"}
-$host=$host.Replace($old,$new)
+$hostSource=$hostSource.Replace($old,$new)
 $clockSource=[IO.File]::ReadAllText('r64/DeskSpaceWeatherContrastV64.cs')
 foreach($guard in @('FrozenInk(','FrozenOutline(','ReferenceEquals(text.Foreground,ink)')){
     if(!$clockSource.Contains($guard)){throw "R366 clock resource cache missing: $guard"}
 }
-[IO.File]::WriteAllText($hostPath,$host,[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($hostPath,$hostSource,[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText($clockPath,$clockSource,[Text.UTF8Encoding]::new($false))
 Write-Host 'R366 shipping host clock styling caches visuals and preserves update progress.'
