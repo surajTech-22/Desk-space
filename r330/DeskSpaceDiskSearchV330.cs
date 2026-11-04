@@ -19,6 +19,8 @@ internal static class DeskSpaceDiskSearchV330
     internal const int MaximumPending=4096;
     internal const int MaximumReturned=640;
     private static readonly object SetupGate=new();
+    // Single low-priority catalog reconciler per DeskSpace process.
+    internal static readonly SemaphoreSlim ScanGateV368=new(1,1);
     // Queue each path only once; retain the newest state for that path.
     // A burst of duplicate watcher notifications must not generate duplicate SQL.
     private static readonly ConcurrentQueue<string> PendingChanges=new();
