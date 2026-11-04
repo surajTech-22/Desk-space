@@ -4,6 +4,7 @@ on:
     branches: [fix/r366-background-activity-audit]
     paths:
       - src/DeskSpace/DeskSpaceWeatherContrastV64.cs
+      - src/DeskSpace/WidgetHost.cs
       - r64/DeskSpaceWeatherContrastV64.cs
       - r366/Tests/**
       - .github/workflows/test-r366-clock-style.yml
@@ -25,6 +26,17 @@ jobs:
           $ErrorActionPreference='Stop'
           dotnet build src/DeskSpace/DeskSpace.csproj -c Release --nologo
           if($LASTEXITCODE -ne 0){throw 'Checked-in DeskSpace WPF build failed'}
+      - name: Check idle widget path avoids discarded clock effects
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $code=Get-Content src/DeskSpace/WidgetHost.cs -Raw
+          $start=$code.IndexOf('    private void UpdateCenter()')
+          $progress=$code.IndexOf('        if (progress.Active)', $start)
+          $effect=$code.IndexOf('new System.Windows.Media.Effects.DropShadowEffect', $start)
+          if($start -lt 0 -or $progress -lt 0 -or $effect -lt $progress){
+              throw 'Idle widget still creates a weather effect before checking update progress'
+          }
       - name: Verify identical clock palette and no idle resource churn
         shell: pwsh
         run: |
