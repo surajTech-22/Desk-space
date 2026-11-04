@@ -77,19 +77,22 @@ $scan=@'
     private static void ScanVolume(string root)
     {
         if(!ScanningRootsV324.TryAdd(root,0))return;
+        // R368: one background volume reconciler at a time. Parallel disk
+        // crawls used to compete with each other and the interactive UI.
+        DeskSpaceDiskSearchV330.ScanGateV368.Wait();
         var batch=new List<DeskSpaceDiskSearchV330.Item>(
             DeskSpaceDiskSearchV330.BatchSize);
-        long epoch=0;
         bool succeeded=false;
         try
         {
             VolumeComplete[root]=false;
-            epoch=DeskSpaceDiskSearchV330.BeginScan();
+            // Read every accessible filename for full-drive coverage and
+            // deletion safety, but do NOT rewrite unchanged SQLite rows.
+            // A TEMP row-id set replaces durable scan_epoch churn.
+            using var session=DeskSpaceDiskSearchV330.BeginLowWriteScanV368(root);
             long found=0;
             foreach(var path in EnumerateTree(root))
             {
-                // R366: internal index/WAL activity must never become a
-                // searchable input to the same catalog being written.
                 if(DeskSpaceDiskSearchV330.IsOwnIndexPathV335(path))continue;
                 FileAttributes flags;
                 try{flags=File.GetAttributes(path);}
@@ -100,7 +103,7 @@ $scan=@'
                     Path.GetFileName(path),path,
                     (flags&FileAttributes.Directory)!=0,root));
                 if(batch.Count<DeskSpaceDiskSearchV330.BatchSize)continue;
-                DeskSpaceDiskSearchV330.WriteBatch(root,epoch,batch);
+                session.WriteBatch(batch);
                 found+=batch.Count;
                 VolumeCounts[root]=found;
                 batch.Clear();
@@ -108,18 +111,19 @@ $scan=@'
             }
             if(batch.Count!=0)
             {
-                DeskSpaceDiskSearchV330.WriteBatch(root,epoch,batch);
+                session.WriteBatch(batch);
                 found+=batch.Count;
                 VolumeCounts[root]=found;
                 batch.Clear();
             }
-            DeskSpaceDiskSearchV330.CompleteScan(root,epoch);
+            // Only a complete, accessible scan may remove missing entries.
+            session.Complete();
             succeeded=true;
         }
         catch(Exception)
         {
-            // Leave the last complete disk index searchable if a volume
-            // disappears or its scan fails midway. No large heap retained.
+            // Interrupted/inaccessible/failed volume scans never delete
+            // previous good results. The live watcher still operates.
         }
         finally
         {
@@ -127,6 +131,7 @@ $scan=@'
             VolumeComplete[root]=succeeded;
             ScanningRootsV324.TryRemove(root,out _);
             Interlocked.Increment(ref revisionV324);
+            DeskSpaceDiskSearchV330.ScanGateV368.Release();
         }
     }
 '@
