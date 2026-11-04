@@ -5,6 +5,8 @@ on:
     paths:
       - .github/workflows/test-r366-background-audit.yml
       - r330/**
+      - r366/**
+      - r64/DeskSpaceWeatherContrastV64.cs
       - r324/Tests/Program.cs
       - r312/**
       - r310/**
@@ -192,6 +194,19 @@ jobs:
           Write-Host "Verified R232 + R233-R239 Stable source plus R301 Deck collision hotfix."
       # Audit only: build the reviewed source and run Windows regressions.
       # Never allocate a version, publish an installer or touch installed data.
+      - name: Apply R366 clock performance patch to shipping WPF source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          ./r366/apply-r366.ps1
+          if($LASTEXITCODE -ne 0){throw 'R366 shipping clock patch failed'}
+          $h=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
+          $c=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceWeatherContrastV64.cs' -Raw
+          if(!$h.Contains('ApplyWeatherContrast();') -or
+             !$h.Contains('progress.Active') -or
+             !$c.Contains('FrozenOutline(')){
+             throw 'R366 shipping clock resources not correctly applied'
+          }
       - name: Run isolated synthetic updater and WPF acceptance on shipping source
         shell: pwsh
         run: |
