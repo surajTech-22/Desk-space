@@ -233,7 +233,15 @@ internal static class DeskSpacePublicUpdaterV44
         // ntfy.sh cannot deliver a push event. This MUST NOT use GitHub REST
         // API at this frequency. Event-driven detection remains immediate.
         timer=new DispatcherTimer{Interval=TimeSpan.FromMinutes(1)};
-        timer.Tick+=async (_,_)=>await CheckAsync(owner,true);
+        timer.Tick+=async (_,_)=>
+        {
+            // R367: a Workspace process can start while another widget owns
+            // release notifications. If that owner exits, this process
+            // attempts to acquire the listener mutex on its normal timer.
+            // No extra GitHub checks or additional polling timer are added.
+            DeskSpaceReleasePushV133.Start(owner);
+            await CheckAsync(owner,true);
+        };
         timer.Start();
         // Subscribe immediately, independently of periodic checks.
         DeskSpaceReleasePushV133.Start(owner);
@@ -283,10 +291,16 @@ internal static class DeskSpacePublicUpdaterV44
         if(response.Content.Headers.ContentLength>limit)
             throw new InvalidDataException("Unexpected installer size");
         await using var input=await response.Content.ReadAsStreamAsync(ct);
+        // R367: durable privacy-safe transfer boundaries help distinguish
+        // a failed/stalled network stream from a blocked installation.
+        Log("R367 installer transfer started; expected bytes="+
+            (response.Content.Headers.ContentLength?.ToString()??"unknown"));
         // R222: never overwrite the cached installer while downloading.
         // Promote a completed local transfer in one same-folder file rename;
         // R219 then verifies official SHA256, metadata digest and PE signature.
         await DeskSpaceAtomicInstallerV222.StageFromStreamAsync(input,file,ct);
+        Log("R367 installer transfer completed; bytes="+
+            new FileInfo(file).Length+"; awaiting official SHA-256 verification.");
     }
     private static void Verify(string installer,string checksum,JsonElement? root)
     {
@@ -677,6 +691,22 @@ internal static class DeskSpacePublicUpdaterV44
         catch(Exception ex)
         {
             Log("Update failed at "+stage+": "+ex.GetType().Name+" "+ex.Message);
+            // R367: after a transient failed tester download, do not leave
+            // automatic retries blocked for 30 minutes. Space retries by
+            // five minutes to respect the unauthenticated GitHub API budget;
+            // never override explicit 403/429 Retry-After or SHA validation.
+            bool transient=ex is HttpRequestException or IOException or
+                OperationCanceledException;
+            if(automatic && Channel=="tester" && transient &&
+               (stage.StartsWith("Download",StringComparison.Ordinal) ||
+                stage=="GitHub release metadata"))
+            {
+                DeskSpaceUpdateRateV127.SaveUtc(
+                    DeskSpaceUpdateRateV127.PollFile(Local,"tester"),
+                    DateTimeOffset.UtcNow.AddMinutes(-25));
+                Log("R367 transient tester network failure; next automatic "+
+                    "release check eligible in approximately five minutes.");
+            }
             if(!automatic)MessageBox.Show(owner,
                 "Update failed during "+stage+": "+ex.Message+
                 "\nThe existing installation has not been replaced.",
