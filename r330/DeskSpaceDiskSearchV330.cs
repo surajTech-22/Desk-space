@@ -54,8 +54,11 @@ internal static class DeskSpaceDiskSearchV330
             var prefix=Path.TrimEndingDirectorySeparator(directory)+
                 Path.DirectorySeparatorChar;
             var absolute=Path.GetFullPath(path);
-            return absolute.StartsWith(prefix,
-                StringComparison.OrdinalIgnoreCase);
+            return absolute.Equals(
+                    Path.TrimEndingDirectorySeparator(directory),
+                    StringComparison.OrdinalIgnoreCase) ||
+                absolute.StartsWith(prefix,
+                    StringComparison.OrdinalIgnoreCase);
         }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
             or ArgumentException or NotSupportedException
