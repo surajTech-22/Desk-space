@@ -19,7 +19,13 @@ internal static class DeskSpaceDiskSearchV330
     internal const int MaximumPending=4096;
     internal const int MaximumReturned=640;
     private static readonly object SetupGate=new();
-    private static readonly ConcurrentQueue<Pending> PendingChanges=new();
+    // Queue each path only once; retain the newest state for that path.
+    // A burst of duplicate watcher notifications must not generate duplicate SQL.
+    private static readonly ConcurrentQueue<string> PendingChanges=new();
+    private static readonly ConcurrentDictionary<string,bool> PendingStates=
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string,long> LastRecoveryScanTicks=
+        new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string,byte> DirtyVolumes=
         new(StringComparer.OrdinalIgnoreCase);
     private static Timer? updateTimer;
@@ -27,17 +33,11 @@ internal static class DeskSpaceDiskSearchV330
     private static int pendingCount,flushing,initialized;
     private static long epochSequence=DateTime.UtcNow.Ticks;
 
-    private static string DatabaseFile
-    {
-        get
-        {
-            var baseFolder=Path.Combine(Environment.GetFolderPath(
-                Environment.SpecialFolder.LocalApplicationData),
-                "DeskSpace","Search");
-            Directory.CreateDirectory(baseFolder);
-            return Path.Combine(baseFolder,"filenames-v336.sqlite");
-        }
-    }
+    // Computing an exclusion path on every filesystem event must not itself
+    // issue Directory.CreateDirectory against the disk.
+    private static readonly string DatabaseFile=Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "DeskSpace","Search","filenames-v336.sqlite");
 
     // R335: exclude the filename index's OWN SQLite, WAL, SHM and journal
     // files from both scanner and watcher. Otherwise indexing writes raise
@@ -82,6 +82,7 @@ internal static class DeskSpaceDiskSearchV330
         {
             if(initialized!=0)return;
             string file=DatabaseFile;
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             using var connection=new SqliteConnection(new SqliteConnectionStringBuilder{
                 DataSource=file,Mode=SqliteOpenMode.ReadWriteCreate,
                 Pooling=false
@@ -135,14 +136,27 @@ internal static class DeskSpaceDiskSearchV330
         {
             path=Path.GetFullPath(path);
             if(IsOwnIndexPathV335(path))return;
-            if(Interlocked.Increment(ref pendingCount)>MaximumPending)
+            while(true)
             {
-                Interlocked.Decrement(ref pendingCount);
-                string? root=Path.GetPathRoot(path);
-                if(!string.IsNullOrEmpty(root))DirtyVolumes[root]=0;
-                return; // never let event bursts cause an unbounded heap
+                // Coalesce repeated notifications without losing a newer
+                // rename/create/delete state while a flush is in progress.
+                if(PendingStates.TryGetValue(path,out var previous))
+                {
+                    if(PendingStates.TryUpdate(path,exists,previous))return;
+                    continue;
+                }
+                if(!PendingStates.TryAdd(path,exists))continue;
+                if(Interlocked.Increment(ref pendingCount)>MaximumPending)
+                {
+                    Interlocked.Decrement(ref pendingCount);
+                    PendingStates.TryRemove(path,out _);
+                    string? root=Path.GetPathRoot(path);
+                    if(!string.IsNullOrEmpty(root))DirtyVolumes[root]=0;
+                    return;
+                }
+                PendingChanges.Enqueue(path);
+                return;
             }
-            PendingChanges.Enqueue(new Pending(path,exists));
         }
         catch(Exception ex) when(ex is ArgumentException or NotSupportedException
             or PathTooLongException){}
@@ -154,10 +168,11 @@ internal static class DeskSpaceDiskSearchV330
         try
         {
             var batch=new List<Pending>(MaximumPending);
-            while(batch.Count<MaximumPending&&PendingChanges.TryDequeue(out var item))
+            while(batch.Count<MaximumPending&&PendingChanges.TryDequeue(out var path))
             {
+                if(!PendingStates.TryRemove(path,out var exists))continue;
                 Interlocked.Decrement(ref pendingCount);
-                batch.Add(item);
+                batch.Add(new Pending(path,exists));
             }
             if(batch.Count!=0)
             {
@@ -168,7 +183,9 @@ internal static class DeskSpaceDiskSearchV330
                 upsert.CommandText=@"INSERT INTO entries(path,name,folder,volume,scan_epoch)
                     VALUES($path,$name,$folder,$volume,0)
                     ON CONFLICT(path) DO UPDATE SET
-                     name=excluded.name,folder=excluded.folder,volume=excluded.volume,scan_epoch=0;";
+                     name=excluded.name,folder=excluded.folder,volume=excluded.volume,scan_epoch=0
+                    WHERE entries.scan_epoch<>0 OR entries.name<>excluded.name
+                       OR entries.folder<>excluded.folder OR entries.volume<>excluded.volume;";
                 var p=upsert.Parameters.Add("$path",SqliteType.Text);
                 var n=upsert.Parameters.Add("$name",SqliteType.Text);
                 var f=upsert.Parameters.Add("$folder",SqliteType.Integer);
@@ -202,9 +219,9 @@ internal static class DeskSpaceDiskSearchV330
         {
             // Not all events can be replayed after a transient database error.
             // Recover all affected volumes with a fresh bounded rescan.
-            foreach(var eventItem in PendingChanges)
+            foreach(var eventPath in PendingChanges)
             {
-                string? root=Path.GetPathRoot(eventItem.Path);
+                string? root=Path.GetPathRoot(eventPath);
                 if(!string.IsNullOrEmpty(root))DirtyVolumes[root]=0;
             }
             // A failure after dequeuing a transaction must not silently
@@ -220,10 +237,18 @@ internal static class DeskSpaceDiskSearchV330
         {
             Interlocked.Exchange(ref flushing,0);
             foreach(var root in DirtyVolumes.Keys)
-                if(DirtyVolumes.TryRemove(root,out _) && rescan!=null)
-                {
-                    try{rescan(root);}catch(Exception){}
-                }
+            {
+                if(rescan==null)break;
+                long now=Environment.TickCount64;
+                // Overflow recovery must not become a permanent full-drive
+                // rescan loop under sustained filesystem-event pressure.
+                if(LastRecoveryScanTicks.TryGetValue(root,out var last) &&
+                   now-last<TimeSpan.FromMinutes(2).TotalMilliseconds)continue;
+                if(!DirtyVolumes.TryRemove(root,out _))continue;
+                LastRecoveryScanTicks[root]=now;
+                try{rescan(root);}
+                catch(Exception){DirtyVolumes[root]=0;}
+            }
         }
     }
 
