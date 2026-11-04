@@ -51,19 +51,32 @@ internal static class DeskSpaceReleasePushV133
         // process subscribes and starts supervised installs for a user.
         try
         {
-            streamOwner=new System.Threading.Mutex(true,
-                @"Local\DeskSpace-ReleasePushV133",out bool ownsStream);
-            if(!ownsStream)
+            // R367: Mutex 'createdNew' does NOT mean ownership. An existing
+            // named mutex may be unowned after a normal exit, or abandoned
+            // after a crash. Acquire the mutex; don't permanently disable
+            // notifications because the object already exists.
+            streamOwner=new System.Threading.Mutex(false,
+                @"Local\DeskSpace-ReleasePushV133");
+            bool acquired;
+            try{acquired=streamOwner.WaitOne(0);}
+            catch(AbandonedMutexException){acquired=true;}
+            if(!acquired)
             {
-                Log("Release listener already active in another DeskSpace process.");
+                Log("Release listener active in another DeskSpace process; "+
+                    "will retry ownership on the next periodic tick.");
                 streamOwner.Dispose();
                 streamOwner=null;
+                started=false;
                 return;
             }
+            Log("R367 release listener ownership acquired.");
         }
         catch(UnauthorizedAccessException)
         {
-            Log("Cannot acquire single-instance release listener mutex.");
+            streamOwner?.Dispose();
+            streamOwner=null;
+            started=false;
+            Log("Cannot acquire release listener mutex; retry remains enabled.");
             return;
         }
         _=ListenAsync(owner);
