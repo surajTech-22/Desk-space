@@ -269,6 +269,7 @@ internal static class DeskSpaceDiskSearchV330
         private readonly long epoch;
         private int batches;
         private bool finished;
+        internal long DurableWritesV368 {get;private set;}
 
         internal FullScanSessionV368(string root)
         {
@@ -322,7 +323,7 @@ internal static class DeskSpaceDiskSearchV330
                 name.Value=item.Name;
                 folder.Value=item.Folder?1:0;
                 seenPath.Value=item.Path;
-                addOrUpdate.ExecuteNonQuery();
+                DurableWritesV368+=addOrUpdate.ExecuteNonQuery();
                 markSeen.ExecuteNonQuery();
             }
             tx.Commit();
