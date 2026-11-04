@@ -190,42 +190,8 @@ jobs:
              throw 'R304 must be in the actual shipping Running Apps Deck'
           }
           Write-Host "Verified R232 + R233-R239 Stable source plus R301 Deck collision hotfix."
-      - name: Assign upgrade version above previously published stable
-        shell: pwsh
-        run: |
-          $ErrorActionPreference='Stop'
-          $version='' # Determine the next version from the latest actual stable release
-          $stable=gh api 'repos/surajTech-22/Desk-space/releases/latest' --jq .tag_name
-          if($LASTEXITCODE -ne 0){throw 'Cannot read existing Stable release'}
-          $latest=[version](($stable|Out-String).Trim().TrimStart('v'))
-          if($latest.Major -ne 1 -or $latest.Minor -ne 5){
-              throw 'Unexpected DeskSpace stable version family'
-          }
-          $nextBuild=1121
-          $version="1.5.$nextBuild"
-          $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
-          if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
-          foreach($tag in @('v1.5.1121','tester-v1.5.1121')){
-            if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
-              throw ('Refuse to overwrite existing release: '+$tag)
-            }
-          }
-          if([version]$version -le [version](($stable|Out-String).Trim().TrimStart('v'))){
-              throw 'New version would be a downgrade'
-          }
-          $setup='installer/DeskSpace.iss'
-          $value=[IO.File]::ReadAllText($setup)
-          $old='#define AppVersion "1.5.1093"'
-          if(!$value.Contains($old)){throw 'Original installer version unexpected'}
-          [IO.File]::WriteAllText($setup,$value.Replace($old,'#define AppVersion "'+$version+'"'),[Text.UTF8Encoding]::new($false))
-          $updater='DeskSpace_Windows_R1/DeskSpace/DeskSpaceUpdater.cs'
-          $s=[IO.File]::ReadAllText($updater)
-          $old='private static readonly Version InstalledVersion = new(1, 5, 1093);'
-          if(!$s.Contains($old)){throw 'Original updater version unexpected'}
-          $s=$s.Replace($old,'private static readonly Version InstalledVersion = new(1, 5, '+$nextBuild+');')
-          [IO.File]::WriteAllText($updater,$s,[Text.UTF8Encoding]::new($false))
-          [IO.File]::WriteAllText('.release-r232/version.txt',$version,[Text.Encoding]::ASCII)
-          Write-Host "DeskSpace scoped Stable Deck hotfix candidate: $version"
+      # Audit only: build the reviewed source and run Windows regressions.
+      # Never allocate a version, publish an installer or touch installed data.
       - name: Run isolated synthetic updater and WPF acceptance on shipping source
         shell: pwsh
         run: |
