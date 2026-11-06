@@ -15,7 +15,7 @@ function Swap([string]$old,[string]$replacement,[string]$context){
     $old=$old.Replace($crlf,$lf)
     $replacement=$replacement.Replace($crlf,$lf)
     $count=([regex]::Matches($script:body,[regex]::Escape($old))).Count
-    if($count -ne 1){throw "R371 $context: expected exactly 1 shipping code anchor, got $count"}
+    if($count -ne 1){throw "R371 ${context}: expected exactly 1 shipping code anchor, got $count"}
     $script:body=$script:body.Replace($old,$replacement)
 }
 
