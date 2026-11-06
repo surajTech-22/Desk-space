@@ -4,6 +4,8 @@ on:
     branches: [fix/r373-live-deck-network-meter-100ms]
     paths:
       - .github/workflows/release-r373-live-deck-network-speed.yml
+      - r372/Tests/Program.cs
+      - r373/**
 
 permissions:
   contents: write
