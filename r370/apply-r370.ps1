@@ -51,11 +51,24 @@ Swap @'
                 Math.Min(area.Width,area.Height));
             Width=Height=diameter;
             activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromModule);
+            // The original 420-DIP donut stage holds a 380-DIP inset.
+            // This keeps the watch crown, bezel and four buttons strictly
+            // inside the circle instead of spilling into other windows.
+            var circularStage=new Grid{
+                Width=420,Height=420,Background=Brushes.Transparent,
+                ClipToBounds=true
+            };
+            circularStage.Children.Add(new Viewbox{
+                Width=380,Height=380,
+                HorizontalAlignment=HorizontalAlignment.Center,
+                VerticalAlignment=VerticalAlignment.Center,
+                Stretch=Stretch.Uniform,
+                Child=activeStopwatch.Create()
+            });
             surface=new Viewbox{
                 Stretch=Stretch.Uniform,
-                StretchDirection=StretchDirection.DownOnly,
                 ClipToBounds=true,
-                Child=activeStopwatch.Create()
+                Child=circularStage
             };
         }
 '@ 'circular stopwatch dimensions and surface'
@@ -98,7 +111,8 @@ foreach($token in @(
     'Segments[i]=="Clock & Weather"',
     'Width=Height=diameter;',
     'Math.Min(OpenDiameter,',
-    'StretchDirection=StretchDirection.DownOnly',
+    'Width=380,Height=380',
+    'Child=circularStage',
     'name=="Stopwatch"',
     'prefs.CenterMode="Stopwatch"',
     'DeskSpaceStopwatchV369(ReturnFromModule)',
