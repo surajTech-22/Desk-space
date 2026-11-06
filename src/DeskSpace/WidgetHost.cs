@@ -808,11 +808,24 @@ public sealed class WidgetShellWindow : Window
                 Math.Min(area.Width,area.Height));
             Width=Height=diameter;
             activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromModule);
+            // 420-DIP standard ring, with a 380-DIP inset for every button
+            // to remain INSIDE the original circular footprint. The old
+            // stopwatch bezel, crown, face and genuine controls are intact.
+            var circularStage=new Grid{
+                Width=420,Height=420,Background=Brushes.Transparent,
+                ClipToBounds=true
+            };
+            circularStage.Children.Add(new Viewbox{
+                Width=380,Height=380,
+                HorizontalAlignment=HorizontalAlignment.Center,
+                VerticalAlignment=VerticalAlignment.Center,
+                Stretch=Stretch.Uniform,
+                Child=activeStopwatch.Create()
+            });
             surface=new Viewbox{
                 Stretch=Stretch.Uniform,
-                StretchDirection=StretchDirection.DownOnly,
                 ClipToBounds=true,
-                Child=activeStopwatch.Create()
+                Child=circularStage
             };
         }
         else if(name=="Excel")
