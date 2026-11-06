@@ -6,6 +6,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using Button = System.Windows.Controls.Button;
+using ButtonBase = System.Windows.Controls.Primitives.ButtonBase;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using DeskSpace;
