@@ -46,12 +46,15 @@ internal static class Program
                 "Child=circularStage",
                 "name is \"Clock\" or \"Weather\" or \"Clock & Weather\"",
                 "if(name==\"Stopwatch\")",
-                "OpenStopwatchFromCircleV371(fromRing:true)",
+                "OpenStopwatchFromCircleV371()",
                 "prefs.CenterMode=stopwatchReturnCenterV371!",
                 "activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromStopwatchV371)",
                 "activeStopwatch?.Dispose();"
             })
                 Check(code.Contains(token),"original-circle safety missing: "+token);
+            Check(!code.Contains("if(returnToRing)") &&
+                  !code.Contains("stopwatchReturnRingV371"),
+                "Back must not expand the donut after restoring compact circle");
             Check(!code.Contains("Width=Math.Min(area.Width,530)"),
                 "oversized stopwatch width still in shipping branch");
             Check(!code.Contains("Height=Math.Min(area.Height,574)"),
