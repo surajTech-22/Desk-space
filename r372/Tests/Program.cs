@@ -59,11 +59,11 @@ internal static class Program
             values=Calculate(previous,next,0);
             Check(values.Down==0 && values.Up==0,
                 "invalid elapsed-time sample must be zero");
-            Check((string)rate.Invoke(null,new object[]{0d})!=="0 KB/s",
+            Check((string)rate.Invoke(null,new object[]{0d})! == "0 KB/s",
                 "idle network speed must display 0 KB/s");
-            Check((string)rate.Invoke(null,new object[]{65536d})!=="64 KB/s",
+            Check((string)rate.Invoke(null,new object[]{65536d})! == "64 KB/s",
                 "KB/s formatting incorrect");
-            Check((string)rate.Invoke(null,new object[]{2097152d})!=="2.0 MB/s",
+            Check((string)rate.Invoke(null,new object[]{2097152d})! == "2.0 MB/s",
                 "MB/s formatting incorrect");
 
             var deck=assembly.GetType("DeskSpace.DeskSpaceDropShelfV15",true)!;
