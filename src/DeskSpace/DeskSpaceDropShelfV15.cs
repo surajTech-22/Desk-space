@@ -131,9 +131,31 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         Interval=TimeSpan.FromSeconds(5)
     };
     private bool runningAppsTimerConnected,refreshingRunningApps;
-    // R372: lightweight network speed lives INSIDE the existing Deck only.
-    // Reuse the five-second Running Apps tick: no new timer, Popup or HWND.
+    // R373: the live throughput readout stays INSIDE the existing Deck.
+    // Its 100-ms UI timer runs only while this monitor's Deck is actually
+    // visible and expanded; no extra Popup or background polling when hidden.
+    private readonly DispatcherTimer networkSpeedTimerV373=new(
+        DispatcherPriority.Background){
+            Interval=TimeSpan.FromMilliseconds(100)};
     private readonly DeskSpaceDeckNetworkSpeedV372 networkSpeedV372=new();
+    private void SyncNetworkSpeedTimerV373()
+    {
+        bool active=!disposed && host.IsVisible &&
+            DeskSpaceDeckVisibilityV89.Visible && popup.IsOpen &&
+            !searchActiveV225 && !deckMinimized;
+        if(active)
+        {
+            if(networkSpeedTimerV373.IsEnabled)return;
+            networkSpeedV372.Reset();
+            networkSpeedV372.Sample(); // initialize baseline without spike
+            networkSpeedTimerV373.Start();
+        }
+        else if(networkSpeedTimerV373.IsEnabled)
+        {
+            networkSpeedTimerV373.Stop();
+            networkSpeedV372.Reset();
+        }
+    }
     private TextBlock? networkSpeedLabelV372;
     private void RefreshNetworkSpeedV372()
     {
@@ -261,6 +283,11 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             AllowsTransparency=true,PopupAnimation=PopupAnimation.Fade,
             Child=panel
         };
+        // Popup events also catch all host hide, dismiss and monitor moves.
+        // One timer per visible Deck; always stop it on closed/minimized.
+        networkSpeedTimerV373.Tick+=(_,_)=>RefreshNetworkSpeedV372();
+        popup.Opened+=(_,_)=>SyncNetworkSpeedTimerV373();
+        popup.Closed+=(_,_)=>SyncNetworkSpeedTimerV373();
         popup.CustomPopupPlacementCallback=(size,target,offset)=>{
             var widget=new Rect(host.Left,host.Top,
                 host.ActualWidth>0?host.ActualWidth:host.Width,
@@ -301,10 +328,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         if(!runningAppsTimerConnected)
         {
             runningAppsTimerConnected=true;
-            runningAppsTimer.Tick+=(_,_)=>{
-                RefreshNetworkSpeedV372();
-                RefreshRunningApps();
-            };
+            runningAppsTimer.Tick+=(_,_)=>RefreshRunningApps();
         }
         if(DeskSpaceDeckVisibilityV89.Visible)
         {
@@ -314,7 +338,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         newFiles ??= new DeskSpaceNewFileWatchV53(host,OfferNewFile,onRemoved:RemoveRecentFile);
         newFiles.Start();
         Render();
-        RefreshNetworkSpeedV372();
+        SyncNetworkSpeedTimerV373();
     }
     // Reconstruct retained copies after restart without touching originals.
     // Each GUID staging folder holds exactly one copied file or directory.
@@ -406,7 +430,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             deckPreview?.Close();
             popup.IsOpen=false;
             runningAppsTimer.Stop();
-            networkSpeedV372.Reset();
+            SyncNetworkSpeedTimerV373();
         }
         else
         {
@@ -415,7 +439,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             runningAppsTimer.Start();
             RefreshRunningApps();
             Render();
-            RefreshNetworkSpeedV372();
+            SyncNetworkSpeedTimerV373();
         }
     }
     private void Position(object? sender,EventArgs e)
@@ -1509,6 +1533,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
                 deckMinimized=!deckMinimized;
                 if(deckMinimized)deckPreview?.Close();
                 Render();
+                SyncNetworkSpeedTimerV373();
                 if(!deckMinimized)
                     DeskSpaceMonitorDockV190.RequestReflowV314(panel,true);
             });
@@ -1538,6 +1563,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         {
             deckPreview?.Close();
             popup.IsOpen=host.IsVisible;
+            SyncNetworkSpeedTimerV373();
             return;
         }
         // R372: speed readout is a slim second row INSIDE the existing
@@ -1553,7 +1579,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             TextTrimming=TextTrimming.CharacterEllipsis,
             TextAlignment=TextAlignment.Center,
             Margin=new Thickness(5,2,5,2),
-            ToolTip="Live download ↓ and upload ↑; active network adapters, refreshed every 5 seconds"
+            ToolTip="Live download ↓ and upload ↑; refreshed every 100 milliseconds while the Deck is open"
         };
         list.Children.Add(new Border{
             CornerRadius=new CornerRadius(6),
@@ -1867,6 +1893,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // Force sizing from all rendered content; scrollbar and header were
         // previously stuck at the OLD collapsed viewport height.
         DeskSpaceMonitorDockV190.RequestReflowV314(panel,openingV314);
+        SyncNetworkSpeedTimerV373();
     }
     public void Dispose()
     {
@@ -1889,6 +1916,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         if(Views.Count==0)pendingDuplicateV211?.Decision.TrySetResult(false);
         if(ReferenceEquals(active,this))active=Views.FirstOrDefault();
         popup.IsOpen=false;
+        networkSpeedTimerV373.Stop();
         recentRenderTimer.Stop();
         runningAppsTimer.Stop();
         excelSuggestTimerV122.Stop();
