@@ -50,7 +50,7 @@ internal static class Program
             var laps=type.GetProperty("Laps",flags)!;
             var reset=type.GetMethod("Reset",flags)!;
             reset.Invoke(null,null);
-            Assert((string)elapsed.GetValue(null)!=="00:00.00",
+            Assert((string)elapsed.GetValue(null)! == "00:00.00",
                 "initial stopwatch must be zeroed");
             Click(map["Start"]);
             Assert((bool)isRunning.GetValue(null)!,
@@ -81,7 +81,7 @@ internal static class Program
             Click(map["Reset"]);
             Assert(!(bool)isRunning.GetValue(null)!,
                 "Reset did not stop the clock");
-            Assert((string)elapsed.GetValue(null)!=="00:00.00",
+            Assert((string)elapsed.GetValue(null)! == "00:00.00",
                 "Reset did not restore zero elapsed time");
             Assert(((IEnumerable)laps.GetValue(null)!).Cast<object>().Count()==0,
                 "Reset did not clear laps");
