@@ -96,20 +96,9 @@ Swap-R372 @'
         else
         {
 '@ 'stop network rate on hidden Deck'
-Swap-R372 @'
-            RefreshRunningApps();
-            Render();
-        }
-    }
-    private void Position
-'@ @'
-            RefreshRunningApps();
-            Render();
-            RefreshNetworkSpeedV372();
-        }
-    }
-    private void Position
-'@ 'Deck reopen rate'
+# The shipping Deck-visibility handler differs among R304/R366 builds;
+# its existing runningAppsTimer resumes when shown, which will sample
+# traffic on the next existing tick. Do not change Deck visibility logic.
 Swap-R372 @'
         list.Children.Clear();
         if(pendingDuplicateV211
