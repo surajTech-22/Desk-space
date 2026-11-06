@@ -108,22 +108,10 @@ Swap-R372 @'
         if(pendingDuplicateV211
 '@ 'discard old text during Deck re-render'
 Swap-R372 @'
-        if(deckMinimized)
-        {
-            deckPreview?.Close();
-            popup.IsOpen=host.IsVisible;
-            return;
-        }
-        // Running Apps is hover-only;
+        DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
 '@ @'
-        if(deckMinimized)
-        {
-            deckPreview?.Close();
-            popup.IsOpen=host.IsVisible;
-            return;
-        }
-        // R372: this slim speed row is INSIDE the Deck, below its
-        // header and above Running Apps; never in the outside gap.
+        // R372: network speed INSIDE the original Deck, immediately above
+        // Running Apps, never in the gap beneath the circle or new Popup.
         networkSpeedLabelV372=new TextBlock{
             Text=networkSpeedV372.Display,
             FontSize=10,FontWeight=FontWeights.Medium,
@@ -145,8 +133,8 @@ Swap-R372 @'
             MinHeight=21,
             Child=networkSpeedLabelV372
         });
-        // Running Apps is hover-only;
-'@ 'network status inside Deck only'
+        DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
+'@ 'Deck-only status row before original Running Apps group'
 Finish-Patch $deck
 $source='src/DeskSpace/DeskSpaceDeckNetworkSpeedV372.cs'
 $destination='DeskSpace_Windows_R1/DeskSpace/DeskSpaceDeckNetworkSpeedV372.cs'
