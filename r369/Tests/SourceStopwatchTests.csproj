@@ -9,6 +9,5 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/DeskSpace/DeskSpace.csproj"/>
-    <Compile Include="Program.cs" />
   </ItemGroup>
 </Project>
