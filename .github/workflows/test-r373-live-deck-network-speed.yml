@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/test-r373-live-deck-network-speed.yml
       - r373/**
+      - r372/Tests/Program.cs
       - src/DeskSpace/DeskSpaceDeckNetworkSpeedV372.cs
       - src/DeskSpace/DeskSpaceDropShelfV15.cs
       - r372/**
