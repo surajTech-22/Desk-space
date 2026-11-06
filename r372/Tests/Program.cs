@@ -83,9 +83,16 @@ internal static class Program
                 StringComparison.Ordinal);
             Check(title>0 && speed>title && apps>speed,
                 "network speed MUST be inside existing Deck, between header and Running Apps");
-            Check(deckSource.Contains("runningAppsTimer.Tick+=(_,_)=>{") &&
-                  deckSource.Contains("RefreshNetworkSpeedV372();"),
-                "must reuse existing Deck refresh, no extra busy poll");
+            bool originalFiveSecond=
+                deckSource.Contains("runningAppsTimer.Tick+=(_,_)=>{") &&
+                deckSource.Contains("RefreshNetworkSpeedV372();");
+            bool upgradedLiveRate=
+                deckSource.Contains("Interval=TimeSpan.FromMilliseconds(100)") &&
+                deckSource.Contains("networkSpeedTimerV373.Tick+=(_,_)=>RefreshNetworkSpeedV372();") &&
+                deckSource.Contains("runningAppsTimer.Tick+=(_,_)=>RefreshRunningApps();") &&
+                deckSource.Contains("networkSpeedTimerV373.Stop();");
+            Check(originalFiveSecond || upgradedLiveRate,
+                "Deck rates must use the legacy 5s tick or R373 CPU-safe 100ms timer");
             Check(!deckSource.Contains("new DeskSpaceDeckNetworkSpeedV372("),
                 "unexpected network meter process creation");
             var widgetSource=File.ReadAllText(
