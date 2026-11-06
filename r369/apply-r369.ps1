@@ -81,13 +81,9 @@ Swap-R369 @'
             ToolTip = prefs.CenterMode=="Stopwatch"
                 ? "Double-click to open stopwatch" : null };
 '@ 'compact stopwatch tooltip'
-# Legacy rebuilt widget uses a different compact font assignment than the
-# checked-in source. Keep that assignment for every existing centre mode;
-# explicitly scale stopwatch digits only.
-Swap-R369 '        content.FontFamily=new FontFamily("Segoe UI Variable, Segoe UI");' @'
-        if(prefs.CenterMode=="Stopwatch")content.FontSize=28;
-        content.FontFamily=new FontFamily("Segoe UI Variable, Segoe UI");
-'@ 'compact stopwatch font'
+# The existing UpdateCenter() already owns the centre text font. Keep
+# compact widget initialization entirely unchanged; the stopwatch-specific
+# branch below selects 27 DIP only when Stopwatch is selected.
 Swap-R369 @'
         content.FontSize = ringExpanded ? 18 :
             (prefs.CenterMode=="Clock" && prefs.ShowWeather &&
