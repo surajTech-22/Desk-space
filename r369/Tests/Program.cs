@@ -38,12 +38,13 @@ internal static class Program
             var ui=(FrameworkElement)create.Invoke(model,null)!;
             var canvas=(Canvas)((Grid)ui).Children[0];
             var buttons=canvas.Children.OfType<Button>().ToArray();
-            Assert(buttons.Length==4,
-                "approved four-button circular dial missing");
+            Assert(buttons.Length==5,
+                "four stopwatch controls and the actual Back crown required");
             var map=buttons.ToDictionary(x=>((string)x.ToolTip!).Split(' ')[0],
                 x=>x,StringComparer.OrdinalIgnoreCase);
             Assert(map.ContainsKey("Start")&&map.ContainsKey("Pause")&&
-                map.ContainsKey("Reset")&&map.ContainsKey("Lap"),
+                map.ContainsKey("Reset")&&map.ContainsKey("Lap")&&
+                map.ContainsKey("Back"),
                 "Start/Pause/Reset/Lap controls not present");
             Assert(canvas.Children.OfType<System.Windows.Shapes.Ellipse>().Count()>=6,
                 "chronograph metallic bezel/dial missing");
@@ -88,6 +89,29 @@ internal static class Program
             Assert(((IEnumerable)laps.GetValue(null)!).Cast<object>().Count()==0,
                 "Reset did not clear laps");
             Assert(!closed,"Back-to-circle should be invoked only by the crown/Escape");
+
+            // R371: the metal crown must be a REAL WPF Button with a
+            // routed Click event and never depend on MouseLeftButtonUp
+            // from the nested scaled dial's Border.
+            int backInvocations=0;
+            object navigable=constructor.Invoke(new object[]{
+                (Action)(()=>backInvocations++)});
+            var navigationView=(Grid)create.Invoke(navigable,null)!;
+            var navigationDial=(Canvas)navigationView.Children[0];
+            var crown=navigationDial.Children.OfType<Button>()
+                .Single(b=>((string)b.ToolTip!).StartsWith("Back ",
+                    StringComparison.Ordinal));
+            Assert(Canvas.GetZIndex(crown)>=100,
+                "crown loses hit testing behind dial decoration");
+            Click(crown);
+            Assert(backInvocations==1,
+                "crown Click failed to request return to previous DeskSpace module");
+            Click(crown);
+            Assert(backInvocations==1,
+                "repeated crown Click must not double-close the host");
+            ((IDisposable)navigable).Dispose();
+
+            Console.WriteLine("R371 PASS: actual crown Button Click returns once; high Z-order and prior Stopwatch controls intact.");
             Console.WriteLine("R369 PASS: matching circular dial, four actual WPF buttons,"+
                 " Start, Pause, Resume, Reset and Lap accurate, elapsed survives"+
                 " panel close, reset clears lap history; no idle redraw timer.");
