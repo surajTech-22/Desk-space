@@ -203,6 +203,37 @@ public sealed class WidgetShellWindow : Window
     private DeskSpaceWeatherSceneV11? weatherScene;
     private object? previousSurface;
     private string previousCenter = "Clock";
+    // R371: entering a stopwatch is temporary, not a permanent overwrite
+    // of the previous Clock/Weather or other selected centre/module.
+    private string? stopwatchReturnCenterV371;
+    private bool stopwatchReturnRingV371;
+
+    private void OpenStopwatchFromCircleV371(bool fromRing=false)
+    {
+        if(activeStopwatch!=null)return;
+        stopwatchReturnCenterV371 =
+            string.Equals(prefs.CenterMode,"Stopwatch",
+                StringComparison.OrdinalIgnoreCase) ? "Clock" : prefs.CenterMode;
+        stopwatchReturnRingV371=fromRing;
+        OpenInWidget("Stopwatch");
+    }
+
+    private void ReturnFromStopwatchV371()
+    {
+        if(activeStopwatch==null || closingMorph)return;
+        ReturnFromModule();
+        // An interrupted WPF width animation must never strand the user
+        // inside the stopwatch. This one-shot timer is stopped immediately
+        // and does not run while the clock/stopwatch is idle.
+        var guard=new DispatcherTimer{
+            Interval=TimeSpan.FromMilliseconds(360)};
+        guard.Tick+=(_,_)=>{
+            guard.Stop();
+            if(closingMorph && activeStopwatch!=null)
+                CompleteModuleReturn();
+        };
+        guard.Start();
+    }
     private double restoreLeft, restoreTop;
     private static readonly HashSet<string> CenterAllowed = new(StringComparer.OrdinalIgnoreCase) { "Clock", "Stopwatch", "Date", "Calendar", "Notes", "Reminders", "Tasks" };
 
@@ -264,7 +295,7 @@ public sealed class WidgetShellWindow : Window
             Dispatcher.BeginInvoke(new Action(BeginKeyboardDonutV207)));
         menu.Items.Add("Choose centre display", null, (_, _) => Dispatcher.Invoke(ChooseCenter));
         menu.Items.Add("Stopwatch · chronograph", null, (_, _) =>
-            Dispatcher.Invoke(() => {Reveal();OpenInWidget("Stopwatch");}));
+            Dispatcher.Invoke(() => {Reveal();OpenStopwatchFromCircleV371();}));
         menu.Items.Add("Expand selected information", null, (_, _) => Dispatcher.Invoke(() => ToggleDetails()));
         menu.Items.Add("Hide at screen edge", null, (_, _) => Dispatcher.Invoke(() => DockToEdge(manual: true)));
         menu.Items.Add("Check for updates", null, (_, _) => Dispatcher.Invoke(async () => await DeskSpaceUpdateCheckV42.CheckAsync(this)));
@@ -309,7 +340,7 @@ public sealed class WidgetShellWindow : Window
                prefs.CenterMode=="Stopwatch" && e.ChangedButton==MouseButton.Left)
             {
                 e.Handled=true;
-                OpenInWidget("Stopwatch");
+                OpenStopwatchFromCircleV371();
             }
         };
         Deactivated+=(_,_)=>{
@@ -807,7 +838,7 @@ public sealed class WidgetShellWindow : Window
             double diameter=Math.Min(OpenDiameter,
                 Math.Min(area.Width,area.Height));
             Width=Height=diameter;
-            activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromModule);
+            activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromStopwatchV371);
             // 420-DIP standard ring, with a 380-DIP inset for every button
             // to remain INSIDE the original circular footprint. The old
             // stopwatch bezel, crown, face and genuine controls are intact.
@@ -1090,6 +1121,18 @@ public sealed class WidgetShellWindow : Window
         if(!closingMorph)return;
         closingMorph=false;
         StopMorphWindowAnimations();
+        bool wasStopwatch=activeStopwatch!=null;
+        bool returnToRing=wasStopwatch && stopwatchReturnRingV371;
+        if(wasStopwatch)
+        {
+            if(!string.IsNullOrWhiteSpace(stopwatchReturnCenterV371))
+            {
+                prefs.CenterMode=stopwatchReturnCenterV371!;
+                prefs.Save();
+            }
+            stopwatchReturnCenterV371=null;
+            stopwatchReturnRingV371=false;
+        }
         var old=activeModule;activeModule=null;
         var search=activeSearch;activeSearch=null;
         var inline=activeInline;activeInline=null;
@@ -1112,6 +1155,15 @@ public sealed class WidgetShellWindow : Window
         attachedShelf?.SetSearchActiveV225(false);
         Dispatcher.BeginInvoke(new Action(ResumeMediaMode),
             System.Windows.Threading.DispatcherPriority.Background);
+        // From a donut wedge, Back returns to that same twelve-sector
+        // circle; from tray or centre selector it returns to the prior
+        // compact Clock/Weather (or other centre mode).
+        if(returnToRing)
+            Dispatcher.BeginInvoke(new Action(()=>{
+                if(!shutdown && activeModule==null &&
+                   !ringExpanded && !closingMorph && !hiddenAtEdge)
+                    ToggleRing();
+            }),System.Windows.Threading.DispatcherPriority.Background);
     }
     private bool CanDragFrom(MouseButtonEventArgs e)
     {
@@ -1732,9 +1784,11 @@ public sealed class WidgetShellWindow : Window
         {
             var item=new MenuItem { Header=mode,IsCheckable=true,IsChecked=prefs.CenterMode.Equals(mode,StringComparison.OrdinalIgnoreCase) };
             item.Click+=(_,_)=>{
-                prefs.CenterMode=mode;prefs.Save();
-                if(mode=="Stopwatch")OpenInWidget("Stopwatch");
-                else{
+                if(mode=="Stopwatch")
+                    OpenStopwatchFromCircleV371();
+                else
+                {
+                    prefs.CenterMode=mode;prefs.Save();
                     if(activeModule==null&&!ringExpanded)BuildCompact();
                     UpdateCenter();
                 }
@@ -1882,11 +1936,9 @@ public sealed class WidgetShellWindow : Window
         }
         if(name=="Stopwatch")
         {
-            // Occupy the former Weather sector; elapsed time remains visible
-            // on the compact watch after closing the full circular dial.
-            prefs.CenterMode="Stopwatch";
-            prefs.Save();
-            OpenInWidget("Stopwatch");
+            // R371: preserve the selected centre, enter the stopwatch from
+            // the donut and allow Back to return to the same donut.
+            OpenStopwatchFromCircleV371(fromRing:true);
             return;
         }
         if(name=="Calculator")
