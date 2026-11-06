@@ -206,15 +206,15 @@ public sealed class WidgetShellWindow : Window
     // R371: entering a stopwatch is temporary, not a permanent overwrite
     // of the previous Clock/Weather or other selected centre/module.
     private string? stopwatchReturnCenterV371;
-    private bool stopwatchReturnRingV371;
 
-    private void OpenStopwatchFromCircleV371(bool fromRing=false)
+    // R372: from the donut, tray and centre selector, Back always lands on
+    // the former COMPACT 272-DIP circle, never expands the donut again.
+    private void OpenStopwatchFromCircleV371()
     {
         if(activeStopwatch!=null)return;
         stopwatchReturnCenterV371 =
             string.Equals(prefs.CenterMode,"Stopwatch",
                 StringComparison.OrdinalIgnoreCase) ? "Clock" : prefs.CenterMode;
-        stopwatchReturnRingV371=fromRing;
         OpenInWidget("Stopwatch");
     }
 
@@ -1122,7 +1122,6 @@ public sealed class WidgetShellWindow : Window
         closingMorph=false;
         StopMorphWindowAnimations();
         bool wasStopwatch=activeStopwatch!=null;
-        bool returnToRing=wasStopwatch && stopwatchReturnRingV371;
         if(wasStopwatch)
         {
             if(!string.IsNullOrWhiteSpace(stopwatchReturnCenterV371))
@@ -1131,7 +1130,6 @@ public sealed class WidgetShellWindow : Window
                 prefs.Save();
             }
             stopwatchReturnCenterV371=null;
-            stopwatchReturnRingV371=false;
         }
         var old=activeModule;activeModule=null;
         var search=activeSearch;activeSearch=null;
@@ -1155,15 +1153,8 @@ public sealed class WidgetShellWindow : Window
         attachedShelf?.SetSearchActiveV225(false);
         Dispatcher.BeginInvoke(new Action(ResumeMediaMode),
             System.Windows.Threading.DispatcherPriority.Background);
-        // From a donut wedge, Back returns to that same twelve-sector
-        // circle; from tray or centre selector it returns to the prior
-        // compact Clock/Weather (or other centre mode).
-        if(returnToRing)
-            Dispatcher.BeginInvoke(new Action(()=>{
-                if(!shutdown && activeModule==null &&
-                   !ringExpanded && !closingMorph && !hiddenAtEdge)
-                    ToggleRing();
-            }),System.Windows.Threading.DispatcherPriority.Background);
+        // R372: Back restores the compact centre for every origin.
+        // Expanding the donut is a separate explicit user interaction.
     }
     private bool CanDragFrom(MouseButtonEventArgs e)
     {
@@ -1938,7 +1929,7 @@ public sealed class WidgetShellWindow : Window
         {
             // R371: preserve the selected centre, enter the stopwatch from
             // the donut and allow Back to return to the same donut.
-            OpenStopwatchFromCircleV371(fromRing:true);
+            OpenStopwatchFromCircleV371();
             return;
         }
         if(name=="Calculator")
