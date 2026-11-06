@@ -3,11 +3,11 @@ Set-StrictMode -Version Latest
 # R370: the user rejected the enlarged stopwatch panel. Keep the stopwatch
 # inside the SAME expanded 408-DIP DeskSpace circle as the original donut,
 # merge the redundant Clock/Weather sectors and reuse Weather's slot.
-$host='DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs'
-if(!(Test-Path -LiteralPath $host)){throw 'R370 shipping WidgetHost missing'}
+$widgetFile='DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs'
+if(!(Test-Path -LiteralPath $widgetFile)){throw 'R370 shipping WidgetHost missing'}
 $lf=[string][char]10
 $crlf=[string][char]13+$lf
-$script:body=[IO.File]::ReadAllText($host).Replace($crlf,$lf)
+$script:body=[IO.File]::ReadAllText($widgetFile).Replace($crlf,$lf)
 function Swap([string]$old,[string]$new,[string]$why)
 {
     $old=$old.Replace($crlf,$lf)
@@ -104,8 +104,8 @@ Swap @'
         }
 '@ 'clock-weather and stopwatch click routing'
 
-[IO.File]::WriteAllText($host,$script:body,[Text.UTF8Encoding]::new($false))
-$check=[IO.File]::ReadAllText($host)
+[IO.File]::WriteAllText($widgetFile,$script:body,[Text.UTF8Encoding]::new($false))
+$check=[IO.File]::ReadAllText($widgetFile)
 foreach($token in @(
     '"Clock & Weather", "Stopwatch", "Settings"',
     'Segments[i]=="Clock & Weather"',
