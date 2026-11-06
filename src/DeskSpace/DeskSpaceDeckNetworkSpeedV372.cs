@@ -6,15 +6,17 @@ using System.Net.NetworkInformation;
 
 namespace DeskSpace;
 
-// R372: process-local, read-only network throughput for the EXISTING Deck.
-// No extra window/Popup, sockets, traffic collection, network requests or
-// additional recurring timer. The caller samples on its existing five-second
-// Running Apps timer, only while the Deck is actually expanded and visible.
+// R373: process-local read-only network throughput for the EXISTING Deck.
+// Sample at 100 ms while visible; refresh adapter inventory at most every
+// five seconds. This avoids the heavy NIC enumeration on every fast tick.
+// No sockets, remote requests, other windows or private traffic inspection.
 internal sealed class DeskSpaceDeckNetworkSpeedV372
 {
     internal readonly record struct Counters(long Received,long Sent);
     private Dictionary<string,Counters>? previous;
     private long previousTicks;
+    private NetworkInterface[] cachedAdapters=Array.Empty<NetworkInterface>();
+    private long adaptersRefreshedTicks;
     internal string Display {get;private set;}="↓ —    ↑ —";
 
     internal static (double Down,double Up) Calculate(
@@ -58,9 +60,16 @@ internal sealed class DeskSpaceDeckNetworkSpeedV372
     {
         try
         {
+            long now=Stopwatch.GetTimestamp();
+            if(adaptersRefreshedTicks==0 ||
+               now-adaptersRefreshedTicks>=5*Stopwatch.Frequency)
+            {
+                cachedAdapters=NetworkInterface.GetAllNetworkInterfaces();
+                adaptersRefreshedTicks=now;
+            }
             var current=new Dictionary<string,Counters>(
                 StringComparer.OrdinalIgnoreCase);
-            foreach(var adapter in NetworkInterface.GetAllNetworkInterfaces())
+            foreach(var adapter in cachedAdapters)
             {
                 if(adapter.OperationalStatus!=OperationalStatus.Up ||
                    adapter.NetworkInterfaceType==NetworkInterfaceType.Loopback ||
@@ -74,7 +83,6 @@ internal sealed class DeskSpaceDeckNetworkSpeedV372
                 }
                 catch(NetworkInformationException){} // adapter disappeared
             }
-            long now=Stopwatch.GetTimestamp();
             if(previous!=null && previousTicks!=0)
             {
                 double seconds=(now-previousTicks)/(double)Stopwatch.Frequency;
