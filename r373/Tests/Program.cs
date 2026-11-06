@@ -22,11 +22,8 @@ internal static class Program
             var fields=BindingFlags.NonPublic|BindingFlags.Instance;
             var tickField=deck.GetField("networkSpeedTimerV373",fields)!;
             Assert(tickField!=null,"live Deck timer missing");
-            var timer=(DispatcherTimer)tickField.GetValue(
-                System.Runtime.Serialization.FormatterServices
-                    .GetUninitializedObject(deck))!;
-            // Field initializers do not execute on uninitialized WPF objects.
-            // Verify timing via source plus WPF DispatcherTimer's value type.
+            // The native WPF timer type and exact 100-ms interval are
+            // checked without constructing a second live Deck popup.
             Assert(tickField.FieldType==typeof(DispatcherTimer),
                 "network meter must use one WPF Dispatcher timer");
             string source=File.ReadAllText(
