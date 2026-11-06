@@ -46,7 +46,9 @@ internal static class Program
                 "Child=circularStage",
                 "name is \"Clock\" or \"Weather\" or \"Clock & Weather\"",
                 "if(name==\"Stopwatch\")",
-                "prefs.CenterMode=\"Stopwatch\"",
+                "OpenStopwatchFromCircleV371(fromRing:true)",
+                "prefs.CenterMode=stopwatchReturnCenterV371!",
+                "activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromStopwatchV371)",
                 "activeStopwatch?.Dispose();"
             })
                 Check(code.Contains(token),"original-circle safety missing: "+token);
@@ -69,7 +71,10 @@ internal static class Program
             var content=(FrameworkElement)create.Invoke(instance,null)!;
             var originalDial=(Canvas)((Grid)content).Children[0];
             var buttons=originalDial.Children.OfType<Button>().ToArray();
-            Check(buttons.Length==4,"real Start/Pause/Reset/Lap buttons missing");
+            Check(buttons.Length==5,
+                "real Start/Pause/Reset/Lap controls plus Back crown required");
+            Check(buttons.Count(b=>((string)b.ToolTip!).StartsWith("Back "))==1,
+                "real accessible metal crown Back control missing");
             var stage=new Grid{Width=420,Height=420};
             var inset=new Viewbox{
                 Width=380,Height=380,
@@ -101,6 +106,7 @@ internal static class Program
             }
             // R369's separate control tests validate monotonic time,
             // lap splits, pause/resume, reset and stopping idle redraw.
+            Console.WriteLine("R371 PASS: the 4 timer buttons AND accessible Back crown stay within original circle.");
             Console.WriteLine("R370 PASS: Clock+Weather merged, Stopwatch in "+
                 "freed wedge, 12 existing sectors, real four circular "+
                 "buttons fit wholly INSIDE original 420-DIP circle, no "+
