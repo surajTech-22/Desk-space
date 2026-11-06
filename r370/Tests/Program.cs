@@ -74,12 +74,12 @@ internal static class Program
             var inset=new Viewbox{
                 Width=380,Height=380,
                 Stretch=Stretch.Uniform,
-                HorizontalAlignment=HorizontalAlignment.Center,
+                HorizontalAlignment=System.Windows.HorizontalAlignment.Center,
                 VerticalAlignment=VerticalAlignment.Center,
                 Child=content
             };
             stage.Children.Add(inset);
-            stage.Measure(new Size(420,420));
+            stage.Measure(new System.Windows.Size(420,420));
             stage.Arrange(new Rect(0,0,420,420));
             stage.UpdateLayout();
             foreach(var button in buttons)
