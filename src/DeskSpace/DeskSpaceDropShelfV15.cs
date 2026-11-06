@@ -131,6 +131,19 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         Interval=TimeSpan.FromSeconds(5)
     };
     private bool runningAppsTimerConnected,refreshingRunningApps;
+    // R372: lightweight network speed lives INSIDE the existing Deck only.
+    // Reuse the five-second Running Apps tick: no new timer, Popup or HWND.
+    private readonly DeskSpaceDeckNetworkSpeedV372 networkSpeedV372=new();
+    private TextBlock? networkSpeedLabelV372;
+    private void RefreshNetworkSpeedV372()
+    {
+        if(disposed || searchActiveV225 || deckMinimized || !popup.IsOpen)
+            return;
+        networkSpeedV372.Sample();
+        if(networkSpeedLabelV372!=null &&
+           networkSpeedLabelV372.Text!=networkSpeedV372.Display)
+            networkSpeedLabelV372.Text=networkSpeedV372.Display;
+    }
     // Compatibility pointer for older Deck UI hooks only; files, clipboard,
     // lifecycle and refresh always use the shared store and Views.
     private static DeskSpaceDropShelfV15? active;
@@ -288,7 +301,10 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         if(!runningAppsTimerConnected)
         {
             runningAppsTimerConnected=true;
-            runningAppsTimer.Tick+=(_,_)=>RefreshRunningApps();
+            runningAppsTimer.Tick+=(_,_)=>{
+                RefreshNetworkSpeedV372();
+                RefreshRunningApps();
+            };
         }
         if(DeskSpaceDeckVisibilityV89.Visible)
         {
@@ -298,6 +314,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         newFiles ??= new DeskSpaceNewFileWatchV53(host,OfferNewFile,onRemoved:RemoveRecentFile);
         newFiles.Start();
         Render();
+        RefreshNetworkSpeedV372();
     }
     // Reconstruct retained copies after restart without touching originals.
     // Each GUID staging folder holds exactly one copied file or directory.
@@ -389,6 +406,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             deckPreview?.Close();
             popup.IsOpen=false;
             runningAppsTimer.Stop();
+            networkSpeedV372.Reset();
         }
         else
         {
@@ -397,6 +415,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             runningAppsTimer.Start();
             RefreshRunningApps();
             Render();
+            RefreshNetworkSpeedV372();
         }
     }
     private void Position(object? sender,EventArgs e)
@@ -1350,6 +1369,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         deckPreview ??= new DeskSpaceDeckPreviewV99(panel);
         deckPreview.CloseIfMissing();
         list.Children.Clear();
+        networkSpeedLabelV372=null;
         if(pendingDuplicateV211 is { } duplicateV211)
         {
             var row=new StackPanel{Margin=new Thickness(5,3,5,6)};
@@ -1520,6 +1540,30 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             popup.IsOpen=host.IsVisible;
             return;
         }
+        // R372: speed readout is a slim second row INSIDE the existing
+        // popup Deck, below its native controls and above Running Apps.
+        // No extra overlay or changes to Deck/circle anchoring geometry.
+        networkSpeedLabelV372=new TextBlock{
+            Text=networkSpeedV372.Display,
+            FontSize=10,FontWeight=FontWeights.Medium,
+            FontFamily=new FontFamily("Segoe UI"),
+            Foreground=new SolidColorBrush(Color.FromRgb(161,217,249)),
+            VerticalAlignment=VerticalAlignment.Center,
+            HorizontalAlignment=HorizontalAlignment.Center,
+            TextTrimming=TextTrimming.CharacterEllipsis,
+            TextAlignment=TextAlignment.Center,
+            Margin=new Thickness(5,2,5,2),
+            ToolTip="Live download ↓ and upload ↑; active network adapters, refreshed every 5 seconds"
+        };
+        list.Children.Add(new Border{
+            CornerRadius=new CornerRadius(6),
+            Background=new SolidColorBrush(Color.FromArgb(165,27,48,77)),
+            BorderBrush=new SolidColorBrush(Color.FromArgb(85,109,159,207)),
+            BorderThickness=new Thickness(1),
+            Margin=new Thickness(5,0,5,5),
+            MinHeight=21,
+            Child=networkSpeedLabelV372
+        });
         // Running Apps is hover-only; the full Deck is standard view.
         DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
             (appsNow,windowsNow)=>{
