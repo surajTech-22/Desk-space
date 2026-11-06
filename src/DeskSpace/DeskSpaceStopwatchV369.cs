@@ -34,6 +34,15 @@ internal sealed class DeskSpaceStopwatchV369 : IDisposable
     private Button? lapButton;
     private string lastPainted="";
     private bool disposed;
+    private bool returnRequestedV371;
+
+    // R371: one reliable navigation action shared by crown and Escape.
+    private void BackToPreviousV371()
+    {
+        if(disposed || returnRequestedV371)return;
+        returnRequestedV371=true;
+        returnToCircle();
+    }
 
     internal DeskSpaceStopwatchV369(Action returnToCircle)
     {
@@ -228,7 +237,7 @@ internal sealed class DeskSpaceStopwatchV369 : IDisposable
         outer.Children.Add(dial);
         outer.Focusable=true;
         outer.PreviewKeyDown+=(_,e)=>{
-            if(e.Key==Key.Escape){returnToCircle();e.Handled=true;}
+            if(e.Key==Key.Escape){BackToPreviousV371();e.Handled=true;}
             else if(e.Key==Key.Space){
                 if(IsRunning)Pause();else Start();e.Handled=true;
             }
@@ -239,18 +248,37 @@ internal sealed class DeskSpaceStopwatchV369 : IDisposable
         Circle(230,17,80,Solid(8,14,26));
         // The polished mechanical top crown doubles as Back to Circle.
         // No extra close button intrudes into the approved dial design.
-        var crown=new Border{Width=58,Height=60,CornerRadius=new CornerRadius(13),
+        // R371: the decorative Border only listened for MouseLeftButtonUp,
+        // which is not a reliable input control inside the nested scaled
+        // Viewbox. Make the exact same crown a genuine keyboard/mouse
+        // accessible WPF Button and keep it above the dial in hit-testing.
+        var crown=new Button{Width=58,Height=60,
             Background=Metal(),BorderBrush=Glow(213,233,255),
             BorderThickness=new Thickness(1.5),Cursor=Cursors.Hand,
-            ToolTip="Back to DeskSpace circle"};
-        crown.MouseLeftButtonUp+=(_,e)=>{returnToCircle();e.Handled=true;};
+            ToolTip="Back to DeskSpace circle",FocusVisualStyle=null};
+        var crownVisual=new FrameworkElementFactory(typeof(Border));
+        crownVisual.SetValue(Border.CornerRadiusProperty,
+            new CornerRadius(13));
+        crownVisual.SetValue(Border.BorderThicknessProperty,
+            new Thickness(1.5));
+        crownVisual.SetValue(Border.BackgroundProperty,
+            crown.Background);
+        crownVisual.SetValue(Border.BorderBrushProperty,
+            crown.BorderBrush);
+        crown.Template=new ControlTemplate(typeof(Button)){
+            VisualTree=crownVisual};
+        System.Windows.Automation.AutomationProperties.SetName(
+            crown,"Back to DeskSpace circle");
+        crown.Click+=(_,_)=>BackToPreviousV371();
         Put(crown,241,29);
+        Canvas.SetZIndex(crown,100);
         for(int i=0;i<8;i++)
         {
             var rib=new Line{X1=248+i*6,Y1=34,X2=248+i*6,Y2=73,
                 Stroke=Glow(53,72,103),StrokeThickness=2,
                 IsHitTestVisible=false};
             dial.Children.Add(rib);
+            Canvas.SetZIndex(rib,101);
         }
         for(int i=0;i<2;i++)
         {
