@@ -188,6 +188,7 @@ public sealed class WidgetShellWindow : Window
         "◆", "✎", "◉", "▣", "◈", "▥"
     };
     private DeskSpaceModuleV10? activeModule;
+    private DeskSpaceStopwatchV369? activeStopwatch;
     private DeskSpaceInformationV36? informationOverlay;
     private DeskSpaceSearchV11? activeSearch;
     private DeskSpaceExcelV16? activeExcel;
@@ -203,7 +204,7 @@ public sealed class WidgetShellWindow : Window
     private object? previousSurface;
     private string previousCenter = "Clock";
     private double restoreLeft, restoreTop;
-    private static readonly HashSet<string> CenterAllowed = new(StringComparer.OrdinalIgnoreCase) { "Clock", "Date", "Calendar", "Notes", "Reminders", "Tasks" };
+    private static readonly HashSet<string> CenterAllowed = new(StringComparer.OrdinalIgnoreCase) { "Clock", "Stopwatch", "Date", "Calendar", "Notes", "Reminders", "Tasks" };
 
     public WidgetShellWindow()
     {
@@ -262,6 +263,8 @@ public sealed class WidgetShellWindow : Window
         menu.Items.Add("Navigate donut with keyboard (arrows + Enter)...", null, (_, _) =>
             Dispatcher.BeginInvoke(new Action(BeginKeyboardDonutV207)));
         menu.Items.Add("Choose centre display", null, (_, _) => Dispatcher.Invoke(ChooseCenter));
+        menu.Items.Add("Stopwatch · chronograph", null, (_, _) =>
+            Dispatcher.Invoke(() => {Reveal();OpenInWidget("Stopwatch");}));
         menu.Items.Add("Expand selected information", null, (_, _) => Dispatcher.Invoke(() => ToggleDetails()));
         menu.Items.Add("Hide at screen edge", null, (_, _) => Dispatcher.Invoke(() => DockToEdge(manual: true)));
         menu.Items.Add("Check for updates", null, (_, _) => Dispatcher.Invoke(async () => await DeskSpaceUpdateCheckV42.CheckAsync(this)));
@@ -301,6 +304,14 @@ public sealed class WidgetShellWindow : Window
             }
         };
         PreviewKeyDown+=KeyboardDonutKeyV207;
+        MouseDoubleClick+=(_,e)=>{
+            if(activeModule==null && !ringExpanded &&
+               prefs.CenterMode=="Stopwatch" && e.ChangedButton==MouseButton.Left)
+            {
+                e.Handled=true;
+                OpenInWidget("Stopwatch");
+            }
+        };
         Deactivated+=(_,_)=>{
             if(!keyboardDonutModeV207)return;
             EndKeyboardDonutV207();
@@ -420,6 +431,7 @@ public sealed class WidgetShellWindow : Window
             showRequestCancel.Cancel();
             media.VisibilityChanged-=OnMediaVisibility;
             media.Dispose();
+            activeStopwatch?.Dispose();
             activeModule?.Dispose(); informationOverlay?.Dispose();
             attachedShelf?.Dispose();
             excelClipboardShelf?.Dispose();
@@ -784,6 +796,17 @@ public sealed class WidgetShellWindow : Window
             Dispatcher.BeginInvoke(new Action(LaunchWindowsCalculator),
                 System.Windows.Threading.DispatcherPriority.Background);
         }
+        else if(name=="Stopwatch")
+        {
+            // R369: the chronograph uses the existing circular module surface.
+            // No extra desktop window, tray, monitor identity or update worker.
+            var area=ModuleArea();
+            Width=Math.Min(area.Width,530);
+            Height=Math.Min(area.Height,574);
+            activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromModule);
+            surface=new Viewbox{Stretch=Stretch.Uniform,
+                Child=activeStopwatch.Create()};
+        }
         else if(name=="Excel")
         {
             var area=ModuleArea();
@@ -1057,6 +1080,7 @@ public sealed class WidgetShellWindow : Window
         Content=restore;previousSurface=null;
         search?.Dispose();inline?.Dispose();
         activeExcel?.Dispose();activeExcel=null;
+        activeStopwatch?.Dispose();activeStopwatch=null;
         old?.Dispose();
         DeskSpaceWindowBehavior.AllowInput(this,false);
         ShowActivated=false;
@@ -1188,7 +1212,8 @@ public sealed class WidgetShellWindow : Window
             Stroke = DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
             StrokeThickness = 7,
             Cursor = Cursors.Hand,
-            ToolTip = null };
+            ToolTip = prefs.CenterMode=="Stopwatch"
+                ? "Double-click to open stopwatch" : null };
         Canvas.SetLeft(circle, 10); Canvas.SetTop(circle, 9);
         canvas.Children.Add(circle);
         clockFace = circle;
@@ -1208,7 +1233,7 @@ public sealed class WidgetShellWindow : Window
             canvas.Children.Add(halo);
         }
         AddWeatherScene(10,9,272);
-        content.FontSize = 35;
+        content.FontSize = prefs.CenterMode=="Stopwatch"?28:35;
         content.FontFamily=new FontFamily("Segoe UI Variable, Segoe UI");
         content.FontWeight=FontWeights.SemiBold;
         content.IsHitTestVisible=false;
@@ -1680,10 +1705,17 @@ public sealed class WidgetShellWindow : Window
     }    private void ChooseCenter()
     {
         var cm = new ContextMenu();
-        foreach (string mode in new[]{"Clock","Date","Calendar","Notes","Reminders"})
+        foreach (string mode in new[]{"Clock","Stopwatch","Date","Calendar","Notes","Reminders"})
         {
             var item=new MenuItem { Header=mode,IsCheckable=true,IsChecked=prefs.CenterMode.Equals(mode,StringComparison.OrdinalIgnoreCase) };
-            item.Click+=(_,_)=>{prefs.CenterMode=mode;prefs.Save();UpdateCenter();};
+            item.Click+=(_,_)=>{
+                prefs.CenterMode=mode;prefs.Save();
+                if(mode=="Stopwatch")OpenInWidget("Stopwatch");
+                else{
+                    if(activeModule==null&&!ringExpanded)BuildCompact();
+                    UpdateCenter();
+                }
+            };
             cm.Items.Add(item);
         }
         cm.PlacementTarget=canvas;cm.IsOpen=true;
@@ -1891,7 +1923,8 @@ public sealed class WidgetShellWindow : Window
         if (!CenterAllowed.Contains(prefs.CenterMode)) prefs.CenterMode="Clock";
         content.ToolTip=DeskSpaceWeather.WeatherStatus;
         content.FontSize = ringExpanded ? 18 :
-            (prefs.CenterMode=="Clock" && prefs.ShowWeather &&
+            (prefs.CenterMode=="Stopwatch"?27:
+             prefs.CenterMode=="Clock" && prefs.ShowWeather &&
              DeskSpaceWeather.Latest!=null ? 29 : (prefs.CenterMode=="Notes"?30:32));
         var sky=DeskSpaceWeather.Latest;
         var hasSky=prefs.CenterMode=="Clock" && prefs.ShowWeather && sky!=null;
@@ -1922,6 +1955,7 @@ public sealed class WidgetShellWindow : Window
             "Notes" => workspace.Notes.Count==0?"No notes":Trim(workspace.Notes.OrderByDescending(n=>n.Updated).First().Title,ringExpanded ? 28 : 20),
             "Reminders" => workspace.Reminders.Where(x=>!x.Done).OrderBy(x=>x.Due).FirstOrDefault() is ReminderItem rem?Trim(rem.Title,20)+"\n"+rem.Due.ToString("ddd HH:mm"):"No reminders",
             "Tasks" => workspace.Reminders.Count(x=>!x.Done)+" pending\ntasks",
+            "Stopwatch" => DeskSpaceStopwatchV369.CompactElapsed,
             _=> ClockWithWeather()
         };
         if (!string.Equals(content.Text,nextCentreText,StringComparison.Ordinal))
