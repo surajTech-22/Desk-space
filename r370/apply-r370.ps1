@@ -31,8 +31,7 @@ Swap @'
 Swap @'
         else if(name=="Stopwatch")
         {
-            // R369: the chronograph uses the existing circular module surface.
-            // No extra desktop window, tray, monitor identity or update worker.
+            // R369: use existing widget module surface; never an extra app.
             var area=ModuleArea();
             Width=Math.Min(area.Width,530);
             Height=Math.Min(area.Height,574);
