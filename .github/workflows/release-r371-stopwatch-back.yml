@@ -236,7 +236,7 @@ jobs:
               'RoundButton("↶","Reset"','RoundButton("⚑","Lap"','Stopwatch Clock=new()')){
               if(!$chrono.Contains($token)){throw ('R369 approved controls missing: '+$token)}
           }
-          if(!$widget.Contains('activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromModule)') -or
+          if(!$widget.Contains('activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromStopwatchV371)') -or
              !$widget.Contains('activeStopwatch?.Dispose();') -or
              !$widget.Contains('CenterMode=="Stopwatch"')){
                throw 'R369 control integration or widget lifecycle safety missing'
