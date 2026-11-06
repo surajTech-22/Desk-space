@@ -233,6 +233,14 @@ jobs:
              !$r372meter.Contains('NetworkInterface.GetAllNetworkInterfaces()')){
               throw 'R372 download/upload must be inside existing Deck using local adapter counters'
           }
+          $deckHeader=$r372deck.IndexOf('list.Children.Add(title);')
+          $speedInsideDeck=$r372deck.IndexOf('networkSpeedLabelV372=new TextBlock{')
+          $runningAppGroup=$r372deck.IndexOf('DeskSpaceRunningAppsV88.AddHoverGroupLive')
+          if($deckHeader -lt 0 -or
+             $speedInsideDeck -le $deckHeader -or
+             $runningAppGroup -le $speedInsideDeck){
+               throw 'R372 speed strip must render INSIDE Deck after title and before Running Apps, not in the outside gap'
+          }
           $circular=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
           foreach($part in @('"Clock & Weather", "Stopwatch", "Settings"',
               'Width=Height=diameter;','Width=380,Height=380',
