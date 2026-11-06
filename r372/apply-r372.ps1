@@ -38,9 +38,6 @@ Swap-R372 '        stopwatchReturnRingV371=fromRing;' '' 'obsolete ring return f
 Swap-R372 '        bool returnToRing=wasStopwatch && stopwatchReturnRingV371;' '' 'obsolete ring return flag use'
 Swap-R372 '            stopwatchReturnRingV371=false;' '' 'obsolete ring reset'
 Swap-R372 @'
-        // From a donut wedge, Back returns to that same twelve-sector
-        // circle; from tray or centre selector it returns to the prior
-        // compact Clock/Weather (or other centre mode).
         if(returnToRing)
             Dispatcher.BeginInvoke(new Action(()=>{
                 if(!shutdown && activeModule==null &&
