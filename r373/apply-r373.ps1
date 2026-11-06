@@ -48,13 +48,15 @@ Swap-R373 @'
     }
 '@ 'Deck meter 100ms sampling and visibility state'
 Swap-R373 @'
-        popup.CustomPopupPlacementCallback=(size,target,offset)=>{
+        DeskSpaceMonitorDockV190.Attach(host,popup,panel);
 '@ @'
+        // Bind to the actual Deck Popup once, regardless of its custom
+        // placement algorithm in this installer-source generation.
         networkSpeedTimerV373.Tick+=(_,_)=>RefreshNetworkSpeedV372();
         popup.Opened+=(_,_)=>SyncNetworkSpeedTimerV373();
         popup.Closed+=(_,_)=>SyncNetworkSpeedTimerV373();
-        popup.CustomPopupPlacementCallback=(size,target,offset)=>{
-'@ 'hook original Deck popup lifecycle'
+        DeskSpaceMonitorDockV190.Attach(host,popup,panel);
+'@ 'hook original Deck Popup lifecycle without changing positioning'
 Swap-R373 @'
             runningAppsTimer.Tick+=(_,_)=>{
                 RefreshNetworkSpeedV372();
