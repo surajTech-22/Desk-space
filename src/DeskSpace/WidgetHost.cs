@@ -180,11 +180,11 @@ public sealed class WidgetShellWindow : Window
     // same order. Excel is the seventh inner sector; Excel Clipboard
     // is the seventh outer sector. No duplicate/hidden module.
     private static readonly string[] Segments = {
-        "Search", "Calendar", "Calculator", "Clock", "Weather", "Settings",
+        "Search", "Calendar", "Calculator", "Clock & Weather", "Stopwatch", "Settings",
         "Information", "Notes", "Reminders", "Clipboard", "Applications", "Excel Functions"
     };
     private static readonly string[] SegmentIcons = {
-        "⌕", "▦", "⊞", "◷", "☀", "⚙",
+        "⌕", "▦", "⊞", "◷", "⏱", "⚙",
         "◆", "✎", "◉", "▣", "◈", "▥"
     };
     private DeskSpaceModuleV10? activeModule;
@@ -798,14 +798,22 @@ public sealed class WidgetShellWindow : Window
         }
         else if(name=="Stopwatch")
         {
-            // R369: the chronograph uses the existing circular module surface.
-            // No extra desktop window, tray, monitor identity or update worker.
+            // R370: the ONLY stopwatch surface is the original expanded
+            // DeskSpace circle (same circular geometry as its twelve-sector
+            // donut). Never open a 530x574 rectangular panel or new HWND.
+            // The approved chronograph is uniformly scaled WITH its working
+            // WPF buttons to fit completely inside this existing circle.
             var area=ModuleArea();
-            Width=Math.Min(area.Width,530);
-            Height=Math.Min(area.Height,574);
+            double diameter=Math.Min(OpenDiameter,
+                Math.Min(area.Width,area.Height));
+            Width=Height=diameter;
             activeStopwatch=new DeskSpaceStopwatchV369(ReturnFromModule);
-            surface=new Viewbox{Stretch=Stretch.Uniform,
-                Child=activeStopwatch.Create()};
+            surface=new Viewbox{
+                Stretch=Stretch.Uniform,
+                StretchDirection=StretchDirection.DownOnly,
+                ClipToBounds=true,
+                Child=activeStopwatch.Create()
+            };
         }
         else if(name=="Excel")
         {
@@ -1577,7 +1585,9 @@ public sealed class WidgetShellWindow : Window
             canvas.Children.Add(wedge);ringPaths.Add(wedge);
             var angle=(-90+slot*(360.0/(outer?6:6)))*Math.PI/180;
             var label=new TextBlock{
-                Text=SegmentIcons[i]+"\n"+Segments[i],FontSize=outer?12:11,
+                Text=SegmentIcons[i]+"\n"+
+                    (Segments[i]=="Clock & Weather"?"Clock\nWeather":Segments[i]),
+                FontSize=outer?12:11,
                 TextAlignment=TextAlignment.Center,FontWeight=FontWeights.SemiBold,
                 Foreground=DeskSpaceHighContrastV208.Label(
                     SystemParameters.HighContrast,DeskSpaceAppearanceV148.InkBrush),
@@ -1849,10 +1859,21 @@ public sealed class WidgetShellWindow : Window
            !informationOverlay.ConfirmNavigation())return;
         CloseInformationContext();
         informationOverlay?.Hide();
-        if(name is "Clock" or "Weather")
+        if(name is "Clock" or "Weather" or "Clock & Weather")
         {
-            prefs.CenterMode=name=="Tasks"?"Tasks":name=="Date"?"Date":"Clock";
+            // Weather is already built into the Clock centre; combine the
+            // duplicate sectors without changing weather or clock behavior.
+            prefs.CenterMode="Clock";
             prefs.Save();CollapseRing();BuildCompact();UpdateCenter();
+            return;
+        }
+        if(name=="Stopwatch")
+        {
+            // Occupy the former Weather sector; elapsed time remains visible
+            // on the compact watch after closing the full circular dial.
+            prefs.CenterMode="Stopwatch";
+            prefs.Save();
+            OpenInWidget("Stopwatch");
             return;
         }
         if(name=="Calculator")
