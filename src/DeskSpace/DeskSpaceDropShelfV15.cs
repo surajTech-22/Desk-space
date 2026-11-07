@@ -132,11 +132,11 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
     };
     private bool runningAppsTimerConnected,refreshingRunningApps;
     // R373: the live throughput readout stays INSIDE the existing Deck.
-    // Its 100-ms UI timer runs only while this monitor's Deck is actually
+    // Its one-second UI timer runs only while this monitor's Deck is actually
     // visible and expanded; no extra Popup or background polling when hidden.
     private readonly DispatcherTimer networkSpeedTimerV373=new(
         DispatcherPriority.Background){
-            Interval=TimeSpan.FromMilliseconds(100)};
+            Interval=TimeSpan.FromSeconds(1)};
     private readonly DeskSpaceDeckNetworkSpeedV372 networkSpeedV372=new();
     private void SyncNetworkSpeedTimerV373()
     {
@@ -1579,7 +1579,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             TextTrimming=TextTrimming.CharacterEllipsis,
             TextAlignment=TextAlignment.Center,
             Margin=new Thickness(5,2,5,2),
-            ToolTip="Live download ↓ and upload ↑; refreshed every 100 milliseconds while the Deck is open"
+            ToolTip="Live download ↓ and upload ↑; refreshed once per second while the Deck is open"
         };
         list.Children.Add(new Border{
             CornerRadius=new CornerRadius(6),
