@@ -6,6 +6,7 @@ on:
       - .github/workflows/test-r374-deck-network-speed-1s.yml
       - r374/**
       - r373/Tests/Program.cs
+      - r372/Tests/Program.cs
       - r373/**
       - r372/Tests/Program.cs
       - src/DeskSpace/DeskSpaceDeckNetworkSpeedV372.cs
