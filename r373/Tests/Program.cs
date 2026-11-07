@@ -30,8 +30,9 @@ internal static class Program
                 "DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs");
             string data=File.ReadAllText(
                 "DeskSpace_Windows_R1/DeskSpace/DeskSpaceDeckNetworkSpeedV372.cs");
-            Assert(source.Contains("Interval=TimeSpan.FromMilliseconds(100)"),
-                "live rate should update every 100 milliseconds, not 5 seconds");
+            Assert(source.Contains("Interval=TimeSpan.FromMilliseconds(100)") ||
+                   source.Contains("Interval=TimeSpan.FromSeconds(1)};"),
+                "live rate should update at 100ms (R373) or every second (R374)");
             Assert(source.Contains("networkSpeedTimerV373.Tick+=(_,_)=>RefreshNetworkSpeedV372();"),
                 "actual rate sample is not on the fast UI timer");
             Assert(source.Contains("runningAppsTimer.Tick+=(_,_)=>RefreshRunningApps();") &&
