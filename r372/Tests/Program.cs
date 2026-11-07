@@ -87,12 +87,13 @@ internal static class Program
                 deckSource.Contains("runningAppsTimer.Tick+=(_,_)=>{") &&
                 deckSource.Contains("RefreshNetworkSpeedV372();");
             bool upgradedLiveRate=
-                deckSource.Contains("Interval=TimeSpan.FromMilliseconds(100)") &&
+                (deckSource.Contains("Interval=TimeSpan.FromMilliseconds(100)") ||
+                 deckSource.Contains("Interval=TimeSpan.FromSeconds(1)};")) &&
                 deckSource.Contains("networkSpeedTimerV373.Tick+=(_,_)=>RefreshNetworkSpeedV372();") &&
                 deckSource.Contains("runningAppsTimer.Tick+=(_,_)=>RefreshRunningApps();") &&
                 deckSource.Contains("networkSpeedTimerV373.Stop();");
             Check(originalFiveSecond || upgradedLiveRate,
-                "Deck rates must use the legacy 5s tick or R373 CPU-safe 100ms timer");
+                "Deck rates must use a verified 5s legacy, 100ms R373 or 1s R374 timer");
             Check(!deckSource.Contains("new DeskSpaceDeckNetworkSpeedV372("),
                 "unexpected network meter process creation");
             var widgetSource=File.ReadAllText(
