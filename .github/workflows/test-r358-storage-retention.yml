@@ -1,0 +1,60 @@
+name: R358 DeskSpace storage retention acceptance (no publication)
+on:
+  push:
+    branches: [fix/r358-cleanup-retention-evidence]
+    paths:
+      - r348/**
+      - r351/**
+      - r358/**
+      - .github/workflows/test-r358-storage-retention.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-cleanup-safety:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify safe rollback, Search index, and staged installer retention
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./r348/test-r348.ps1
+          if(!$?){throw 'R348 rollback/search protections failed'}
+          & ./r351/test-r351.ps1
+          if(!$?){throw 'R358 stage recognition/retention protections failed'}
+      - name: Validate exact runtime PowerShell resource and safety signature
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='DeskSpace_Windows_R1/DeskSpace'
+          New-Item -ItemType Directory -Force -Path $root|Out-Null
+          Copy-Item 'src/DeskSpace/App.xaml.cs' (Join-Path $root 'App.xaml.cs') -Force
+          Copy-Item 'src/DeskSpace/DeskSpace.csproj' (Join-Path $root 'DeskSpace.csproj') -Force
+          Copy-Item 'src/DeskSpace/DeskSpaceUpdateSupervisor.ps1' (Join-Path $root 'DeskSpaceUpdateSupervisor.ps1') -Force
+          & ./r351/apply-startup-r351.ps1
+          if(!$?){throw 'Bundled cleanup resource patch failed'}
+          $path=Join-Path $root 'DeskSpacePostLaunchCleanupV351.ps1'
+          $tokens=$null;$errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path).Path,[ref]$tokens,[ref]$errors)
+          if($errors.Count){throw ($errors|Out-String)}
+          $s=Get-Content $path -Raw
+          foreach($expected in @(
+            'retained recent rollback (<12h)',
+            'CompleteDeskSpaceUpdate',
+            'retained unrecognized installer',
+            'InstalledVersion',
+            'reclaimed-bytes='
+          )){
+            if(!$s.Contains($expected)){throw ('Bundled R358 cleanup missing: '+$expected)}
+          }
+          if($s.Contains('[IO.File]::WriteAllLines($output') -or
+             !$s.Contains('Add-Content -LiteralPath $output -Encoding UTF8 -Value $records.ToArray()')){
+            throw 'R358 must append cumulative cleanup evidence, not replace it'
+          }
+          if($s.Contains('Stop-Process') -or $s.Contains('Restart-Computer')){
+            throw 'R358 must not stop apps or restart the user computer'
+          }
+          Write-Host 'R358 PASS: cleanup embedded for both normal Workspace and widget startup with strict scoped path/manifest checks.'

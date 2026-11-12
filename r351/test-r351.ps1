@@ -33,6 +33,11 @@ try {
         $item=Get-Item -LiteralPath $dir -Force
         $item.LastWriteTimeUtc=[DateTime]::UtcNow.AddDays(-12)
     }
+    # The updater itself writes this GUID-named supervisor script.
+    # Older R351 erroneously labelled that valid staging asset unknown.
+    $legacySupervisor=Join-Path $updates 'v1.5.1117\CompleteDeskSpaceUpdate.11111111111111111111111111111111.ps1'
+    [IO.File]::WriteAllBytes($legacySupervisor,(New-Object byte[] 211))
+    (Get-Item -LiteralPath (Split-Path -Parent $legacySupervisor)).LastWriteTimeUtc=[DateTime]::UtcNow.AddDays(-12)
     $partial=Join-Path $updates 'tester-v1.5.1110\DeskSpace_Setup.exe.11111111111111111111111111111111.partial'
     [IO.File]::WriteAllBytes($partial,(New-Object byte[] 128))
     (Get-Item (Join-Path $updates 'tester-v1.5.1110')).LastWriteTimeUtc=
@@ -48,7 +53,9 @@ try {
     New-Item -ItemType Directory -Force $recovery|Out-Null
     [IO.File]::WriteAllText((Join-Path $recovery 'DeskSpace_Setup.exe'),'recovery')
 
-    $args=@{UpdatesRoot=$updates;CurrentExe=$exe}
+    # Synthetic test EXE has no PE version. Production reads the real
+    # installed FileVersion; test passes it explicitly.
+    $args=@{UpdatesRoot=$updates;CurrentExe=$exe;InstalledVersion=[version]'1.5.1127.0'}
     $post=Join-Path $updates 'PostInstall'
     New-Item -ItemType Directory -Force $post|Out-Null
     [IO.File]::WriteAllText((Join-Path $post 'pending.json'),'{}')
@@ -66,8 +73,9 @@ try {
     $script:otherProcess=$false
 
     $result=Invoke-R351StagedInstallerRetention @args
+    Write-Host ('R358 TEST DIAGNOSTIC: removed='+$result.Removed+' bytes='+$result.Bytes+' skipped='+$result.Skipped+' reasons='+($result.Messages -join ' || '))
     Assert-R351 ($result.Removed -eq 3) 'not exactly three old staged installer folders'
-    Assert-R351 ($result.Bytes -eq (3*1024+128)) 'reclaimed staged bytes incorrect'
+    Assert-R351 ($result.Bytes -eq (3*1024+128+211)) 'reclaimed staged bytes incorrect'
     Assert-R351 (!(Test-Path (Join-Path $updates 'tester-v1.5.1110'))) 'old partial remnants not cleaned'
     foreach($name in @('tester-v1.5.1125','tester-v1.5.1124','v1.5.1124')){
         Assert-R351 (Test-Path (Join-Path $updates $name)) ('protected rollback installer '+$name)
