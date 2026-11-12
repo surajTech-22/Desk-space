@@ -1676,6 +1676,19 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // by the monitor widgets without another monitoring panel.
         list.Children.Add(DeskSpaceSmartContextDeckV280.CreatePanel(
             host,ContextChangedV280));
+        if(DeskSpaceExcelActiveV122.ForegroundExcel() && excelMatchesV122.Count==0)
+        {
+            var pasteGroup=DeskSpaceShelfGroupsV88.Add(list,"Excel paste",1,true,()=>{});
+            var pasteBtn=new Button{
+                Content="Paste to Excel · Clipboard & mappings",
+                ToolTip="Connect to active Microsoft Excel workbook to paste copied values or mappings",
+                FontSize=11,Padding=new Thickness(6,5,6,5),
+                Margin=new Thickness(1,2,1,2),
+                HorizontalContentAlignment=HorizontalAlignment.Left
+            };
+            pasteBtn.Click+=(_,_)=>DeskSpaceExcelClipboardV39.ShowActive();
+            pasteGroup.Children.Add(pasteBtn);
+        }
         var suggestionGroup=DeskSpaceShelfGroupsV88.Add(list,
             "Excel paste suggestions",excelMatchesV122.Count,
             excelExpandedV122,()=>{

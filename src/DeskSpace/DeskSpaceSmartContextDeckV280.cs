@@ -26,6 +26,7 @@ internal static class DeskSpaceSmartContextDeckV280
         new(StringComparer.Ordinal)
         {
             ["Excel"]=new[]{
+                new Suggestion("excel_paste","Paste to Excel"),
                 new Suggestion("excel","Open Excel mappings"),
                 new Suggestion("clipboard","Clipboard conversions")},
             ["Files"]=new[]{
@@ -268,6 +269,9 @@ internal static class DeskSpaceSmartContextDeckV280
     {
         switch(id)
         {
+            case "excel_paste":
+                DeskSpaceExcelClipboardV39.ShowActive();
+                break;
             case "excel":
                 _=DeskSpaceFeatureNavigationV200.OpenExcelAsync(owner);
                 break;
