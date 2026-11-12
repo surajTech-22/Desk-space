@@ -274,7 +274,12 @@ jobs:
           }
           & ./r375/apply-r375.ps1
           if(!$?){throw 'R375 Excel paste deck connection not applied to shipping Deck'}
-          $contextCode=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceSmartContextDeckV280.cs' -Raw
+          $deckCode=Get-Content 'DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs' -Raw
+          if(!$deckCode.Contains('Paste to Excel · Clipboard & mappings') -or
+             !$deckCode.Contains('DeskSpaceExcelClipboardV39.ShowActive();')){
+              throw 'R375 Excel paste connection missing from shipping Deck'
+          }
+          $contextCode=Get-Content 'src/DeskSpace/DeskSpaceSmartContextDeckV280.cs' -Raw
           if(!$contextCode.Contains('new Suggestion("excel_paste","Paste to Excel")') -or
              !$contextCode.Contains('DeskSpaceExcelClipboardV39.ShowActive();')){
               throw 'R375 Excel paste connection missing from Smart Context Deck'
