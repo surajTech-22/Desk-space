@@ -123,6 +123,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
     private string NonAppSignature()=>string.Join("\u001e",
         held.Concat(detected).Select(x=>x.StagedPath)
             .Concat(excelMatchesV122.Select(x=>x.Id.ToString()))
+            .Concat(DeskSpaceExcelClipboardV39.SharedClips.Select(x=>x.SourceSheet+":"+x.SourceAddress))
             .Concat(recognizedFolderV363.Select(x=>
                 x.Folder+"|"+x.AppId+"|"+recognizedFolderEpochV363)));
     private IReadOnlyList<DeskSpaceRunningAppsV88.Entry> runningApps=
@@ -250,6 +251,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // One opt-in session feeds both monitor-local Deck views; display
         // positions and UI state remain independent of shared context.
         DeskSpaceSmartContextDeckV280.Changed+=ContextChangedV280;
+        DeskSpaceExcelClipboardV39.ClipsChanged+=OnClipsChangedV376;
         host.AllowDrop=true;
         host.PreviewDragOver+=DragOver;
         host.PreviewDrop+=Receive;
@@ -455,7 +457,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // Parentheses matter: Media presence must not reopen the Deck
         // while Search owns input or while the source widget is hidden.
         bool contents=held.Count+detected.Count+runningApps.Count+
-            excelMatchesV122.Count>0 ||
+            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0 ||
             DeskSpaceMediaV18.ActiveV123?.DeckVisibleV123==true;
         if((bool)e.NewValue)deckMinimized=false;
         popup.IsOpen=!deckDismissed &&
@@ -1177,6 +1179,8 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         VerticalAlignment=VerticalAlignment.Center
     };
     // Excel suggestion state is independent of Running Apps expansion.
+    private bool excelClipsExpandedV376=true;
+    private static void OnClipsChangedV376(){RefreshViews();}
     private bool excelExpandedV122=true,excelRefreshingV122;
     private readonly List<(Guid Id,string Name,int Writable)> excelMatchesV122=new();
     private readonly DispatcherTimer excelSuggestTimerV122=new(){
@@ -1689,6 +1693,63 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             pasteBtn.Click+=(_,_)=>DeskSpaceExcelClipboardV39.ShowActive();
             pasteGroup.Children.Add(pasteBtn);
         }
+        var excelClipGroup=DeskSpaceShelfGroupsV88.Add(list,
+            "Excel clipboard",DeskSpaceExcelClipboardV39.SharedClips.Count,
+            excelClipsExpandedV376,()=>{
+                excelClipsExpandedV376=!excelClipsExpandedV376;Render();
+            });
+        if(excelClipsExpandedV376)
+            foreach(var clip in DeskSpaceExcelClipboardV39.SharedClips.ToArray())
+            {
+                var row=new Border{
+                    Background=new SolidColorBrush(Color.FromArgb(145,39,50,84)),
+                    CornerRadius=new CornerRadius(6),
+                    Padding=new Thickness(6,4,6,4),
+                    Margin=new Thickness(1,2,1,3)
+                };
+                var rowContent=new StackPanel();
+                var header=new DockPanel();
+                var drop=new Button{
+                    Content="×",FontSize=12,MinWidth=20,Padding=new Thickness(1),
+                    ToolTip="Remove from Excel clipboard"
+                };
+                drop.Click+=(_,_)=>{
+                    DeskSpaceExcelClipboardV39.SharedClips.Remove(clip);
+                    DeskSpaceExcelClipboardV39.NotifyChanged();
+                };
+                DockPanel.SetDock(drop,Dock.Right);
+                header.Children.Add(drop);
+                header.Children.Add(new TextBlock{
+                    Text=clip.SourceSheet+" · "+clip.SourceAddress,
+                    FontWeight=FontWeights.SemiBold,FontSize=11,Foreground=Brushes.White
+                });
+                rowContent.Children.Add(header);
+                rowContent.Children.Add(new TextBlock{
+                    Text=clip.RowCount+" rows × "+clip.ColumnCount+" cols · "+clip.Cells.Count+" copied cells",
+                    FontSize=10,Foreground=Brushes.LightSteelBlue,
+                    Margin=new Thickness(0,2,0,4)
+                });
+                var actions=new WrapPanel();
+                var copyBtn=new Button{
+                    Content="Copy values",FontSize=11,
+                    Padding=new Thickness(6,3,6,3),Margin=new Thickness(0,0,4,0),
+                    ToolTip="Copy cell values to Windows clipboard"
+                };
+                copyBtn.Click+=(_,_)=>DeskSpaceExcelClipboardV39.CopyPlain(clip);
+                actions.Children.Add(copyBtn);
+
+                var pasteBtn=new Button{
+                    Content="Paste to Excel",FontSize=11,
+                    Padding=new Thickness(6,3,6,3),
+                    ToolTip="Paste values directly to active Excel workbook with backup"
+                };
+                pasteBtn.Click+=(_,_)=>DeskSpaceExcelClipboardV39.PasteExcel(clip);
+                actions.Children.Add(pasteBtn);
+
+                rowContent.Children.Add(actions);
+                row.Child=rowContent;
+                excelClipGroup.Children.Add(row);
+            }
         var suggestionGroup=DeskSpaceShelfGroupsV88.Add(list,
             "Excel paste suggestions",excelMatchesV122.Count,
             excelExpandedV122,()=>{
@@ -1921,6 +1982,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             recognizedFolderErrorV363=null;
         }
         DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
+        if(Views.Count==0)DeskSpaceExcelClipboardV39.ClipsChanged-=OnClipsChangedV376;
         if(Views.Count==0)DeskSpaceSmartContextDeckV280.Stop();
         // The media player stays inside the Deck until the FINAL widget
         // goes away. Closing monitor 1 must not open an extra floating

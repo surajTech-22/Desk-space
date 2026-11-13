@@ -27,10 +27,13 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     private readonly Window host;
     private readonly Popup popup;
     private readonly StackPanel list;
-    private readonly List<DeskSpaceExcelTemplateV16> clips=new();
+    internal static readonly List<DeskSpaceExcelTemplateV16> SharedClips=new();
+    internal static event Action? ClipsChanged;
+    internal static void NotifyChanged()=>ClipsChanged?.Invoke();
     private HwndSource? source;
     private IntPtr hwnd;
-    private bool disposed,ownClipboardWrite,manualOpen,userHidden,collapsed,dragging,customPosition,captureBusy;
+    private static bool ownClipboardWrite;
+    private bool disposed,manualOpen,userHidden,collapsed,dragging,customPosition,captureBusy;
     private Point dragStart;
     private double dragOffsetX,dragOffsetY;
     private FrameworkElement? dragHeader;
@@ -104,14 +107,15 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
             entry.Cells.ForEach(c=>c.Role="Value");
             // An automatic event for the same selection should not duplicate
             // the shelf, but a deliberate second Copy should bring it forward.
-            if(clips.Count>0 && clips[0].SourceWorkbook==entry.SourceWorkbook &&
-               clips[0].SourceSheet==entry.SourceSheet &&
-               clips[0].SourceAddress==entry.SourceAddress &&
-               clips[0].Cells.Count==entry.Cells.Count &&
-               clips[0].Cells.Zip(entry.Cells,(x,y)=>x.RawValue==y.RawValue).All(x=>x))
+            if(SharedClips.Count>0 && SharedClips[0].SourceWorkbook==entry.SourceWorkbook &&
+               SharedClips[0].SourceSheet==entry.SourceSheet &&
+               SharedClips[0].SourceAddress==entry.SourceAddress &&
+               SharedClips[0].Cells.Count==entry.Cells.Count &&
+               SharedClips[0].Cells.Zip(entry.Cells,(x,y)=>x.RawValue==y.RawValue).All(x=>x))
                 return;
-            clips.Insert(0,entry);
-            if(clips.Count>8)clips.RemoveAt(clips.Count-1);
+            SharedClips.Insert(0,entry);
+            if(SharedClips.Count>8)SharedClips.RemoveAt(SharedClips.Count-1);
+            NotifyChanged();
             Render();
         }
         catch(Exception ex)
@@ -132,7 +136,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
         popup.HorizontalOffset=host.Left+host.Width+315<working.Right ? 314 : -315;
     }
     private void Visible(object sender,DependencyPropertyChangedEventArgs e)
-    {if(!disposed)popup.IsOpen=!userHidden && (bool)e.NewValue && (clips.Count>0||manualOpen);}
+    {if(!disposed)popup.IsOpen=false;}
     private void HideShelf()
     {
         userHidden=true;
@@ -237,9 +241,9 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
             list.Children.Add(row);
         }
         Reposition(this,EventArgs.Empty);
-        popup.IsOpen=!userHidden && host.IsVisible;
+        popup.IsOpen=false;
     }
-    private static string Tsv(DeskSpaceExcelTemplateV16 entry)
+    internal static string Tsv(DeskSpaceExcelTemplateV16 entry)
     {
         int rows=Math.Min(entry.RowCount,250),cols=Math.Min(entry.ColumnCount,60);
         var matrix=new string[rows,cols];
@@ -264,7 +268,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
         }
         return string.Join("\r\n",lines);
     }
-    private void CopyPlain(DeskSpaceExcelTemplateV16 clip)
+    internal static void CopyPlain(DeskSpaceExcelTemplateV16 clip)
     {
         try {
             ownClipboardWrite=true;
@@ -275,7 +279,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
         }
         finally{ownClipboardWrite=false;}
     }
-    private async void PasteExcel(DeskSpaceExcelTemplateV16 clip)
+    internal static async void PasteExcel(DeskSpaceExcelTemplateV16 clip)
     {
         try
         {
@@ -301,7 +305,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     public void Dispose()
     {
         if(disposed)return;
-        disposed=true;clips.Clear();
+        disposed=true;
         if(ReferenceEquals(active,this))active=null;
         popup.IsOpen=false;
         host.SourceInitialized-=SourceReady;
