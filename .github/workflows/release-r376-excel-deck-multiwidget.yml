@@ -606,7 +606,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1139: connects the Excel Paste option directly into the Deck (DropShelf and Smart Context Deck). When Microsoft Excel is active or clipboard cells are present, users can trigger Paste to Excel directly from the Deck to review and apply values to the open workbook with safety backups. All existing one-second network speed indicators, Clock/Weather, Desk modules, search index safeguards, user data, and official SHA-256 verified updater remain unchanged. Full native Windows build, regression suites, and Deck integration tests gate publishing to Stable and Tester."
+              $notes="DeskSpace 1.5.1140: docks the Excel Clipboard directly inside the Deck DropShelf and synchronizes copied cell groups across all circle widgets in MultiWidget setups. Users can copy plain values to the Windows clipboard or paste directly into active Microsoft Excel workbooks with automated backups. The floating detached Excel clipboard popup is retired in favor of the integrated Deck view. All existing one-second network speed indicators, Clock/Weather, Desk modules, search index safeguards, user data, and official SHA-256 verified updater remain unchanged. Full native Windows build, regression suites, and Deck integration tests gate publishing to Stable and Tester."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Multi-Widget Excel Clipboard Inside Deck" --notes $notes
               }else{
@@ -627,7 +627,7 @@ jobs:
                   }
               }
           }
-          Write-Host "R374 Multi-Widget Excel Clipboard Inside Deck release SUCCESS: same SHA256 installer published to Tester and Stable."
+          Write-Host "R376 Multi-Widget Excel Clipboard Inside Deck release SUCCESS: same SHA256 installer published to Tester and Stable."
       - name: Send fresh SHA256-verified v1.5.1140 notification hints to both installed channels
         shell: pwsh
         run: |

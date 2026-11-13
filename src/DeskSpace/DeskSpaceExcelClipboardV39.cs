@@ -195,7 +195,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     {
         if(disposed)return;
         list.Children.Clear();
-        if(clips.Count==0&&!manualOpen){popup.IsOpen=false;return;}
+        if(SharedClips.Count==0&&!manualOpen){popup.IsOpen=false;return;}
         var head=new DockPanel{Margin=new Thickness(2,2,2,6),
             Background=new SolidColorBrush(Color.FromArgb(180,35,62,99))};
         // Close and collapse are always visible, even if zero cells exist.
@@ -206,10 +206,10 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
         var collapse=Button(collapsed?"+":"−",()=>{collapsed=!collapsed;Render();});
         collapse.ToolTip=collapsed?"Expand Excel clipboard":"Minimize Excel clipboard";
         DockPanel.SetDock(collapse,Dock.Right);head.Children.Add(collapse);
-        var clear=Button("Clear",()=>{clips.Clear();manualOpen=true;Render();});
+        var clear=Button("Clear",()=>{SharedClips.Clear();NotifyChanged();manualOpen=true;Render();});
         clear.ToolTip="Delete Excel clipboard copies";
         DockPanel.SetDock(clear,Dock.Right);head.Children.Add(clear);
-        var title=Label("⋮⋮ Excel clipboard · "+clips.Count,13);
+        var title=Label("⋮⋮ Excel clipboard · "+SharedClips.Count,13);
         title.Cursor=Cursors.SizeAll;
         title.ToolTip="Hold and drag to move the Excel clipboard";
         title.MouseLeftButtonDown+=DragStart;
@@ -217,16 +217,16 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
         title.MouseLeftButtonUp+=DragEnd;
         head.Children.Add(title);
         list.Children.Add(head);
-        if(!collapsed && clips.Count==0)
+        if(!collapsed && SharedClips.Count==0)
         {
             list.Children.Add(Label("Copy a range in Microsoft Excel to collect cells here."));
             list.Children.Add(Button("Capture selected Excel cells",()=>CaptureSelection(false)));
         }
-        foreach(var clip in (collapsed?Array.Empty<DeskSpaceExcelTemplateV16>():clips.ToArray()))
+        foreach(var clip in (collapsed?Array.Empty<DeskSpaceExcelTemplateV16>():SharedClips.ToArray()))
         {
             var row=new StackPanel{Margin=new Thickness(2,2,2,6)};
             var header=new DockPanel();
-            var drop=Button("×",()=>{clips.Remove(clip);Render();});
+            var drop=Button("×",()=>{SharedClips.Remove(clip);NotifyChanged();Render();});
             DockPanel.SetDock(drop,Dock.Right);header.Children.Add(drop);
             header.Children.Add(Label(clip.SourceSheet+" · "+clip.SourceAddress));
             row.Children.Add(header);
