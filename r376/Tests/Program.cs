@@ -29,7 +29,7 @@ internal static class Program
             Check(deckSource.Contains("DeskSpaceExcelClipboardV39.ClipsChanged+=OnClipsChangedV376;") &&
                   deckSource.Contains("RefreshViews();"),
                 "ClipsChanged must trigger RefreshViews across all active MultiWidget circle views");
-            Check(deckSource.Contains(""Excel clipboard",DeskSpaceExcelClipboardV39.SharedClips.Count") &&
+            Check(deckSource.Contains("\"Excel clipboard\",DeskSpaceExcelClipboardV39.SharedClips.Count") &&
                   deckSource.Contains("Paste to Excel") &&
                   deckSource.Contains("Copy values"),
                 "Excel clipboard must be docked inside the Deck DropShelf with Copy and Paste actions");
