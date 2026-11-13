@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using Button = System.Windows.Controls.Button;
 using DeskSpace;
 
 internal static class Program
@@ -138,6 +139,7 @@ internal static class Program
         var btn = new Button { Content = "◉" };
         host.Content = deck;
         host.Show();
+        host.UpdateLayout();
         try
         {
             var previewType = asm.GetType("DeskSpace.DeskSpaceDeckPreviewV99", true)!;
@@ -311,6 +313,7 @@ internal static class Program
     [STAThread]
     private static int Main()
     {
+        var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try
         {
             var asm = typeof(FullscreenDetector).Assembly;
@@ -326,6 +329,10 @@ internal static class Program
         {
             Console.Error.WriteLine(ex);
             return 1;
+        }
+        finally
+        {
+            app.Shutdown();
         }
     }
 }
