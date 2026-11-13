@@ -31,18 +31,18 @@ if(Test-Path -LiteralPath $deckPath){
 '@ 'expand flag and multiwidget refresh trigger'
 
     Swap-R376 @'
-        DeskSpaceSmartContextDeckV280.Changed+=ContextChangedV280;
+        Views.Add(this);
 '@ @'
-        DeskSpaceSmartContextDeckV280.Changed+=ContextChangedV280;
+        Views.Add(this);
         DeskSpaceExcelClipboardV39.ClipsChanged+=OnClipsChangedV376;
-'@ 'hook clipboard changes to refresh all deck views'
+'@ 'hook clipboard changes in DropShelf constructor'
 
     Swap-R376 @'
-        DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
+        Views.Remove(this);
 '@ @'
-        DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
+        Views.Remove(this);
         if(Views.Count==0)DeskSpaceExcelClipboardV39.ClipsChanged-=OnClipsChangedV376;
-'@ 'unhook clipboard changes when all views closed'
+'@ 'unhook clipboard changes in DropShelf Dispose'
 
     Swap-R376 @'
 .Concat(excelMatchesV122.Select(x=>x.Id.ToString()))
