@@ -556,7 +556,7 @@ Swap-R377 @'
     private static void OnClipsChangedV376(){RefreshViews();}
     private static void OnShowDeckRequestedV377()
     {
-        DeskSpaceDeckVisibilityV89.Visible=true;
+        DeskSpaceDeckVisibilityV89.TrySet(true,out _);
         foreach(var view in Views.ToArray())
             view.WakeDeckV377();
     }
@@ -1045,9 +1045,10 @@ public static class FullscreenDetector
             ? new System.Windows.Interop.WindowInteropHelper(widget).Handle
             : IntPtr.Zero;
         Forms.Screen? bound=null;
-        if(widget!=null)
-            bound=DeskSpaceMonitorFenceV152.BoundScreen(widget) ??
-                (widgetHwnd!=IntPtr.Zero?Forms.Screen.FromHandle(widgetHwnd):null);
+        if(widget is WidgetShellWindow shell)
+            bound=DeskSpaceMonitorFenceV152.BoundScreen(shell);
+        if(bound==null && widgetHwnd!=IntPtr.Zero)
+            bound=Forms.Screen.FromHandle(widgetHwnd);
         string? wantedDevice=bound?.DeviceName;
         if(!string.IsNullOrWhiteSpace(wantedDevice))
         {
