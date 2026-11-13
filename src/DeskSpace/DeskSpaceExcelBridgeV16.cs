@@ -660,4 +660,144 @@ internal static class DeskSpaceExcelBridgeV16
         // Don't auto-save. User may inspect the workbook and save when ready.
         return backup;
     }
+
+    public static DeskSpaceExcelProposalV16 PreviewClipboardValues(
+        DeskSpaceExcelTemplateV16 entry,bool overwrite)
+    {
+        if(!entry.CoordinatesVerified || entry.Cells.Count==0)
+            throw new InvalidOperationException(
+                "No captured Excel cell values to paste.");
+        dynamic app=Excel();
+        dynamic sheet=app.ActiveSheet;
+        dynamic selected=app.ActiveWindow.RangeSelection;
+        int r=(int)selected.Row,c=(int)selected.Column;
+        bool sheetProtected=(bool)sheet.ProtectContents;
+        var preview=new DeskSpaceExcelProposalV16 {
+            StartRow=r,StartColumn=c,
+            SheetName=Text(sheet.Name),
+            WorkbookFullName=Text(app.ActiveWorkbook.FullName),
+            Verified=true,
+            Reason="Clipboard paste starting at active Excel cell "+Text(selected.Address)+".",
+            UsedReferenceSignatureV120=false
+        };
+        foreach(var source in entry.Cells)
+        {
+            bool hasText=!string.IsNullOrEmpty(source.RawValue)||
+                !string.IsNullOrWhiteSpace(source.Display);
+            if(source.ValueKind=="blank" && !hasText)continue;
+            int destRow=r+source.RowOffset,destCol=c+source.ColumnOffset;
+            if(destRow<1||destCol<1)continue;
+            dynamic cell=sheet.Cells[destRow,destCol];
+            var old=(object?)cell.Value2;
+            var oldText=Text(cell.Text);
+            bool destinationFormula=Formula(cell);
+            string decision;
+            if(sheetProtected)decision="Sheet is protected";
+            else if(destinationFormula)decision="Formula cell preserved";
+            else if(old!=null && !overwrite)decision="Occupied (overwrite off)";
+            else decision="Ready";
+            if(decision=="Ready" && (bool)cell.MergeCells)
+            {
+                dynamic primary=cell.MergeArea.Cells[1,1];
+                if((int)primary.Row!=destRow||(int)primary.Column!=destCol)
+                    decision="Merged cell: not top-left";
+            }
+            var newText=!string.IsNullOrWhiteSpace(source.Display)
+                ? source.Display : source.RawValue;
+            preview.Changes.Add(new DeskSpaceExcelChangeV16 {
+                Row=destRow,Column=destCol,
+                CellAddress=Text(cell.Address),
+                Previous=oldText,PreviousRaw=Text(old),
+                NewValue=newText,
+                Decision=decision,Source=source
+            });
+        }
+        return preview;
+    }
+
+    private static object? ClipboardCellValueV377(DeskSpaceExcelCellV16 cell)
+    {
+        if(DeskSpaceExcelActionsV46.IsNativeShortcut(cell.ValueKind) ||
+           DeskSpaceExcelActionsV46.IsAction(cell.ValueKind))
+            return DeskSpaceExcelActionsV46.PreviewText(cell,DateTime.Now);
+        if(cell.ValueKind=="formula")
+        {
+            if(!string.IsNullOrWhiteSpace(cell.RawValue) &&
+               double.TryParse(cell.RawValue,NumberStyles.Any,
+                   CultureInfo.InvariantCulture,out var numeric))
+                return numeric;
+            var text=!string.IsNullOrEmpty(cell.RawValue)?cell.RawValue:cell.Display;
+            return text.StartsWith("=",StringComparison.Ordinal)?"'"+text:text;
+        }
+        return TypedValue(cell);
+    }
+
+    public static string ApplyClipboardValues(
+        DeskSpaceExcelProposalV16 preview,DeskSpaceExcelTemplateV16 entry,
+        bool overwrite)
+    {
+        if(!preview.Verified || !entry.CoordinatesVerified)
+            throw new InvalidOperationException(
+                "Clipboard preview is not ready to paste.");
+        if(!preview.Changes.Any(c=>c.CanApply))
+            throw new InvalidOperationException(
+                "No writable destination cells at the active Excel selection.");
+        dynamic app=Excel();
+        dynamic sheet=app.ActiveSheet;
+        if(!string.Equals(Text(sheet.Name),preview.SheetName,StringComparison.Ordinal) ||
+           !string.Equals(Text(app.ActiveWorkbook.FullName),preview.WorkbookFullName,
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "The active Excel workbook or sheet changed. Please paste again.");
+        if((bool)sheet.ProtectContents)
+            throw new InvalidOperationException("The destination worksheet is protected.");
+        foreach(var change in preview.Changes.Where(x=>x.CanApply))
+        {
+            dynamic destination=sheet.Cells[change.Row,change.Column];
+            if(Formula(destination) ||
+               !string.Equals(Text((object?)destination.Value2),change.PreviousRaw,
+                   StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Destination "+change.CellAddress+" changed before paste. Please paste again.");
+        }
+        var folder=Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "DeskSpace","ExcelBackups");
+        Directory.CreateDirectory(folder);
+        var ext=Path.GetExtension(Text(app.ActiveWorkbook.Name));
+        if(string.IsNullOrEmpty(ext))ext=".xlsx";
+        var backup=Path.Combine(folder,"Excel_before_clipboard_"+
+            DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")+ext);
+        app.ActiveWorkbook.SaveCopyAs(backup);
+        if(!File.Exists(backup)||new FileInfo(backup).Length==0)
+            throw new IOException("Excel backup was not created. Nothing was changed.");
+        var rollback=new List<(dynamic Cell,object? Old,bool HadFormula,string Formula)>();
+        try
+        {
+            foreach(var change in preview.Changes.Where(x=>x.CanApply))
+            {
+                dynamic cell=sheet.Cells[change.Row,change.Column];
+                var previous=(object?)cell.Value2;
+                var hadFormula=Formula(cell);
+                if(hadFormula)continue;
+                if(previous!=null && !overwrite)continue;
+                rollback.Add((cell,previous,hadFormula,""));
+                cell.Value2=ClipboardCellValueV377(change.Source);
+                if(!string.IsNullOrWhiteSpace(change.Source.NumberFormat) &&
+                   change.Source.NumberFormat!="General")
+                    try{cell.NumberFormat=change.Source.NumberFormat;}
+                    catch(COMException){}
+            }
+        }
+        catch
+        {
+            foreach(var x in rollback.AsEnumerable().Reverse())
+                try{
+                    if(x.HadFormula)x.Cell.FormulaR1C1=x.Formula;
+                    else x.Cell.Value2=x.Old;
+                }catch(COMException){}
+            throw;
+        }
+        return backup;
+    }
 }

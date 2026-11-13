@@ -85,6 +85,15 @@ internal static class DeskSpaceExcelWorkerV41
         DeskSpaceExcelTemplateV16 entry,bool selection,bool overwrite)=>
         Sta(()=>DeskSpaceExcelBridgeV16.Preview(entry,selection,overwrite));
 
+    public static Task<DeskSpaceExcelProposalV16> PreviewClipboardAsync(
+        DeskSpaceExcelTemplateV16 entry,bool overwrite)=>
+        Sta(()=>DeskSpaceExcelBridgeV16.PreviewClipboardValues(entry,overwrite));
+
+    public static Task<string> ApplyClipboardAsync(
+        DeskSpaceExcelProposalV16 preview,DeskSpaceExcelTemplateV16 entry,
+        bool overwrite)=>
+        Sta(()=>DeskSpaceExcelBridgeV16.ApplyClipboardValues(preview,entry,overwrite));
+
     // Format-only operations are separate from the existing values-only autofill.
     public static Task<string> PasteSpecialFormulasAsync(
         DeskSpaceExcelTemplateV16 entry)=>
