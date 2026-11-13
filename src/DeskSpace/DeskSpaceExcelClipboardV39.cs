@@ -63,6 +63,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
             var entry=await DeskSpaceExcelWorkerV41.CaptureAsync(
                 "Cells · "+DateTime.Now.ToString("HH:mm:ss"),"",true);
             if(entry==null || entry.Cells.Count==0)return;
+            entry.Cells.ForEach(c=>c.Role="Value");
             RecordSharedClip(entry);
             SetStatus("Captured "+entry.Cells.Count+" cells from "+
                 entry.SourceSheet+" ("+entry.SourceAddress+")");
@@ -97,7 +98,10 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
             {
                 var entry=await DeskSpaceExcelWorkerV41.CopyEventAsync();
                 if(entry!=null && entry.Cells.Count>0)
+                {
+                    entry.Cells.ForEach(c=>c.Role="Value");
                     RecordSharedClip(entry);
+                }
             }
         }
         catch{}
@@ -163,6 +167,11 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
                 ? await DeskSpaceExcelWorkerV41.CopyEventAsync()
                 : await DeskSpaceExcelWorkerV41.CaptureAsync(
                     "Cells · "+DateTime.Now.ToString("HH:mm:ss"),"",true);
+            if(clipboardEvent && !disposed && (entry==null || entry.Cells.Count==0))
+            {
+                await System.Threading.Tasks.Task.Delay(220);
+                if(!disposed)entry=await DeskSpaceExcelWorkerV41.CopyEventAsync();
+            }
             if(disposed || entry==null || entry.Cells.Count==0)return;
             entry.Cells.ForEach(c=>c.Role="Value");
             bool added=RecordSharedClip(entry);
@@ -181,7 +190,30 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
         }
         finally{captureBusy=false;}
     }
-    public void Enable(){if(!disposed)Render();}
+    public void Enable()
+    {
+        if(disposed)return;
+        Render();
+        if(SharedClips.Count==0 && !captureBusy &&
+           (active==null || ReferenceEquals(active,this)) &&
+           DeskSpaceExcelActiveV122.AnyExcelOpen())
+            host.Dispatcher.BeginInvoke(new Action(()=>PrefetchActiveCopyV377()));
+    }
+    private async void PrefetchActiveCopyV377()
+    {
+        if(disposed || captureBusy || SharedClips.Count>0)return;
+        captureBusy=true;
+        try
+        {
+            var entry=await DeskSpaceExcelWorkerV41.CopyEventAsync();
+            if(disposed || entry==null || entry.Cells.Count==0)return;
+            entry.Cells.ForEach(c=>c.Role="Value");
+            RecordSharedClip(entry);
+            Render();
+        }
+        catch{}
+        finally{captureBusy=false;}
+    }
     private void Reposition(object? sender,EventArgs e)
     {
         if(disposed||customPosition)return;
@@ -407,15 +439,19 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
             var preview=await DeskSpaceExcelWorkerV41.PreviewClipboardAsync(clip,true);
             if(!preview.Verified||preview.Writable==0)
                 throw new InvalidOperationException("No writable target cells at the active Excel selection. Select a non-formula cell in Excel and try again.");
+            string bookName=string.IsNullOrWhiteSpace(preview.WorkbookFullName)
+                ? "" : Path.GetFileName(preview.WorkbookFullName);
+            string targetCell=preview.Changes.FirstOrDefault(x=>x.CanApply)?.CellAddress??"";
+            string destDesc=(bookName.Length>0?bookName+" · ":"")+
+                preview.SheetName+(targetCell.Length>0?" ("+targetCell+")":"");
             var answer=MessageBox.Show(
-                "Paste "+preview.Writable+" values into "+
-                preview.SheetName+" starting at the active cell?\n"+
+                "Paste "+preview.Writable+" values into "+destDesc+"?\n"+
                 "Existing formulas will be preserved and a workbook backup will be saved first.",
                 "DeskSpace · Paste to Excel",
                 MessageBoxButton.YesNo,MessageBoxImage.Question);
             if(answer!=MessageBoxResult.Yes)return;
             await DeskSpaceExcelWorkerV41.ApplyClipboardAsync(preview,clip,true);
-            SetStatus("Pasted "+preview.Writable+" cells to "+preview.SheetName+" · backup saved");
+            SetStatus("Pasted "+preview.Writable+" cells to "+destDesc+" · backup saved");
         }
         catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Excel");}
     }

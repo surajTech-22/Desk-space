@@ -205,10 +205,35 @@ internal static class Program
               deckSource.Contains("deckPreview?.BindExcel(previewClip,row,clip,()=>previewOnHover)") &&
               deckSource.Contains("ClipSummarySnippet(clip)"),
             "DropShelf must connect real Excel paste actions and hover table preview");
-        Check(deckSource.Contains("held.Count+detected.Count+runningApps.Count+\n            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0"),
-            "DropShelf Visible() must account for SharedClips count");
+        Check(deckSource.Contains("held.Count+detected.Count+runningApps.Count+\n            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0") &&
+              deckSource.Contains("DeskSpaceExcelActiveV122.AnyExcelOpen()") &&
+              deckSource.Contains("Excel clipboard · 0"),
+            "DropShelf Visible() and Render() must account for SharedClips count and any open Excel window");
         Check(Regex.Matches(deckSource, @"DeckHeaderButton\(").Count == 4,
             "R308 invariant broken: DeckHeaderButton( count must remain exactly 4");
+
+        string bridgeSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelBridgeV16.cs");
+        Check(bridgeSource.Contains("AccessibleObjectFromWindow(") &&
+              bridgeSource.Contains("EXCEL7") &&
+              bridgeSource.Contains("limit++<2500"),
+            "DeskSpaceExcelBridgeV16 must include XLMAIN->EXCEL7 native OM discovery and expanded ROT scan limit");
+
+        string activeSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelActiveV122.cs");
+        Check(activeSource.Contains("AnyExcelOpen()"),
+            "DeskSpaceExcelActiveV122 must expose AnyExcelOpen()");
+
+        string clipSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelClipboardV39.cs");
+        Check(clipSource.Contains("PrefetchActiveCopyV377()"),
+            "DeskSpaceExcelClipboardV39 must prefetch active Excel copy on Enable()");
+
+        var activeType = typeof(FullscreenDetector).Assembly.GetType("DeskSpace.DeskSpaceExcelActiveV122", true)!;
+        var anyOpenMethod = activeType.GetMethod("AnyExcelOpen", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!;
+        bool openRes = (bool)anyOpenMethod.Invoke(null, null)!;
+        Check(!openRes || openRes, "AnyExcelOpen() must execute cleanly without throwing");
+
+        var bridgeType = typeof(FullscreenDetector).Assembly.GetType("DeskSpace.DeskSpaceExcelBridgeV16", true)!;
+        Check(bridgeType.GetMethod("AccessibleObjectFromWindow", BindingFlags.Static | BindingFlags.NonPublic) != null,
+            "AccessibleObjectFromWindow P/Invoke must be compiled into DeskSpaceExcelBridgeV16");
 
         string widgetSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs");
         Check(widgetSource.Contains("previousFullscreen=FullscreenDetector.IsMonitorFullscreen(this);") &&
@@ -236,6 +261,8 @@ internal static class Program
         // 2. Fullscreen VLC playing on Monitor 2 (1920,0..4480,1440)
         Check(FullscreenDetector.CoversMonitor(1920, 0, 4480, 1440, 1920, 0, 4480, 1440, 1920, 0, 4480, 1440, 0x14000000u, 0, "Qt652QWindowIcon"),
             "Fullscreen video on Monitor 2 must hide Monitor 2 widget");
+        Check(FullscreenDetector.CoversMonitor(1923, 3, 4477, 1437, 1920, 0, 4480, 1440, 1920, 0, 4480, 1440, 0x14000000u, 0, "Chrome_WidgetWin_1"),
+            "Fractional-DPI 3px rounded fullscreen video on Monitor 2 must still hide Monitor 2 widget");
         Check(!FullscreenDetector.CoversMonitor(1920, 0, 4480, 1440, 0, 0, 1920, 1080, 0, 0, 1920, 1032, 0x14000000u, 0, "Qt652QWindowIcon"),
             "Fullscreen video on Monitor 2 must NEVER hide Monitor 1 widget");
 

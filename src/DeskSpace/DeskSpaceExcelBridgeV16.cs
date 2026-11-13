@@ -49,9 +49,17 @@ internal static class DeskSpaceExcelBridgeV16
         out System.Runtime.InteropServices.ComTypes.IBindCtx context);
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(WindowEnumerator callback,IntPtr arg);
+    [DllImport("user32.dll")]
+    private static extern bool EnumChildWindows(IntPtr parent,WindowEnumerator callback,IntPtr arg);
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]
     private static extern int GetClassName(IntPtr hwnd,
         System.Text.StringBuilder output,int length);
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleObjectFromWindow(
+        IntPtr hwnd,uint id,ref Guid iid,
+        [MarshalAs(UnmanagedType.IDispatch)]out object? ppvObject);
     private delegate bool WindowEnumerator(IntPtr hwnd,IntPtr arg);
 
     private static dynamic Excel()
@@ -75,7 +83,7 @@ internal static class DeskSpaceExcelBridgeV16
                 rot.EnumRunning(out var enumeration);
                 var item=new System.Runtime.InteropServices.ComTypes.IMoniker[1];
                 int limit=0;
-                while(limit++<300 && enumeration.Next(1,item,IntPtr.Zero)==0)
+                while(limit++<2500 && enumeration.Next(1,item,IntPtr.Zero)==0)
                 {
                     try
                     {
@@ -96,6 +104,43 @@ internal static class DeskSpaceExcelBridgeV16
         }
         catch(COMException){}
         catch(InvalidOperationException){}
+        // AccessibleObjectFromWindow(OBJID_NATIVEOM) reliably connects to open
+        // Click-to-Run, unsaved, and CSV Excel windows at matching privilege.
+        try
+        {
+            var sb=new System.Text.StringBuilder(64);
+            var iidDispatch=new Guid("00020400-0000-0000-C000-000000000046");
+            EnumWindows((hwnd,_)=>{
+                if(!IsWindowVisible(hwnd))return true;
+                sb.Clear();
+                if(GetClassName(hwnd,sb,sb.Capacity)<=0 || sb.ToString()!="XLMAIN")
+                    return true;
+                bool foundForWindow=false;
+                EnumChildWindows(hwnd,(child,__)=>{
+                    if(foundForWindow)return false;
+                    var cb=new System.Text.StringBuilder(64);
+                    if(GetClassName(child,cb,cb.Capacity)<=0 || cb.ToString()!="EXCEL7")
+                        return true;
+                    try
+                    {
+                        var iid=iidDispatch;
+                        if(AccessibleObjectFromWindow(child,0xFFFFFFF0u,ref iid,out var winObj)==0 &&
+                           winObj!=null)
+                        {
+                            RegisterExcelApp((object)((dynamic)winObj).Application,apps);
+                            foundForWindow=true;
+                            return false;
+                        }
+                    }
+                    catch(COMException){}
+                    catch(InvalidCastException){}
+                    catch(Microsoft.CSharp.RuntimeBinder.RuntimeBinderException){}
+                    return true;
+                },IntPtr.Zero);
+                return true;
+            },IntPtr.Zero);
+        }
+        catch(Exception){}
         if(apps.Count==0)
             throw new InvalidOperationException(
                 "Could not connect to the already opened Excel workbook. "+

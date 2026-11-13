@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 # R377:
 #  1) Make Deck Excel Paste truly functional (Paste latest / Capture selected / Open mappings)
@@ -41,9 +41,83 @@ if((Get-FileHash $clipSrc -Algorithm SHA256).Hash -ne
     throw 'R377 DeskSpaceExcelClipboardV39 copy hash mismatch'
 }
 
-# --- Part B: Patch DeskSpaceExcelBridgeV16.cs (explicit clipboard preview/apply) ---
+# --- Part B: Patch DeskSpaceExcelBridgeV16.cs (explicit clipboard preview/apply + reliable OM discovery) ---
 $bridgePath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelBridgeV16.cs'
 Begin-Patch $bridgePath
+Swap-R377 @'
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(WindowEnumerator callback,IntPtr arg);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hwnd,
+        System.Text.StringBuilder output,int length);
+    private delegate bool WindowEnumerator(IntPtr hwnd,IntPtr arg);
+'@ @'
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(WindowEnumerator callback,IntPtr arg);
+    [DllImport("user32.dll")]
+    private static extern bool EnumChildWindows(IntPtr parent,WindowEnumerator callback,IntPtr arg);
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hwnd,
+        System.Text.StringBuilder output,int length);
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleObjectFromWindow(
+        IntPtr hwnd,uint id,ref Guid iid,
+        [MarshalAs(UnmanagedType.IDispatch)]out object? ppvObject);
+    private delegate bool WindowEnumerator(IntPtr hwnd,IntPtr arg);
+'@ 'excel bridge window OM imports'
+Swap-R377 @'
+                while(limit++<300 && enumeration.Next(1,item,IntPtr.Zero)==0)
+'@ @'
+                while(limit++<2500 && enumeration.Next(1,item,IntPtr.Zero)==0)
+'@ 'expand ROT scan limit'
+Swap-R377 @'
+        catch(COMException){}
+        catch(InvalidOperationException){}
+        if(apps.Count==0)
+'@ @'
+        catch(COMException){}
+        catch(InvalidOperationException){}
+        // AccessibleObjectFromWindow(OBJID_NATIVEOM) reliably connects to open
+        // Click-to-Run, unsaved, and CSV Excel windows at matching privilege.
+        try
+        {
+            var sb=new System.Text.StringBuilder(64);
+            var iidDispatch=new Guid("00020400-0000-0000-C000-000000000046");
+            EnumWindows((hwnd,_)=>{
+                if(!IsWindowVisible(hwnd))return true;
+                sb.Clear();
+                if(GetClassName(hwnd,sb,sb.Capacity)<=0 || sb.ToString()!="XLMAIN")
+                    return true;
+                bool foundForWindow=false;
+                EnumChildWindows(hwnd,(child,__)=>{
+                    if(foundForWindow)return false;
+                    var cb=new System.Text.StringBuilder(64);
+                    if(GetClassName(child,cb,cb.Capacity)<=0 || cb.ToString()!="EXCEL7")
+                        return true;
+                    try
+                    {
+                        var iid=iidDispatch;
+                        if(AccessibleObjectFromWindow(child,0xFFFFFFF0u,ref iid,out var winObj)==0 &&
+                           winObj!=null)
+                        {
+                            RegisterExcelApp((object)((dynamic)winObj).Application,apps);
+                            foundForWindow=true;
+                            return false;
+                        }
+                    }
+                    catch(COMException){}
+                    catch(InvalidCastException){}
+                    catch(Microsoft.CSharp.RuntimeBinder.RuntimeBinderException){}
+                    return true;
+                },IntPtr.Zero);
+                return true;
+            },IntPtr.Zero);
+        }
+        catch(Exception){}
+        if(apps.Count==0)
+'@ 'XLMAIN/EXCEL7 native OM Excel discovery'
 Swap-R377 @'
         // Don't auto-save. User may inspect the workbook and save when ready.
         return backup;
@@ -196,6 +270,65 @@ Swap-R377 @'
 }
 '@ 'clipboard value preview and apply'
 Finish-Patch $bridgePath
+
+# --- Part B2: Patch DeskSpaceExcelActiveV122.cs (detect any open Excel window even when backgrounded) ---
+$activePath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelActiveV122.cs'
+Begin-Patch $activePath
+Swap-R377 @'
+    internal static bool SafeToSuggest(bool excelForeground,
+        bool verifiedSignature,int writable)=>
+        excelForeground&&verifiedSignature&&writable>0;
+}
+'@ @'
+    [DllImport("user32.dll")] private static extern bool EnumWindows(
+        WindowEnumV377 callback,IntPtr arg);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr handle);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(
+        IntPtr handle,System.Text.StringBuilder output,int length);
+    private delegate bool WindowEnumV377(IntPtr handle,IntPtr arg);
+
+    internal static bool AnyExcelOpen()
+    {
+        try
+        {
+            if(ForegroundExcel())return true;
+            bool found=false;
+            var sb=new System.Text.StringBuilder(64);
+            EnumWindows((hwnd,_)=>{
+                if(!IsWindowVisible(hwnd))return true;
+                sb.Clear();
+                if(GetClassName(hwnd,sb,sb.Capacity)>0 && sb.ToString()=="XLMAIN")
+                {
+                    found=true;
+                    return false;
+                }
+                return true;
+            },IntPtr.Zero);
+            if(found)return true;
+            var procs=Process.GetProcessesByName("EXCEL");
+            try
+            {
+                foreach(var p in procs)
+                {
+                    try{if(p.MainWindowHandle!=IntPtr.Zero)return true;}
+                    catch{}
+                }
+            }
+            finally
+            {
+                foreach(var p in procs)try{p.Dispose();}catch{}
+            }
+            return false;
+        }
+        catch{return false;}
+    }
+
+    internal static bool SafeToSuggest(bool excelForeground,
+        bool verifiedSignature,int writable)=>
+        excelForeground&&verifiedSignature&&writable>0;
+}
+'@ 'detect open Excel window even when backgrounded'
+Finish-Patch $activePath
 
 # --- Part C: Patch DeskSpaceExcelWorkerV41.cs ---
 $workerPath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelWorkerV41.cs'
@@ -603,9 +736,9 @@ Swap-R377 @'
 '@ @'
         bool contents=held.Count+detected.Count+runningApps.Count+
             excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0 ||
-            DeskSpaceExcelActiveV122.ForegroundExcel() ||
+            DeskSpaceExcelActiveV122.AnyExcelOpen() ||
             DeskSpaceMediaV18.ActiveV123?.DeckVisibleV123==true;
-'@ 'include Excel clips and foreground Excel in Deck visibility'
+'@ 'include Excel clips and open Excel in Deck visibility'
 
 Swap-R377 @'
             string currentNonApp=NonAppSignature();
@@ -628,9 +761,9 @@ Swap-R377 @'
 '@ @'
         if(held.Count+detected.Count+runningApps.Count+
             excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count==0 &&
-            !DeskSpaceExcelActiveV122.ForegroundExcel() &&
+            !DeskSpaceExcelActiveV122.AnyExcelOpen() &&
             DeskSpaceMediaV18.ActiveV123?.DeckVisibleV123!=true && !busy)
-'@ 'keep Deck open when Excel clips or active Excel actions exist'
+'@ 'keep Deck open when Excel clips or open Excel actions exist'
 
 Swap-R377 @'
         if(DeskSpaceExcelActiveV122.ForegroundExcel() && excelMatchesV122.Count==0)
@@ -705,7 +838,8 @@ Swap-R377 @'
             }
 '@ @'
         string clipStatusV377=DeskSpaceExcelClipboardV39.CurrentStatus();
-        if(DeskSpaceExcelActiveV122.ForegroundExcel() && excelMatchesV122.Count==0)
+        bool excelOpenV377=DeskSpaceExcelActiveV122.AnyExcelOpen();
+        if((excelOpenV377 || DeskSpaceExcelClipboardV39.SharedClips.Count>0) && excelMatchesV122.Count==0)
         {
             int pasteCountV377=DeskSpaceExcelClipboardV39.SharedClips.Count>0?3:2;
             var pasteGroup=DeskSpaceShelfGroupsV88.Add(list,"Excel paste",pasteCountV377,
@@ -761,6 +895,54 @@ Swap-R377 @'
             excelClipsExpandedV376,()=>{
                 excelClipsExpandedV376=!excelClipsExpandedV376;Render();
             });
+        if(DeskSpaceExcelClipboardV39.SharedClips.Count==0 && (excelOpenV377 || clipStatusV377.Length>0))
+        {
+            var emptyClipHeader=new Button{
+                Content=(excelClipsExpandedV376?"▾ ":"▸ ")+"Excel clipboard · 0",
+                FontSize=11,FontWeight=FontWeights.SemiBold,
+                Foreground=Brushes.White,
+                Background=new SolidColorBrush(Color.FromArgb(145,28,40,68)),
+                BorderThickness=new Thickness(0),
+                Padding=new Thickness(7,4,7,4),
+                Margin=new Thickness(0,3,0,2),
+                HorizontalContentAlignment=HorizontalAlignment.Left
+            };
+            emptyClipHeader.Click+=(_,_)=>{
+                excelClipsExpandedV376=!excelClipsExpandedV376;Render();
+            };
+            list.Children.Add(emptyClipHeader);
+            if(excelClipsExpandedV376)
+            {
+                var emptyCard=new Border{
+                    Background=new SolidColorBrush(Color.FromArgb(120,34,46,76)),
+                    CornerRadius=new CornerRadius(6),
+                    Padding=new Thickness(6,5,6,5),
+                    Margin=new Thickness(1,1,1,4)
+                };
+                var emptyStack=new StackPanel();
+                emptyStack.Children.Add(new TextBlock{
+                    Text=clipStatusV377.Length>0
+                        ? clipStatusV377
+                        : "Copy cells in Excel (Ctrl+C) to preview values here, or capture your current Excel selection.",
+                    FontSize=10.5,
+                    Foreground=clipStatusV377.Length>0
+                        ? new SolidColorBrush(Color.FromRgb(161,232,188))
+                        : Brushes.LightSteelBlue,
+                    TextWrapping=TextWrapping.Wrap,
+                    Margin=new Thickness(0,0,0,5)
+                });
+                var emptyCapBtn=new Button{
+                    Content="Capture Excel selection now",
+                    ToolTip="Read the highlighted cells from open Microsoft Excel into Excel clipboard",
+                    FontSize=11,Padding=new Thickness(6,3,6,3),
+                    HorizontalContentAlignment=HorizontalAlignment.Left
+                };
+                emptyCapBtn.Click+=(_,_)=>DeskSpaceExcelClipboardV39.CaptureSelectionNow();
+                emptyStack.Children.Add(emptyCapBtn);
+                emptyCard.Child=emptyStack;
+                list.Children.Add(emptyCard);
+            }
+        }
         if(excelClipsExpandedV376)
         {
             if(DeskSpaceExcelClipboardV39.SharedClips.Count>0 && clipStatusV377.Length>0)
@@ -1025,8 +1207,8 @@ public static class FullscreenDetector
            string.Equals(className,"Shell_TrayWnd",StringComparison.OrdinalIgnoreCase) ||
            string.Equals(className,"Shell_SecondaryTrayWnd",StringComparison.OrdinalIgnoreCase))
             return false;
-        bool covers=winLeft<=monLeft+2 && winTop<=monTop+2 &&
-            winRight>=monRight-2 && winBottom>=monBottom-2;
+        bool covers=winLeft<=monLeft+4 && winTop<=monTop+4 &&
+            winRight>=monRight-4 && winBottom>=monBottom-4;
         if(!covers)return false;
         bool hasWorkInset=workLeft>monLeft || workTop>monTop ||
             workRight<monRight || workBottom<monBottom;
@@ -1208,16 +1390,22 @@ public static class FullscreenDetector
 Finish-Patch $hostPath
 
 # --- R377 Static verification guards ---
-$bridgeFinal=Get-Content $bridgePath -Raw
-$workerFinal=Get-Content $workerPath -Raw
-$previewFinal=Get-Content $previewPath -Raw
-$deckFinal=Get-Content $deckPath -Raw
-$hostFinal=Get-Content $hostPath -Raw
+$bridgeFinal=[IO.File]::ReadAllText($bridgePath)
+$activeFinal=[IO.File]::ReadAllText($activePath)
+$workerFinal=[IO.File]::ReadAllText($workerPath)
+$previewFinal=[IO.File]::ReadAllText($previewPath)
+$deckFinal=[IO.File]::ReadAllText($deckPath)
+$hostFinal=[IO.File]::ReadAllText($hostPath)
 
 if(!$bridgeFinal.Contains('Selected-cell fallback is disabled for data.') -or
    !$bridgeFinal.Contains('PreviewClipboardValues(') -or
-   !$bridgeFinal.Contains('ApplyClipboardValues(')){
-    throw 'R377 bridge clipboard or R125 strict information guard missing'
+   !$bridgeFinal.Contains('ApplyClipboardValues(') -or
+   !$bridgeFinal.Contains('AccessibleObjectFromWindow(') -or
+   !$bridgeFinal.Contains('"EXCEL7"')){
+    throw 'R377 bridge clipboard, native OM Excel discovery, or R125 strict guard missing'
+}
+if(!$activeFinal.Contains('AnyExcelOpen()')){
+    throw 'R377 AnyExcelOpen helper missing from DeskSpaceExcelActiveV122'
 }
 if(!$workerFinal.Contains('PreviewClipboardAsync(') -or
    !$workerFinal.Contains('ApplyClipboardAsync(')){
@@ -1230,8 +1418,10 @@ if(!$previewFinal.Contains('ShowExcel(') -or !$previewFinal.Contains('BindExcel(
 if($deckFinal.Contains('Paste to Excel · Clipboard & mappings') -or
    !$deckFinal.Contains('Capture selected Excel cells') -or
    !$deckFinal.Contains('Open Excel mappings') -or
+   !$deckFinal.Contains('DeskSpaceExcelActiveV122.AnyExcelOpen()') -or
+   !$deckFinal.Contains('Excel clipboard · 0') -or
    !$deckFinal.Contains('BindExcel(previewClip,row,clip')){
-    throw 'R377 Deck Excel paste actions or clipboard hover binding missing'
+    throw 'R377 Deck Excel paste actions, open-Excel persistence, or clipboard hover binding missing'
 }
 if(([regex]::Matches($deckFinal,'DeckHeaderButton[(]')).Count -ne 4){
     throw 'R377 broke R308 header button count invariant (must equal 4)'

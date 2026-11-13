@@ -24,6 +24,49 @@ internal static class DeskSpaceExcelActiveV122
                 StringComparison.OrdinalIgnoreCase);
         }catch{return false;}
     }
+    [DllImport("user32.dll")] private static extern bool EnumWindows(
+        WindowEnumV377 callback,IntPtr arg);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr handle);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(
+        IntPtr handle,System.Text.StringBuilder output,int length);
+    private delegate bool WindowEnumV377(IntPtr handle,IntPtr arg);
+
+    internal static bool AnyExcelOpen()
+    {
+        try
+        {
+            if(ForegroundExcel())return true;
+            bool found=false;
+            var sb=new System.Text.StringBuilder(64);
+            EnumWindows((hwnd,_)=>{
+                if(!IsWindowVisible(hwnd))return true;
+                sb.Clear();
+                if(GetClassName(hwnd,sb,sb.Capacity)>0 && sb.ToString()=="XLMAIN")
+                {
+                    found=true;
+                    return false;
+                }
+                return true;
+            },IntPtr.Zero);
+            if(found)return true;
+            var procs=Process.GetProcessesByName("EXCEL");
+            try
+            {
+                foreach(var p in procs)
+                {
+                    try{if(p.MainWindowHandle!=IntPtr.Zero)return true;}
+                    catch{}
+                }
+            }
+            finally
+            {
+                foreach(var p in procs)try{p.Dispose();}catch{}
+            }
+            return false;
+        }
+        catch{return false;}
+    }
+
     internal static bool SafeToSuggest(bool excelForeground,
         bool verifiedSignature,int writable)=>
         excelForeground&&verifiedSignature&&writable>0;

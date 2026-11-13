@@ -368,11 +368,11 @@ jobs:
           if($latest.Major -ne 1 -or $latest.Minor -ne 5){
               throw 'Unexpected DeskSpace stable version family'
           }
-          $nextBuild=1141
+          $nextBuild=1142
           $version="1.5.$nextBuild"
           $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
           if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
-          foreach($tag in @('v1.5.1141','tester-v1.5.1141')){
+          foreach($tag in @('v1.5.1142','tester-v1.5.1142')){
             if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
               throw ('Refuse to overwrite existing release: '+$tag)
             }
@@ -604,7 +604,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1141: upgrades the Excel Paste section inside the Deck with working quick actions (Paste latest, Capture selected Excel cells, and Open Excel mappings) and repairs direct cell-value pasting into Microsoft Excel with automated workbook backups. Adds rich hover and eye-button spreadsheet table previews plus an inline values preview for Excel clipboard items. Makes multi-monitor fullscreen/video auto-hide and edge unhiding strictly per-monitor aware across differently scaled displays so videos on one monitor never hide or unhide widgets on other monitors. All existing modules and SHA-256 verified updates remain intact."
+              $notes="DeskSpace 1.5.1142: upgrades Microsoft Excel connection via native window discovery so already-open workbooks connect reliably alongside Office Click-to-Run, keeps Excel paste and Excel clipboard visible inside the Deck whenever Excel is open (even after clicking away), prefetches existing copied ranges cleanly, clarifies target workbook/sheet/cell in paste confirmation, preserves hover table previews, and improves fractional-DPI monitor-aware hiding/unhiding. All existing modules and SHA-256 verified updates remain intact."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Excel Preview & Monitor-Aware Widgets" --notes $notes
               }else{
@@ -626,14 +626,14 @@ jobs:
               }
           }
           Write-Host "R377 Excel Preview & Monitor-Aware Widgets release SUCCESS: same SHA256 installer published to Tester and Stable."
-      - name: Send fresh SHA256-verified v1.5.1141 notification hints to both installed channels
+      - name: Send fresh SHA256-verified v1.5.1142 notification hints to both installed channels
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
-          foreach($hint in @('stable|v1.5.1141','tester|tester-v1.5.1141')){
+          foreach($hint in @('stable|v1.5.1142','tester|tester-v1.5.1142')){
             try{
-              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1141 available' }
+              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1142 available' }
               if($response.event -ne 'message'){throw ('Relay rejected '+$hint)}
               Write-Host ('ACKNOWLEDGED official release hint: '+$hint)
             }catch{
