@@ -29,7 +29,17 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     private readonly StackPanel list;
     internal static readonly List<DeskSpaceExcelTemplateV16> SharedClips=new();
     internal static event Action? ClipsChanged;
+    internal static event Action? ShowDeckRequested;
     internal static void NotifyChanged()=>ClipsChanged?.Invoke();
+    private static string lastStatus="";
+    private static DateTime lastStatusUntilUtc=DateTime.MinValue;
+    internal static string CurrentStatus()=>DateTime.UtcNow<=lastStatusUntilUtc?lastStatus:"";
+    internal static void SetStatus(string message)
+    {
+        lastStatus=message??"";
+        lastStatusUntilUtc=string.IsNullOrEmpty(lastStatus)?DateTime.MinValue:DateTime.UtcNow.AddSeconds(7);
+        NotifyChanged();
+    }
     private HwndSource? source;
     private IntPtr hwnd;
     private static bool ownClipboardWrite;
@@ -37,11 +47,60 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     private Point dragStart;
     private double dragOffsetX,dragOffsetY;
     private FrameworkElement? dragHeader;
+    private static readonly List<DeskSpaceExcelClipboardV39> Instances=new();
     private static DeskSpaceExcelClipboardV39? active;
     private int reposition;
-    public static void CaptureNow()=>active?.CaptureSelection(false);
-    public static void ShowActive()
+    public static void CaptureNow()=>CaptureSelectionNow();
+    internal static async void CaptureSelectionNow()
     {
+        if(active!=null)
+        {
+            active.CaptureSelection(false);
+            return;
+        }
+        try
+        {
+            var entry=await DeskSpaceExcelWorkerV41.CaptureAsync(
+                "Cells · "+DateTime.Now.ToString("HH:mm:ss"),"",true);
+            if(entry==null || entry.Cells.Count==0)return;
+            RecordSharedClip(entry);
+            SetStatus("Captured "+entry.Cells.Count+" cells from "+
+                entry.SourceSheet+" ("+entry.SourceAddress+")");
+        }
+        catch(Exception ex)
+        {
+            MessageBox.Show(ex.Message,"DeskSpace Excel clipboard",
+                MessageBoxButton.OK,MessageBoxImage.Warning);
+        }
+    }
+    private static bool SameClipSnapshot(DeskSpaceExcelTemplateV16 a,DeskSpaceExcelTemplateV16 b)=>
+        a.SourceWorkbook==b.SourceWorkbook &&
+        a.SourceSheet==b.SourceSheet &&
+        a.SourceAddress==b.SourceAddress &&
+        a.Cells.Count==b.Cells.Count &&
+        a.Cells.Zip(b.Cells,(x,y)=>x.RawValue==y.RawValue).All(x=>x);
+    private static bool RecordSharedClip(DeskSpaceExcelTemplateV16 entry)
+    {
+        if(SharedClips.Count>0 && SameClipSnapshot(SharedClips[0],entry))
+            return false;
+        SharedClips.Insert(0,entry);
+        if(SharedClips.Count>8)SharedClips.RemoveAt(SharedClips.Count-1);
+        NotifyChanged();
+        return true;
+    }
+    public static async void ShowActive()
+    {
+        ShowDeckRequested?.Invoke();
+        try
+        {
+            if(SharedClips.Count==0 && active!=null && !active.disposed && !active.captureBusy)
+            {
+                var entry=await DeskSpaceExcelWorkerV41.CopyEventAsync();
+                if(entry!=null && entry.Cells.Count>0)
+                    RecordSharedClip(entry);
+            }
+        }
+        catch{}
         if(active==null)return;
         active.manualOpen=true;
         active.userHidden=false;
@@ -50,7 +109,7 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
 
     public DeskSpaceExcelClipboardV39(Window hostWindow)
     {
-        host=hostWindow;active=this;
+        host=hostWindow;Instances.Add(this);active=this;
         list=new StackPanel{Margin=new Thickness(8)};
         var panel=new Border{
             MinWidth=224,MaxWidth=304,
@@ -87,7 +146,8 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     private IntPtr ClipboardMessage(IntPtr h,int message,IntPtr wp,IntPtr lp,
         ref bool handled)
     {
-        if(message==WM_CLIPBOARDUPDATE&&!disposed&&!ownClipboardWrite)
+        if(message==WM_CLIPBOARDUPDATE&&!disposed&&!ownClipboardWrite&&
+           (active==null||ReferenceEquals(active,this)))
             host.Dispatcher.BeginInvoke(new Action(()=>CaptureSelection(true)));
         return IntPtr.Zero;
     }
@@ -105,17 +165,12 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
                     "Cells · "+DateTime.Now.ToString("HH:mm:ss"),"",true);
             if(disposed || entry==null || entry.Cells.Count==0)return;
             entry.Cells.ForEach(c=>c.Role="Value");
-            // An automatic event for the same selection should not duplicate
-            // the shelf, but a deliberate second Copy should bring it forward.
-            if(SharedClips.Count>0 && SharedClips[0].SourceWorkbook==entry.SourceWorkbook &&
-               SharedClips[0].SourceSheet==entry.SourceSheet &&
-               SharedClips[0].SourceAddress==entry.SourceAddress &&
-               SharedClips[0].Cells.Count==entry.Cells.Count &&
-               SharedClips[0].Cells.Zip(entry.Cells,(x,y)=>x.RawValue==y.RawValue).All(x=>x))
-                return;
-            SharedClips.Insert(0,entry);
-            if(SharedClips.Count>8)SharedClips.RemoveAt(SharedClips.Count-1);
-            NotifyChanged();
+            bool added=RecordSharedClip(entry);
+            if(!clipboardEvent && added)
+                SetStatus("Captured "+entry.Cells.Count+" cells from "+
+                    entry.SourceSheet+" ("+entry.SourceAddress+")");
+            else if(!clipboardEvent && !added)
+                SetStatus("Selection unchanged ("+entry.SourceSheet+" · "+entry.SourceAddress+")");
             Render();
         }
         catch(Exception ex)
@@ -268,11 +323,76 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
         }
         return string.Join("\r\n",lines);
     }
+    internal static string ColumnLetter(int oneBasedCol)
+    {
+        if(oneBasedCol<1)return "?";
+        int n=oneBasedCol;
+        var sb=new StringBuilder();
+        while(n>0)
+        {
+            n--;
+            sb.Insert(0,(char)('A'+(n%26)));
+            n/=26;
+        }
+        return sb.ToString();
+    }
+    internal static string CellDisplayText(DeskSpaceExcelCellV16 cell)=>
+        !string.IsNullOrWhiteSpace(cell.Display)?cell.Display:(cell.RawValue??"");
+    internal static DeskSpaceExcelCellV16?[,] BuildCellMatrix(
+        DeskSpaceExcelTemplateV16 entry,int maxRows,int maxCols)
+    {
+        int rows=Math.Clamp(entry.RowCount,1,maxRows);
+        int cols=Math.Clamp(entry.ColumnCount,1,maxCols);
+        var matrix=new DeskSpaceExcelCellV16?[rows,cols];
+        foreach(var cell in entry.Cells)
+        {
+            if(cell.RowOffset<0||cell.ColumnOffset<0||
+               cell.RowOffset>=rows||cell.ColumnOffset>=cols)continue;
+            matrix[cell.RowOffset,cell.ColumnOffset]=cell;
+        }
+        return matrix;
+    }
+    internal static string[,] BuildDisplayMatrix(
+        DeskSpaceExcelTemplateV16 entry,int maxRows,int maxCols)
+    {
+        var cells=BuildCellMatrix(entry,maxRows,maxCols);
+        int rows=cells.GetLength(0),cols=cells.GetLength(1);
+        var matrix=new string[rows,cols];
+        for(int r=0;r<rows;r++)
+            for(int c=0;c<cols;c++)
+                matrix[r,c]=cells[r,c]!=null?CellDisplayText(cells[r,c]!):"";
+        return matrix;
+    }
+    internal static string ClipSummarySnippet(DeskSpaceExcelTemplateV16 entry)
+    {
+        if(entry.Cells.Count==0)return "";
+        int rows=Math.Clamp(entry.RowCount,1,24),cols=Math.Clamp(entry.ColumnCount,1,8);
+        var matrix=BuildDisplayMatrix(entry,rows,cols);
+        for(int r=0;r<rows;r++)
+        {
+            var items=new List<string>();
+            for(int c=0;c<cols;c++)
+            {
+                var v=(matrix[r,c]??"").Replace("\r"," ").Replace("\n"," ").Trim();
+                if(v.Length>0)items.Add(v.Length>18?v.Substring(0,17)+"…":v);
+                if(items.Count>=4)break;
+            }
+            if(items.Count>0)
+            {
+                string line=string.Join(" | ",items);
+                if(entry.ColumnCount>cols || items.Count<entry.ColumnCount)
+                    line+=" …";
+                return line.Length>66?line.Substring(0,65)+"…":line;
+            }
+        }
+        return "(blank cells)";
+    }
     internal static void CopyPlain(DeskSpaceExcelTemplateV16 clip)
     {
         try {
             ownClipboardWrite=true;
             Clipboard.SetText(Tsv(clip),TextDataFormat.UnicodeText);
+            SetStatus("Copied "+clip.Cells.Count+" cells to Windows clipboard");
         }
         catch(Exception ex){
             MessageBox.Show("Cannot copy Excel cells: "+ex.Message,"DeskSpace Excel");
@@ -283,22 +403,19 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     {
         try
         {
-            // Preview safely off UI dispatcher.
-            var preview=await DeskSpaceExcelWorkerV41.PreviewAsync(clip,true,true);
+            // Preview safely off UI dispatcher using active Excel selection.
+            var preview=await DeskSpaceExcelWorkerV41.PreviewClipboardAsync(clip,true);
             if(!preview.Verified||preview.Writable==0)
-                throw new InvalidOperationException("No safe writable target cells. Select the starting Excel cell.");
+                throw new InvalidOperationException("No writable target cells at the active Excel selection. Select a non-formula cell in Excel and try again.");
             var answer=MessageBox.Show(
                 "Paste "+preview.Writable+" values into "+
-                preview.SheetName+" starting at the selected cell?\n"+
-                "Existing formulas and all formatting will be preserved.\n"+
-                "A workbook backup will be created before any change.",
-                "DeskSpace · Paste Special Values",
+                preview.SheetName+" starting at the active cell?\n"+
+                "Existing formulas will be preserved and a workbook backup will be saved first.",
+                "DeskSpace · Paste to Excel",
                 MessageBoxButton.YesNo,MessageBoxImage.Question);
             if(answer!=MessageBoxResult.Yes)return;
-            var backup=await DeskSpaceExcelWorkerV41.ApplyAsync(preview,clip,true);
-            MessageBox.Show("Values applied to the open workbook.\nBackup: "+
-                backup+"\nSave the workbook in Excel after reviewing.",
-                "DeskSpace Excel");
+            await DeskSpaceExcelWorkerV41.ApplyClipboardAsync(preview,clip,true);
+            SetStatus("Pasted "+preview.Writable+" cells to "+preview.SheetName+" · backup saved");
         }
         catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Excel");}
     }
@@ -306,7 +423,8 @@ internal sealed class DeskSpaceExcelClipboardV39 : IDisposable
     {
         if(disposed)return;
         disposed=true;
-        if(ReferenceEquals(active,this))active=null;
+        Instances.Remove(this);
+        if(ReferenceEquals(active,this))active=Instances.Count>0?Instances[Instances.Count-1]:null;
         popup.IsOpen=false;
         host.SourceInitialized-=SourceReady;
         host.LocationChanged-=Reposition;
