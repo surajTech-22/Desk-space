@@ -1,13 +1,10 @@
 ﻿$ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
-# R377:
-#  1) Make Deck Excel Paste truly functional (Paste latest / Capture selected / Open mappings)
-#     and fix [Paste to Excel] on Excel clipboard items via explicit clipboard COM preview/apply
-#     (leaving R125 strict Preview(entry,true,false) exception intact).
-#  2) Add hover + eye-button spreadsheet table preview on Excel clipboard items via DeskSpaceDeckPreviewV99
-#     plus inline copied-values snippet, and wake/open Deck properly for SharedClips.
-#  3) Make Multi-Monitor fullscreen/video auto-hide and edge unhide strictly per-monitor aware
-#     (EnumWindows per bound Screen + DWM bounds + taskbar-less maximized filter + DPI-safe edge tab).
+# R377 / R378:
+#  1) Revert extra Excel discovery/prefetch changes to v1.5.1141 and remove 'Excel paste' from Deck
+#     while preserving [Paste to Excel], [Copy values], snippet & hover table preview on copied cells.
+#  2) Keep per-monitor fullscreen detection & DPI-safe edge docking.
+#  3) Make Media Player strictly monitor-aware so media controls only appear on the monitor playing it.
 
 $lf=[string][char]10
 $crlf=([string][char]13)+$lf
@@ -41,83 +38,9 @@ if((Get-FileHash $clipSrc -Algorithm SHA256).Hash -ne
     throw 'R377 DeskSpaceExcelClipboardV39 copy hash mismatch'
 }
 
-# --- Part B: Patch DeskSpaceExcelBridgeV16.cs (explicit clipboard preview/apply + reliable OM discovery) ---
+# --- Part B: Patch DeskSpaceExcelBridgeV16.cs (explicit clipboard preview/apply) ---
 $bridgePath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelBridgeV16.cs'
 Begin-Patch $bridgePath
-Swap-R377 @'
-    [DllImport("user32.dll")]
-    private static extern bool EnumWindows(WindowEnumerator callback,IntPtr arg);
-    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
-    private static extern int GetClassName(IntPtr hwnd,
-        System.Text.StringBuilder output,int length);
-    private delegate bool WindowEnumerator(IntPtr hwnd,IntPtr arg);
-'@ @'
-    [DllImport("user32.dll")]
-    private static extern bool EnumWindows(WindowEnumerator callback,IntPtr arg);
-    [DllImport("user32.dll")]
-    private static extern bool EnumChildWindows(IntPtr parent,WindowEnumerator callback,IntPtr arg);
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hwnd);
-    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
-    private static extern int GetClassName(IntPtr hwnd,
-        System.Text.StringBuilder output,int length);
-    [DllImport("oleacc.dll")]
-    private static extern int AccessibleObjectFromWindow(
-        IntPtr hwnd,uint id,ref Guid iid,
-        [MarshalAs(UnmanagedType.IDispatch)]out object? ppvObject);
-    private delegate bool WindowEnumerator(IntPtr hwnd,IntPtr arg);
-'@ 'excel bridge window OM imports'
-Swap-R377 @'
-                while(limit++<300 && enumeration.Next(1,item,IntPtr.Zero)==0)
-'@ @'
-                while(limit++<2500 && enumeration.Next(1,item,IntPtr.Zero)==0)
-'@ 'expand ROT scan limit'
-Swap-R377 @'
-        catch(COMException){}
-        catch(InvalidOperationException){}
-        if(apps.Count==0)
-'@ @'
-        catch(COMException){}
-        catch(InvalidOperationException){}
-        // AccessibleObjectFromWindow(OBJID_NATIVEOM) reliably connects to open
-        // Click-to-Run, unsaved, and CSV Excel windows at matching privilege.
-        try
-        {
-            var sb=new System.Text.StringBuilder(64);
-            var iidDispatch=new Guid("00020400-0000-0000-C000-000000000046");
-            EnumWindows((hwnd,_)=>{
-                if(!IsWindowVisible(hwnd))return true;
-                sb.Clear();
-                if(GetClassName(hwnd,sb,sb.Capacity)<=0 || sb.ToString()!="XLMAIN")
-                    return true;
-                bool foundForWindow=false;
-                EnumChildWindows(hwnd,(child,__)=>{
-                    if(foundForWindow)return false;
-                    var cb=new System.Text.StringBuilder(64);
-                    if(GetClassName(child,cb,cb.Capacity)<=0 || cb.ToString()!="EXCEL7")
-                        return true;
-                    try
-                    {
-                        var iid=iidDispatch;
-                        if(AccessibleObjectFromWindow(child,0xFFFFFFF0u,ref iid,out var winObj)==0 &&
-                           winObj!=null)
-                        {
-                            RegisterExcelApp((object)((dynamic)winObj).Application,apps);
-                            foundForWindow=true;
-                            return false;
-                        }
-                    }
-                    catch(COMException){}
-                    catch(InvalidCastException){}
-                    catch(Microsoft.CSharp.RuntimeBinder.RuntimeBinderException){}
-                    return true;
-                },IntPtr.Zero);
-                return true;
-            },IntPtr.Zero);
-        }
-        catch(Exception){}
-        if(apps.Count==0)
-'@ 'XLMAIN/EXCEL7 native OM Excel discovery'
 Swap-R377 @'
         // Don't auto-save. User may inspect the workbook and save when ready.
         return backup;
@@ -270,65 +193,6 @@ Swap-R377 @'
 }
 '@ 'clipboard value preview and apply'
 Finish-Patch $bridgePath
-
-# --- Part B2: Patch DeskSpaceExcelActiveV122.cs (detect any open Excel window even when backgrounded) ---
-$activePath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelActiveV122.cs'
-Begin-Patch $activePath
-Swap-R377 @'
-    internal static bool SafeToSuggest(bool excelForeground,
-        bool verifiedSignature,int writable)=>
-        excelForeground&&verifiedSignature&&writable>0;
-}
-'@ @'
-    [DllImport("user32.dll")] private static extern bool EnumWindows(
-        WindowEnumV377 callback,IntPtr arg);
-    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr handle);
-    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(
-        IntPtr handle,System.Text.StringBuilder output,int length);
-    private delegate bool WindowEnumV377(IntPtr handle,IntPtr arg);
-
-    internal static bool AnyExcelOpen()
-    {
-        try
-        {
-            if(ForegroundExcel())return true;
-            bool found=false;
-            var sb=new System.Text.StringBuilder(64);
-            EnumWindows((hwnd,_)=>{
-                if(!IsWindowVisible(hwnd))return true;
-                sb.Clear();
-                if(GetClassName(hwnd,sb,sb.Capacity)>0 && sb.ToString()=="XLMAIN")
-                {
-                    found=true;
-                    return false;
-                }
-                return true;
-            },IntPtr.Zero);
-            if(found)return true;
-            var procs=Process.GetProcessesByName("EXCEL");
-            try
-            {
-                foreach(var p in procs)
-                {
-                    try{if(p.MainWindowHandle!=IntPtr.Zero)return true;}
-                    catch{}
-                }
-            }
-            finally
-            {
-                foreach(var p in procs)try{p.Dispose();}catch{}
-            }
-            return false;
-        }
-        catch{return false;}
-    }
-
-    internal static bool SafeToSuggest(bool excelForeground,
-        bool verifiedSignature,int writable)=>
-        excelForeground&&verifiedSignature&&writable>0;
-}
-'@ 'detect open Excel window even when backgrounded'
-Finish-Patch $activePath
 
 # --- Part C: Patch DeskSpaceExcelWorkerV41.cs ---
 $workerPath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelWorkerV41.cs'
@@ -685,7 +549,7 @@ Swap-R377 @'
     private static void OnClipsChangedV376(){RefreshViews();}
     private bool excelExpandedV122=true,excelRefreshingV122;
 '@ @'
-    private bool excelClipsExpandedV376=true,excelPasteExpandedV377=true;
+    private bool excelClipsExpandedV376=true;
     private static void OnClipsChangedV376(){RefreshViews();}
     private static void OnShowDeckRequestedV377()
     {
@@ -736,9 +600,8 @@ Swap-R377 @'
 '@ @'
         bool contents=held.Count+detected.Count+runningApps.Count+
             excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0 ||
-            DeskSpaceExcelActiveV122.AnyExcelOpen() ||
-            DeskSpaceMediaV18.ActiveV123?.DeckVisibleV123==true;
-'@ 'include Excel clips and open Excel in Deck visibility'
+            DeskSpaceMediaV18.ForHostV378(host)?.DeckVisibleV123==true;
+'@ 'include Excel clips and foreground Excel in Deck visibility'
 
 Swap-R377 @'
             string currentNonApp=NonAppSignature();
@@ -755,15 +618,26 @@ Swap-R377 @'
 '@ 'allow newly copied Excel cells to reopen a dismissed Deck'
 
 Swap-R377 @'
+        var player=DeskSpaceMediaV18.ActiveV123;
+'@ @'
+        var player=DeskSpaceMediaV18.ForHostV378(host);
+'@ 'per-monitor media state polling in RefreshMediaDeckV123'
+
+Swap-R377 @'
         if(held.Count+detected.Count+runningApps.Count+
             excelMatchesV122.Count==0 &&
             DeskSpaceMediaV18.ActiveV123?.DeckVisibleV123!=true && !busy)
 '@ @'
         if(held.Count+detected.Count+runningApps.Count+
             excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count==0 &&
-            !DeskSpaceExcelActiveV122.AnyExcelOpen() &&
-            DeskSpaceMediaV18.ActiveV123?.DeckVisibleV123!=true && !busy)
-'@ 'keep Deck open when Excel clips or open Excel actions exist'
+            DeskSpaceMediaV18.ForHostV378(host)?.DeckVisibleV123!=true && !busy)
+'@ 'keep Deck open when Excel clips or monitor-local media exist'
+
+Swap-R377 @'
+        var activeMedia=DeskSpaceMediaV18.ActiveV123;
+'@ @'
+        var activeMedia=DeskSpaceMediaV18.ForHostV378(host);
+'@ 'render monitor-local Media Player in Deck'
 
 Swap-R377 @'
         if(DeskSpaceExcelActiveV122.ForegroundExcel() && excelMatchesV122.Count==0)
@@ -838,111 +712,11 @@ Swap-R377 @'
             }
 '@ @'
         string clipStatusV377=DeskSpaceExcelClipboardV39.CurrentStatus();
-        bool excelOpenV377=DeskSpaceExcelActiveV122.AnyExcelOpen();
-        if((excelOpenV377 || DeskSpaceExcelClipboardV39.SharedClips.Count>0) && excelMatchesV122.Count==0)
-        {
-            int pasteCountV377=DeskSpaceExcelClipboardV39.SharedClips.Count>0?3:2;
-            var pasteGroup=DeskSpaceShelfGroupsV88.Add(list,"Excel paste",pasteCountV377,
-                excelPasteExpandedV377,()=>{
-                    excelPasteExpandedV377=!excelPasteExpandedV377;Render();
-                });
-            if(excelPasteExpandedV377)
-            {
-                if(DeskSpaceExcelClipboardV39.SharedClips.Count>0)
-                {
-                    var latestClip=DeskSpaceExcelClipboardV39.SharedClips[0];
-                    var pasteLatestBtn=new Button{
-                        Content="Paste latest · "+latestClip.SourceSheet+" ("+
-                            latestClip.RowCount+"×"+latestClip.ColumnCount+")",
-                        ToolTip="Paste the newest copied Excel cells at the active Excel selection (with workbook backup)",
-                        FontSize=11,Padding=new Thickness(6,4,6,4),
-                        Margin=new Thickness(1,2,1,2),
-                        HorizontalContentAlignment=HorizontalAlignment.Left
-                    };
-                    pasteLatestBtn.Click+=(_,_)=>DeskSpaceExcelClipboardV39.PasteExcel(latestClip);
-                    pasteGroup.Children.Add(pasteLatestBtn);
-                }
-                var captureBtn=new Button{
-                    Content="Capture selected Excel cells",
-                    ToolTip="Copy selected cells from the open Microsoft Excel worksheet into Excel clipboard",
-                    FontSize=11,Padding=new Thickness(6,4,6,4),
-                    Margin=new Thickness(1,2,1,2),
-                    HorizontalContentAlignment=HorizontalAlignment.Left
-                };
-                captureBtn.Click+=(_,_)=>DeskSpaceExcelClipboardV39.CaptureSelectionNow();
-                pasteGroup.Children.Add(captureBtn);
-
-                var mapBtn=new Button{
-                    Content="Open Excel mappings",
-                    ToolTip="Open saved Excel templates, header rules and backups",
-                    FontSize=11,Padding=new Thickness(6,4,6,4),
-                    Margin=new Thickness(1,2,1,2),
-                    HorizontalContentAlignment=HorizontalAlignment.Left
-                };
-                mapBtn.Click+=(_,_)=>{_=DeskSpaceFeatureNavigationV200.OpenExcelAsync(host);};
-                pasteGroup.Children.Add(mapBtn);
-
-                if(DeskSpaceExcelClipboardV39.SharedClips.Count==0 && clipStatusV377.Length>0)
-                    pasteGroup.Children.Add(new TextBlock{
-                        Text=clipStatusV377,FontSize=10,
-                        Foreground=new SolidColorBrush(Color.FromRgb(161,232,188)),
-                        Margin=new Thickness(3,2,3,2),TextWrapping=TextWrapping.Wrap
-                    });
-            }
-        }
         var excelClipGroup=DeskSpaceShelfGroupsV88.Add(list,
             "Excel clipboard",DeskSpaceExcelClipboardV39.SharedClips.Count,
             excelClipsExpandedV376,()=>{
                 excelClipsExpandedV376=!excelClipsExpandedV376;Render();
             });
-        if(DeskSpaceExcelClipboardV39.SharedClips.Count==0 && (excelOpenV377 || clipStatusV377.Length>0))
-        {
-            var emptyClipHeader=new Button{
-                Content=(excelClipsExpandedV376?"▾ ":"▸ ")+"Excel clipboard · 0",
-                FontSize=11,FontWeight=FontWeights.SemiBold,
-                Foreground=Brushes.White,
-                Background=new SolidColorBrush(Color.FromArgb(145,28,40,68)),
-                BorderThickness=new Thickness(0),
-                Padding=new Thickness(7,4,7,4),
-                Margin=new Thickness(0,3,0,2),
-                HorizontalContentAlignment=HorizontalAlignment.Left
-            };
-            emptyClipHeader.Click+=(_,_)=>{
-                excelClipsExpandedV376=!excelClipsExpandedV376;Render();
-            };
-            list.Children.Add(emptyClipHeader);
-            if(excelClipsExpandedV376)
-            {
-                var emptyCard=new Border{
-                    Background=new SolidColorBrush(Color.FromArgb(120,34,46,76)),
-                    CornerRadius=new CornerRadius(6),
-                    Padding=new Thickness(6,5,6,5),
-                    Margin=new Thickness(1,1,1,4)
-                };
-                var emptyStack=new StackPanel();
-                emptyStack.Children.Add(new TextBlock{
-                    Text=clipStatusV377.Length>0
-                        ? clipStatusV377
-                        : "Copy cells in Excel (Ctrl+C) to preview values here, or capture your current Excel selection.",
-                    FontSize=10.5,
-                    Foreground=clipStatusV377.Length>0
-                        ? new SolidColorBrush(Color.FromRgb(161,232,188))
-                        : Brushes.LightSteelBlue,
-                    TextWrapping=TextWrapping.Wrap,
-                    Margin=new Thickness(0,0,0,5)
-                });
-                var emptyCapBtn=new Button{
-                    Content="Capture Excel selection now",
-                    ToolTip="Read the highlighted cells from open Microsoft Excel into Excel clipboard",
-                    FontSize=11,Padding=new Thickness(6,3,6,3),
-                    HorizontalContentAlignment=HorizontalAlignment.Left
-                };
-                emptyCapBtn.Click+=(_,_)=>DeskSpaceExcelClipboardV39.CaptureSelectionNow();
-                emptyStack.Children.Add(emptyCapBtn);
-                emptyCard.Child=emptyStack;
-                list.Children.Add(emptyCard);
-            }
-        }
         if(excelClipsExpandedV376)
         {
             if(DeskSpaceExcelClipboardV39.SharedClips.Count>0 && clipStatusV377.Length>0)
@@ -1387,25 +1161,849 @@ public static class FullscreenDetector
     }
 }
 '@ 'per-monitor fullscreen detector and DPI-safe edge placement'
+Swap-R377 @'
+            excelClipboardShelf ??= new DeskSpaceExcelClipboardV39(this);
+            excelClipboardShelf.Enable();
+            media.VisibilityChanged+=OnMediaVisibility;
+            media.Start();
+'@ @'
+            excelClipboardShelf ??= new DeskSpaceExcelClipboardV39(this);
+            excelClipboardShelf.Enable();
+            media.BindHostV378(this);
+            media.VisibilityChanged+=OnMediaVisibility;
+            media.Start();
+'@ 'bind each monitor WidgetHost to its own DeskSpaceMediaV18'
+
 Finish-Patch $hostPath
+# --- Part G: Patch DeskSpaceMediaV18.cs (Strict Per-Monitor Media Ownership) ---
+$mediaPath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceMediaV18.cs'
+Begin-Patch $mediaPath
+
+Swap-R377 @'
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+'@ @'
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using Drawing=System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+using Forms=System.Windows.Forms;
+'@ 'media monitor awareness usings'
+
+Swap-R377 @'
+    internal static DeskSpaceMediaV18? ActiveV123 {get;private set;}
+    internal static bool DeckIntegrationV123 {get;set;}
+'@ @'
+    internal static DeskSpaceMediaV18? ActiveV123 {get;private set;}
+    internal static bool DeckIntegrationV123 {get;set;}
+
+    private static readonly object SyncV378=new();
+    private static readonly List<DeskSpaceMediaV18> InstancesV378=new();
+    private static readonly Dictionary<string,string> PreferredMonitorBySourceV378=new(StringComparer.OrdinalIgnoreCase);
+    private Window? ownerHostV378;
+    private string currentSourceIdV378="";
+
+    internal void BindHostV378(Window owner)
+    {
+        ownerHostV378=owner;
+    }
+
+    internal static DeskSpaceMediaV18? ForHostV378(Window? owner)
+    {
+        lock(SyncV378)
+        {
+            if(owner!=null)
+            {
+                var match=InstancesV378.LastOrDefault(x=>!x.disposed && ReferenceEquals(x.ownerHostV378,owner));
+                if(match!=null)return match;
+                if(InstancesV378.Any(x=>!x.disposed && x.ownerHostV378!=null))
+                    return null;
+            }
+            return ActiveV123;
+        }
+    }
+
+    internal sealed record MediaWindowInfoV378(
+        IntPtr Handle,
+        string Title,
+        string ClassName,
+        string ProcessName,
+        string AppUserModelId,
+        IReadOnlyList<string> ChildProcesses,
+        IReadOnlyList<string> ChildAppUserModelIds,
+        bool Minimized,
+        bool Fullscreen,
+        string MonitorDevice);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRectV378 { public int Left,Top,Right,Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePointV378 { public int X,Y; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePlacementV378
+    {
+        public int Length,Flags,ShowCmd;
+        public NativePointV378 MinPosition,MaxPosition;
+        public NativeRectV378 NormalPosition;
+    }
+    [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Auto)]
+    private struct NativeMonitorInfoV378
+    {
+        public uint cbSize;
+        public NativeRectV378 rcMonitor;
+        public NativeRectV378 rcWork;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr,SizeConst=32)]
+        public string szDevice;
+    }
+
+    private delegate bool EnumWindowsProcV378(IntPtr hwnd,IntPtr lParam);
+    [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(EnumWindowsProcV378 callback,IntPtr lParam);
+    [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumChildWindows(IntPtr parent,EnumWindowsProcV378 callback,IntPtr lParam);
+    [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetWindowTextLength(IntPtr hwnd);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hwnd,StringBuilder output,int maxCount);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hwnd,StringBuilder output,int maxCount);
+    [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hwnd,out NativeRectV378 rect);
+    [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowPlacement(IntPtr hwnd,ref NativePlacementV378 placement);
+    [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr64V378(IntPtr hwnd,int index);
+    [DllImport("user32.dll",EntryPoint="GetWindowLongW")]
+    private static extern int GetWindowLong32V378(IntPtr hwnd,int index);
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd,uint flags);
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromRect([In] ref NativeRectV378 rect,uint flags);
+    [DllImport("user32.dll",CharSet=CharSet.Auto)] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitor,ref NativeMonitorInfoV378 info);
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr hwnd,int attribute,out int value,int size);
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd,out uint processId);
+    [DllImport("kernel32.dll",SetLastError=true)]
+    private static extern IntPtr OpenProcess(uint desiredAccess,bool inheritHandle,uint processId);
+    [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryFullProcessImageName(IntPtr hProcess,uint flags,StringBuilder exeName,ref uint size);
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode)]
+    private static extern int GetApplicationUserModelId(IntPtr hProcess,ref uint length,StringBuilder? appUserModelId);
+
+    private static uint GetWindowLongUIntV378(IntPtr hwnd,int index)
+    {
+        var raw=IntPtr.Size==8?GetWindowLongPtr64V378(hwnd,index):new IntPtr(GetWindowLong32V378(hwnd,index));
+        return unchecked((uint)raw.ToInt64());
+    }
+
+    private static string ResolveWindowDeviceV378(Window owner)
+    {
+        try
+        {
+            if(owner is WidgetShellWindow shell)
+            {
+                var bound=DeskSpaceMonitorFenceV152.BoundScreen(shell);
+                if(bound!=null && !string.IsNullOrWhiteSpace(bound.DeviceName))
+                    return bound.DeviceName;
+            }
+            var hwnd=new System.Windows.Interop.WindowInteropHelper(owner).Handle;
+            if(hwnd!=IntPtr.Zero)
+            {
+                var mon=MonitorFromWindow(hwnd,2);
+                var info=new NativeMonitorInfoV378{cbSize=(uint)Marshal.SizeOf<NativeMonitorInfoV378>(),szDevice=""};
+                if(mon!=IntPtr.Zero && GetMonitorInfo(mon,ref info) && !string.IsNullOrWhiteSpace(info.szDevice))
+                    return info.szDevice;
+                var scr=Forms.Screen.FromHandle(hwnd);
+                if(!string.IsNullOrWhiteSpace(scr.DeviceName))return scr.DeviceName;
+            }
+            return Forms.Screen.PrimaryScreen?.DeviceName??"";
+        }
+        catch{return "";}
+    }
+
+    private static (string ProcessName,string AppUserModelId) QueryProcessMetaV378(uint pid,Dictionary<uint,(string,string)> cache)
+    {
+        if(cache.TryGetValue(pid,out var cached))return cached;
+        string proc="",aumid="";
+        IntPtr h=OpenProcess(0x1000u,false,pid);
+        if(h!=IntPtr.Zero)
+        {
+            try
+            {
+                uint cap=512;
+                var sb=new StringBuilder((int)cap);
+                if(QueryFullProcessImageName(h,0,sb,ref cap))
+                    proc=Path.GetFileNameWithoutExtension(sb.ToString());
+                uint len=260;
+                var ab=new StringBuilder((int)len);
+                int rc=GetApplicationUserModelId(h,ref len,ab);
+                if(rc==0)aumid=ab.ToString();
+                else if(rc==122 && len>0 && len<=2048)
+                {
+                    ab=new StringBuilder((int)len);
+                    if(GetApplicationUserModelId(h,ref len,ab)==0)
+                        aumid=ab.ToString();
+                }
+            }
+            catch{}
+            finally{CloseHandle(h);}
+        }
+        if(string.IsNullOrWhiteSpace(proc))
+        {
+            try{proc=Process.GetProcessById((int)pid).ProcessName;}
+            catch{}
+        }
+        var result=(proc??"",aumid??"");
+        cache[pid]=result;
+        return result;
+    }
+
+    private static IReadOnlyList<MediaWindowInfoV378> SnapshotMediaWindowsV378()
+    {
+        var result=new List<MediaWindowInfoV378>();
+        var procCache=new Dictionary<uint,(string,string)>();
+        uint selfPid=(uint)Environment.ProcessId;
+        var clsSb=new StringBuilder(128);
+        EnumWindows((hwnd,_)=>{
+            if(!IsWindowVisible(hwnd))return true;
+            if(DwmGetWindowAttribute(hwnd,14,out int cloaked,sizeof(int))==0 && cloaked!=0)
+                return true;
+            GetWindowThreadProcessId(hwnd,out uint pid);
+            if(pid==0 || pid==selfPid)return true;
+
+            clsSb.Clear();
+            int cl=GetClassName(hwnd,clsSb,clsSb.Capacity);
+            string cls=cl>0?clsSb.ToString():"";
+            if(string.Equals(cls,"Progman",StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(cls,"WorkerW",StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(cls,"Shell_TrayWnd",StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(cls,"Shell_SecondaryTrayWnd",StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(cls,"Windows.UI.Core.CoreWindow",StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(cls,"DummyDwmListenerWindow",StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(cls,"EdgeUiInputTopWndClass",StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            int tlen=GetWindowTextLength(hwnd);
+            string winTitle="";
+            if(tlen>0)
+            {
+                var tb=new StringBuilder(Math.Min(tlen+2,1024));
+                if(GetWindowText(hwnd,tb,tb.Capacity)>0)
+                    winTitle=tb.ToString();
+            }
+
+            bool minimized=IsIconic(hwnd);
+            uint style=GetWindowLongUIntV378(hwnd,-16);
+            uint exStyle=GetWindowLongUIntV378(hwnd,-20);
+            if((exStyle & 0x80u)!=0 && string.IsNullOrWhiteSpace(winTitle) && !IsPipTitleV378(winTitle))
+                return true;
+
+            if(!minimized)
+            {
+                if(!GetWindowRect(hwnd,out var rect))return true;
+                int w=rect.Right-rect.Left, h=rect.Bottom-rect.Top;
+                if(w<60 || h<40)return true;
+                IntPtr mon=MonitorFromWindow(hwnd,2);
+                var mi=new NativeMonitorInfoV378{cbSize=(uint)Marshal.SizeOf<NativeMonitorInfoV378>(),szDevice=""};
+                if(mon==IntPtr.Zero || !GetMonitorInfo(mon,ref mi) || string.IsNullOrWhiteSpace(mi.szDevice))
+                    return true;
+                bool fullscreen=FullscreenDetector.CoversMonitor(
+                    rect.Left,rect.Top,rect.Right,rect.Bottom,
+                    mi.rcMonitor.Left,mi.rcMonitor.Top,mi.rcMonitor.Right,mi.rcMonitor.Bottom,
+                    mi.rcWork.Left,mi.rcWork.Top,mi.rcWork.Right,mi.rcWork.Bottom,
+                    style,exStyle,cls);
+                var (procName,aumid)=QueryProcessMetaV378(pid,procCache);
+                var childProcs=new List<string>();
+                var childAumids=new List<string>();
+                if(string.Equals(cls,"ApplicationFrameWindow",StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(procName,"ApplicationFrameHost",StringComparison.OrdinalIgnoreCase))
+                {
+                    EnumChildWindows(hwnd,(child,__)=>{
+                        GetWindowThreadProcessId(child,out uint cpid);
+                        if(cpid!=0 && cpid!=pid && cpid!=selfPid)
+                        {
+                            var (cp,ca)=QueryProcessMetaV378(cpid,procCache);
+                            if(!string.IsNullOrWhiteSpace(cp) && !childProcs.Contains(cp,StringComparer.OrdinalIgnoreCase))
+                                childProcs.Add(cp);
+                            if(!string.IsNullOrWhiteSpace(ca) && !childAumids.Contains(ca,StringComparer.OrdinalIgnoreCase))
+                                childAumids.Add(ca);
+                        }
+                        return true;
+                    },IntPtr.Zero);
+                }
+                result.Add(new MediaWindowInfoV378(
+                    hwnd,winTitle,cls,procName,aumid,childProcs,childAumids,false,fullscreen,mi.szDevice));
+            }
+            else
+            {
+                var wp=new NativePlacementV378{Length=Marshal.SizeOf<NativePlacementV378>()};
+                IntPtr mon=IntPtr.Zero;
+                if(GetWindowPlacement(hwnd,ref wp))
+                {
+                    var nr=wp.NormalPosition;
+                    mon=MonitorFromRect(ref nr,2);
+                }
+                if(mon==IntPtr.Zero)mon=MonitorFromWindow(hwnd,2);
+                var mi=new NativeMonitorInfoV378{cbSize=(uint)Marshal.SizeOf<NativeMonitorInfoV378>(),szDevice=""};
+                if(mon==IntPtr.Zero || !GetMonitorInfo(mon,ref mi) || string.IsNullOrWhiteSpace(mi.szDevice))
+                    return true;
+                var (procName,aumid)=QueryProcessMetaV378(pid,procCache);
+                result.Add(new MediaWindowInfoV378(
+                    hwnd,winTitle,cls,procName,aumid,Array.Empty<string>(),Array.Empty<string>(),true,false,mi.szDevice));
+            }
+            return true;
+        },IntPtr.Zero);
+        return result;
+    }
+
+    private static string? GetPreferredMonitorV378(string? sourceAppId)
+    {
+        if(string.IsNullOrWhiteSpace(sourceAppId))return null;
+        lock(SyncV378)
+            return PreferredMonitorBySourceV378.TryGetValue(sourceAppId,out var dev)?dev:null;
+    }
+
+    private static void SetPreferredMonitorV378(string? sourceAppId,string monitorDevice)
+    {
+        if(string.IsNullOrWhiteSpace(sourceAppId)||string.IsNullOrWhiteSpace(monitorDevice))return;
+        lock(SyncV378)
+            PreferredMonitorBySourceV378[sourceAppId]=monitorDevice;
+    }
+
+    private static string NormalizeTokenV378(string s)
+    {
+        if(string.IsNullOrWhiteSpace(s))return "";
+        var sb=new StringBuilder(s.Length);
+        foreach(char ch in s)
+        {
+            if(char.IsLetterOrDigit(ch))sb.Append(char.ToLowerInvariant(ch));
+        }
+        return sb.ToString();
+    }
+
+    private static bool MatchAppIdentityV378(string? procOrAumid,string sourceLower)
+    {
+        if(string.IsNullOrWhiteSpace(procOrAumid)||string.IsNullOrWhiteSpace(sourceLower))return false;
+        string raw=procOrAumid.Trim().ToLowerInvariant();
+        if(raw.EndsWith(".exe"))raw=raw[..^4];
+        if(sourceLower.Equals(raw,StringComparison.OrdinalIgnoreCase))return true;
+        string sourceNoExe=sourceLower.EndsWith(".exe")?sourceLower[..^4]:sourceLower;
+        if(sourceNoExe.Equals(raw,StringComparison.OrdinalIgnoreCase))return true;
+
+        // Well-known browser & media player SourceAppUserModelId aliases on Windows 10/11
+        bool sourceIsChrome=sourceLower=="chrome"||sourceLower.StartsWith("chrome.")||sourceLower.Contains("google.chrome");
+        if(sourceIsChrome && raw=="chrome")return true;
+
+        bool sourceIsEdge=sourceLower=="msedge"||sourceLower.StartsWith("msedge.")||sourceLower.Contains("microsoft.microsoftedge");
+        if(sourceIsEdge && raw=="msedge")return true;
+
+        bool sourceIsFirefox=sourceLower is "308046b0af4a39cb" or "e7cf176e110c211b" or "6f193ccc56814779" ||
+            sourceLower.Contains("firefox") || sourceLower.Contains("mozilla");
+        if(sourceIsFirefox && raw is "firefox" or "zen" or "floorp" or "waterfox" or "librewolf")return true;
+
+        bool sourceIsBrave=sourceLower=="brave"||sourceLower.StartsWith("brave.")||sourceLower.Contains("brave");
+        if(sourceIsBrave && raw=="brave")return true;
+
+        bool sourceIsOpera=sourceLower.Contains("opera");
+        if(sourceIsOpera && raw is "opera" or "operagx")return true;
+
+        bool sourceIsVivaldi=sourceLower.Contains("vivaldi");
+        if(sourceIsVivaldi && raw=="vivaldi")return true;
+
+        bool sourceIsSpotify=sourceLower.Contains("spotify");
+        if(sourceIsSpotify && raw=="spotify")return true;
+
+        bool sourceIsVlc=sourceLower.Contains("vlc");
+        if(sourceIsVlc && raw=="vlc")return true;
+
+        bool sourceIsZuneVideo=sourceLower.Contains("zunevideo");
+        if(sourceIsZuneVideo && raw is "video.ui" or "zunevideo")return true;
+
+        bool sourceIsZuneMusic=sourceLower.Contains("zunemusic")||sourceLower.Contains("microsoft.media.player");
+        if(sourceIsZuneMusic && raw is "microsoft.media.player" or "music.ui" or "zunemusic")return true;
+
+        // UWP / MSIX PackageFamilyName / exclamation suffix match
+        int bang=raw.IndexOf('!');
+        string rawPkg=bang>0?raw[..bang]:raw;
+        int srcBang=sourceLower.IndexOf('!');
+        string srcPkg=srcBang>0?sourceLower[..srcBang]:sourceLower;
+        if(rawPkg.Length>=5 && srcPkg.Length>=5 &&
+           (rawPkg.Equals(srcPkg,StringComparison.OrdinalIgnoreCase) ||
+            rawPkg.Contains(srcPkg,StringComparison.OrdinalIgnoreCase) ||
+            srcPkg.Contains(rawPkg,StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        // Generic stem match for PotPlayer, MPC-HC, MPV, MusicBee, iTunes, etc.
+        string normRaw=NormalizeTokenV378(raw);
+        if(normRaw.Length>=3)
+        {
+            if(normRaw is "app" or "host" or "applicationframehost" or "explorer" or "microsoft" or "windows" or "google")
+                return false;
+            var parts=sourceLower.Split(new[]{'\\','/','.', '_', '!', '-', ' '},StringSplitOptions.RemoveEmptyEntries);
+            foreach(var p in parts)
+            {
+                string np=NormalizeTokenV378(p);
+                if(np.Length>=3 &&
+                   (np==normRaw || (np.Length>=5 && normRaw.Contains(np)) || (normRaw.Length>=5 && np.Contains(normRaw))))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    internal static bool WindowMatchesSourceV378(MediaWindowInfoV378 win,string sourceAppId)
+    {
+        if(string.IsNullOrWhiteSpace(sourceAppId))return false;
+        string sl=sourceAppId.Trim().ToLowerInvariant();
+        if(MatchAppIdentityV378(win.AppUserModelId,sl))return true;
+        foreach(var ca in win.ChildAppUserModelIds)
+            if(MatchAppIdentityV378(ca,sl))return true;
+        if(MatchAppIdentityV378(win.ProcessName,sl))return true;
+        foreach(var cp in win.ChildProcesses)
+            if(MatchAppIdentityV378(cp,sl))return true;
+        return false;
+    }
+
+    internal static bool IsPipTitleV378(string title)
+    {
+        if(string.IsNullOrWhiteSpace(title))return false;
+        return title.Equals("Picture in Picture",StringComparison.OrdinalIgnoreCase) ||
+               title.Equals("Picture-in-Picture",StringComparison.OrdinalIgnoreCase) ||
+               title.IndexOf("Picture-in-Picture",StringComparison.OrdinalIgnoreCase)>=0 ||
+               title.IndexOf("Picture in Picture",StringComparison.OrdinalIgnoreCase)>=0;
+    }
+
+    private static string StripBrowserTitleSuffixV378(string winTitle)
+    {
+        string s=(winTitle??"").Replace("\u200B","").Trim();
+        foreach(var suffix in new[]{
+            " - Google Chrome"," - Chromium"," - Brave"," - Vivaldi"," - Opera"," - Opera GX",
+            " — Mozilla Firefox"," - Mozilla Firefox"," - Zen Browser",
+            " - Microsoft Edge"," - Personal - Microsoft Edge"," - Work - Microsoft Edge",
+            " - VLC media player"})
+        {
+            if(s.EndsWith(suffix,StringComparison.OrdinalIgnoreCase))
+            {
+                s=s[..^suffix.Length].Trim();
+                break;
+            }
+        }
+        return s;
+    }
+
+    internal static bool TitleMatchesMediaV378(string winTitle,string mediaTitle,string mediaArtist,bool strictShort=false)
+    {
+        string cleanedWin=StripBrowserTitleSuffixV378(winTitle);
+        string mt=(mediaTitle??"").Replace("\u200B","").Trim();
+        string ma=(mediaArtist??"").Replace("\u200B","").Trim();
+        if(string.IsNullOrWhiteSpace(cleanedWin) || string.IsNullOrWhiteSpace(mt))return false;
+
+        if(mt.Length>=5 && (cleanedWin.IndexOf(mt,StringComparison.OrdinalIgnoreCase)>=0 ||
+           (!strictShort && cleanedWin.Length>=6 && mt.IndexOf(cleanedWin,StringComparison.OrdinalIgnoreCase)>=0)))
+            return true;
+
+        if(cleanedWin.Equals(mt,StringComparison.OrdinalIgnoreCase))return true;
+        if(ma.Length>=3 && cleanedWin.IndexOf(ma,StringComparison.OrdinalIgnoreCase)>=0 &&
+           cleanedWin.IndexOf(mt,StringComparison.OrdinalIgnoreCase)>=0)
+            return true;
+
+        var winSegs=cleanedWin.Split(new[]{" | "," — "," – "," - "},StringSplitOptions.RemoveEmptyEntries);
+        var mediaSegs=mt.Split(new[]{" | "," — "," – "," - "},StringSplitOptions.RemoveEmptyEntries);
+        foreach(var ws in winSegs)
+        {
+            string w=ws.Trim();
+            if(w.Equals(mt,StringComparison.OrdinalIgnoreCase))return true;
+            if(!strictShort && mt.Length>=6 && w.Length>=6 &&
+               (w.IndexOf(mt,StringComparison.OrdinalIgnoreCase)>=0 || mt.IndexOf(w,StringComparison.OrdinalIgnoreCase)>=0))
+                return true;
+            foreach(var ms in mediaSegs)
+            {
+                string m=ms.Trim();
+                if(m.Length>=5 && w.IndexOf(m,StringComparison.OrdinalIgnoreCase)>=0)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // Pure monitor ownership resolver: guarantees a session NEVER broadcasts
+    // across all monitors when it is playing in a specific window/tab/monitor.
+    internal static HashSet<string> SelectMonitorsForSession(
+        string sourceAppId,
+        string mediaTitle,
+        string mediaArtist,
+        bool isVideo,
+        IReadOnlyList<MediaWindowInfoV378> windows,
+        IReadOnlyList<string> connectedMonitors,
+        string primaryMonitor,
+        string? preferredMonitor=null)
+    {
+        var result=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var candidates=windows
+            .Where(w=>!string.IsNullOrWhiteSpace(w.MonitorDevice) && WindowMatchesSourceV378(w,sourceAppId))
+            .ToList();
+
+        if(candidates.Count==0 && !string.IsNullOrWhiteSpace(mediaTitle))
+        {
+            candidates=windows
+                .Where(w=>!w.Minimized && !string.IsNullOrWhiteSpace(w.MonitorDevice) &&
+                    TitleMatchesMediaV378(w.Title,mediaTitle,mediaArtist,strictShort:true))
+                .ToList();
+        }
+
+        if(candidates.Count==0)
+        {
+            if(isVideo && connectedMonitors.Count>1)
+                return result;
+            if(!string.IsNullOrWhiteSpace(primaryMonitor))
+                result.Add(primaryMonitor);
+            else if(connectedMonitors.Count>0)
+                result.Add(connectedMonitors[0]);
+            return result;
+        }
+
+        var nonMinimized=candidates.Where(w=>!w.Minimized).ToList();
+        if(nonMinimized.Count>0)
+        {
+            var pips=nonMinimized.Where(w=>IsPipTitleV378(w.Title)).ToList();
+            if(pips.Count>0)
+            {
+                foreach(var p in pips)result.Add(p.MonitorDevice);
+                return result;
+            }
+
+            var titleMatches=nonMinimized
+                .Where(w=>TitleMatchesMediaV378(w.Title,mediaTitle,mediaArtist))
+                .ToList();
+            if(titleMatches.Count>0)
+            {
+                foreach(var m in titleMatches)result.Add(m.MonitorDevice);
+                return result;
+            }
+
+            var fullscreens=nonMinimized.Where(w=>w.Fullscreen).ToList();
+            if(fullscreens.Count>0)
+            {
+                foreach(var fs in fullscreens)result.Add(fs.MonitorDevice);
+                return result;
+            }
+
+            var distinctMonitors=nonMinimized
+                .Select(w=>w.MonitorDevice)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if(distinctMonitors.Count==1)
+            {
+                result.Add(distinctMonitors[0]);
+                return result;
+            }
+
+            if(!string.IsNullOrWhiteSpace(preferredMonitor) &&
+               nonMinimized.Any(w=>string.Equals(w.MonitorDevice,preferredMonitor,StringComparison.OrdinalIgnoreCase)))
+            {
+                result.Add(preferredMonitor);
+                return result;
+            }
+
+            result.Add(nonMinimized[0].MonitorDevice);
+            return result;
+        }
+
+        var minTitleMatches=candidates
+            .Where(w=>TitleMatchesMediaV378(w.Title,mediaTitle,mediaArtist))
+            .ToList();
+        if(minTitleMatches.Count>0)
+        {
+            result.Add(minTitleMatches[0].MonitorDevice);
+            return result;
+        }
+
+        if(!string.IsNullOrWhiteSpace(preferredMonitor) &&
+           candidates.Any(w=>string.Equals(w.MonitorDevice,preferredMonitor,StringComparison.OrdinalIgnoreCase)))
+        {
+            result.Add(preferredMonitor);
+            return result;
+        }
+
+        result.Add(candidates[0].MonitorDevice);
+        return result;
+    }
+'@ 'monitor-aware media window matcher and per-host lookup'
+
+Swap-R377 @'
+    public DeskSpaceMediaV18()
+    {
+        ActiveV123=this;
+'@ @'
+    public DeskSpaceMediaV18()
+    {
+        lock(SyncV378)
+        {
+            InstancesV378.Add(this);
+            ActiveV123=this;
+        }
+'@ 'register DeskSpaceMediaV18 instance for multi-monitor lookup'
+
+Swap-R377 @'
+        try
+        {
+            manager??=await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            var session=manager.GetSessions().FirstOrDefault(x=>
+                x.GetPlaybackInfo()?.PlaybackStatus==
+                    GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                ?? manager.GetCurrentSession();
+            bool active=session?.GetPlaybackInfo()?.PlaybackStatus==
+                GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            if(active)lastPlaying=DateTime.UtcNow;
+            bool show=session!=null&&(active||
+                visible&&DateTime.UtcNow-lastPlaying<TimeSpan.FromSeconds(35));
+            if(!show)
+            {
+                current=null;
+                if(visible){visible=false;VisibilityChanged?.Invoke(false);}
+                return;
+            }
+            current=session;
+            playing=active;
+            source=Short(session!.SourceAppUserModelId,42);
+            var info=session.GetPlaybackInfo();
+            capabilities=info?.Controls;
+            shuffle=info?.IsShuffleActive;
+            repeat=info?.AutoRepeatMode??MediaPlaybackAutoRepeatMode.None;
+            speed=info?.PlaybackRate??1;
+            string newTitle="";
+            string priorIdentity=source+"|"+title;
+            try
+            {
+                var meta=await session.TryGetMediaPropertiesAsync();
+                newTitle=Short(meta.Title,92);
+                artist=Short(meta.Artist,72);
+                mediaKind=meta.PlaybackType?.ToString()??"Media";
+                string identity=source+"|"+newTitle;
+                if(artIdentity!=identity)
+                {
+                    artIdentity=identity;
+                    _=LoadArtAsync(meta.Thumbnail,identity);
+                }
+            }
+            catch(Exception){artist="";mediaKind="Media";}
+'@ @'
+        try
+        {
+            Window? attachedHost=ownerHostV378;
+            string hostDevice=attachedHost!=null?ResolveWindowDeviceV378(attachedHost):"";
+            manager??=await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            var rawSessions=manager.GetSessions().ToList();
+            var currentGlobal=manager.GetCurrentSession();
+            GlobalSystemMediaTransportControlsSession? session=null;
+            GlobalSystemMediaTransportControlsSessionMediaProperties? prefetchedMeta=null;
+            if(string.IsNullOrWhiteSpace(hostDevice))
+            {
+                session=rawSessions.FirstOrDefault(x=>
+                    x.GetPlaybackInfo()?.PlaybackStatus==
+                        GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                    ?? currentGlobal;
+            }
+            else if(rawSessions.Count>0)
+            {
+                var allScreens=Forms.Screen.AllScreens;
+                var connected=allScreens.Select(s=>s.DeviceName).ToArray();
+                var primary=(Forms.Screen.PrimaryScreen??allScreens.FirstOrDefault())?.DeviceName??hostDevice;
+                var windowsSnap=await Task.Run(SnapshotMediaWindowsV378);
+                if(disposed)return;
+                bool withinPauseGrace=visible&&DateTime.UtcNow-lastPlaying<TimeSpan.FromSeconds(35);
+                var ordered=rawSessions
+                    .Select(s=>new{
+                        Session=s,
+                        Playing=s.GetPlaybackInfo()?.PlaybackStatus==
+                            GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
+                        IsCurrentGlobal=currentGlobal!=null&&
+                            string.Equals(s.SourceAppUserModelId,currentGlobal.SourceAppUserModelId,StringComparison.OrdinalIgnoreCase)
+                    })
+                    .OrderByDescending(x=>x.Playing)
+                    .ThenByDescending(x=>x.IsCurrentGlobal)
+                    .ToList();
+                foreach(var item in ordered)
+                {
+                    bool matchesPrevPaused=!item.Playing&&withinPauseGrace&&
+                        string.Equals(item.Session.SourceAppUserModelId,currentSourceIdV378,StringComparison.OrdinalIgnoreCase);
+                    if(!item.Playing&&!matchesPrevPaused)continue;
+                    GlobalSystemMediaTransportControlsSessionMediaProperties? meta=null;
+                    string rawTitle="",rawArtist="";
+                    bool isVideo=false;
+                    try
+                    {
+                        meta=await item.Session.TryGetMediaPropertiesAsync();
+                        rawTitle=meta?.Title??"";
+                        rawArtist=meta?.Artist??"";
+                        isVideo=meta?.PlaybackType==MediaPlaybackType.Video;
+                    }
+                    catch(Exception){}
+                    string? preferred=GetPreferredMonitorV378(item.Session.SourceAppUserModelId);
+                    var owners=SelectMonitorsForSession(
+                        item.Session.SourceAppUserModelId,rawTitle,rawArtist,isVideo,
+                        windowsSnap,connected,primary,preferred);
+                    if(owners.Count==1)
+                        SetPreferredMonitorV378(item.Session.SourceAppUserModelId,owners.First());
+                    if(owners.Contains(hostDevice))
+                    {
+                        session=item.Session;
+                        prefetchedMeta=meta;
+                        break;
+                    }
+                }
+            }
+            bool active=session?.GetPlaybackInfo()?.PlaybackStatus==
+                GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            if(active)lastPlaying=DateTime.UtcNow;
+            bool show=session!=null&&(active||
+                visible&&DateTime.UtcNow-lastPlaying<TimeSpan.FromSeconds(35));
+            if(!show)
+            {
+                current=null;playing=false;currentSourceIdV378="";
+                if(!string.IsNullOrWhiteSpace(hostDevice)){title="";artist="";}
+                if(visible){visible=false;VisibilityChanged?.Invoke(false);}
+                return;
+            }
+            current=session;
+            currentSourceIdV378=session!.SourceAppUserModelId??"";
+            playing=active;
+            source=Short(session!.SourceAppUserModelId,42);
+            var info=session.GetPlaybackInfo();
+            capabilities=info?.Controls;
+            shuffle=info?.IsShuffleActive;
+            repeat=info?.AutoRepeatMode??MediaPlaybackAutoRepeatMode.None;
+            speed=info?.PlaybackRate??1;
+            string newTitle="";
+            string priorIdentity=source+"|"+title;
+            try
+            {
+                var meta=prefetchedMeta??await session.TryGetMediaPropertiesAsync();
+                if(meta!=null)
+                {
+                    newTitle=Short(meta.Title,92);
+                    artist=Short(meta.Artist,72);
+                    mediaKind=meta.PlaybackType?.ToString()??"Media";
+                    string identity=source+"|"+newTitle;
+                    if(artIdentity!=identity)
+                    {
+                        artIdentity=identity;
+                        _=LoadArtAsync(meta.Thumbnail,identity);
+                    }
+                }
+            }
+            catch(Exception){artist="";mediaKind="Media";}
+'@ 'filter GSMTC playback sessions per monitor in PollAsync'
+
+Swap-R377 @'
+    private void KeepVisible()
+    {
+        if(host==null||popup==null)return;
+        var work=SystemParameters.WorkArea;
+        double width=frame?.Width??256;
+        double height=view==Layout.Pill?76:view==Layout.Advanced?240:156;
+        offsetX=Math.Clamp(offsetX,work.Left-host.Left+7,
+            Math.Max(work.Left-host.Left+7,work.Right-host.Left-width-7));
+        offsetY=Math.Clamp(offsetY,work.Top-host.Top+7,
+            Math.Max(work.Top-host.Top+7,work.Bottom-host.Top-height-7));
+        popup.HorizontalOffset=offsetX;popup.VerticalOffset=offsetY;
+    }
+'@ @'
+    private void KeepVisible()
+    {
+        if(host==null||popup==null)return;
+        Rect work=SystemParameters.WorkArea;
+        try
+        {
+            var src=PresentationSource.FromVisual(host);
+            double sx=src?.CompositionTarget?.TransformToDevice.M11??1;
+            double sy=src?.CompositionTarget?.TransformToDevice.M22??1;
+            if(sx<=0.1||double.IsNaN(sx))sx=1;
+            if(sy<=0.1||double.IsNaN(sy))sy=1;
+            Drawing.Rectangle area;
+            if(host is WidgetShellWindow shell && DeskSpaceMonitorFenceV152.BoundScreen(shell) is Forms.Screen bound)
+                area=bound.WorkingArea;
+            else
+            {
+                var hwnd=new System.Windows.Interop.WindowInteropHelper(host).Handle;
+                area=(hwnd!=IntPtr.Zero?Forms.Screen.FromHandle(hwnd):Forms.Screen.PrimaryScreen??Forms.Screen.AllScreens[0]).WorkingArea;
+            }
+            work=new Rect(area.Left/sx,area.Top/sy,area.Width/sx,area.Height/sy);
+        }
+        catch{}
+        double width=frame?.Width??256;
+        double height=view==Layout.Pill?76:view==Layout.Advanced?240:156;
+        offsetX=Math.Clamp(offsetX,work.Left-host.Left+7,
+            Math.Max(work.Left-host.Left+7,work.Right-host.Left-width-7));
+        offsetY=Math.Clamp(offsetY,work.Top-host.Top+7,
+            Math.Max(work.Top-host.Top+7,work.Bottom-host.Top-height-7));
+        popup.HorizontalOffset=offsetX;popup.VerticalOffset=offsetY;
+    }
+'@ 'clamp standalone media popup onto own physical monitor work area'
+
+Swap-R377 @'
+    public void ShowBelow(Window window,Func<string> previousModuleData)
+    {
+        if(disposed||!visible||dismissedV123)return;
+'@ @'
+    public void ShowBelow(Window window,Func<string> previousModuleData)
+    {
+        if(disposed||!visible||dismissedV123)return;
+        if(ownerHostV378!=null && !ReferenceEquals(ownerHostV378,window))return;
+'@ 'prevent cross-host floating ShowBelow'
+
+Swap-R377 @'
+    public void Dispose()
+    {
+        disposed=true;poller.Stop();CloseBelow();
+        if(ReferenceEquals(ActiveV123,this))ActiveV123=null;
+        manager=null;current=null;VisibilityChanged=null;
+    }
+'@ @'
+    public void Dispose()
+    {
+        disposed=true;poller.Stop();CloseBelow();
+        lock(SyncV378)
+        {
+            InstancesV378.Remove(this);
+            if(ReferenceEquals(ActiveV123,this))
+                ActiveV123=InstancesV378.LastOrDefault(x=>!x.disposed);
+        }
+        manager=null;current=null;VisibilityChanged=null;
+    }
+'@ 'remove instance from multi-monitor list on Dispose'
+
+Finish-Patch $mediaPath
+
 
 # --- R377 Static verification guards ---
-$bridgeFinal=[IO.File]::ReadAllText($bridgePath)
-$activeFinal=[IO.File]::ReadAllText($activePath)
-$workerFinal=[IO.File]::ReadAllText($workerPath)
-$previewFinal=[IO.File]::ReadAllText($previewPath)
-$deckFinal=[IO.File]::ReadAllText($deckPath)
-$hostFinal=[IO.File]::ReadAllText($hostPath)
+$bridgeFinal=Get-Content $bridgePath -Raw
+$workerFinal=Get-Content $workerPath -Raw
+$previewFinal=Get-Content $previewPath -Raw
+$deckFinal=Get-Content $deckPath -Raw
+$hostFinal=Get-Content $hostPath -Raw
 
 if(!$bridgeFinal.Contains('Selected-cell fallback is disabled for data.') -or
    !$bridgeFinal.Contains('PreviewClipboardValues(') -or
-   !$bridgeFinal.Contains('ApplyClipboardValues(') -or
-   !$bridgeFinal.Contains('AccessibleObjectFromWindow(') -or
-   !$bridgeFinal.Contains('"EXCEL7"')){
-    throw 'R377 bridge clipboard, native OM Excel discovery, or R125 strict guard missing'
-}
-if(!$activeFinal.Contains('AnyExcelOpen()')){
-    throw 'R377 AnyExcelOpen helper missing from DeskSpaceExcelActiveV122'
+   !$bridgeFinal.Contains('ApplyClipboardValues(')){
+    throw 'R377 bridge clipboard or R125 strict information guard missing'
 }
 if(!$workerFinal.Contains('PreviewClipboardAsync(') -or
    !$workerFinal.Contains('ApplyClipboardAsync(')){
@@ -1415,21 +2013,28 @@ if(!$previewFinal.Contains('ShowExcel(') -or !$previewFinal.Contains('BindExcel(
    !$previewFinal.Contains('CreateExcelPreview(')){
     throw 'R377 Deck preview Excel table helpers missing'
 }
-if($deckFinal.Contains('Paste to Excel · Clipboard & mappings') -or
-   !$deckFinal.Contains('Capture selected Excel cells') -or
-   !$deckFinal.Contains('Open Excel mappings') -or
-   !$deckFinal.Contains('DeskSpaceExcelActiveV122.AnyExcelOpen()') -or
-   !$deckFinal.Contains('Excel clipboard · 0') -or
+if($deckFinal.Contains('"Excel paste"') -or
+   $deckFinal.Contains('Paste to Excel · Clipboard & mappings') -or
+   !$deckFinal.Contains('DeskSpaceMediaV18.ForHostV378(host)') -or
    !$deckFinal.Contains('BindExcel(previewClip,row,clip')){
-    throw 'R377 Deck Excel paste actions, open-Excel persistence, or clipboard hover binding missing'
+    throw 'R377 Deck Excel paste removal, clipboard hover binding, or monitor media wiring missing'
+}
+$activeFinal=[IO.File]::ReadAllText('DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelActiveV122.cs')
+if($activeFinal.Contains('AnyExcelOpen') -or $bridgeFinal.Contains('AccessibleObjectFromWindow')){
+    throw 'R377 extra 1142 Excel discovery code should remain reverted to v1.5.1141'
 }
 if(([regex]::Matches($deckFinal,'DeckHeaderButton[(]')).Count -ne 4){
     throw 'R377 broke R308 header button count invariant (must equal 4)'
 }
 if(!$hostFinal.Contains('FullscreenDetector.IsMonitorFullscreen(this)') -or
    !$hostFinal.Contains('CoversMonitor(') -or
+   !$hostFinal.Contains('media.BindHostV378(this);') -or
    !$hostFinal.Contains('PlaceEdgeHandleNative(')){
-    throw 'R377 per-monitor fullscreen detector or edge dock placement missing'
+    throw 'R377 per-monitor fullscreen detector, media host bind, or edge dock placement missing'
+}
+$mediaFinal=[IO.File]::ReadAllText($mediaPath)
+if(!$mediaFinal.Contains('ForHostV378(') -or !$mediaFinal.Contains('SelectMonitorsForSession(')){
+    throw 'R377 monitor-aware Media Player logic missing from DeskSpaceMediaV18'
 }
 
-Write-Host 'R377 PASS: Excel paste actions fixed, Excel clipboard hover table preview wired, Multi-Monitor fullscreen behavior isolated per monitor.'
+Write-Host 'R377 PASS: Excel reverted cleanly, Excel paste removed from Deck, and Media Player + widgets are monitor-aware.'

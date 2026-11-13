@@ -196,49 +196,35 @@ internal static class Program
     private static void TestDeckAndSourceInvariants()
     {
         string deckSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs").Replace("\r\n", "\n");
-        Check(!deckSource.Contains("Paste to Excel · Clipboard & mappings"),
-            "Obsolete non-functional R375 placeholder button must be removed");
+        Check(!deckSource.Contains("\"Excel paste\"") &&
+              !deckSource.Contains("Paste to Excel · Clipboard & mappings"),
+            "Excel paste section must be completely removed from Deck");
         Check(deckSource.Contains("ShowDeckRequested+=OnShowDeckRequestedV377") &&
-              deckSource.Contains("DeskSpaceExcelClipboardV39.PasteExcel(latestClip)") &&
-              deckSource.Contains("DeskSpaceExcelClipboardV39.CaptureSelectionNow()") &&
-              deckSource.Contains("DeskSpaceFeatureNavigationV200.OpenExcelAsync(host)") &&
-              deckSource.Contains("deckPreview?.BindExcel(previewClip,row,clip,()=>previewOnHover)") &&
+              deckSource.Contains("DeskSpaceMediaV18.ForHostV378(host)") &&
+              !deckSource.Contains("DeskSpaceMediaV18.ActiveV123"),
+            "DropShelf must bind Media Player per-host and remove global ActiveV123 usage");
+        Check(deckSource.Contains("deckPreview?.BindExcel(previewClip,row,clip,()=>previewOnHover)") &&
               deckSource.Contains("ClipSummarySnippet(clip)"),
-            "DropShelf must connect real Excel paste actions and hover table preview");
-        Check(deckSource.Contains("held.Count+detected.Count+runningApps.Count+\n            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0") &&
-              deckSource.Contains("DeskSpaceExcelActiveV122.AnyExcelOpen()") &&
-              deckSource.Contains("Excel clipboard · 0"),
-            "DropShelf Visible() and Render() must account for SharedClips count and any open Excel window");
+            "DropShelf must keep Excel clipboard inline snippet and hover table preview");
+        Check(deckSource.Contains("held.Count+detected.Count+runningApps.Count+\n            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0"),
+            "DropShelf Visible() must account for SharedClips count");
         Check(Regex.Matches(deckSource, @"DeckHeaderButton\(").Count == 4,
             "R308 invariant broken: DeckHeaderButton( count must remain exactly 4");
 
-        string bridgeSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelBridgeV16.cs");
-        Check(bridgeSource.Contains("AccessibleObjectFromWindow(") &&
-              bridgeSource.Contains("EXCEL7") &&
-              bridgeSource.Contains("limit++<2500"),
-            "DeskSpaceExcelBridgeV16 must include XLMAIN->EXCEL7 native OM discovery and expanded ROT scan limit");
-
         string activeSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelActiveV122.cs");
-        Check(activeSource.Contains("AnyExcelOpen()"),
-            "DeskSpaceExcelActiveV122 must expose AnyExcelOpen()");
+        Check(!activeSource.Contains("AnyExcelOpen"), "v1.5.1142 AnyExcelOpen must be reverted");
+
+        string bridgeSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelBridgeV16.cs");
+        Check(!bridgeSource.Contains("AccessibleObjectFromWindow"), "v1.5.1142 AccessibleObjectFromWindow must be reverted");
 
         string clipSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelClipboardV39.cs");
-        Check(clipSource.Contains("PrefetchActiveCopyV377()"),
-            "DeskSpaceExcelClipboardV39 must prefetch active Excel copy on Enable()");
-
-        var activeType = typeof(FullscreenDetector).Assembly.GetType("DeskSpace.DeskSpaceExcelActiveV122", true)!;
-        var anyOpenMethod = activeType.GetMethod("AnyExcelOpen", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!;
-        bool openRes = (bool)anyOpenMethod.Invoke(null, null)!;
-        Check(!openRes || openRes, "AnyExcelOpen() must execute cleanly without throwing");
-
-        var bridgeType = typeof(FullscreenDetector).Assembly.GetType("DeskSpace.DeskSpaceExcelBridgeV16", true)!;
-        Check(bridgeType.GetMethod("AccessibleObjectFromWindow", BindingFlags.Static | BindingFlags.NonPublic) != null,
-            "AccessibleObjectFromWindow P/Invoke must be compiled into DeskSpaceExcelBridgeV16");
+        Check(!clipSource.Contains("PrefetchActiveCopyV377"), "v1.5.1142 PrefetchActiveCopyV377 must be reverted");
 
         string widgetSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs");
         Check(widgetSource.Contains("previousFullscreen=FullscreenDetector.IsMonitorFullscreen(this);") &&
-              !widgetSource.Contains("previousFullscreen=FullscreenDetector.IsOtherFullscreen();"),
-            "WidgetHost Tick must use per-monitor IsMonitorFullscreen(this), not global GetForegroundWindow");
+              !widgetSource.Contains("previousFullscreen=FullscreenDetector.IsOtherFullscreen();") &&
+              widgetSource.Contains("media.BindHostV378(this);"),
+            "WidgetHost must use per-monitor fullscreen detection and bind Media Player to its host");
         Check(widgetSource.Contains("PrepareEdgeDock(") &&
               widgetSource.Contains("PlaceEdgeHandleNative("),
             "DockToEdge must use DPI-aware monitor-local edge handle placement");
@@ -337,6 +323,100 @@ internal static class Program
         }
     }
 
+
+    private static void TestMonitorAwareMediaOwnership(Assembly asm)
+    {
+        var mediaType = asm.GetType("DeskSpace.DeskSpaceMediaV18", true)!;
+        var winType = mediaType.GetNestedType("MediaWindowInfoV378", BindingFlags.NonPublic | BindingFlags.Public)!;
+        var selectMethod = mediaType.GetMethod("SelectMonitorsForSession", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!;
+        var bindMethod = mediaType.GetMethod("BindHostV378", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!;
+        var forHostMethod = mediaType.GetMethod("ForHostV378", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!;
+        var activeProp = mediaType.GetProperty("ActiveV123", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!;
+
+        object MakeWin(string title, string cls, string proc, string aumid, string[] cprocs, string[] caumids, bool min, bool fs, string mon) =>
+            Activator.CreateInstance(winType, new object[] { IntPtr.Zero, title, cls, proc, aumid, cprocs, caumids, min, fs, mon })!;
+
+        var monitors = new[] { @"\\.\DISPLAY1", @"\\.\DISPLAY2" };
+
+        HashSet<string> Resolve(string src, string title, string artist, bool isVideo, object[] wins, string? pref = null)
+        {
+            var typed = Array.CreateInstance(winType, wins.Length);
+            for (int i = 0; i < wins.Length; i++) typed.SetValue(wins[i], i);
+            return (HashSet<string>)selectMethod.Invoke(null, new object?[] { src, title, artist, isVideo, typed, monitors, @"\\.\DISPLAY1", pref })!;
+        }
+
+        // Case 1 (exact user scenario): Chrome docs on Monitor 1, Airtel Xstream video playing on Monitor 2
+        var wDocsMon1 = MakeWin("Google Docs - Google Chrome", "Chrome_WidgetWin_1", "chrome", "", Array.Empty<string>(), Array.Empty<string>(), false, false, @"\\.\DISPLAY1");
+        var wCricketMon2 = MakeWin("4th ODI - 13 Nov 2026 | Airtel Xstream Play - Google Chrome", "Chrome_WidgetWin_1", "chrome", "", Array.Empty<string>(), Array.Empty<string>(), false, false, @"\\.\DISPLAY2");
+        var res1 = Resolve("Chrome", "4th ODI - 13 Nov 2026 | Airtel Xstream Play", "", true, new[] { wDocsMon1, wCricketMon2 });
+        Check(!res1.Contains(@"\\.\DISPLAY1") && res1.Contains(@"\\.\DISPLAY2"),
+            "Chrome video on Monitor 2 must ONLY show Media Player on Monitor 2, never on Monitor 1");
+
+        // Case 2: Only Monitor 2 has Chrome open and user switched tabs -> still stays strictly on Monitor 2
+        var wOtherTabMon2 = MakeWin("Inbox - Google Chrome", "Chrome_WidgetWin_1", "chrome", "", Array.Empty<string>(), Array.Empty<string>(), false, false, @"\\.\DISPLAY2");
+        var res2 = Resolve("Chrome", "4th ODI - 13 Nov 2026 | Airtel Xstream Play", "", true, new[] { wOtherTabMon2 });
+        Check(!res2.Contains(@"\\.\DISPLAY1") && res2.Contains(@"\\.\DISPLAY2"),
+            "Single browser window on Monitor 2 must keep media on Monitor 2 even when tab changed");
+
+        // Case 3: User pops out Chrome Picture-in-Picture onto Monitor 1 while tab remains on Monitor 2 -> follows video to Monitor 1
+        var wPipMon1 = MakeWin("Picture in Picture", "Chrome_WidgetWin_1", "chrome", "", Array.Empty<string>(), Array.Empty<string>(), false, false, @"\\.\DISPLAY1");
+        var res3 = Resolve("Chrome", "4th ODI - 13 Nov 2026 | Airtel Xstream Play", "", true, new[] { wCricketMon2, wPipMon1 });
+        Check(res3.Contains(@"\\.\DISPLAY1") && !res3.Contains(@"\\.\DISPLAY2"),
+            "Picture-in-Picture window on Monitor 1 must move Media Player to Monitor 1");
+
+        // Case 4: Both monitors have unrelated Chrome windows -> sticky preferredMonitor keeps it on Monitor 2 without dual broadcast
+        var res4 = Resolve("Chrome", "4th ODI - 13 Nov 2026 | Airtel Xstream Play", "", true, new[] { wDocsMon1, wOtherTabMon2 }, @"\\.\DISPLAY2");
+        Check(res4.Count == 1 && res4.Contains(@"\\.\DISPLAY2"),
+            "With Chrome windows on both monitors and no title match, sticky affinity must keep controls on Monitor 2 only");
+
+        // Case 5: UWP Movies & TV (ApplicationFrameWindow + Video.UI child) on Monitor 2
+        var wUwpMon2 = MakeWin("Movies & TV", "ApplicationFrameWindow", "ApplicationFrameHost", "",
+            new[] { "Video.UI" }, new[] { "Microsoft.ZuneVideo_8wekyb3d8bbwe!Microsoft.ZuneVideo" }, false, true, @"\\.\DISPLAY2");
+        var res5 = Resolve("Microsoft.ZuneVideo_8wekyb3d8bbwe!Microsoft.ZuneVideo", "clip.mp4", "", true, new[] { wUwpMon2 });
+        Check(!res5.Contains(@"\\.\DISPLAY1") && res5.Contains(@"\\.\DISPLAY2"),
+            "UWP video hosted in ApplicationFrameWindow on Monitor 2 must resolve to Monitor 2 only");
+
+        // Case 6: Minimized VLC on Monitor 2 stays on Monitor 2
+        var wVlcMinMon2 = MakeWin("concert.mkv - VLC media player", "Qt652QWindowIcon", "vlc", "", Array.Empty<string>(), Array.Empty<string>(), true, false, @"\\.\DISPLAY2");
+        var res6 = Resolve("vlc.exe", "concert.mkv", "", false, new[] { wVlcMinMon2 });
+        Check(!res6.Contains(@"\\.\DISPLAY1") && res6.Contains(@"\\.\DISPLAY2"),
+            "Minimized VLC on Monitor 2 must keep controls on Monitor 2 only");
+
+        // Case 7: Background tray music with 0 windows falls back to Primary ONLY, never Monitor 2; video with 0 windows returns empty
+        var res7Audio = Resolve("Spotify.exe", "Yellow", "Coldplay", false, Array.Empty<object>());
+        Check(res7Audio.Count == 1 && res7Audio.Contains(@"\\.\DISPLAY1"),
+            "Windowless tray audio must fall back to Primary monitor only");
+        var res7Video = Resolve("UnknownPlayer.exe", "InvisibleVideo", "", true, Array.Empty<object>());
+        Check(res7Video.Count == 0,
+            "Video session with zero visible windows across multi-monitor setup must not appear on either monitor");
+
+        // Case 8: Per-host DeskSpaceMediaV18 binding and disposal isolation
+        var h1 = new Window { Width = 100, Height = 100, Left = -2000, Top = -2000, ShowInTaskbar = false, ShowActivated = false };
+        var h2 = new Window { Width = 100, Height = 100, Left = -2000, Top = -2000, ShowInTaskbar = false, ShowActivated = false };
+        var m1 = Activator.CreateInstance(mediaType)!;
+        var m2 = Activator.CreateInstance(mediaType)!;
+        try
+        {
+            bindMethod.Invoke(m1, new object[] { h1 });
+            bindMethod.Invoke(m2, new object[] { h2 });
+            Check(ReferenceEquals(forHostMethod.Invoke(null, new object[] { h1 }), m1),
+                "ForHostV378(h1) must return h1's own controller, not h2's ActiveV123");
+            Check(ReferenceEquals(forHostMethod.Invoke(null, new object[] { h2 }), m2),
+                "ForHostV378(h2) must return h2's own controller");
+
+            ((IDisposable)m2).Dispose();
+            Check(ReferenceEquals(forHostMethod.Invoke(null, new object[] { h1 }), m1),
+                "Disposing monitor 2 media controller must keep monitor 1's controller bound");
+            Check(ReferenceEquals(activeProp.GetValue(null), m1),
+                "Disposing monitor 2 media controller must promote surviving m1 to ActiveV123 instead of nulling it");
+        }
+        finally
+        {
+            ((IDisposable)m1).Dispose();
+            ((IDisposable)m2).Dispose();
+        }
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -349,7 +429,8 @@ internal static class Program
             TestExcelDeckPreviewPopup(asm);
             TestDeckAndSourceInvariants();
             TestMonitorAwareFullscreenLogic(asm);
-            Console.WriteLine("R377 PASS: Excel paste works safely, Excel clipboard hover table renders values, and Multi-Monitor fullscreen detection is monitor-aware.");
+            TestMonitorAwareMediaOwnership(asm);
+            Console.WriteLine("R377 PASS: Excel reverted cleanly, Excel paste removed from Deck, and Media Player + widgets are monitor-aware.");
             return 0;
         }
         catch (Exception ex)
