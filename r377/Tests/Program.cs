@@ -281,7 +281,7 @@ internal static class Program
         var ev = clipType.GetEvent("ShowDeckRequested", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!;
         bool wakeFired = false;
         Action wakeHandler = () => wakeFired = true;
-        ev.AddEventHandler(null, wakeHandler);
+        ev.GetAddMethod(true)!.Invoke(null, new object[] { wakeHandler });
         try
         {
             clipType.GetMethod("ShowActive", BindingFlags.Static | BindingFlags.Public)!.Invoke(null, null);
@@ -289,7 +289,7 @@ internal static class Program
         }
         finally
         {
-            ev.RemoveEventHandler(null, wakeHandler);
+            ev.GetRemoveMethod(true)!.Invoke(null, new object[] { wakeHandler });
         }
 
         // 9. Per-widget live IsMonitorFullscreen call safety on desktop runner
