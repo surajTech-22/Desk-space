@@ -331,7 +331,35 @@ internal static class DeskSpaceDeskTouchBridgeV378
     internal static void SwitchDeviceAsync(int targetId) => DispatchActionAsync($"SWITCH:{targetId}");
     internal static void ReturnLocalAsync() => DispatchActionAsync("RETURN");
     internal static void TogglePayModeAsync(int peerId) => DispatchActionAsync($"TOGGLE_PAY:{peerId}");
-    internal static void OpenDeskTouchAsync() => DispatchActionAsync("SHOW");
+    internal static void OpenDeskTouchAsync()
+    {
+        Task.Run(async () =>
+        {
+            try
+            {
+                string? raw = SendPipeRequest("SHOW", timeoutMs: 260);
+                if (!string.IsNullOrWhiteSpace(raw))
+                {
+                    ApplySnapshot(ParseSnapshotJson(raw, requireFreshTimestamp: false));
+                    return;
+                }
+                string launcher = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Programs", "DeskTouchVision", "DeskTouchVision.exe");
+                if (File.Exists(launcher))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(launcher)
+                    {
+                        UseShellExecute = true,
+                        WorkingDirectory = Path.GetDirectoryName(launcher)
+                    });
+                }
+                await Task.Delay(350).ConfigureAwait(false);
+                ApplySnapshot(FetchLiveSnapshot());
+            }
+            catch { }
+        });
+    }
     internal static void OpenNotificationsAsync(int targetId) => DispatchActionAsync($"OPEN_NOTIFS:{targetId}");
     internal static void ToggleClipboardAsync() => DispatchActionAsync("TOGGLE_CLIPBOARD");
     internal static void DropFilePathAsync(int targetId, string? path) => DispatchActionAsync(
@@ -577,7 +605,7 @@ internal static class DeskSpaceDeskTouchBridgeV378
         string headerText = snap.ConnectedCount == 1
             ? "Devices · 1 connected"
             : $"Devices · {snap.ConnectedCount} connected";
-        header.Children.Add(new TextBlock
+        var headerTitle = new TextBlock
         {
             Text = headerText,
             FontSize = 10.5,
@@ -585,8 +613,19 @@ internal static class DeskSpaceDeskTouchBridgeV378
             FontFamily = new WpfFontFamily("Segoe UI"),
             Foreground = new SolidColorBrush(WpfColor.FromRgb(186, 226, 252)),
             VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        });
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Double-click to open DeskTouch Vision"
+        };
+        headerTitle.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ClickCount >= 2)
+            {
+                e.Handled = true;
+                OpenDeskTouchAsync();
+            }
+        };
+        header.Children.Add(headerTitle);
         container.Children.Add(header);
 
         if (!minimized && snap.Devices.Count > 0)

@@ -655,8 +655,9 @@ internal static class Program
               bridgeType.GetMethod("DropFilePathAsync", flags) != null &&
               bridgeType.GetMethod("SendPowerAsync", flags) != null &&
               bridgeType.GetMethod("SendMediaAsync", flags) != null &&
-              bridgeType.GetMethod("SwitchProfileAsync", flags) != null,
-              "DeskSpaceDeskTouchBridgeV378 must expose v0.3.82 notification, clipboard, file drop, power, media, and profile commands");
+              bridgeType.GetMethod("SwitchProfileAsync", flags) != null &&
+              bridgeType.GetMethod("OpenDeskTouchAsync", flags) != null,
+              "DeskSpaceDeskTouchBridgeV378 must expose v0.3.82/v0.3.83 notification, clipboard, file drop, power, media, profile, and open commands");
     }
 
     [STAThread]
