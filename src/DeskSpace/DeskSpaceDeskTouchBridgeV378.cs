@@ -34,7 +34,10 @@ internal sealed record DeskTouchDeviceItemV378(
     double LayoutY = 0,
     double LayoutW = 0,
     double LayoutH = 0,
-    int ArrangementOrder = 0);
+    int ArrangementOrder = 0,
+    int BatteryPercent = -1,
+    bool IsCharging = false,
+    string SignalLabel = "");
 
 internal sealed record DeskTouchBridgeSnapshotV378(
     bool IsLive,
@@ -48,7 +51,11 @@ internal sealed record DeskTouchBridgeSnapshotV378(
     int ConnectedCount,
     int TotalNotificationCount,
     bool HasAnyKnownNotificationCount,
-    IReadOnlyList<DeskTouchDeviceItemV378> Devices);
+    IReadOnlyList<DeskTouchDeviceItemV378> Devices,
+    string ActiveProfile = "Work",
+    bool ClipboardSyncEnabled = true,
+    string ActiveForegroundApp = "",
+    string ActiveShortcutPreset = "Default");
 
 internal static class DeskSpaceDeskTouchBridgeV378
 {
@@ -170,11 +177,21 @@ internal static class DeskSpaceDeskTouchBridgeV378
                     double lw = d.TryGetProperty("layoutW", out var lwEl) && lwEl.TryGetDouble(out double lwv) && double.IsFinite(lwv) ? lwv : 0;
                     double lh = d.TryGetProperty("layoutH", out var lhEl) && lhEl.TryGetDouble(out double lhv) && double.IsFinite(lhv) ? lhv : 0;
                     int order = d.TryGetProperty("arrangementOrder", out var aoEl) && aoEl.TryGetInt32(out int aov) ? aov : fallbackIdx;
-                    list.Add(new DeskTouchDeviceItemV378(id, name, platform, isLocal, isSel, isCtrl, supports, notif, status, lx, ly, lw, lh, order));
+                    int batt = d.TryGetProperty("batteryPercent", out var bpEl) && bpEl.TryGetInt32(out int bpv) ? bpv : -1;
+                    bool charging = d.TryGetProperty("isCharging", out var chgEl) && chgEl.ValueKind == JsonValueKind.True;
+                    string sig = d.TryGetProperty("signalLabel", out var sigEl) && sigEl.ValueKind == JsonValueKind.String ? (sigEl.GetString() ?? "") : "";
+                    list.Add(new DeskTouchDeviceItemV378(id, name, platform, isLocal, isSel, isCtrl, supports, notif, status, lx, ly, lw, lh, order, batt, charging, sig));
                     fallbackIdx++;
                 }
                 list.Sort((a, b) => a.ArrangementOrder.CompareTo(b.ArrangementOrder));
             }
+            string activeProfile = root.TryGetProperty("activeProfile", out var apEl) && apEl.ValueKind == JsonValueKind.String
+                ? (apEl.GetString() ?? "Work") : "Work";
+            bool clipEnabled = !root.TryGetProperty("clipboardSyncEnabled", out var csEl) || csEl.ValueKind != JsonValueKind.False;
+            string activeFg = root.TryGetProperty("activeForegroundApp", out var fgEl) && fgEl.ValueKind == JsonValueKind.String
+                ? (fgEl.GetString() ?? "") : "";
+            string activePreset = root.TryGetProperty("activeShortcutPreset", out var spEl) && spEl.ValueKind == JsonValueKind.String
+                ? (spEl.GetString() ?? "Default") : "Default";
             return new DeskTouchBridgeSnapshotV378(
                 IsLive: list.Count > 0,
                 Version: version,
@@ -187,7 +204,11 @@ internal static class DeskSpaceDeskTouchBridgeV378
                 ConnectedCount: connectedCount,
                 TotalNotificationCount: totalNotif,
                 HasAnyKnownNotificationCount: hasKnown,
-                Devices: list);
+                Devices: list,
+                ActiveProfile: activeProfile,
+                ClipboardSyncEnabled: clipEnabled,
+                ActiveForegroundApp: activeFg,
+                ActiveShortcutPreset: activePreset);
         }
         catch
         {
@@ -202,7 +223,9 @@ internal static class DeskSpaceDeskTouchBridgeV378
             .Append(s.ConnectedCount).Append('|')
             .Append(s.IsRemoteActive ? '1' : '0').Append('|')
             .Append(s.ActiveTargetId).Append('|')
-            .Append(s.TotalNotificationCount);
+            .Append(s.TotalNotificationCount).Append('|')
+            .Append(s.ActiveProfile).Append('|')
+            .Append(s.ClipboardSyncEnabled ? '1' : '0');
         foreach (var d in s.Devices)
         {
             sb.Append(';').Append(d.Id).Append(':')
@@ -215,7 +238,9 @@ internal static class DeskSpaceDeskTouchBridgeV378
                 .Append(d.IsControlling ? '1' : '0')
                 .Append(d.IsSelected ? '1' : '0')
                 .Append(d.SupportsInput ? '1' : '0').Append(':')
-                .Append(d.NotificationCount);
+                .Append(d.NotificationCount).Append(':')
+                .Append(d.BatteryPercent).Append(':')
+                .Append(d.IsCharging ? '1' : '0');
         }
         return sb.ToString();
     }
@@ -307,6 +332,13 @@ internal static class DeskSpaceDeskTouchBridgeV378
     internal static void ReturnLocalAsync() => DispatchActionAsync("RETURN");
     internal static void TogglePayModeAsync(int peerId) => DispatchActionAsync($"TOGGLE_PAY:{peerId}");
     internal static void OpenDeskTouchAsync() => DispatchActionAsync("SHOW");
+    internal static void OpenNotificationsAsync(int targetId) => DispatchActionAsync($"OPEN_NOTIFS:{targetId}");
+    internal static void ToggleClipboardAsync() => DispatchActionAsync("TOGGLE_CLIPBOARD");
+    internal static void DropFilePathAsync(int targetId, string? path) => DispatchActionAsync(
+        string.IsNullOrWhiteSpace(path) ? $"DROP_FILE:{targetId}" : $"DROP_FILE_PATH:{targetId}|{path}");
+    internal static void SendPowerAsync(int targetId, string action) => DispatchActionAsync($"POWER:{targetId}|{action}");
+    internal static void SendMediaAsync(int targetId, string action) => DispatchActionAsync($"MEDIA:{targetId}|{action}");
+    internal static void SwitchProfileAsync(string profileName) => DispatchActionAsync($"PROFILE:{profileName}");
 
     private static void DispatchActionAsync(string command)
     {
@@ -590,6 +622,7 @@ internal static class DeskSpaceDeskTouchBridgeV378
                         Margin = i > 0 ? new Thickness(6, 0, 0, 0) : new Thickness(0)
                     };
 
+                    var captured = device;
                     bool hasUnread = device.NotificationCount > 0;
                     var badge = new Border
                     {
@@ -597,12 +630,18 @@ internal static class DeskSpaceDeskTouchBridgeV378
                         Padding = new Thickness(5, 0.5, 5, 0.5),
                         Margin = new Thickness(0, 0, 0, 2),
                         HorizontalAlignment = WpfHorizontalAlignment.Center,
+                        Cursor = System.Windows.Input.Cursors.Hand,
                         Background = new SolidColorBrush(hasUnread
                             ? WpfColor.FromRgb(56, 189, 248)
                             : WpfColor.FromRgb(47, 64, 96)),
                         ToolTip = device.NotificationCount >= 0
-                            ? $"{device.NotificationCount} active notifications"
-                            : "Notification count unavailable"
+                            ? $"{device.NotificationCount} active notifications — click to view/reply"
+                            : "Click to view notifications"
+                    };
+                    badge.MouseLeftButtonUp += (_, e) =>
+                    {
+                        e.Handled = true;
+                        OpenNotificationsAsync(captured.Id);
                     };
                     badge.Child = new TextBlock
                     {
@@ -638,14 +677,32 @@ internal static class DeskSpaceDeskTouchBridgeV378
                         Cursor = device.SupportsInput ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
                         ToolTip = device.IsLocal
                             ? $"Return mouse & keyboard to this computer ({device.Name})"
-                            : $"{device.Name} ({device.Platform}) · {device.StatusText}",
+                            : $"{device.Name} ({device.Platform}) · {device.StatusText} (Drop file to send)",
                         Content = CreateDeviceLogo(isMobile, strokeColor)
                     };
-                    var captured = device;
                     btn.Click += (_, _) =>
                     {
                         if (captured.IsLocal) ReturnLocalAsync();
                         else if (captured.SupportsInput) SwitchDeviceAsync(captured.Id);
+                    };
+                    unit.AllowDrop = true;
+                    unit.DragOver += (_, e) =>
+                    {
+                        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+                        {
+                            e.Effects = System.Windows.DragDropEffects.Copy;
+                            e.Handled = true;
+                        }
+                    };
+                    unit.Drop += (_, e) =>
+                    {
+                        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop) &&
+                            e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files &&
+                            files.Length > 0)
+                        {
+                            DropFilePathAsync(captured.Id, files[0]);
+                            e.Handled = true;
+                        }
                     };
                     unit.Children.Add(btn);
 
@@ -660,6 +717,25 @@ internal static class DeskSpaceDeskTouchBridgeV378
                             ? new SolidColorBrush(WpfColor.FromRgb(56, 189, 248))
                             : WpfBrushes.Transparent
                     });
+
+                    if (device.BatteryPercent >= 0)
+                    {
+                        var battColor = device.IsCharging
+                            ? WpfColor.FromRgb(56, 189, 248)
+                            : (device.BatteryPercent <= 20
+                                ? WpfColor.FromRgb(252, 165, 165)
+                                : WpfColor.FromRgb(134, 239, 172));
+                        unit.Children.Add(new TextBlock
+                        {
+                            Text = (device.IsCharging ? "⚡" : "") + device.BatteryPercent + "%",
+                            FontSize = 7.5,
+                            FontWeight = FontWeights.SemiBold,
+                            FontFamily = new WpfFontFamily("Segoe UI"),
+                            Foreground = new SolidColorBrush(battColor),
+                            HorizontalAlignment = WpfHorizontalAlignment.Center,
+                            Margin = new Thickness(0, 1, 0, 0)
+                        });
+                    }
 
                     if (isMobile && device.SupportsInput)
                     {
@@ -688,6 +764,31 @@ internal static class DeskSpaceDeskTouchBridgeV378
             }
 
             container.Children.Add(diagram);
+
+            var ecoStrip = new StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = WpfHorizontalAlignment.Center,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            ecoStrip.Children.Add(CreateQuickPill(
+                snap.ClipboardSyncEnabled ? "Clip On" : "Clip Off",
+                "Toggle shared clipboard sync",
+                ToggleClipboardAsync));
+            int dropTargetId = snap.ActiveTargetId != int.MinValue
+                ? snap.ActiveTargetId
+                : (snap.Devices.FirstOrDefault(d => !d.IsLocal)?.Id ?? 0);
+            ecoStrip.Children.Add(CreateQuickPill("File", "Send a file to active device", () => DropFilePathAsync(dropTargetId, null)));
+            ecoStrip.Children.Add(CreateQuickPill("⏯", "Play / Pause active device", () => SendMediaAsync(dropTargetId, "play-pause")));
+            ecoStrip.Children.Add(CreateQuickPill("🔒", "Lock all linked computers", () => SendPowerAsync(0, "lock-all")));
+            string nextProfile = string.Equals(snap.ActiveProfile, "Work", StringComparison.OrdinalIgnoreCase)
+                ? "Presentation"
+                : (string.Equals(snap.ActiveProfile, "Presentation", StringComparison.OrdinalIgnoreCase) ? "Away" : "Work");
+            ecoStrip.Children.Add(CreateQuickPill(
+                string.IsNullOrWhiteSpace(snap.ActiveProfile) ? "Work" : snap.ActiveProfile,
+                $"Profile: {snap.ActiveProfile} (click to switch to {nextProfile})",
+                () => SwitchProfileAsync(nextProfile)));
+            container.Children.Add(ecoStrip);
         }
 
         list.Children.Add(new Border
@@ -752,7 +853,35 @@ internal static class DeskSpaceDeskTouchBridgeV378
                 devicesMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
                 devicesMenu.DropDownItems.Add("Pause Phone Accessibility (Payments)", null,
                     (_, _) => dispatcher.Invoke(() => TogglePayModeAsync(readyPhone.Id)));
+                devicesMenu.DropDownItems.Add($"View {readyPhone.Name} Notifications...", null,
+                    (_, _) => dispatcher.Invoke(() => OpenNotificationsAsync(readyPhone.Id)));
             }
+
+            devicesMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+            devicesMenu.DropDownItems.Add(
+                snap.ClipboardSyncEnabled ? "Clipboard Sync: On (Click to Pause)" : "Clipboard Sync: Paused (Click to Resume)",
+                null,
+                (_, _) => dispatcher.Invoke(ToggleClipboardAsync));
+            devicesMenu.DropDownItems.Add("Send File to Active Device...", null,
+                (_, _) => dispatcher.Invoke(() => DropFilePathAsync(
+                    snap.ActiveTargetId != int.MinValue ? snap.ActiveTargetId : (snap.Devices.FirstOrDefault(d => !d.IsLocal)?.Id ?? 0),
+                    null)));
+            var profileMenu = new Forms.ToolStripMenuItem($"Profile ({snap.ActiveProfile})");
+            foreach (string profName in new[] { "Work", "Presentation", "Away" })
+            {
+                string capturedProf = profName;
+                var pItem = new Forms.ToolStripMenuItem(capturedProf)
+                {
+                    Checked = string.Equals(snap.ActiveProfile, capturedProf, StringComparison.OrdinalIgnoreCase)
+                };
+                pItem.Click += (_, _) => dispatcher.Invoke(() => SwitchProfileAsync(capturedProf));
+                profileMenu.DropDownItems.Add(pItem);
+            }
+            devicesMenu.DropDownItems.Add(profileMenu);
+            devicesMenu.DropDownItems.Add("Lock All Linked Computers", null,
+                (_, _) => dispatcher.Invoke(() => SendPowerAsync(0, "lock-all")));
+            devicesMenu.DropDownItems.Add("Wake Linked Computers", null,
+                (_, _) => dispatcher.Invoke(() => SendPowerAsync(0, "wake")));
 
             devicesMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
             if (IsSectionDismissed)
@@ -764,6 +893,26 @@ internal static class DeskSpaceDeskTouchBridgeV378
                 (_, _) => dispatcher.Invoke(OpenDeskTouchAsync));
         };
         menu.Items.Add(devicesMenu);
+    }
+
+    private static WpfButton CreateQuickPill(string text, string tooltip, Action click)
+    {
+        var pill = new WpfButton
+        {
+            Content = text,
+            FontSize = 8,
+            Padding = new Thickness(4.5, 1, 4.5, 1),
+            Margin = new Thickness(1.5, 0, 1.5, 0),
+            Foreground = new SolidColorBrush(WpfColor.FromRgb(210, 228, 250)),
+            Background = new SolidColorBrush(WpfColor.FromArgb(140, 36, 56, 92)),
+            BorderBrush = new SolidColorBrush(WpfColor.FromArgb(140, 82, 132, 198)),
+            BorderThickness = new Thickness(0.8),
+            Focusable = false,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = tooltip
+        };
+        pill.Click += (_, _) => click();
+        return pill;
     }
 
     private static string ShortLabel(string name, int maxLen)

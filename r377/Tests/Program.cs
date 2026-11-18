@@ -602,6 +602,63 @@ internal static class Program
         vetoWin.Close();
     }
 
+    private static void TestEcosystemBridgeFeaturesV382(Assembly asm)
+    {
+        var bridgeType = asm.GetType("DeskSpace.DeskSpaceDeskTouchBridgeV378", true)!;
+        var flags = BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+        var parse = bridgeType.GetMethod("ParseSnapshotJson", flags)!;
+        long freshMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        string json = $$"""
+            {"version":1,"updatedUtcMs":{{freshMs}},"localName":"DESKTOP-IQ1KSJ9","localNotificationCount":1,"activeTargetId":5,"isRemoteActive":true,"activeDeviceName":"Xiaomi","connectedCount":2,"totalNotificationCount":3,"hasAnyKnownNotificationCount":true,"activeProfile":"Presentation","clipboardSyncEnabled":false,"activeForegroundApp":"powerpnt.exe","activeShortcutPreset":"Presentation","devices":[{"id":-2147483648,"name":"DESKTOP-IQ1KSJ9","platform":"Windows","isLocal":true,"isSelected":false,"isControlling":false,"supportsInput":true,"notificationCount":1,"statusText":"Return","batteryPercent":-1,"isCharging":false},{"id":5,"name":"Xiaomi","platform":"Android","isLocal":false,"isSelected":true,"isControlling":true,"supportsInput":true,"notificationCount":2,"statusText":"Controlling","batteryPercent":79,"isCharging":true,"signalLabel":"5 GHz"}]}
+            """;
+        var snap = parse.Invoke(null, new object[] { json, true })!;
+        var sType = snap.GetType();
+        Check((string)sType.GetProperty("ActiveProfile")!.GetValue(snap)! == "Presentation",
+              "Bridge snapshot must parse ActiveProfile");
+        Check(!(bool)sType.GetProperty("ClipboardSyncEnabled")!.GetValue(snap)!,
+              "Bridge snapshot must parse ClipboardSyncEnabled=false");
+        Check((string)sType.GetProperty("ActiveForegroundApp")!.GetValue(snap)! == "powerpnt.exe",
+              "Bridge snapshot must parse ActiveForegroundApp");
+        var devs = (IList)sType.GetProperty("Devices")!.GetValue(snap)!;
+        Check((int)devs[1]!.GetType().GetProperty("BatteryPercent")!.GetValue(devs[1])! == 79 &&
+              (bool)devs[1]!.GetType().GetProperty("IsCharging")!.GetValue(devs[1])!,
+              "Bridge device item must preserve phone BatteryPercent and IsCharging telemetry");
+
+        bridgeType.GetMethod("ApplySnapshot", flags)!.Invoke(null, new object[] { snap });
+        var deckHost = new System.Windows.Controls.StackPanel();
+        bridgeType.GetMethod("AddDeckSection", flags)!.Invoke(null, new object?[] { deckHost });
+
+        var allTexts = new List<string>();
+        var allAllowDrops = new List<bool>();
+        void WalkAll(DependencyObject obj)
+        {
+            if (obj is System.Windows.Controls.TextBlock tb && !string.IsNullOrWhiteSpace(tb.Text))
+                allTexts.Add(tb.Text);
+            if (obj is UIElement ue && ue.AllowDrop)
+                allAllowDrops.Add(true);
+            for (int c = 0; c < System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj); c++)
+                WalkAll(System.Windows.Media.VisualTreeHelper.GetChild(obj, c));
+            if (obj is System.Windows.Controls.ContentControl cc && cc.Content is DependencyObject cd && !(obj is System.Windows.Media.Visual && System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj) > 0))
+                WalkAll(cd);
+            if (obj is System.Windows.Controls.Decorator dec && dec.Child != null && System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj) == 0)
+                WalkAll(dec.Child);
+            if (obj is System.Windows.Controls.Panel pnl && System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj) == 0)
+                foreach (var ch in pnl.Children.OfType<DependencyObject>()) WalkAll(ch);
+        }
+        WalkAll(deckHost);
+        Check(allTexts.Any(t => t.Contains("79%", StringComparison.Ordinal)),
+              "Deck device unit must display phone battery percentage when available");
+        Check(allAllowDrops.Count >= 2,
+              "Deck device units must enable drag-and-drop AllowDrop for instant file transfer");
+        Check(bridgeType.GetMethod("OpenNotificationsAsync", flags) != null &&
+              bridgeType.GetMethod("ToggleClipboardAsync", flags) != null &&
+              bridgeType.GetMethod("DropFilePathAsync", flags) != null &&
+              bridgeType.GetMethod("SendPowerAsync", flags) != null &&
+              bridgeType.GetMethod("SendMediaAsync", flags) != null &&
+              bridgeType.GetMethod("SwitchProfileAsync", flags) != null,
+              "DeskSpaceDeskTouchBridgeV378 must expose v0.3.82 notification, clipboard, file drop, power, media, and profile commands");
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -617,6 +674,7 @@ internal static class Program
             TestMonitorAwareMediaOwnership(asm);
             TestDeskTouchBridgeV378(asm);
             TestGracefulExitParentOwnedChildV379(asm);
+            TestEcosystemBridgeFeaturesV382(asm);
             Console.WriteLine("R377 PASS: Excel reverted cleanly, Excel paste removed from Deck, and Media Player + widgets are monitor-aware.");
             return 0;
         }
