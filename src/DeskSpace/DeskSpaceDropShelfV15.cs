@@ -166,6 +166,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         if(networkSpeedLabelV372!=null &&
            networkSpeedLabelV372.Text!=networkSpeedV372.Display)
             networkSpeedLabelV372.Text=networkSpeedV372.Display;
+        DeskSpaceDeskTouchBridgeV378.PollIfDueAsync();
     }
     // Compatibility pointer for older Deck UI hooks only; files, clipboard,
     // lifecycle and refresh always use the shared store and Views.
@@ -252,6 +253,8 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
         // positions and UI state remain independent of shared context.
         DeskSpaceSmartContextDeckV280.Changed+=ContextChangedV280;
         DeskSpaceExcelClipboardV39.ClipsChanged+=OnClipsChangedV376;
+        DeskSpaceDeskTouchBridgeV378.Changed+=OnDeskTouchChangedV378;
+        DeskSpaceDeskTouchBridgeV378.PollIfDueAsync(force:true);
         host.AllowDrop=true;
         host.PreviewDragOver+=DragOver;
         host.PreviewDrop+=Receive;
@@ -1181,6 +1184,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
     // Excel suggestion state is independent of Running Apps expansion.
     private bool excelClipsExpandedV376=true;
     private static void OnClipsChangedV376(){RefreshViews();}
+    private static void OnDeskTouchChangedV378(){RefreshViews();}
     private bool excelExpandedV122=true,excelRefreshingV122;
     private readonly List<(Guid Id,string Name,int Writable)> excelMatchesV122=new();
     private readonly DispatcherTimer excelSuggestTimerV122=new(){
@@ -1594,6 +1598,7 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             MinHeight=21,
             Child=networkSpeedLabelV372
         });
+        DeskSpaceDeskTouchBridgeV378.AddDeckSection(list);
         // Running Apps is hover-only; the full Deck is standard view.
         DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
             (appsNow,windowsNow)=>{
@@ -1982,7 +1987,11 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
             recognizedFolderErrorV363=null;
         }
         DeskSpaceSmartContextDeckV280.Changed-=ContextChangedV280;
-        if(Views.Count==0)DeskSpaceExcelClipboardV39.ClipsChanged-=OnClipsChangedV376;
+        if(Views.Count==0)
+        {
+            DeskSpaceExcelClipboardV39.ClipsChanged-=OnClipsChangedV376;
+            DeskSpaceDeskTouchBridgeV378.Changed-=OnDeskTouchChangedV378;
+        }
         if(Views.Count==0)DeskSpaceSmartContextDeckV280.Stop();
         // The media player stays inside the Deck until the FINAL widget
         // goes away. Closing monitor 1 must not open an extra floating

@@ -26,6 +26,18 @@ function Finish-Patch([string]$path){
     [IO.File]::WriteAllText($path,$script:code,[Text.UTF8Encoding]::new($false))
 }
 
+# --- Part A2: Sync DeskSpaceDeskTouchBridgeV378.cs ---
+$dtSrc='src/DeskSpace/DeskSpaceDeskTouchBridgeV378.cs'
+$dtDst='DeskSpace_Windows_R1/DeskSpace/DeskSpaceDeskTouchBridgeV378.cs'
+if(!(Test-Path -LiteralPath $dtSrc)){
+    throw 'R378 missing DeskSpaceDeskTouchBridgeV378 source'
+}
+Copy-Item -LiteralPath $dtSrc -Destination $dtDst -Force
+if((Get-FileHash $dtSrc -Algorithm SHA256).Hash -ne
+   (Get-FileHash $dtDst -Algorithm SHA256).Hash){
+    throw 'R378 DeskSpaceDeskTouchBridgeV378 copy hash mismatch'
+}
+
 # --- Part A: Sync DeskSpaceExcelClipboardV39.cs ---
 $clipSrc='src/DeskSpace/DeskSpaceExcelClipboardV39.cs'
 $clipDst='DeskSpace_Windows_R1/DeskSpace/DeskSpaceExcelClipboardV39.cs'
@@ -1993,6 +2005,102 @@ Swap-R377 @'
 Finish-Patch $mediaPath
 
 
+# --- Part H: Patch DeskSpaceDropShelfV15.cs & WidgetHost.cs (DeskTouch Devices, Notifications & Tray Switcher V378) ---
+Begin-Patch $deckPath
+Swap-R377 @'
+    private static void OnClipsChangedV376(){RefreshViews();}
+'@ @'
+    private static void OnClipsChangedV376(){RefreshViews();}
+    private static void OnDeskTouchChangedV378(){RefreshViews();}
+'@ 'V378 Deck device bridge change handler'
+
+Swap-R377 @'
+        networkSpeedV372.Sample();
+        if(networkSpeedLabelV372!=null &&
+           networkSpeedLabelV372.Text!=networkSpeedV372.Display)
+            networkSpeedLabelV372.Text=networkSpeedV372.Display;
+'@ @'
+        networkSpeedV372.Sample();
+        if(networkSpeedLabelV372!=null &&
+           networkSpeedLabelV372.Text!=networkSpeedV372.Display)
+            networkSpeedLabelV372.Text=networkSpeedV372.Display;
+        DeskSpaceDeskTouchBridgeV378.PollIfDueAsync();
+'@ 'V378 poll DeskTouch bridge inside active 1s Deck tick'
+
+Swap-R377 @'
+        DeskSpaceExcelClipboardV39.ClipsChanged+=OnClipsChangedV376;
+        DeskSpaceExcelClipboardV39.ShowDeckRequested+=OnShowDeckRequestedV377;
+'@ @'
+        DeskSpaceExcelClipboardV39.ClipsChanged+=OnClipsChangedV376;
+        DeskSpaceExcelClipboardV39.ShowDeckRequested+=OnShowDeckRequestedV377;
+        DeskSpaceDeskTouchBridgeV378.Changed+=OnDeskTouchChangedV378;
+        DeskSpaceDeskTouchBridgeV378.PollIfDueAsync(force:true);
+'@ 'V378 subscribe DropShelf to DeskTouch bridge changes'
+
+Swap-R377 @'
+        if(Views.Count==0)
+        {
+            DeskSpaceExcelClipboardV39.ClipsChanged-=OnClipsChangedV376;
+            DeskSpaceExcelClipboardV39.ShowDeckRequested-=OnShowDeckRequestedV377;
+        }
+'@ @'
+        if(Views.Count==0)
+        {
+            DeskSpaceExcelClipboardV39.ClipsChanged-=OnClipsChangedV376;
+            DeskSpaceExcelClipboardV39.ShowDeckRequested-=OnShowDeckRequestedV377;
+            DeskSpaceDeskTouchBridgeV378.Changed-=OnDeskTouchChangedV378;
+        }
+'@ 'V378 unsubscribe DropShelf from DeskTouch bridge changes'
+
+Swap-R377 @'
+        bool contents=held.Count+detected.Count+runningApps.Count+
+            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0 ||
+            DeskSpaceMediaV18.ForHostV378(host)?.DeckVisibleV123==true;
+'@ @'
+        bool contents=held.Count+detected.Count+runningApps.Count+
+            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count>0 ||
+            DeskSpaceMediaV18.ForHostV378(host)?.DeckVisibleV123==true ||
+            DeskSpaceDeskTouchBridgeV378.HasConnectedDevices;
+'@ 'V378 keep Deck visible when connected DeskTouch devices exist'
+
+Swap-R377 @'
+        if(held.Count+detected.Count+runningApps.Count+
+            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count==0 &&
+            DeskSpaceMediaV18.ForHostV378(host)?.DeckVisibleV123!=true && !busy)
+'@ @'
+        if(held.Count+detected.Count+runningApps.Count+
+            excelMatchesV122.Count+DeskSpaceExcelClipboardV39.SharedClips.Count==0 &&
+            DeskSpaceMediaV18.ForHostV378(host)?.DeckVisibleV123!=true &&
+            !DeskSpaceDeskTouchBridgeV378.HasConnectedDevices && !busy)
+'@ 'V378 open Deck when DeskTouch has connected devices'
+
+Swap-R377 @'
+            MinHeight=21,
+            Child=networkSpeedLabelV372
+        });
+        // Running Apps is hover-only; the full Deck is standard view.
+        DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
+'@ @'
+            MinHeight=21,
+            Child=networkSpeedLabelV372
+        });
+        DeskSpaceDeskTouchBridgeV378.AddDeckSection(list);
+        // Running Apps is hover-only; the full Deck is standard view.
+        DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
+'@ 'V378 render DeskTouch device switcher & numeric notification pills in Deck'
+Finish-Patch $deckPath
+
+Begin-Patch $hostPath
+Swap-R377 @'
+        menu.Items.Add("About / Version", null, (_, _) => Dispatcher.Invoke(ShowAbout));
+        menu.Items.Add("Open DeskSpace", null, (_, _) => Dispatcher.Invoke(OpenMain));
+'@ @'
+        DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);
+        menu.Items.Add("About / Version", null, (_, _) => Dispatcher.Invoke(ShowAbout));
+        menu.Items.Add("Open DeskSpace", null, (_, _) => Dispatcher.Invoke(OpenMain));
+'@ 'V378 add DeskTouch Devices switcher submenu to tray icon'
+Finish-Patch $hostPath
+
 # --- R377 Static verification guards ---
 $bridgeFinal=Get-Content $bridgePath -Raw
 $workerFinal=Get-Content $workerPath -Raw
@@ -2037,4 +2145,8 @@ if(!$mediaFinal.Contains('ForHostV378(') -or !$mediaFinal.Contains('SelectMonito
     throw 'R377 monitor-aware Media Player logic missing from DeskSpaceMediaV18'
 }
 
-Write-Host 'R377 PASS: Excel reverted cleanly, Excel paste removed from Deck, and Media Player + widgets are monitor-aware.'
+if(!$deckFinal.Contains('DeskSpaceDeskTouchBridgeV378.AddDeckSection(list);') -or
+   !$hostFinal.Contains('DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(')){
+    throw 'R378 DeskTouch Vision Deck or tray switcher wiring missing'
+}
+Write-Host 'R377+R378 PASS: DeskTouch Vision Deck + tray switcher integrated with monitor-aware widgets and Excel preview.'

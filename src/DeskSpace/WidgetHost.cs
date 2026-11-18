@@ -390,6 +390,7 @@ public sealed class WidgetShellWindow : Window
             null,(_,_)=>Dispatcher.Invoke(()=>OpenInWidget("Search")));
         menu.Items.Add("Excel Clipboard shelf",null,(_,_)=>Dispatcher.Invoke(
             DeskSpaceExcelClipboardV39.ShowActive));
+        DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);
         menu.Items.Add("About / Version", null, (_, _) => Dispatcher.Invoke(ShowAbout));
         menu.Items.Add("Open DeskSpace", null, (_, _) => Dispatcher.Invoke(OpenMain));
         menu.Items.Add("Exit widget", null, (_, _) => Dispatcher.Invoke(

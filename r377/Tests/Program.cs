@@ -417,6 +417,44 @@ internal static class Program
         }
     }
 
+    private static void TestDeskTouchBridgeV378(Assembly asm)
+    {
+        var bridgeType = asm.GetType("DeskSpace.DeskSpaceDeskTouchBridgeV378", true)!;
+        var flags = BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+        var parse = bridgeType.GetMethod("ParseSnapshotJson", flags)!;
+        var badge = bridgeType.GetMethod("FormatCountBadge", flags)!;
+
+        Check((string)badge.Invoke(null, new object[] { 0 })! == "0", "Zero count badge mismatch");
+        Check((string)badge.Invoke(null, new object[] { 12 })! == "12", "Positive count badge mismatch");
+        Check((string)badge.Invoke(null, new object[] { -1 })! == "—", "Unavailable count badge mismatch");
+
+        long freshMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        string sampleJson = $$"""
+            {"version":1,"updatedUtcMs":{{freshMs}},"localName":"DESKTOP-IQ1KSJ9","localNotificationCount":3,"activeTargetId":5,"isRemoteActive":true,"activeDeviceName":"Xiaomi","connectedCount":2,"totalNotificationCount":9,"hasAnyKnownNotificationCount":true,"devices":[{"id":-2147483648,"name":"DESKTOP-IQ1KSJ9","platform":"Windows","isLocal":true,"isSelected":false,"isControlling":false,"supportsInput":true,"notificationCount":3,"statusText":"Click to return"},{"id":5,"name":"Xiaomi","platform":"Android","isLocal":false,"isSelected":true,"isControlling":true,"supportsInput":true,"notificationCount":4,"statusText":"Controlling"},{"id":-2,"name":"SURAJ","platform":"Windows","isLocal":false,"isSelected":false,"isControlling":false,"supportsInput":true,"notificationCount":2,"statusText":"Connected"}]}
+            """;
+        var snap = parse.Invoke(null, new object[] { sampleJson, true })!;
+        var sType = snap.GetType();
+        Check((bool)sType.GetProperty("IsLive")!.GetValue(snap)! &&
+              (int)sType.GetProperty("ConnectedCount")!.GetValue(snap)! == 2 &&
+              (bool)sType.GetProperty("IsRemoteActive")!.GetValue(snap)! &&
+              (string)sType.GetProperty("ActiveDeviceName")!.GetValue(snap)! == "Xiaomi",
+              "DeskSpaceDeskTouchBridgeV378 must parse connected count and active device state");
+        var devs = (IList)sType.GetProperty("Devices")!.GetValue(snap)!;
+        Check(devs.Count == 3, "DeskTouch device list must include local + connected peers");
+
+        string staleJson = $$"""{"version":1,"updatedUtcMs":1000,"connectedCount":1,"devices":[{"id":5,"name":"Xiaomi","platform":"Android","isLocal":false,"notificationCount":1}]}""";
+        var staleSnap = parse.Invoke(null, new object[] { staleJson, true })!;
+        Check(!(bool)sType.GetProperty("IsLive")!.GetValue(staleSnap)!,
+              "Stale file fallback snapshot must not be treated as live");
+
+        string deckSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/DeskSpaceDropShelfV15.cs").Replace("\r\n", "\n");
+        string widgetSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs").Replace("\r\n", "\n");
+        Check(deckSource.Contains("DeskSpaceDeskTouchBridgeV378.AddDeckSection(list);") &&
+              deckSource.Contains("DeskSpaceDeskTouchBridgeV378.Changed+=OnDeskTouchChangedV378;") &&
+              widgetSource.Contains("DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);"),
+              "DeskSpace Deck and tray must wire DeskSpaceDeskTouchBridgeV378 switcher and counts");
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -430,6 +468,7 @@ internal static class Program
             TestDeckAndSourceInvariants();
             TestMonitorAwareFullscreenLogic(asm);
             TestMonitorAwareMediaOwnership(asm);
+            TestDeskTouchBridgeV378(asm);
             Console.WriteLine("R377 PASS: Excel reverted cleanly, Excel paste removed from Deck, and Media Player + widgets are monitor-aware.");
             return 0;
         }
