@@ -498,20 +498,20 @@ internal static class Program
         var switchButtons = new List<System.Windows.Controls.Button>();
         void Walk(DependencyObject obj, bool insideTileBtn)
         {
-            if (obj is System.Windows.Controls.Button b && b.Content is Viewbox)
+            if (obj is System.Windows.Controls.Button b && b.Content is System.Windows.Controls.Viewbox)
             {
                 switchButtons.Add(b);
                 insideTileBtn = true;
             }
             if (insideTileBtn && obj is System.Windows.Controls.TextBlock tb && !string.IsNullOrWhiteSpace(tb.Text))
                 textsInSwitchButtons.Add(tb.Text);
-            for (int c = 0; c < VisualTreeHelper.GetChildrenCount(obj); c++)
-                Walk(VisualTreeHelper.GetChild(obj, c), insideTileBtn);
-            if (obj is ContentControl cc && cc.Content is DependencyObject childDep && !(obj is Visual && VisualTreeHelper.GetChildrenCount(obj) > 0))
+            for (int c = 0; c < System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj); c++)
+                Walk(System.Windows.Media.VisualTreeHelper.GetChild(obj, c), insideTileBtn);
+            if (obj is System.Windows.Controls.ContentControl cc && cc.Content is DependencyObject childDep && !(obj is System.Windows.Media.Visual && System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj) > 0))
                 Walk(childDep, insideTileBtn);
-            if (obj is Decorator dec && dec.Child != null && VisualTreeHelper.GetChildrenCount(obj) == 0)
+            if (obj is System.Windows.Controls.Decorator dec && dec.Child != null && System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj) == 0)
                 Walk(dec.Child, insideTileBtn);
-            if (obj is Panel pnl && VisualTreeHelper.GetChildrenCount(obj) == 0)
+            if (obj is System.Windows.Controls.Panel pnl && System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj) == 0)
             {
                 foreach (var ch in pnl.Children.OfType<DependencyObject>())
                     Walk(ch, insideTileBtn);
