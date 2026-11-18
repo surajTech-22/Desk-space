@@ -2078,14 +2078,12 @@ Swap-R377 @'
             MinHeight=21,
             Child=networkSpeedLabelV372
         });
-        // Running Apps is hover-only; the full Deck is standard view.
         DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
 '@ @'
             MinHeight=21,
             Child=networkSpeedLabelV372
         });
         DeskSpaceDeskTouchBridgeV378.AddDeckSection(list);
-        // Running Apps is hover-only; the full Deck is standard view.
         DeskSpaceRunningAppsV88.AddHoverGroupLive(list,runningApps,runningWindows,
 '@ 'V378 render DeskTouch device switcher & numeric notification pills in Deck'
 Finish-Patch $deckPath
