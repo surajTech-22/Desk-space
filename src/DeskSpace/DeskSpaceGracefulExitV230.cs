@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -86,16 +87,38 @@ internal static class DeskSpaceGracefulExitV230
     {
         var ordered=windows.Where(w=>!ReferenceEquals(w,main))
             .Concat(windows.Where(w=>ReferenceEquals(w,main))).ToArray();
-        foreach(var window in ordered)
+        // Track windows closed transitively when an owner or sibling Closing
+        // handler closes child windows (e.g. multi-monitor satellite handles).
+        // Without this, calling Close() on an already-closed child never raises
+        // Closed again and leaves --widget-host holding its singleton mutex.
+        var preClosed=new HashSet<Window>();
+        var preHandlers=new List<(Window Window,EventHandler Handler)>(ordered.Length);
+        foreach(var w in ordered)
         {
-            bool closed=false;
-            EventHandler handler=(_,_)=>closed=true;
-            window.Closed+=handler;
-            try{window.Close();}
-            catch(InvalidOperationException){return false;}
-            finally{window.Closed-=handler;}
-            if(!closed)return false;
+            Window target=w;
+            EventHandler preHandler=(_,_)=>preClosed.Add(target);
+            target.Closed+=preHandler;
+            preHandlers.Add((target,preHandler));
         }
-        return true;
+        try
+        {
+            foreach(var window in ordered)
+            {
+                if(preClosed.Contains(window))continue;
+                bool closed=false;
+                EventHandler handler=(_,_)=>closed=true;
+                window.Closed+=handler;
+                try{window.Close();}
+                catch(InvalidOperationException){return false;}
+                finally{window.Closed-=handler;}
+                if(preClosed.Contains(window))closed=true;
+                if(!closed)return false;
+            }
+            return true;
+        }
+        finally
+        {
+            foreach(var pair in preHandlers)pair.Window.Closed-=pair.Handler;
+        }
     }
 }

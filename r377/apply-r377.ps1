@@ -26,6 +26,78 @@ function Finish-Patch([string]$path){
     [IO.File]::WriteAllText($path,$script:code,[Text.UTF8Encoding]::new($false))
 }
 
+# --- Part A1: Upgrade DeskSpaceGracefulExitV230.TryCloseInOrder for multi-window parent/child closure ---
+$gracePath='DeskSpace_Windows_R1/DeskSpace/DeskSpaceGracefulExitV230.cs'
+Begin-Patch $gracePath
+Swap-R377 @'
+using System;
+'@ @'
+using System;
+using System.Collections.Generic;
+'@ 'V379 graceful exit Generic import'
+Swap-R377 @'
+    internal static bool TryCloseInOrder(Window[] windows,Window? main)
+    {
+        var ordered=windows.Where(w=>!ReferenceEquals(w,main))
+            .Concat(windows.Where(w=>ReferenceEquals(w,main))).ToArray();
+        foreach(var window in ordered)
+        {
+            bool closed=false;
+            EventHandler handler=(_,_)=>closed=true;
+            window.Closed+=handler;
+            try{window.Close();}
+            catch(InvalidOperationException){return false;}
+            finally{window.Closed-=handler;}
+            if(!closed)return false;
+        }
+        return true;
+    }
+'@ @'
+    internal static bool TryCloseInOrder(Window[] windows,Window? main)
+    {
+        var ordered=windows.Where(w=>!ReferenceEquals(w,main))
+            .Concat(windows.Where(w=>ReferenceEquals(w,main))).ToArray();
+        // Track windows closed transitively when an owner or sibling Closing
+        // handler closes child windows (e.g. multi-monitor satellite handles).
+        // Without this, calling Close() on an already-closed child never raises
+        // Closed again and leaves --widget-host holding its singleton mutex.
+        var preClosed=new HashSet<Window>();
+        var preHandlers=new List<(Window Window,EventHandler Handler)>(ordered.Length);
+        foreach(var w in ordered)
+        {
+            Window target=w;
+            EventHandler preHandler=(_,_)=>preClosed.Add(target);
+            target.Closed+=preHandler;
+            preHandlers.Add((target,preHandler));
+        }
+        try
+        {
+            foreach(var window in ordered)
+            {
+                if(preClosed.Contains(window))continue;
+                bool closed=false;
+                EventHandler handler=(_,_)=>closed=true;
+                window.Closed+=handler;
+                try{window.Close();}
+                catch(InvalidOperationException){return false;}
+                finally{window.Closed-=handler;}
+                if(preClosed.Contains(window))closed=true;
+                if(!closed)return false;
+            }
+            return true;
+        }
+        finally
+        {
+            foreach(var pair in preHandlers)pair.Window.Closed-=pair.Handler;
+        }
+    }
+'@ 'V379 handle transitive child window close in TryCloseInOrder'
+Finish-Patch $gracePath
+$graceFinal=[IO.File]::ReadAllText($gracePath)
+if(!$graceFinal.Contains('preClosed.Contains(window)') -or !$graceFinal.Contains('updateExitAuthorized=true;')){
+    throw 'R379 DeskSpaceGracefulExitV230 multi-window patch or R355 guard missing'
+}
+
 # --- Part A2: Sync DeskSpaceDeskTouchBridgeV378.cs ---
 $dtSrc='src/DeskSpace/DeskSpaceDeskTouchBridgeV378.cs'
 $dtDst='DeskSpace_Windows_R1/DeskSpace/DeskSpaceDeskTouchBridgeV378.cs'
@@ -2167,6 +2239,10 @@ if(!$mediaFinal.Contains('ForHostV378(') -or !$mediaFinal.Contains('SelectMonito
     throw 'R377 monitor-aware Media Player logic missing from DeskSpaceMediaV18'
 }
 
+$dtFinal=[IO.File]::ReadAllText($dtDst)
+if(!$dtFinal.Contains('ComputeDeckPlacements(') -or !$dtFinal.Contains('CreateDeviceLogo(')){
+    throw 'R379 spatial DeskTouch Deck icon layout missing'
+}
 if(!$deckFinal.Contains('DeskSpaceDeskTouchBridgeV378.AddDeckSection(list);') -or
    !$hostFinal.Contains('DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(')){
     throw 'R378 DeskTouch Vision Deck or tray switcher wiring missing'

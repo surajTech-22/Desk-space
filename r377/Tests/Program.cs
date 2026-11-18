@@ -454,6 +454,107 @@ internal static class Program
               deckSource.Contains("view.host.Dispatcher.BeginInvoke") &&
               widgetSource.Contains("DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);"),
               "DeskSpace Deck and tray must wire DeskSpaceDeskTouchBridgeV378 switcher and counts");
+
+        // R379: Spatial arrangement placement + icon-only tiles (no device text names)
+        string orderedJson = $$"""
+            {"version":1,"updatedUtcMs":{{freshMs}},"localName":"DESKTOP-IQ1KSJ9","localNotificationCount":2,"activeTargetId":0,"isRemoteActive":false,"activeDeviceName":"DESKTOP-IQ1KSJ9","connectedCount":2,"totalNotificationCount":5,"hasAnyKnownNotificationCount":true,"devices":[{"id":-2,"name":"SURAJ","platform":"Windows","isLocal":false,"isSelected":false,"isControlling":false,"supportsInput":true,"notificationCount":3,"statusText":"Connected","layoutX":0.0,"layoutY":0.10,"layoutW":0.32,"layoutH":0.18,"arrangementOrder":0},{"id":-2147483648,"name":"DESKTOP-IQ1KSJ9","platform":"Windows","isLocal":true,"isSelected":true,"isControlling":false,"supportsInput":true,"notificationCount":2,"statusText":"Click to return","layoutX":0.36,"layoutY":0.10,"layoutW":0.36,"layoutH":0.20,"arrangementOrder":1},{"id":5,"name":"Xiaomi 22041216I","platform":"Android","isLocal":false,"isSelected":false,"isControlling":false,"supportsInput":true,"notificationCount":0,"statusText":"Connected","layoutX":0.76,"layoutY":0.0,"layoutW":0.18,"layoutH":0.38,"arrangementOrder":2}]}
+            """;
+        var ordSnap = parse.Invoke(null, new object[] { orderedJson, true })!;
+        var ordDevs = (IList)sType.GetProperty("Devices")!.GetValue(ordSnap)!;
+        Check(ordDevs.Count == 3 &&
+              (string)ordDevs[0]!.GetType().GetProperty("Name")!.GetValue(ordDevs[0])! == "SURAJ" &&
+              (string)ordDevs[1]!.GetType().GetProperty("Name")!.GetValue(ordDevs[1])! == "DESKTOP-IQ1KSJ9",
+              "DeskSpaceDeskTouchBridgeV378 must preserve exact DeskTouch spatial arrangement order");
+
+        var compute = bridgeType.GetMethod("ComputeDeckPlacements", flags)!;
+        object?[] horizArgs = new object?[] { ordDevs, 258.0, 0.0 };
+        var placements = (IList)compute.Invoke(null, horizArgs)!;
+        Check(placements.Count == 3, "ComputeDeckPlacements must place all 3 arranged devices");
+        double x0 = (double)placements[0]!.GetType().GetProperty("X")!.GetValue(placements[0])!;
+        double x1 = (double)placements[1]!.GetType().GetProperty("X")!.GetValue(placements[1])!;
+        double x2 = (double)placements[2]!.GetType().GetProperty("X")!.GetValue(placements[2])!;
+        Check(x0 < x1 && x1 < x2,
+              $"Horizontal arrangement Left->Center->Right expected x0({x0}) < x1({x1}) < x2({x2})");
+
+        // Stacked 2D arrangement: SURAJ stacked ABOVE DESKTOP-IQ1KSJ9, Xiaomi on right.
+        string stackedJson = $$"""
+            {"version":1,"updatedUtcMs":{{freshMs}},"connectedCount":2,"devices":[{"id":-2,"name":"SURAJ","platform":"Windows","isLocal":false,"supportsInput":true,"notificationCount":1,"layoutX":0.0,"layoutY":0.0,"layoutW":0.42,"layoutH":0.24,"arrangementOrder":0},{"id":5,"name":"Xiaomi","platform":"Android","isLocal":false,"supportsInput":true,"notificationCount":0,"layoutX":0.52,"layoutY":0.14,"layoutW":0.20,"layoutH":0.42,"arrangementOrder":1},{"id":-2147483648,"name":"DESKTOP-IQ1KSJ9","platform":"Windows","isLocal":true,"isSelected":true,"supportsInput":true,"notificationCount":2,"layoutX":0.0,"layoutY":0.34,"layoutW":0.42,"layoutH":0.24,"arrangementOrder":2}]}
+            """;
+        var stackSnap = parse.Invoke(null, new object[] { stackedJson, true })!;
+        var stackDevs = (IList)sType.GetProperty("Devices")!.GetValue(stackSnap)!;
+        object?[] stackArgs = new object?[] { stackDevs, 258.0, 0.0 };
+        var stackPlacements = (IList)compute.Invoke(null, stackArgs)!;
+        double topY = (double)stackPlacements[0]!.GetType().GetProperty("Y")!.GetValue(stackPlacements[0])!;
+        double bottomY = (double)stackPlacements[2]!.GetType().GetProperty("Y")!.GetValue(stackPlacements[2])!;
+        Check(topY < bottomY,
+              $"Stacked Top->Bottom arrangement expected SURAJ Y({topY}) < Local Y({bottomY})");
+
+        // Verify AddDeckSection builds vector logo buttons with ZERO device text names inside tiles.
+        var apply = bridgeType.GetMethod("ApplySnapshot", flags)!;
+        apply.Invoke(null, new object[] { ordSnap });
+        var deckHost = new System.Windows.Controls.StackPanel();
+        bridgeType.GetMethod("AddDeckSection", flags)!.Invoke(null, new object[] { deckHost });
+        var textsInSwitchButtons = new List<string>();
+        var switchButtons = new List<System.Windows.Controls.Button>();
+        void Walk(DependencyObject obj, bool insideTileBtn)
+        {
+            if (obj is System.Windows.Controls.Button b && b.Content is Viewbox)
+            {
+                switchButtons.Add(b);
+                insideTileBtn = true;
+            }
+            if (insideTileBtn && obj is System.Windows.Controls.TextBlock tb && !string.IsNullOrWhiteSpace(tb.Text))
+                textsInSwitchButtons.Add(tb.Text);
+            for (int c = 0; c < VisualTreeHelper.GetChildrenCount(obj); c++)
+                Walk(VisualTreeHelper.GetChild(obj, c), insideTileBtn);
+            if (obj is ContentControl cc && cc.Content is DependencyObject childDep && !(obj is Visual && VisualTreeHelper.GetChildrenCount(obj) > 0))
+                Walk(childDep, insideTileBtn);
+            if (obj is Decorator dec && dec.Child != null && VisualTreeHelper.GetChildrenCount(obj) == 0)
+                Walk(dec.Child, insideTileBtn);
+            if (obj is Panel pnl && VisualTreeHelper.GetChildrenCount(obj) == 0)
+            {
+                foreach (var ch in pnl.Children.OfType<DependencyObject>())
+                    Walk(ch, insideTileBtn);
+            }
+        }
+        Walk(deckHost, false);
+        Check(switchButtons.Count == 3 && textsInSwitchButtons.Count == 0,
+              $"Deck device tiles must render monitor/mobile logos ONLY with zero device text names (buttons={switchButtons.Count}, texts={textsInSwitchButtons.Count})");
+    }
+
+    private static void TestGracefulExitParentOwnedChildV379(Assembly asm)
+    {
+        var exitType = asm.GetType("DeskSpace.DeskSpaceGracefulExitV230", true)!;
+        var tryOrder = exitType.GetMethod("TryCloseInOrder", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        // Reproduce 2-monitor WidgetHost layout where replica.Closing closes replicaEdgeHandle.
+        var main = new Window { Width = 90, Height = 80, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
+        var mainHandle = new Window { Width = 40, Height = 40, ShowInTaskbar = false, WindowStyle = WindowStyle.None, Owner = main };
+        var replica = new Window { Width = 90, Height = 80, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
+        var replicaHandle = new Window { Width = 40, Height = 40, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
+        bool handleClosed = false;
+        replicaHandle.Closed += (_, _) => handleClosed = true;
+        replica.Closing += (_, _) => { if (!handleClosed) replicaHandle.Close(); };
+
+        main.Show();
+        mainHandle.Show();
+        replica.Show();
+        replicaHandle.Show();
+
+        // Exact failing order seen in multi-monitor logs: [replica, replicaHandle, mainHandle, main].
+        bool ok = (bool)tryOrder.Invoke(null, new object?[] { new[] { replica, replicaHandle, mainHandle, main }, main })!;
+        Check(ok && handleClosed, "TryCloseInOrder must accept transitive child window closures during multi-monitor exit");
+
+        // Still verify a genuine Closing veto blocks graceful shutdown.
+        bool block = true;
+        System.ComponentModel.CancelEventHandler h = (_, e) => e.Cancel = block;
+        var vetoWin = new Window { Width = 80, Height = 80, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
+        vetoWin.Closing += h;
+        vetoWin.Show();
+        bool vetoed = (bool)tryOrder.Invoke(null, new object?[] { new[] { vetoWin }, null })!;
+        Check(!vetoed, "TryCloseInOrder must still return false when a window genuinely vetoes Closing");
+        block = false;
+        vetoWin.Close();
     }
 
     [STAThread]
@@ -470,6 +571,7 @@ internal static class Program
             TestMonitorAwareFullscreenLogic(asm);
             TestMonitorAwareMediaOwnership(asm);
             TestDeskTouchBridgeV378(asm);
+            TestGracefulExitParentOwnedChildV379(asm);
             Console.WriteLine("R377 PASS: Excel reverted cleanly, Excel paste removed from Deck, and Media Player + widgets are monitor-aware.");
             return 0;
         }
