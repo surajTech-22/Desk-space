@@ -2240,7 +2240,7 @@ if(!$mediaFinal.Contains('ForHostV378(') -or !$mediaFinal.Contains('SelectMonito
 }
 
 $dtFinal=[IO.File]::ReadAllText($dtDst)
-if(!$dtFinal.Contains('ComputeCompactRows(') -or !$dtFinal.Contains('CreateDeviceLogo(')){
+if(!$dtFinal.Contains('ComputeCompactRows(') -or !$dtFinal.Contains('CreateDeviceLogo(') -or !$dtFinal.Contains('CreateSectionHeaderButton(')){
     throw 'R379 spatial DeskTouch Deck icon layout missing'
 }
 if(!$deckFinal.Contains('DeskSpaceDeskTouchBridgeV378.AddDeckSection(list);') -or

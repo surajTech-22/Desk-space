@@ -63,6 +63,9 @@ internal static class DeskSpaceDeskTouchBridgeV378
     private static string _lastSignature = "";
     private static long _lastPollTicks;
     private static int _polling;
+    private static bool _sectionMinimized;
+    private static bool _sectionDismissed;
+    private static int _lastConnectedCount;
 
     internal static event Action? Changed;
 
@@ -72,6 +75,32 @@ internal static class DeskSpaceDeskTouchBridgeV378
     }
 
     internal static bool HasConnectedDevices => Current.ConnectedCount > 0;
+    internal static bool IsSectionMinimized { get { lock (StateLock) return _sectionMinimized; } }
+    internal static bool IsSectionDismissed { get { lock (StateLock) return _sectionDismissed; } }
+
+    internal static void ToggleMinimized()
+    {
+        lock (StateLock)
+            _sectionMinimized = !_sectionMinimized;
+        Changed?.Invoke();
+    }
+
+    internal static void DismissSection()
+    {
+        lock (StateLock)
+            _sectionDismissed = true;
+        Changed?.Invoke();
+    }
+
+    internal static void ResetSectionVisibility()
+    {
+        lock (StateLock)
+        {
+            _sectionMinimized = false;
+            _sectionDismissed = false;
+        }
+        Changed?.Invoke();
+    }
 
     internal static DeskTouchBridgeSnapshotV378 CreateEmpty(bool live) =>
         new(
@@ -236,6 +265,12 @@ internal static class DeskSpaceDeskTouchBridgeV378
         lock (StateLock)
         {
             _current = next;
+            if ((next.ConnectedCount > 0 && _lastConnectedCount == 0)
+                || (!next.IsLive && _lastConnectedCount > 0))
+            {
+                _sectionDismissed = false;
+            }
+            _lastConnectedCount = next.ConnectedCount;
             changed = !string.Equals(_lastSignature, sig, StringComparison.Ordinal);
             _lastSignature = sig;
         }
@@ -450,39 +485,62 @@ internal static class DeskSpaceDeskTouchBridgeV378
         return host;
     }
 
+    private static WpfButton CreateSectionHeaderButton(string symbol, string tooltip, Action click)
+    {
+        var btn = new WpfButton
+        {
+            Content = symbol,
+            Width = 20,
+            Height = 20,
+            MinWidth = 20,
+            MinHeight = 20,
+            Padding = new Thickness(0),
+            Margin = new Thickness(2, 0, 0, 0),
+            FontSize = 12,
+            FontWeight = FontWeights.Medium,
+            FontFamily = new WpfFontFamily("Segoe UI"),
+            Foreground = new SolidColorBrush(WpfColor.FromRgb(184, 207, 239)),
+            Background = WpfBrushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Focusable = false,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = WpfHorizontalAlignment.Center,
+            ToolTip = tooltip
+        };
+        btn.Click += (_, _) => click();
+        return btn;
+    }
+
     internal static void AddDeckSection(StackPanel list)
     {
         var snap = Current;
-        if (!snap.IsLive && snap.ConnectedCount == 0)
+        bool minimized, dismissed;
+        lock (StateLock)
+        {
+            minimized = _sectionMinimized;
+            dismissed = _sectionDismissed;
+        }
+        if (dismissed || (!snap.IsLive && snap.ConnectedCount == 0))
             return;
 
         var container = new StackPanel();
-        var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 4) };
+        var header = new DockPanel
+        {
+            LastChildFill = true,
+            Margin = new Thickness(0, 0, 0, minimized ? 0 : 4)
+        };
 
-        var rightAction = new WpfButton
-        {
-            Content = snap.IsRemoteActive ? "Return PC" : "Open",
-            FontSize = 10,
-            Padding = new Thickness(6, 2, 6, 2),
-            MinWidth = 42,
-            Foreground = WpfBrushes.White,
-            Background = new SolidColorBrush(snap.IsRemoteActive
-                ? WpfColor.FromRgb(14, 116, 144)
-                : WpfColor.FromRgb(42, 61, 96)),
-            BorderBrush = new SolidColorBrush(WpfColor.FromRgb(93, 141, 194)),
-            BorderThickness = new Thickness(1),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = snap.IsRemoteActive
-                ? "Return mouse & keyboard to this computer"
-                : "Open DeskTouch Vision Displays window"
-        };
-        rightAction.Click += (_, _) =>
-        {
-            if (snap.IsRemoteActive) ReturnLocalAsync();
-            else OpenDeskTouchAsync();
-        };
-        DockPanel.SetDock(rightAction, Dock.Right);
-        header.Children.Add(rightAction);
+        var closeBtn = CreateSectionHeaderButton("×", "Hide Devices section", DismissSection);
+        DockPanel.SetDock(closeBtn, Dock.Right);
+        header.Children.Add(closeBtn);
+
+        var minBtn = CreateSectionHeaderButton(
+            minimized ? "▢" : "−",
+            minimized ? "Expand Devices section" : "Minimize Devices section",
+            ToggleMinimized);
+        DockPanel.SetDock(minBtn, Dock.Right);
+        header.Children.Add(minBtn);
 
         string headerText = snap.ConnectedCount == 1
             ? "Devices · 1 connected"
@@ -499,7 +557,7 @@ internal static class DeskSpaceDeskTouchBridgeV378
         });
         container.Children.Add(header);
 
-        if (snap.Devices.Count > 0)
+        if (!minimized && snap.Devices.Count > 0)
         {
             var rows = ComputeCompactRows(snap.Devices);
             var diagram = new StackPanel
@@ -527,7 +585,7 @@ internal static class DeskSpaceDeskTouchBridgeV378
 
                     var unit = new StackPanel
                     {
-                        Width = 34,
+                        MinWidth = isMobile ? 46 : 34,
                         HorizontalAlignment = WpfHorizontalAlignment.Center,
                         Margin = i > 0 ? new Thickness(6, 0, 0, 0) : new Thickness(0)
                     };
@@ -697,6 +755,11 @@ internal static class DeskSpaceDeskTouchBridgeV378
             }
 
             devicesMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+            if (IsSectionDismissed)
+            {
+                devicesMenu.DropDownItems.Add("Show Devices Section on Deck", null,
+                    (_, _) => dispatcher.Invoke(ResetSectionVisibility));
+            }
             devicesMenu.DropDownItems.Add("Open DeskTouch Vision", null,
                 (_, _) => dispatcher.Invoke(OpenDeskTouchAsync));
         };

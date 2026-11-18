@@ -513,6 +513,57 @@ internal static class Program
               switchButtons.All(b => Equals(b.Background, System.Windows.Media.Brushes.Transparent)) &&
               switchButtons.All(b => Math.Abs(b.Width - switchButtons[0].Width) < 0.01 && Math.Abs(b.Height - switchButtons[0].Height) < 0.01),
               $"Deck device buttons must use equal-size no-background monitor/mobile diagrams with zero device text (buttons={switchButtons.Count}, texts={textsInSwitchButtons.Count})");
+
+        // R381: Header uses minimize (-) and close (x) buttons without Open button, and Pay Off is never clipped.
+        var headerTexts = new List<string>();
+        var headerBtns = new List<System.Windows.Controls.Button>();
+        void WalkHeader(DependencyObject obj)
+        {
+            if (obj is System.Windows.Controls.Button b && !(b.Content is System.Windows.Controls.Grid))
+                headerBtns.Add(b);
+            if (obj is System.Windows.Controls.TextBlock tb && !string.IsNullOrWhiteSpace(tb.Text))
+                headerTexts.Add(tb.Text);
+            if (obj is System.Windows.Controls.Panel pnl)
+            {
+                foreach (var ch in pnl.Children.OfType<DependencyObject>())
+                    WalkHeader(ch);
+            }
+            if (obj is System.Windows.Controls.Decorator dec && dec.Child != null)
+                WalkHeader(dec.Child);
+            if (obj is System.Windows.Controls.ContentControl cc && cc.Content is DependencyObject cd)
+                WalkHeader(cd);
+        }
+        WalkHeader(deckHost);
+        Check(!headerBtns.Any(b => Equals(b.Content, "Open") || Equals(b.Content, "Return PC")) &&
+              headerBtns.Any(b => Equals(b.Content, "−")) &&
+              headerBtns.Any(b => Equals(b.Content, "×")) &&
+              headerBtns.Any(b => Equals(b.Content, "Pay Off")),
+              "Devices section header must expose minimize (-) and close (x) buttons without an Open button, and show full Pay Off label");
+
+        var toggleMin = bridgeType.GetMethod("ToggleMinimized", flags)!;
+        var dismissSec = bridgeType.GetMethod("DismissSection", flags)!;
+        var resetVis = bridgeType.GetMethod("ResetSectionVisibility", flags)!;
+        toggleMin.Invoke(null, null);
+        var minHost = new System.Windows.Controls.StackPanel();
+        bridgeType.GetMethod("AddDeckSection", flags)!.Invoke(null, new object?[] { minHost });
+        void CountNonDeviceBtns(DependencyObject obj, List<string> syms)
+        {
+            if (obj is System.Windows.Controls.Button b && b.Content is string s) syms.Add(s);
+            if (obj is System.Windows.Controls.Panel pnl)
+                foreach (var ch in pnl.Children.OfType<DependencyObject>()) CountNonDeviceBtns(ch, syms);
+            if (obj is System.Windows.Controls.Decorator dec && dec.Child != null) CountNonDeviceBtns(dec.Child, syms);
+            if (obj is System.Windows.Controls.ContentControl cc && cc.Content is DependencyObject cd) CountNonDeviceBtns(cd, syms);
+        }
+        var minSyms = new List<string>();
+        CountNonDeviceBtns(minHost, minSyms);
+        Check(minHost.Children.Count == 1 && !minSyms.Contains("Pay Off") && minSyms.Contains("▢") && minSyms.Contains("×"),
+              "Minimizing Devices section must collapse device diagram and show restore (▢) button");
+
+        dismissSec.Invoke(null, null);
+        var disHost = new System.Windows.Controls.StackPanel();
+        bridgeType.GetMethod("AddDeckSection", flags)!.Invoke(null, new object?[] { disHost });
+        Check(disHost.Children.Count == 0, "Closing (×) Devices section must hide it from Deck until reset or reconnected");
+        resetVis.Invoke(null, null);
     }
 
     private static void TestGracefulExitParentOwnedChildV379(Assembly asm)

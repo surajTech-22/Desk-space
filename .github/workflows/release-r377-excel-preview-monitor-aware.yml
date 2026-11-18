@@ -368,11 +368,11 @@ jobs:
           if($latest.Major -ne 1 -or $latest.Minor -ne 5){
               throw 'Unexpected DeskSpace stable version family'
           }
-          $nextBuild=1147
+          $nextBuild=1148
           $version="1.5.$nextBuild"
           $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
           if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
-          foreach($tag in @('v1.5.1147','tester-v1.5.1147')){
+          foreach($tag in @('v1.5.1148','tester-v1.5.1148')){
             if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
               throw ('Refuse to overwrite existing release: '+$tag)
             }
@@ -604,7 +604,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1147: renders DeskTouch devices inside the Deck as compact, equal-size, background-free monitor and mobile diagram icons closely arranged in their exact screen order with centered numeric notification counts above each icon."
+              $notes="DeskSpace 1.5.1148: replaces the Devices section Open button with compact minimize (-) and close (x) header controls and fixes full Pay Off button width while preserving close-arranged equal-size device icons."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Excel Preview & Monitor-Aware Widgets" --notes $notes
               }else{
@@ -631,9 +631,9 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
-          foreach($hint in @('stable|v1.5.1147','tester|tester-v1.5.1147')){
+          foreach($hint in @('stable|v1.5.1148','tester|tester-v1.5.1148')){
             try{
-              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1147 available' }
+              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1148 available' }
               if($response.event -ne 'message'){throw ('Relay rejected '+$hint)}
               Write-Host ('ACKNOWLEDGED official release hint: '+$hint)
             }catch{
