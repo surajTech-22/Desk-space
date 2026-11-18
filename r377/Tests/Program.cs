@@ -455,7 +455,7 @@ internal static class Program
               widgetSource.Contains("DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);"),
               "DeskSpace Deck and tray must wire DeskSpaceDeskTouchBridgeV378 switcher and counts");
 
-        // R379: Spatial arrangement placement + icon-only tiles (no device text names)
+        // R380: Compact no-background equal-size monitor/mobile diagram in exact spatial order
         string orderedJson = $$"""
             {"version":1,"updatedUtcMs":{{freshMs}},"localName":"DESKTOP-IQ1KSJ9","localNotificationCount":2,"activeTargetId":0,"isRemoteActive":false,"activeDeviceName":"DESKTOP-IQ1KSJ9","connectedCount":2,"totalNotificationCount":5,"hasAnyKnownNotificationCount":true,"devices":[{"id":-2,"name":"SURAJ","platform":"Windows","isLocal":false,"isSelected":false,"isControlling":false,"supportsInput":true,"notificationCount":3,"statusText":"Connected","layoutX":0.0,"layoutY":0.10,"layoutW":0.32,"layoutH":0.18,"arrangementOrder":0},{"id":-2147483648,"name":"DESKTOP-IQ1KSJ9","platform":"Windows","isLocal":true,"isSelected":true,"isControlling":false,"supportsInput":true,"notificationCount":2,"statusText":"Click to return","layoutX":0.36,"layoutY":0.10,"layoutW":0.36,"layoutH":0.20,"arrangementOrder":1},{"id":5,"name":"Xiaomi 22041216I","platform":"Android","isLocal":false,"isSelected":false,"isControlling":false,"supportsInput":true,"notificationCount":0,"statusText":"Connected","layoutX":0.76,"layoutY":0.0,"layoutW":0.18,"layoutH":0.38,"arrangementOrder":2}]}
             """;
@@ -466,39 +466,30 @@ internal static class Program
               (string)ordDevs[1]!.GetType().GetProperty("Name")!.GetValue(ordDevs[1])! == "DESKTOP-IQ1KSJ9",
               "DeskSpaceDeskTouchBridgeV378 must preserve exact DeskTouch spatial arrangement order");
 
-        var compute = bridgeType.GetMethod("ComputeDeckPlacements", flags)!;
-        object?[] horizArgs = new object?[] { ordDevs, 258.0, 0.0 };
-        var placements = (IList)compute.Invoke(null, horizArgs)!;
-        Check(placements.Count == 3, "ComputeDeckPlacements must place all 3 arranged devices");
-        double x0 = (double)placements[0]!.GetType().GetProperty("X")!.GetValue(placements[0])!;
-        double x1 = (double)placements[1]!.GetType().GetProperty("X")!.GetValue(placements[1])!;
-        double x2 = (double)placements[2]!.GetType().GetProperty("X")!.GetValue(placements[2])!;
-        Check(x0 < x1 && x1 < x2,
-              $"Horizontal arrangement Left->Center->Right expected x0({x0}) < x1({x1}) < x2({x2})");
+        var computeRows = bridgeType.GetMethod("ComputeCompactRows", flags)!;
+        var horizRows = (IList)computeRows.Invoke(null, new object?[] { ordDevs })!;
+        Check(horizRows.Count == 1 && ((IList)horizRows[0]!).Count == 3,
+              "Side-by-side devices must group into one tight horizontal diagram row in order");
 
-        // Stacked 2D arrangement: SURAJ stacked ABOVE DESKTOP-IQ1KSJ9, Xiaomi on right.
         string stackedJson = $$"""
-            {"version":1,"updatedUtcMs":{{freshMs}},"connectedCount":2,"devices":[{"id":-2,"name":"SURAJ","platform":"Windows","isLocal":false,"supportsInput":true,"notificationCount":1,"layoutX":0.0,"layoutY":0.0,"layoutW":0.42,"layoutH":0.24,"arrangementOrder":0},{"id":5,"name":"Xiaomi","platform":"Android","isLocal":false,"supportsInput":true,"notificationCount":0,"layoutX":0.52,"layoutY":0.14,"layoutW":0.20,"layoutH":0.42,"arrangementOrder":1},{"id":-2147483648,"name":"DESKTOP-IQ1KSJ9","platform":"Windows","isLocal":true,"isSelected":true,"supportsInput":true,"notificationCount":2,"layoutX":0.0,"layoutY":0.34,"layoutW":0.42,"layoutH":0.24,"arrangementOrder":2}]}
+            {"version":1,"updatedUtcMs":{{freshMs}},"connectedCount":2,"devices":[{"id":-2,"name":"SURAJ","platform":"Windows","isLocal":false,"supportsInput":true,"notificationCount":1,"layoutX":0.0,"layoutY":0.0,"layoutW":0.42,"layoutH":0.24,"arrangementOrder":0},{"id":5,"name":"Xiaomi","platform":"Android","isLocal":false,"supportsInput":true,"notificationCount":0,"layoutX":0.52,"layoutY":0.02,"layoutW":0.20,"layoutH":0.26,"arrangementOrder":1},{"id":-2147483648,"name":"DESKTOP-IQ1KSJ9","platform":"Windows","isLocal":true,"isSelected":true,"supportsInput":true,"notificationCount":2,"layoutX":0.0,"layoutY":0.48,"layoutW":0.42,"layoutH":0.24,"arrangementOrder":2}]}
             """;
         var stackSnap = parse.Invoke(null, new object[] { stackedJson, true })!;
         var stackDevs = (IList)sType.GetProperty("Devices")!.GetValue(stackSnap)!;
-        object?[] stackArgs = new object?[] { stackDevs, 258.0, 0.0 };
-        var stackPlacements = (IList)compute.Invoke(null, stackArgs)!;
-        double topY = (double)stackPlacements[0]!.GetType().GetProperty("Y")!.GetValue(stackPlacements[0])!;
-        double bottomY = (double)stackPlacements[2]!.GetType().GetProperty("Y")!.GetValue(stackPlacements[2])!;
-        Check(topY < bottomY,
-              $"Stacked Top->Bottom arrangement expected SURAJ Y({topY}) < Local Y({bottomY})");
+        var stackedRows = (IList)computeRows.Invoke(null, new object?[] { stackDevs })!;
+        Check(stackedRows.Count == 2 && ((IList)stackedRows[0]!).Count == 2 && ((IList)stackedRows[1]!).Count == 1,
+              "Vertically stacked layout must group cleanly into compact top and bottom rows");
 
-        // Verify AddDeckSection builds vector logo buttons with ZERO device text names inside tiles.
+        // Verify AddDeckSection builds equal-size, transparent-background diagram buttons with zero text names inside.
         var apply = bridgeType.GetMethod("ApplySnapshot", flags)!;
         apply.Invoke(null, new object[] { ordSnap });
         var deckHost = new System.Windows.Controls.StackPanel();
-        bridgeType.GetMethod("AddDeckSection", flags)!.Invoke(null, new object[] { deckHost });
+        bridgeType.GetMethod("AddDeckSection", flags)!.Invoke(null, new object?[] { deckHost });
         var textsInSwitchButtons = new List<string>();
         var switchButtons = new List<System.Windows.Controls.Button>();
         void Walk(DependencyObject obj, bool insideTileBtn)
         {
-            if (obj is System.Windows.Controls.Button b && b.Content is System.Windows.Controls.Viewbox)
+            if (obj is System.Windows.Controls.Button b && b.Content is System.Windows.Controls.Grid)
             {
                 switchButtons.Add(b);
                 insideTileBtn = true;
@@ -518,8 +509,10 @@ internal static class Program
             }
         }
         Walk(deckHost, false);
-        Check(switchButtons.Count == 3 && textsInSwitchButtons.Count == 0,
-              $"Deck device tiles must render monitor/mobile logos ONLY with zero device text names (buttons={switchButtons.Count}, texts={textsInSwitchButtons.Count})");
+        Check(switchButtons.Count == 3 && textsInSwitchButtons.Count == 0 &&
+              switchButtons.All(b => Equals(b.Background, System.Windows.Media.Brushes.Transparent)) &&
+              switchButtons.All(b => Math.Abs(b.Width - switchButtons[0].Width) < 0.01 && Math.Abs(b.Height - switchButtons[0].Height) < 0.01),
+              $"Deck device buttons must use equal-size no-background monitor/mobile diagrams with zero device text (buttons={switchButtons.Count}, texts={textsInSwitchButtons.Count})");
     }
 
     private static void TestGracefulExitParentOwnedChildV379(Assembly asm)

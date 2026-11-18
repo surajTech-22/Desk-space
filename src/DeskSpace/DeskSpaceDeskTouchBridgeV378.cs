@@ -50,17 +50,6 @@ internal sealed record DeskTouchBridgeSnapshotV378(
     bool HasAnyKnownNotificationCount,
     IReadOnlyList<DeskTouchDeviceItemV378> Devices);
 
-internal sealed record DeckDevicePlacementV378(
-    DeskTouchDeviceItemV378 Device,
-    double X,
-    double Y,
-    double Width,
-    double Height,
-    double UnitX,
-    double UnitTopY,
-    double UnitWidth,
-    double UnitHeight);
-
 internal static class DeskSpaceDeskTouchBridgeV378
 {
     internal const string PipeName = "DeskTouch.Vision.DeckBridge.V1";
@@ -300,250 +289,131 @@ internal static class DeskSpaceDeskTouchBridgeV378
         });
     }
 
-    internal static IReadOnlyList<DeckDevicePlacementV378> ComputeDeckPlacements(
-        IReadOnlyList<DeskTouchDeviceItemV378> devices,
-        double canvasWidth,
-        out double canvasHeight)
+    internal static IReadOnlyList<IReadOnlyList<DeskTouchDeviceItemV378>> ComputeCompactRows(
+        IReadOnlyList<DeskTouchDeviceItemV378> devices)
     {
-        canvasHeight = 0;
         if (devices == null || devices.Count == 0)
-            return Array.Empty<DeckDevicePlacementV378>();
+            return Array.Empty<IReadOnlyList<DeskTouchDeviceItemV378>>();
 
-        const double padX = 8.0;
-        const double padTop = 6.0;
-        const double padBottom = 6.0;
-        const double badgeHeadroom = 20.0;
-        const double payFootroom = 18.0;
-        const double minGap = 6.0;
+        var ordered = devices
+            .OrderBy(d => d.ArrangementOrder)
+            .ThenBy(d => Math.Round(d.LayoutY + (d.LayoutH * 0.5), 2))
+            .ThenBy(d => d.LayoutX)
+            .ToArray();
 
-        double usableW = Math.Max(140.0, canvasWidth - (2.0 * padX));
-        bool hasNormalized = devices.All(d => d.LayoutW > 0.001 && d.LayoutH > 0.001);
+        bool hasBounds = ordered.All(d => d.LayoutW > 0.001 && d.LayoutH > 0.001);
+        if (!hasBounds || ordered.Length <= 1)
+            return new IReadOnlyList<DeskTouchDeviceItemV378>[] { ordered };
 
-        var items = new DeskTouchDeviceItemV378[devices.Count];
-        var rawRects = new Rect[devices.Count];
-        for (int i = 0; i < devices.Count; i++)
+        var byRow = ordered
+            .OrderBy(d => d.LayoutY + (d.LayoutH * 0.5))
+            .ThenBy(d => d.LayoutX)
+            .ToArray();
+
+        var rows = new List<IReadOnlyList<DeskTouchDeviceItemV378>>();
+        var current = new List<DeskTouchDeviceItemV378>();
+        double rowMinY = 0;
+        double rowMaxY = 0;
+
+        foreach (var d in byRow)
         {
-            items[i] = devices[i];
-            if (hasNormalized)
+            double top = d.LayoutY;
+            double bottom = d.LayoutY + d.LayoutH;
+            if (current.Count == 0)
             {
-                rawRects[i] = new Rect(items[i].LayoutX, items[i].LayoutY, items[i].LayoutW, items[i].LayoutH);
+                current.Add(d);
+                rowMinY = top;
+                rowMaxY = bottom;
             }
             else
             {
-                bool isMobile = string.Equals(items[i].Platform, "Android", StringComparison.OrdinalIgnoreCase);
-                double rw = isMobile ? 0.19 : 0.34;
-                double rh = isMobile ? 0.32 : 0.22;
-                double rx = i * (rw + 0.06);
-                double ry = (0.34 - rh) * 0.5;
-                rawRects[i] = new Rect(rx, Math.Max(0, ry), rw, rh);
-            }
-        }
-
-        // Preserve stable spatial ordering from DeskTouch arrangement metadata.
-        var orderIdx = Enumerable.Range(0, items.Length)
-            .OrderBy(i => items[i].ArrangementOrder)
-            .ThenBy(i => Math.Round(rawRects[i].Y, 2))
-            .ThenBy(i => rawRects[i].X)
-            .ToArray();
-
-        double minX = rawRects.Min(r => r.Left);
-        double maxX = rawRects.Max(r => r.Right);
-        double minY = rawRects.Min(r => r.Top);
-        double maxY = rawRects.Max(r => r.Bottom);
-        double spanX = Math.Max(0.05, maxX - minX);
-        double spanY = Math.Max(0.05, maxY - minY);
-
-        // Scale proportionally to canvas width while keeping vertical stacks compact.
-        double scale = usableW / spanX;
-        if (spanY * scale > 130.0)
-            scale = 130.0 / spanY;
-
-        int n = orderIdx.Length;
-        var sortedItems = new DeskTouchDeviceItemV378[n];
-        var bx = new double[n];
-        var by = new double[n];
-        var bw = new double[n];
-        var bh = new double[n];
-        var hasPay = new bool[n];
-        var normCx = new double[n];
-        var normCy = new double[n];
-
-        for (int k = 0; k < n; k++)
-        {
-            int src = orderIdx[k];
-            var dev = items[src];
-            var nr = rawRects[src];
-            sortedItems[k] = dev;
-
-            bool isMobile = !dev.IsLocal && string.Equals(dev.Platform, "Android", StringComparison.OrdinalIgnoreCase);
-            hasPay[k] = isMobile && dev.SupportsInput;
-
-            double minTileW = isMobile ? 32.0 : 48.0;
-            double maxTileW = isMobile ? 46.0 : 88.0;
-            double minTileH = isMobile ? 44.0 : 32.0;
-            double maxTileH = isMobile ? 64.0 : 54.0;
-
-            double w = Math.Clamp(nr.Width * scale, minTileW, maxTileW);
-            double h = Math.Clamp(nr.Height * scale, minTileH, maxTileH);
-            if (isMobile && h < w + 8.0)
-                h = Math.Clamp(w + 12.0, minTileH, maxTileH);
-
-            double cx = (nr.Left + (nr.Width * 0.5) - minX) * scale;
-            double cy = (nr.Top + (nr.Height * 0.5) - minY) * scale;
-            normCx[k] = nr.Left + (nr.Width * 0.5);
-            normCy[k] = nr.Top + (nr.Height * 0.5);
-
-            bw[k] = w;
-            bh[k] = h;
-            bx[k] = cx - (w * 0.5);
-            by[k] = cy - (h * 0.5);
-        }
-
-        // Resolve overlaps iteratively without inverting relative left/right or top/bottom order.
-        for (int pass = 0; pass < 4; pass++)
-        {
-            for (int i = 0; i < n; i++)
-            {
-                double iLeft = bx[i] - Math.Max(0, (HasPayWidth(hasPay[i], bw[i]) - bw[i]) * 0.5);
-                double iRight = iLeft + HasPayWidth(hasPay[i], bw[i]);
-                double iTop = by[i] - badgeHeadroom;
-                double iBottom = by[i] + bh[i] + (hasPay[i] ? payFootroom : 0.0);
-
-                for (int j = i + 1; j < n; j++)
+                double overlap = Math.Min(rowMaxY, bottom) - Math.Max(rowMinY, top);
+                double minH = Math.Max(0.01, Math.Min(rowMaxY - rowMinY, d.LayoutH));
+                if (overlap > minH * 0.30)
                 {
-                    double jUnitW = HasPayWidth(hasPay[j], bw[j]);
-                    double jLeft = bx[j] - Math.Max(0, (jUnitW - bw[j]) * 0.5);
-                    double jRight = jLeft + jUnitW;
-                    double jTop = by[j] - badgeHeadroom;
-                    double jBottom = by[j] + bh[j] + (hasPay[j] ? payFootroom : 0.0);
-
-                    bool overlapX = jLeft < iRight + minGap && iLeft < jRight + minGap;
-                    bool overlapY = jTop < iBottom + minGap && iTop < jBottom + minGap;
-                    if (!overlapX || !overlapY)
-                        continue;
-
-                    double ndx = Math.Abs(normCx[j] - normCx[i]);
-                    double ndy = Math.Abs(normCy[j] - normCy[i]);
-                    if (ndx >= ndy)
-                    {
-                        double shift = (iRight + minGap) - jLeft;
-                        bx[j] += shift;
-                    }
-                    else
-                    {
-                        double shift = (iBottom + minGap) - jTop;
-                        by[j] += shift;
-                    }
+                    current.Add(d);
+                    rowMinY = Math.Min(rowMinY, top);
+                    rowMaxY = Math.Max(rowMaxY, bottom);
+                }
+                else
+                {
+                    rows.Add(current.OrderBy(x => x.LayoutX).ToArray());
+                    current = new List<DeskTouchDeviceItemV378> { d };
+                    rowMinY = top;
+                    rowMaxY = bottom;
                 }
             }
         }
+        if (current.Count > 0)
+            rows.Add(current.OrderBy(x => x.LayoutX).ToArray());
 
-        // Normalize coordinates to fit inside [padX, canvasWidth - padX] centered nicely.
-        double totalMinX = double.MaxValue;
-        double totalMaxX = double.MinValue;
-        for (int i = 0; i < n; i++)
-        {
-            double uw = HasPayWidth(hasPay[i], bw[i]);
-            double uLeft = bx[i] - Math.Max(0, (uw - bw[i]) * 0.5);
-            if (uLeft < totalMinX) totalMinX = uLeft;
-            if (uLeft + uw > totalMaxX) totalMaxX = uLeft + uw;
-        }
-        double curSpanW = Math.Max(1.0, totalMaxX - totalMinX);
-        if (curSpanW > usableW)
-        {
-            double fitScale = usableW / curSpanW;
-            for (int i = 0; i < n; i++)
-            {
-                double uw = HasPayWidth(hasPay[i], bw[i]);
-                double uLeft = bx[i] - Math.Max(0, (uw - bw[i]) * 0.5);
-                double centerOffset = (uLeft - totalMinX) * fitScale;
-                bw[i] = Math.Max(26.0, bw[i] * fitScale);
-                double nextUw = HasPayWidth(hasPay[i], bw[i]);
-                bx[i] = centerOffset + Math.Max(0, (nextUw - bw[i]) * 0.5);
-            }
-            totalMinX = 0;
-            totalMaxX = usableW;
-        }
-
-        double offsetX = padX + Math.Max(0.0, (usableW - (totalMaxX - totalMinX)) * 0.5) - totalMinX;
-        double minUnitTop = Enumerable.Range(0, n).Min(i => by[i] - badgeHeadroom);
-        double offsetY = padTop - minUnitTop;
-
-        double maxBottom = 0;
-        var result = new List<DeckDevicePlacementV378>(n);
-        for (int i = 0; i < n; i++)
-        {
-            double tx = Math.Round(bx[i] + offsetX, 1);
-            double ty = Math.Round(by[i] + offsetY, 1);
-            double uw = Math.Round(HasPayWidth(hasPay[i], bw[i]), 1);
-            double ux = Math.Round(tx - Math.Max(0, (uw - bw[i]) * 0.5), 1);
-            double utop = Math.Round(ty - badgeHeadroom, 1);
-            double uh = Math.Round(badgeHeadroom + bh[i] + (hasPay[i] ? payFootroom : 0.0), 1);
-            if (utop + uh > maxBottom) maxBottom = utop + uh;
-
-            result.Add(new DeckDevicePlacementV378(
-                sortedItems[i],
-                tx,
-                ty,
-                Math.Round(bw[i], 1),
-                Math.Round(bh[i], 1),
-                ux,
-                utop,
-                uw,
-                uh));
-        }
-
-        canvasHeight = Math.Round(maxBottom + padBottom, 1);
-        return result;
+        return rows;
     }
 
-    private static double HasPayWidth(bool hasPay, double tileWidth) =>
-        Math.Max(tileWidth, hasPay ? 46.0 : 30.0);
-
-    private static FrameworkElement CreateDeviceLogo(bool isMobile, double tileWidth, double tileHeight)
+    private static ControlTemplate CreateBorderlessTemplate()
     {
-        var white = new SolidColorBrush(WpfColor.FromRgb(241, 246, 255));
+        var template = new ControlTemplate(typeof(WpfButton));
+        var root = new FrameworkElementFactory(typeof(Border));
+        root.SetValue(Border.BackgroundProperty, WpfBrushes.Transparent);
+        root.SetValue(Border.SnapsToDevicePixelsProperty, true);
+        var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+        cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, WpfHorizontalAlignment.Center);
+        cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+        root.AppendChild(cp);
+        template.VisualTree = root;
+        return template;
+    }
+
+    private static FrameworkElement CreateDeviceLogo(bool isMobile, WpfColor strokeColor)
+    {
+        var strokeBrush = new SolidColorBrush(strokeColor);
+        var host = new Grid
+        {
+            Width = 22,
+            Height = 20,
+            HorizontalAlignment = WpfHorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            SnapsToDevicePixels = true
+        };
+
         if (isMobile)
         {
             var body = new Border
             {
-                Width = 12,
-                Height = 19,
-                CornerRadius = new CornerRadius(2.4),
-                BorderThickness = new Thickness(1.6),
-                BorderBrush = white,
-                Background = new SolidColorBrush(WpfColor.FromArgb(48, 255, 255, 255)),
+                Width = 11,
+                Height = 18,
+                CornerRadius = new CornerRadius(2.2),
+                BorderThickness = new Thickness(1.5),
+                BorderBrush = strokeBrush,
+                Background = WpfBrushes.Transparent,
+                HorizontalAlignment = WpfHorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
                 SnapsToDevicePixels = true
             };
             var inner = new Grid();
             inner.Children.Add(new Border
             {
-                Width = 4.6,
-                Height = 1.4,
-                CornerRadius = new CornerRadius(0.7),
-                Background = white,
+                Width = 3.8,
+                Height = 1.2,
+                CornerRadius = new CornerRadius(0.6),
+                Background = strokeBrush,
                 HorizontalAlignment = WpfHorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 1.8, 0, 0)
             });
             inner.Children.Add(new Border
             {
-                Width = 5.4,
-                Height = 1.3,
-                CornerRadius = new CornerRadius(0.65),
-                Background = new SolidColorBrush(WpfColor.FromArgb(205, 241, 246, 255)),
+                Width = 4.5,
+                Height = 1.2,
+                CornerRadius = new CornerRadius(0.6),
+                Background = strokeBrush,
                 HorizontalAlignment = WpfHorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(0, 0, 0, 1.8)
+                Margin = new Thickness(0, 0, 0, 1.6)
             });
             body.Child = inner;
-            return new Viewbox
-            {
-                Stretch = Stretch.Uniform,
-                MaxWidth = Math.Max(10.0, tileWidth - 10.0),
-                MaxHeight = Math.Max(14.0, tileHeight - 10.0),
-                Child = body
-            };
+            host.Children.Add(body);
+            return host;
         }
 
         var monitor = new StackPanel
@@ -553,36 +423,31 @@ internal static class DeskSpaceDeskTouchBridgeV378
         };
         monitor.Children.Add(new Border
         {
-            Width = 20,
-            Height = 13,
-            CornerRadius = new CornerRadius(2),
-            BorderThickness = new Thickness(1.7),
-            BorderBrush = white,
-            Background = new SolidColorBrush(WpfColor.FromArgb(44, 255, 255, 255)),
+            Width = 18,
+            Height = 12,
+            CornerRadius = new CornerRadius(1.8),
+            BorderThickness = new Thickness(1.5),
+            BorderBrush = strokeBrush,
+            Background = WpfBrushes.Transparent,
             SnapsToDevicePixels = true
         });
         monitor.Children.Add(new Border
         {
-            Width = 3,
-            Height = 2.4,
-            Background = white,
+            Width = 2.0,
+            Height = 2.2,
+            Background = strokeBrush,
             HorizontalAlignment = WpfHorizontalAlignment.Center
         });
         monitor.Children.Add(new Border
         {
-            Width = 10,
-            Height = 1.8,
-            CornerRadius = new CornerRadius(0.9),
-            Background = white,
+            Width = 9.0,
+            Height = 1.5,
+            CornerRadius = new CornerRadius(0.75),
+            Background = strokeBrush,
             HorizontalAlignment = WpfHorizontalAlignment.Center
         });
-        return new Viewbox
-        {
-            Stretch = Stretch.Uniform,
-            MaxWidth = Math.Max(14.0, tileWidth - 10.0),
-            MaxHeight = Math.Max(12.0, tileHeight - 8.0),
-            Child = monitor
-        };
+        host.Children.Add(monitor);
+        return host;
     }
 
     internal static void AddDeckSection(StackPanel list)
@@ -592,7 +457,7 @@ internal static class DeskSpaceDeskTouchBridgeV378
             return;
 
         var container = new StackPanel();
-        var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 5) };
+        var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 4) };
 
         var rightAction = new WpfButton
         {
@@ -636,121 +501,135 @@ internal static class DeskSpaceDeskTouchBridgeV378
 
         if (snap.Devices.Count > 0)
         {
-            const double arrangementWidth = 258.0;
-            var placements = ComputeDeckPlacements(snap.Devices, arrangementWidth, out double arrangementHeight);
-            var canvas = new Canvas
+            var rows = ComputeCompactRows(snap.Devices);
+            var diagram = new StackPanel
             {
-                Width = arrangementWidth,
-                Height = Math.Max(64.0, arrangementHeight),
-                ClipToBounds = false
+                HorizontalAlignment = WpfHorizontalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 1)
             };
+            var borderlessTemplate = CreateBorderlessTemplate();
 
-            foreach (var p in placements)
+            for (int r = 0; r < rows.Count; r++)
             {
-                var device = p.Device;
-                bool active = device.IsControlling || (device.IsSelected && device.IsLocal);
-                bool isMobile = !device.IsLocal && string.Equals(device.Platform, "Android", StringComparison.OrdinalIgnoreCase);
-
-                var unit = new StackPanel
+                var rowItems = rows[r];
+                var rowPanel = new StackPanel
                 {
-                    Width = p.UnitWidth,
-                    HorizontalAlignment = WpfHorizontalAlignment.Center
-                };
-
-                bool hasUnread = device.NotificationCount > 0;
-                var badge = new Border
-                {
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(6, 1, 6, 1),
-                    Margin = new Thickness(0, 0, 0, 3),
+                    Orientation = System.Windows.Controls.Orientation.Horizontal,
                     HorizontalAlignment = WpfHorizontalAlignment.Center,
-                    Background = new SolidColorBrush(hasUnread
-                        ? WpfColor.FromRgb(56, 189, 248)
-                        : WpfColor.FromRgb(47, 64, 96)),
-                    ToolTip = device.NotificationCount >= 0
-                        ? $"{device.NotificationCount} active notifications"
-                        : "Notification count unavailable"
+                    Margin = r > 0 ? new Thickness(0, 4, 0, 0) : new Thickness(0)
                 };
-                badge.Child = new TextBlock
-                {
-                    Text = FormatCountBadge(device.NotificationCount),
-                    FontSize = 9.0,
-                    FontWeight = FontWeights.Bold,
-                    FontFamily = new WpfFontFamily("Segoe UI"),
-                    Foreground = new SolidColorBrush(hasUnread
-                        ? WpfColor.FromRgb(9, 17, 30)
-                        : WpfColor.FromRgb(220, 232, 248)),
-                    HorizontalAlignment = WpfHorizontalAlignment.Center
-                };
-                unit.Children.Add(badge);
 
-                var fillColor = device.IsLocal
-                    ? WpfColor.FromRgb(66, 119, 203)
-                    : WpfColor.FromRgb(54, 136, 131);
-                var borderColor = active
-                    ? WpfColor.FromRgb(56, 189, 248)
-                    : (device.IsLocal ? WpfColor.FromRgb(126, 174, 245) : WpfColor.FromRgb(106, 179, 175));
+                for (int i = 0; i < rowItems.Count; i++)
+                {
+                    var device = rowItems[i];
+                    bool active = device.IsControlling || (device.IsSelected && device.IsLocal);
+                    bool isMobile = !device.IsLocal && string.Equals(device.Platform, "Android", StringComparison.OrdinalIgnoreCase);
 
-                var btn = new WpfButton
-                {
-                    Width = p.Width,
-                    Height = p.Height,
-                    MinWidth = p.Width,
-                    MinHeight = p.Height,
-                    Padding = new Thickness(0),
-                    HorizontalAlignment = WpfHorizontalAlignment.Center,
-                    IsEnabled = device.SupportsInput,
-                    Cursor = device.SupportsInput ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
-                    Background = new SolidColorBrush(fillColor),
-                    BorderBrush = new SolidColorBrush(borderColor),
-                    BorderThickness = new Thickness(active ? 1.8 : 1.0),
-                    ToolTip = device.IsLocal
-                        ? $"Return mouse & keyboard to this computer ({device.Name})"
-                        : $"{device.Name} ({device.Platform}) · {device.StatusText}",
-                    Content = CreateDeviceLogo(isMobile, p.Width, p.Height)
-                };
-                var captured = device;
-                btn.Click += (_, _) =>
-                {
-                    if (captured.IsLocal) ReturnLocalAsync();
-                    else if (captured.SupportsInput) SwitchDeviceAsync(captured.Id);
-                };
-                unit.Children.Add(btn);
-
-                if (isMobile && device.SupportsInput)
-                {
-                    var pay = new WpfButton
+                    var unit = new StackPanel
                     {
-                        Content = "Pay Off",
-                        FontSize = 8.5,
-                        Padding = new Thickness(4, 1, 4, 1),
-                        Margin = new Thickness(0, 3, 0, 0),
+                        Width = 34,
                         HorizontalAlignment = WpfHorizontalAlignment.Center,
-                        Foreground = new SolidColorBrush(WpfColor.FromRgb(251, 207, 232)),
-                        Background = new SolidColorBrush(WpfColor.FromRgb(72, 34, 54)),
-                        BorderBrush = new SolidColorBrush(WpfColor.FromRgb(219, 92, 156)),
-                        BorderThickness = new Thickness(1),
-                        Cursor = System.Windows.Input.Cursors.Hand,
-                        ToolTip = "Pause phone Accessibility for payments"
+                        Margin = i > 0 ? new Thickness(6, 0, 0, 0) : new Thickness(0)
                     };
-                    pay.Click += (_, _) => TogglePayModeAsync(captured.Id);
-                    unit.Children.Add(pay);
+
+                    bool hasUnread = device.NotificationCount > 0;
+                    var badge = new Border
+                    {
+                        CornerRadius = new CornerRadius(7),
+                        Padding = new Thickness(5, 0.5, 5, 0.5),
+                        Margin = new Thickness(0, 0, 0, 2),
+                        HorizontalAlignment = WpfHorizontalAlignment.Center,
+                        Background = new SolidColorBrush(hasUnread
+                            ? WpfColor.FromRgb(56, 189, 248)
+                            : WpfColor.FromRgb(47, 64, 96)),
+                        ToolTip = device.NotificationCount >= 0
+                            ? $"{device.NotificationCount} active notifications"
+                            : "Notification count unavailable"
+                    };
+                    badge.Child = new TextBlock
+                    {
+                        Text = FormatCountBadge(device.NotificationCount),
+                        FontSize = 8.5,
+                        FontWeight = FontWeights.Bold,
+                        FontFamily = new WpfFontFamily("Segoe UI"),
+                        Foreground = new SolidColorBrush(hasUnread
+                            ? WpfColor.FromRgb(9, 17, 30)
+                            : WpfColor.FromRgb(220, 232, 248)),
+                        HorizontalAlignment = WpfHorizontalAlignment.Center
+                    };
+                    unit.Children.Add(badge);
+
+                    var strokeColor = active
+                        ? WpfColor.FromRgb(56, 189, 248)
+                        : WpfColor.FromRgb(212, 224, 244);
+
+                    var btn = new WpfButton
+                    {
+                        Width = 26,
+                        Height = 22,
+                        MinWidth = 26,
+                        MinHeight = 22,
+                        Padding = new Thickness(0),
+                        Background = WpfBrushes.Transparent,
+                        BorderBrush = WpfBrushes.Transparent,
+                        BorderThickness = new Thickness(0),
+                        Template = borderlessTemplate,
+                        Focusable = false,
+                        HorizontalAlignment = WpfHorizontalAlignment.Center,
+                        IsEnabled = device.SupportsInput,
+                        Cursor = device.SupportsInput ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
+                        ToolTip = device.IsLocal
+                            ? $"Return mouse & keyboard to this computer ({device.Name})"
+                            : $"{device.Name} ({device.Platform}) · {device.StatusText}",
+                        Content = CreateDeviceLogo(isMobile, strokeColor)
+                    };
+                    var captured = device;
+                    btn.Click += (_, _) =>
+                    {
+                        if (captured.IsLocal) ReturnLocalAsync();
+                        else if (captured.SupportsInput) SwitchDeviceAsync(captured.Id);
+                    };
+                    unit.Children.Add(btn);
+
+                    unit.Children.Add(new Border
+                    {
+                        Width = 12,
+                        Height = 2,
+                        CornerRadius = new CornerRadius(1),
+                        Margin = new Thickness(0, 1, 0, 0),
+                        HorizontalAlignment = WpfHorizontalAlignment.Center,
+                        Background = active
+                            ? new SolidColorBrush(WpfColor.FromRgb(56, 189, 248))
+                            : WpfBrushes.Transparent
+                    });
+
+                    if (isMobile && device.SupportsInput)
+                    {
+                        var pay = new WpfButton
+                        {
+                            Content = "Pay Off",
+                            FontSize = 8,
+                            Padding = new Thickness(4, 0.5, 4, 0.5),
+                            Margin = new Thickness(0, 2, 0, 0),
+                            HorizontalAlignment = WpfHorizontalAlignment.Center,
+                            Foreground = new SolidColorBrush(WpfColor.FromRgb(251, 207, 232)),
+                            Background = WpfBrushes.Transparent,
+                            BorderBrush = new SolidColorBrush(WpfColor.FromRgb(219, 92, 156)),
+                            BorderThickness = new Thickness(1),
+                            Cursor = System.Windows.Input.Cursors.Hand,
+                            ToolTip = "Pause phone Accessibility for payments"
+                        };
+                        pay.Click += (_, _) => TogglePayModeAsync(captured.Id);
+                        unit.Children.Add(pay);
+                    }
+
+                    rowPanel.Children.Add(unit);
                 }
 
-                Canvas.SetLeft(unit, p.UnitX);
-                Canvas.SetTop(unit, p.UnitTopY);
-                canvas.Children.Add(unit);
+                diagram.Children.Add(rowPanel);
             }
 
-            container.Children.Add(new Border
-            {
-                CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(WpfColor.FromRgb(22, 25, 31)),
-                BorderBrush = new SolidColorBrush(WpfColor.FromRgb(42, 49, 61)),
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(2),
-                Child = canvas
-            });
+            container.Children.Add(diagram);
         }
 
         list.Children.Add(new Border
