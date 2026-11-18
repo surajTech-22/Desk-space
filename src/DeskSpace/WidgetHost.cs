@@ -2080,6 +2080,8 @@ public sealed class WidgetShellWindow : Window
             dockedManually=false;
             edgeHandle.Hide();
         }
+        if(WindowState==WindowState.Minimized)WindowState=WindowState.Normal;
+        if(!DeskSpaceMultiMonitorV151.IsSatellite(this))KeepOnVisibleDesktop();
         Show();Topmost=true;
         if (!ringExpanded) BuildCompact(); // resume paused weather animation
     }

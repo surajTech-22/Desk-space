@@ -2011,7 +2011,21 @@ Swap-R377 @'
     private static void OnClipsChangedV376(){RefreshViews();}
 '@ @'
     private static void OnClipsChangedV376(){RefreshViews();}
-    private static void OnDeskTouchChangedV378(){RefreshViews();}
+    private static void OnDeskTouchChangedV378()
+    {
+        foreach(var view in Views.ToArray())
+        {
+            if(view.disposed)continue;
+            try
+            {
+                view.host.Dispatcher.BeginInvoke(new Action(()=>
+                {
+                    if(!view.disposed)view.Render();
+                }));
+            }
+            catch{}
+        }
+    }
 '@ 'V378 Deck device bridge change handler'
 
 Swap-R377 @'
@@ -2089,6 +2103,16 @@ Swap-R377 @'
 Finish-Patch $deckPath
 
 Begin-Patch $hostPath
+Swap-R377 @'
+        Show();Topmost=true;
+        if (!ringExpanded) BuildCompact(); // resume paused weather animation
+'@ @'
+        if(WindowState==WindowState.Minimized)WindowState=WindowState.Normal;
+        if(!DeskSpaceMultiMonitorV151.IsSatellite(this))KeepOnVisibleDesktop();
+        Show();Topmost=true;
+        if (!ringExpanded) BuildCompact(); // resume paused weather animation
+'@ 'V378 restore normal WindowState and bounds inside Reveal'
+
 Swap-R377 @'
         menu.Items.Add("About / Version", null, (_, _) => Dispatcher.Invoke(ShowAbout));
         menu.Items.Add("Open DeskSpace", null, (_, _) => Dispatcher.Invoke(OpenMain));

@@ -451,6 +451,7 @@ internal static class Program
         string widgetSource = File.ReadAllText("DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs").Replace("\r\n", "\n");
         Check(deckSource.Contains("DeskSpaceDeskTouchBridgeV378.AddDeckSection(list);") &&
               deckSource.Contains("DeskSpaceDeskTouchBridgeV378.Changed+=OnDeskTouchChangedV378;") &&
+              deckSource.Contains("view.host.Dispatcher.BeginInvoke") &&
               widgetSource.Contains("DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);"),
               "DeskSpace Deck and tray must wire DeskSpaceDeskTouchBridgeV378 switcher and counts");
     }

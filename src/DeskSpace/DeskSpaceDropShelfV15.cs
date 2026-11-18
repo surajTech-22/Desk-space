@@ -1184,7 +1184,21 @@ internal sealed class DeskSpaceDropShelfV15 : IDisposable
     // Excel suggestion state is independent of Running Apps expansion.
     private bool excelClipsExpandedV376=true;
     private static void OnClipsChangedV376(){RefreshViews();}
-    private static void OnDeskTouchChangedV378(){RefreshViews();}
+    private static void OnDeskTouchChangedV378()
+    {
+        foreach(var view in Views.ToArray())
+        {
+            if(view.disposed)continue;
+            try
+            {
+                view.host.Dispatcher.BeginInvoke(new Action(()=>
+                {
+                    if(!view.disposed)view.Render();
+                }));
+            }
+            catch{}
+        }
+    }
     private bool excelExpandedV122=true,excelRefreshingV122;
     private readonly List<(Guid Id,string Name,int Writable)> excelMatchesV122=new();
     private readonly DispatcherTimer excelSuggestTimerV122=new(){
