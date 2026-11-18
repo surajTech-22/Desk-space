@@ -529,7 +529,7 @@ internal static class Program
 
         // Reproduce 2-monitor WidgetHost layout where replica.Closing closes replicaEdgeHandle.
         var main = new Window { Width = 90, Height = 80, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
-        var mainHandle = new Window { Width = 40, Height = 40, ShowInTaskbar = false, WindowStyle = WindowStyle.None, Owner = main };
+        var mainHandle = new Window { Width = 40, Height = 40, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
         var replica = new Window { Width = 90, Height = 80, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
         var replicaHandle = new Window { Width = 40, Height = 40, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
         bool handleClosed = false;
@@ -537,6 +537,7 @@ internal static class Program
         replica.Closing += (_, _) => { if (!handleClosed) replicaHandle.Close(); };
 
         main.Show();
+        mainHandle.Owner = main;
         mainHandle.Show();
         replica.Show();
         replicaHandle.Show();
