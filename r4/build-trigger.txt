@@ -1,0 +1,1 @@
+Build and validate small collapsed donut, press-and-hold ring selector, release-to-activate, and outside-circle drag-only behavior.
