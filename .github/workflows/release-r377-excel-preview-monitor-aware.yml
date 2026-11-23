@@ -4,6 +4,7 @@ on:
     branches: [fix/r377-excel-preview-monitor-aware]
     paths:
       - .github/workflows/release-r377-excel-preview-monitor-aware.yml
+      - r380/**
       - r377/**
       - r376/**
       - r375/**
@@ -295,6 +296,8 @@ jobs:
           }
           & ./r377/apply-r377.ps1
           if(!$?){throw 'R377 Excel paste, clipboard hover preview and monitor-aware patch failed'}
+          & ./r380/apply-r380.ps1
+          if(!$?){throw 'R380 Modern Suite and Pinned App Compatible Files patch failed'}
           $circular=Get-Content 'DeskSpace_Windows_R1/DeskSpace/WidgetHost.cs' -Raw
           foreach($part in @('"Clock & Weather", "Stopwatch", "Settings"',
               'Width=Height=diameter;','Width=380,Height=380',
@@ -368,11 +371,11 @@ jobs:
           if($latest.Major -ne 1 -or $latest.Minor -ne 5){
               throw 'Unexpected DeskSpace stable version family'
           }
-          $nextBuild=1150
+          $nextBuild=1151
           $version="1.5.$nextBuild"
           $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
           if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
-          foreach($tag in @('v1.5.1150','tester-v1.5.1150')){
+          foreach($tag in @('v1.5.1151','tester-v1.5.1151')){
             if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
               throw ('Refuse to overwrite existing release: '+$tag)
             }
@@ -553,6 +556,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'R376 Excel deck multiwidget regression'}
           dotnet run --project 'r377/Tests/ExcelPreviewMonitorTests.csproj' -c Release
           if($LASTEXITCODE -ne 0){throw 'R377 Excel paste, preview and monitor-aware widget tests failed'}
+          dotnet run --project 'r380/Tests/ModernV380Tests.csproj' -c Release
+          if($LASTEXITCODE -ne 0){throw 'R380 Modern Suite and Pinned App Compatible Files tests failed'}
           Write-Host 'R366 shipping runtime and clock-cache tests PASS'
       - name: Install Inno Setup
         shell: pwsh
@@ -604,11 +609,11 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1150: adds DeskTouch Vision launcher fallback and header double-click open alongside v0.3.83 ecosystem controls."
+              $notes="DeskSpace 1.5.1151: Modern Suite (Mica/Acrylic Bento Dashboard, Alt+Space Command Bar, Screen Snip & Table OCR, Donut Focus Ring, Vault Pro Hello/TOTP/Backup, Excel Pro GSTIN/Rollback, Window Snap Zones, Offline QR/EXIF/PDF/ZIP Toolkit, Opt-In Local AI, and Pinned App System-Wide Compatible Files for Tally, Excel & all pinned apps)."
               if($entry.Pre){
-                  gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Excel Preview & Monitor-Aware Widgets" --notes $notes
+                  gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Modern Suite & Pinned App Files" --notes $notes
               }else{
-                  gh release create $tag @assets -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Stable Excel Preview & Monitor-Aware Widgets" --notes $notes
+                  gh release create $tag @assets -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Stable Modern Suite & Pinned App Files" --notes $notes
               }
               if($LASTEXITCODE -ne 0){throw "Failed to publish $tag"}
           }
@@ -626,14 +631,14 @@ jobs:
               }
           }
           Write-Host "R377 Excel Preview & Monitor-Aware Widgets release SUCCESS: same SHA256 installer published to Tester and Stable."
-      - name: Send fresh SHA256-verified v1.5.1150 notification hints to both installed channels
+      - name: Send fresh SHA256-verified v1.5.1151 notification hints to both installed channels
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
-          foreach($hint in @('stable|v1.5.1150','tester|tester-v1.5.1150')){
+          foreach($hint in @('stable|v1.5.1151','tester|tester-v1.5.1151')){
             try{
-              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1150 available' }
+              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1151 available' }
               if($response.event -ne 'message'){throw ('Relay rejected '+$hint)}
               Write-Host ('ACKNOWLEDGED official release hint: '+$hint)
             }catch{

@@ -199,6 +199,8 @@ public partial class MainWindow
         Add("Diagnostics and safe export",
             "Open Action Palette, select Export diagnostics, then confirm.",
             ()=>DeskSpaceActionPaletteV197.Show(this,false));
+        Section("Modern Suite");
+        DeskSpaceModernHubV380.AddFeatureHubButtons(Add);
         var explanation=new TextBlock
         {
             Text="The widget donut, Deck and main Workspace still share their "+

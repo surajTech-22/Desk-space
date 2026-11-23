@@ -391,6 +391,7 @@ public sealed class WidgetShellWindow : Window
         menu.Items.Add("Excel Clipboard shelf",null,(_,_)=>Dispatcher.Invoke(
             DeskSpaceExcelClipboardV39.ShowActive));
         DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);
+        DeskSpaceModernHubV380.AttachWidgetHost(this, menu);
         menu.Items.Add("About / Version", null, (_, _) => Dispatcher.Invoke(ShowAbout));
         menu.Items.Add("Open DeskSpace", null, (_, _) => Dispatcher.Invoke(OpenMain));
         menu.Items.Add("Exit widget", null, (_, _) => Dispatcher.Invoke(
@@ -1319,6 +1320,7 @@ public sealed class WidgetShellWindow : Window
         canvas.Children.Add(content);
         UpdateCenter();
         ApplyWeatherContrast();
+        DeskSpaceFocusRingV380.AttachToDonutCanvas(canvas);
     }
 
     // R231: no implicit 22-pixel edge attraction while dragging. The

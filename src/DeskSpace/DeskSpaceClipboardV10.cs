@@ -62,6 +62,7 @@ public static class DeskSpaceClipboardV10
         try
         {
             lastContent=secret;
+            DeskSpaceRichClipboardV380.NotifySensitiveCopy(secret);
             Clipboard.SetText(secret);
             var timeout=new System.Windows.Threading.DispatcherTimer{
                 Interval=TimeSpan.FromSeconds(30)

@@ -38,7 +38,23 @@ internal static class DeskSpaceActionPaletteV197
             "Choose a local file or folder and inspect it without opening an external app","Files"),
         new("batchrename","Batch rename and recovery",
             "Review, apply, undo or recover an interrupted batch rename","Files"),
-        new("downloads","Open Downloads folder","Show the ordinary Windows Downloads folder","Files")
+        new("downloads","Open Downloads folder","Show the ordinary Windows Downloads folder","Files"),
+        new("v380_commandbar","Command Bar · Search, Math, GST & Units","Open Spotlight launcher with calculator, converters & quick actions","Tools"),
+        new("v380_pinnedfiles","Pinned Apps · Compatible Files","Browse all compatible files & Tally companies for pinned apps (Recent first)","Files"),
+        new("v380_clipboard","Rich Clipboard History & Transforms","Event-driven text, image, color & file clipboard history","Text"),
+        new("v380_snip","Screen Snip, Table OCR & Pin on Screen","Capture region to OCR text, Excel TSV or floating pin","Tools"),
+        new("v380_eyedropper","Screen Eyedropper Color Picker","Sample #HEX, RGB & HSL color anywhere on screen","Tools"),
+        new("v380_focus","Focus Ring Pomodoro Studio","Start deep-work timer rendered on the DeskSpace donut","Workspace"),
+        new("v380_vaultpro","Vault Pro · Hello, TOTP 2FA & Backup","Windows Hello unlock, RFC 6238 TOTP & AES-256-GCM backup","Privacy"),
+        new("v380_desktouch","DeskTouch Ecosystem Hub & OTP Grabber","Drop files to phone/PC, extract OTPs & scan camera tables","System"),
+        new("v380_snippets","Dynamic Snippet Expander","Expand snippets with {{date}}, {{clipboard}} & {{prompt:...}}","Text"),
+        new("v380_excelpro","Excel & Accounting Pro Studio","Pre-paste diff, rollback history, GSTIN Luhn-36 & PAN validator","Excel"),
+        new("v380_filetoolkit","File Toolkit · QR, EXIF, SHA-256, PDF & ZIP","Offline QR codes, EXIF removal, hash verify, PDF PNG & ZIP","Files"),
+        new("v380_windowpower","Window Power · Snap Zones & Auto-Layouts","Monitor topology layouts, Snap Zones & Always-on-Top pin","Windows"),
+        new("v380_snapzones","Snap Active Window to Zone","Pick visual layout zone for foreground window","Windows"),
+        new("v380_topmost","Toggle Always-on-Top Window Pin","Pin or unpin the active foreground window","Windows"),
+        new("v380_routines","Automation Routines & Smart Profiles","Multi-step routines with dry-run plan and per-app actions","Automation"),
+        new("v380_localai","Local AI Copilot (Opt-In)","Ollama or custom endpoint assistant (disabled by default)","Tools")
     };
     private static readonly Dictionary<Window,Window> Open=new();
 
@@ -137,6 +153,9 @@ internal static class DeskSpaceActionPaletteV197
                             "DeskSpace",MessageBoxButton.OK,MessageBoxImage.Warning);
                     }
                 }
+                break;
+            default:
+                DeskSpaceModernHubV380.TryExecutePaletteCommand(owner, command.Id);
                 break;
         }
     }

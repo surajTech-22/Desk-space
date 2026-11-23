@@ -261,8 +261,10 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             case "launch":
                 if(IsLaunchable(item.Path))
                 {
-                    try{DeskSpacePinnedRecentV122.OpenLatestOrApp(item.Path);}
-                    catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
+                    HideArc();
+                    string pinnedTarget=item.Path;
+                    owner.Dispatcher.BeginInvoke(new Action(()=>
+                        DeskSpacePinnedAppFilesV380.Show(owner,pinnedTarget)));
                 }
                 return true;
             case "pageback":MoveChild(-1);return true;

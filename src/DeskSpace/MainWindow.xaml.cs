@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         InitializeFeatureHubV199();
         InitializeExcelNavigationV49();
         Loaded += (_,_) => DeskSpacePublicUpdaterV44.StartAutomaticChecks(this);
+        Loaded += (_,_) => DeskSpaceModernHubV380.AttachMainWindow(this, () => data ?? new Workspace(), SafeSave, RefreshDashboard);
         // Register once per process, covering Workspace windows even when
         // a separate widget/tray process is active.
         DeskSpaceGracefulExitV230.Attach(this);
@@ -61,6 +62,7 @@ public partial class MainWindow : Window
         trayMenu.Items.Add("Show DeskSpace", null, (_, _) => Dispatcher.Invoke(ShowMainWindow));
         trayMenu.Items.Add("Show Floating Widget", null, (_, _) => Dispatcher.Invoke(ShowFloatingWidget));
         trayMenu.Items.Add("Check for updates", null, (_, _) => Dispatcher.Invoke(async () => await DeskSpaceUpdateCheckV42.CheckAsync(this)));
+        DeskSpaceModernHubV380.AddMainTraySubmenu(trayMenu, this, () => data ?? new Workspace());
         tray.ContextMenuStrip = trayMenu;
         NotesList.ItemsSource = data.Notes;
         var activeReminders=System.Windows.Data.CollectionViewSource.GetDefaultView(data.Reminders);
