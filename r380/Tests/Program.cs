@@ -1644,6 +1644,197 @@ internal static class Program
         }
     }
 
+    private static void TestTallyErp9FixesAndUniversalDisambiguationV380(Assembly asm)
+    {
+        var type = asm.GetType("DeskSpace.DeskSpacePinnedAppFilesV380", true)!;
+        var itemType = asm.GetType("DeskSpace.PinnedAppFileItemV380", true)!;
+        var tryParseTally = type.GetMethod("TryParseTallyCompanyFolder", AnyStatic)!;
+        var tryReadName = type.GetMethod("TryReadTallyCompanyName", AnyStatic)!;
+        var resolveCap = type.GetMethod("ResolveCapability", AnyStatic)!;
+        var buildLaunch = type.GetMethod("BuildLaunchInfo", AnyStatic)!;
+        var mergeMethod = type.GetMethod("MergeAndRank", AnyStatic)!;
+        var resolveAppName = type.GetMethod("ResolvePinnedAppDisplayName", AnyStatic)!;
+
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_Erp9Fixes_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+
+            // 1. Reject non-numeric backup/renamed .900 and out-of-range numeric folders; accept 4..6 digit numeric folders + CmpSave.900
+            string badNonNumeric = Path.Combine(tempRoot, "Backup Copy 24-25");
+            string badShortNumeric = Path.Combine(tempRoot, "123");
+            string badLongNumeric = Path.Combine(tempRoot, "1234567");
+            string goodErpCmpSave = Path.Combine(tempRoot, "10005");
+            Directory.CreateDirectory(badNonNumeric);
+            Directory.CreateDirectory(badShortNumeric);
+            Directory.CreateDirectory(badLongNumeric);
+            Directory.CreateDirectory(goodErpCmpSave);
+
+            foreach (string dir in new[] { badNonNumeric, badShortNumeric, badLongNumeric })
+            {
+                File.WriteAllText(Path.Combine(dir, "Company.900"), "mock");
+                File.WriteAllText(Path.Combine(dir, "Manager.900"), "mock");
+                object?[] parseArgs = { dir, null, false, "Tally Data" };
+                Check(!(bool)tryParseTally.Invoke(null, parseArgs)!,
+                    $"TryParseTallyCompanyFolder must reject non-loadable folder '{Path.GetFileName(dir)}'");
+            }
+
+            File.WriteAllText(Path.Combine(goodErpCmpSave, "Company.900"), "mock");
+            File.WriteAllText(Path.Combine(goodErpCmpSave, "CmpSave.900"), "mock");
+            object?[] goodArgs = { goodErpCmpSave, null, false, "Tally Data" };
+            Check((bool)tryParseTally.Invoke(null, goodArgs)! &&
+                  goodArgs[1] != null &&
+                  GetProp<string>(goodArgs[1]!, "TallyCompanyCode") == "10005" &&
+                  GetProp<string>(goodArgs[1]!, "KindBadge") == "Tally.ERP 9 · #10005",
+                "TryParseTallyCompanyFolder must accept 5-digit .900 folder with Company.900 + CmpSave.900");
+
+            // 2. 512-byte paged Company.900 decoding across 0x200 / 0x400 16-byte page headers
+            static byte[] BuildPagedCompany900(string primaryName, string mailingName, int payloadStartInUnpaged)
+            {
+                byte[] tag1B = { 0x02, 0x10, 0x1B, 0x00, 0x00, 0x0F };
+                byte[] tag1C = { 0x02, 0x10, 0x1C, 0x00, 0x00, 0x0F };
+                byte[] nameBytes = Encoding.Unicode.GetBytes(primaryName + "\0");
+                byte[] mailBytes = Encoding.Unicode.GetBytes(mailingName + "\0");
+
+                byte[] unpaged = new byte[4 * 496];
+                int pos = payloadStartInUnpaged;
+                Buffer.BlockCopy(tag1B, 0, unpaged, pos, tag1B.Length);
+                pos += tag1B.Length;
+                BitConverter.GetBytes((ushort)nameBytes.Length).CopyTo(unpaged, pos);
+                pos += 2;
+                Buffer.BlockCopy(nameBytes, 0, unpaged, pos, nameBytes.Length);
+                pos += nameBytes.Length;
+
+                Buffer.BlockCopy(tag1C, 0, unpaged, pos, tag1C.Length);
+                pos += tag1C.Length;
+                BitConverter.GetBytes((ushort)mailBytes.Length).CopyTo(unpaged, pos);
+                pos += 2;
+                Buffer.BlockCopy(mailBytes, 0, unpaged, pos, mailBytes.Length);
+
+                // Repack into 4 x 512-byte pages with realistic 16-byte page headers containing 0x01 control bytes
+                byte[] paged = new byte[4 * 512];
+                for (int p = 0; p < 4; p++)
+                {
+                    int h = p * 512;
+                    paged[h + 0] = 0x3E;
+                    paged[h + 1] = 0x68;
+                    paged[h + 2] = 0x69;
+                    paged[h + 3] = 0xD9;
+                    paged[h + 4] = 0x01; // control char byte that corrupts raw UTF-16LE reads if not unpaged
+                    paged[h + 8] = 0x06;
+                    paged[h + 12] = (byte)(p + 1);
+                    Buffer.BlockCopy(unpaged, p * 496, paged, h + 16, 496);
+                }
+                return paged;
+            }
+
+            // Case A: UTF-16LE company name string straddles the 0x400 (page 1 -> page 2) boundary (unpaged offset 2*496 - 30 = 962)
+            string pagedDirA = Path.Combine(tempRoot, "10014");
+            Directory.CreateDirectory(pagedDirA);
+            File.WriteAllBytes(Path.Combine(pagedDirA, "Company.900"),
+                BuildPagedCompany900("Sri Vigneshwara Enterprises 25-26", "Fallback Mailing Only", 2 * 496 - 30));
+            File.WriteAllBytes(Path.Combine(pagedDirA, "Manager.900"), new byte[] { 1, 2, 3, 4 });
+            string? resolvedA = (string?)tryReadName.Invoke(null, new object[] { pagedDirA });
+            Check(resolvedA == "Sri Vigneshwara Enterprises 25-26",
+                $"512-byte paged Company.900 straddling 0x400 must recover primary 1B name, got '{resolvedA}'");
+
+            // Case B: The 6-byte 02-10-1B-00-00-0F tag ITSELF is split across the page boundary (unpaged offset 2*496 - 3 = 989)
+            string pagedDirB = Path.Combine(tempRoot, "10015");
+            Directory.CreateDirectory(pagedDirB);
+            File.WriteAllBytes(Path.Combine(pagedDirB, "Company.900"),
+                BuildPagedCompany900("Kaveri Exports & Imports FY26", "Wrong Mailing Fallback", 2 * 496 - 3));
+            File.WriteAllBytes(Path.Combine(pagedDirB, "Manager.900"), new byte[] { 1, 2, 3, 4 });
+            string? resolvedB = (string?)tryReadName.Invoke(null, new object[] { pagedDirB });
+            Check(resolvedB == "Kaveri Exports & Imports FY26",
+                $"512-byte paged Company.900 with split 1B tag across page boundary must recover primary 1B name, got '{resolvedB}'");
+
+            // 3. BuildLaunchInfo always includes /NOINILOAD when overriding TallyDataRoot and normalizes trailing slashes
+            string erpDir = Path.Combine(tempRoot, "Tally.ERP9");
+            Directory.CreateDirectory(erpDir);
+            string erpExe = Path.Combine(erpDir, "tally.exe");
+            File.WriteAllText(erpExe, "mock");
+            var erpCap = resolveCap.Invoke(null, new object[] { erpExe })!;
+
+            var itemWithCode = Activator.CreateInstance(itemType, new object?[]
+            {
+                "Apex Traders", pagedDirA, tempRoot + @"\", "Tally.ERP 9 · #10014",
+                DateTime.UtcNow, true, "★ Tally Recent", true, "10014", tempRoot + @"\"
+            })!;
+            object?[] launch1 = { erpCap, itemWithCode, null, null, new List<string> { @"D:\25-26" } };
+            Check((bool)buildLaunch.Invoke(null, launch1)!, "BuildLaunchInfo must succeed for Tally.ERP 9 company");
+            var psi1 = (ProcessStartInfo)launch1[2]!;
+            Check(psi1.ArgumentList.Count == 3 &&
+                  psi1.ArgumentList[0] == tempRoot.TrimEnd('\\') &&
+                  psi1.ArgumentList[1] == "/NOINILOAD" &&
+                  psi1.ArgumentList[2] == "/LOAD:10014",
+                $"BuildLaunchInfo must pass trimmed data root + /NOINILOAD + /LOAD:10014, got [{string.Join(", ", psi1.ArgumentList)}]");
+
+            var itemWithoutCode = Activator.CreateInstance(itemType, new object?[]
+            {
+                "Apex Traders", pagedDirA, tempRoot, "Tally.ERP 9",
+                DateTime.UtcNow, false, "Tally Data", true, null, tempRoot
+            })!;
+            object?[] launch2 = { erpCap, itemWithoutCode, null, null, new List<string> { @"D:\25-26" } };
+            Check((bool)buildLaunch.Invoke(null, launch2)!, "BuildLaunchInfo fallback without code must succeed");
+            var psi2 = (ProcessStartInfo)launch2[2]!;
+            Check(psi2.ArgumentList.Contains("/NOINILOAD"),
+                "BuildLaunchInfo with overridden TallyDataRoot must always pass /NOINILOAD even if code is absent");
+
+            // 4. Universal duplicate display-name disambiguation across folders and same-folder company codes
+            var dupList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType))!;
+            DateTime t0 = DateTime.UtcNow;
+            dupList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Apex Traders", @"F:\Clients\FY25-26\10005", @"F:\Clients\FY25-26", "Tally.ERP 9 · #10005",
+                t0, true, "★ Recent", true, "10005", @"F:\Clients\FY25-26"
+            })!);
+            dupList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Apex Traders", @"F:\Clients\FY24-25\10005", @"F:\Clients\FY24-25", "Tally.ERP 9 · #10005",
+                t0.AddMinutes(-5), false, "Drive Scan", true, "10005", @"F:\Clients\FY24-25"
+            })!);
+            dupList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Zenith Corp", @"F:\SharedData\10001", @"F:\SharedData", "Tally.ERP 9 · #10001",
+                t0.AddMinutes(-10), false, "Drive Scan", true, "10001", @"F:\SharedData"
+            })!);
+            dupList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Zenith Corp", @"F:\SharedData\10009", @"F:\SharedData", "Tally.ERP 9 · #10009",
+                t0.AddMinutes(-15), false, "Drive Scan", true, "10009", @"F:\SharedData"
+            })!);
+            dupList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Unique Holdings", @"F:\SharedData\10020", @"F:\SharedData", "Tally.ERP 9 · #10020",
+                t0.AddMinutes(-20), false, "Drive Scan", true, "10020", @"F:\SharedData"
+            })!);
+
+            var emptyList = Array.CreateInstance(itemType, 0);
+            var rankedDups = ((IEnumerable)mergeMethod.Invoke(null, new object[] { dupList, emptyList, 100 })!).Cast<object>().ToList();
+            var names = rankedDups.Select(x => GetProp<string>(x, "DisplayName")).ToList();
+            Check(names.Count == 5 &&
+                  names[0] == "Apex Traders · FY25-26" &&
+                  names[1] == "Apex Traders · FY24-25" &&
+                  names[2].Contains("#10001", StringComparison.Ordinal) &&
+                  names[3].Contains("#10009", StringComparison.Ordinal) &&
+                  names[4] == "Unique Holdings",
+                $"MergeAndRank must disambiguate duplicate names by parent folder or company code while leaving unique names untouched, got [{string.Join(" | ", names)}]");
+
+            // 5. Edition-accurate ResolvePinnedAppDisplayName when pinning tally.exe directly
+            string primeDir = Path.Combine(tempRoot, "TallyPrime");
+            Directory.CreateDirectory(primeDir);
+            string primeExe = Path.Combine(primeDir, "tally.exe");
+            File.WriteAllText(primeExe, "mock");
+            Check((string)resolveAppName.Invoke(null, new object[] { erpExe })! == "Tally.ERP 9" &&
+                  (string)resolveAppName.Invoke(null, new object[] { primeExe })! == "TallyPrime",
+                "ResolvePinnedAppDisplayName must distinguish Tally.ERP 9 vs TallyPrime even for direct tally.exe paths");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -1659,6 +1850,7 @@ internal static class Program
             TestApplicationsDepth2ScrollAndHiddenCountersV380(asm);
             TestStrictPerAppIsolationAndNoMixingV380(asm);
             TestQuickArcNoStuckLoadingAndIsolationV380(asm);
+            TestTallyErp9FixesAndUniversalDisambiguationV380(asm);
             TestInformationDonutGeometryAndSectorV380(asm);
             TestInformationTabSyncAndSchemaV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);

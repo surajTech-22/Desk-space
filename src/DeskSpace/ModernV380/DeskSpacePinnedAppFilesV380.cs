@@ -619,6 +619,33 @@ internal static class DeskSpacePinnedAppFilesV380
                 };
                 foreach (string stdPath in editionRoots)
                     AddRoot(stdPath, requireExisting: true);
+
+                try
+                {
+                    string[] driveRelDirs = tallyEdition switch
+                    {
+                        TallyEditionModeV380.TallyPrime1800 => new[] { "TallyData", @"TallyPrime\Data", @"Tally\Data" },
+                        TallyEditionModeV380.TallyErp900 => new[] { "TallyData", @"Tally.ERP9\Data", @"Tally\Data" },
+                        _ => new[] { "TallyData", @"TallyPrime\Data", @"Tally.ERP9\Data", @"Tally\Data" }
+                    };
+                    foreach (var drive in DriveInfo.GetDrives())
+                    {
+                        try
+                        {
+                            if (drive.DriveType != DriveType.Fixed || !drive.IsReady)
+                                continue;
+                            string rootDir = drive.RootDirectory.FullName;
+                            foreach (string rel in driveRelDirs)
+                                AddRoot(System.IO.Path.Combine(rootDir, rel), requireExisting: true);
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+                catch
+                {
+                }
                 break;
 
             case "excel.exe":
@@ -765,6 +792,16 @@ internal static class DeskSpacePinnedAppFilesV380
             if ((dirInfo.Attributes & FileAttributes.ReparsePoint) != 0)
                 return false;
 
+            string folderName = System.IO.Path.GetFileName(fullFolder);
+            // Tally strictly loads 4-to-6-digit numeric company folders (e.g., 10000..99999 for ERP 9,
+            // 10000..999999 for TallyPrime). Non-numeric renamed backup/archive copies cannot be loaded.
+            if (string.IsNullOrEmpty(folderName) ||
+                folderName.Length is < 4 or > 6 ||
+                !folderName.All(char.IsDigit))
+            {
+                return false;
+            }
+
             string company1800 = System.IO.Path.Combine(fullFolder, "Company.1800");
             string manager1800 = System.IO.Path.Combine(fullFolder, "Manager.1800");
             string tranMgr1800 = System.IO.Path.Combine(fullFolder, "TranMgr.1800");
@@ -773,10 +810,12 @@ internal static class DeskSpacePinnedAppFilesV380
             string company900 = System.IO.Path.Combine(fullFolder, "Company.900");
             string manager900 = System.IO.Path.Combine(fullFolder, "Manager.900");
             string tranMgr900 = System.IO.Path.Combine(fullFolder, "TranMgr.900");
+            string cmpSave900 = System.IO.Path.Combine(fullFolder, "CmpSave.900");
 
             bool has1800 = File.Exists(company1800) &&
                 (File.Exists(manager1800) || File.Exists(tranMgr1800) || File.Exists(cmpSave1800));
-            bool has900 = File.Exists(company900) && (File.Exists(manager900) || File.Exists(tranMgr900));
+            bool has900 = File.Exists(company900) &&
+                (File.Exists(manager900) || File.Exists(tranMgr900) || File.Exists(cmpSave900));
 
             if (!has1800 && !has900)
                 return false;
@@ -794,6 +833,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 masterFiles.Add(company900);
                 if (File.Exists(manager900)) masterFiles.Add(manager900);
                 if (File.Exists(tranMgr900)) masterFiles.Add(tranMgr900);
+                if (File.Exists(cmpSave900)) masterFiles.Add(cmpSave900);
             }
 
             DateTime newestUtc = DateTime.MinValue;
@@ -806,18 +846,15 @@ internal static class DeskSpacePinnedAppFilesV380
             if (newestUtc == DateTime.MinValue)
                 newestUtc = dirInfo.LastWriteTimeUtc;
 
-            string folderName = System.IO.Path.GetFileName(fullFolder);
-            string? code = !string.IsNullOrEmpty(folderName) && folderName.All(char.IsDigit)
-                ? folderName
-                : null;
+            string code = folderName;
             string? dataRoot = System.IO.Path.GetDirectoryName(fullFolder);
             string? inAppName = TryReadTallyCompanyName(fullFolder);
             string displayName = !string.IsNullOrWhiteSpace(inAppName)
                 ? inAppName
-                : "Tally Company #" + (code ?? folderName);
+                : "Tally Company #" + code;
             string kindBadge = has1800
-                ? (code != null ? $"TallyPrime · #{code}" : "TallyPrime (.1800)")
-                : (code != null ? $"Tally.ERP 9 · #{code}" : "Tally.ERP 9 (.900)");
+                ? $"TallyPrime · #{code}"
+                : $"Tally.ERP 9 · #{code}";
 
             item = new PinnedAppFileItemV380(
                 DisplayName: displayName,
@@ -1347,13 +1384,211 @@ internal static class DeskSpacePinnedAppFilesV380
                 MergeOne(item);
         }
 
-        return merged.Values
+        var ranked = merged.Values
             .OrderByDescending(x => x.IsRecent)
             .ThenBy(x => BackupOnlyExtensions.Contains(GetEffectiveExtension(x.FullPath)) ? 1 : 0)
             .ThenByDescending(x => x.SortTimeUtc)
             .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
             .Take(maxResults)
             .ToList();
+
+        return DisambiguateDuplicateDisplayNames(ranked);
+    }
+
+    internal static List<PinnedAppFileItemV380> DisambiguateDuplicateDisplayNames(
+        List<PinnedAppFileItemV380> items)
+    {
+        if (items == null || items.Count <= 1)
+            return items ?? new List<PinnedAppFileItemV380>();
+
+        var groups = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < items.Count; i++)
+        {
+            string name = items[i]?.DisplayName?.Trim() ?? string.Empty;
+            if (name.Length == 0)
+                continue;
+            if (!groups.TryGetValue(name, out var indices))
+            {
+                indices = new List<int>(2);
+                groups[name] = indices;
+            }
+            indices.Add(i);
+        }
+
+        if (!groups.Values.Any(g => g.Count > 1))
+            return items;
+
+        var result = new List<PinnedAppFileItemV380>(items);
+
+        static List<string> ExtractParentSegmentsInnermostFirst(string? parentFolder, string fullPath)
+        {
+            string source = !string.IsNullOrWhiteSpace(parentFolder)
+                ? parentFolder
+                : (System.IO.Path.GetDirectoryName(fullPath) ?? string.Empty);
+            var segs = new List<string>(6);
+            if (string.IsNullOrWhiteSpace(source))
+                return segs;
+
+            string[] raw = source.Split(
+                new[] { System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar },
+                StringSplitOptions.RemoveEmptyEntries);
+            for (int i = raw.Length - 1; i >= 0; i--)
+            {
+                string s = raw[i].Trim();
+                if (s.Length > 0)
+                    segs.Add(s);
+            }
+            return segs;
+        }
+
+        static string CompactHint(string raw)
+        {
+            string s = raw.Trim();
+            return s.Length <= 18 ? s : s.Substring(0, 17).TrimEnd() + "…";
+        }
+
+        foreach (var indices in groups.Values)
+        {
+            if (indices.Count <= 1)
+                continue;
+
+            string baseName = result[indices[0]].DisplayName;
+            var perItemSegments = new List<string>[indices.Count];
+            int maxSegs = 0;
+            for (int k = 0; k < indices.Count; k++)
+            {
+                var it = result[indices[k]];
+                perItemSegments[k] = ExtractParentSegmentsInnermostFirst(it.ParentFolder, it.FullPath);
+                if (perItemSegments[k].Count > maxSegs)
+                    maxSegs = perItemSegments[k].Count;
+            }
+
+            // Pick the innermost ancestor level where segments are not all identical
+            // and not already trivially embedded in the base display name.
+            int chosenLevel = -1;
+            for (int level = 0; level < maxSegs; level++)
+            {
+                var distinctAtLevel = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                bool anyNotContainedInTitle = false;
+                for (int k = 0; k < indices.Count; k++)
+                {
+                    string seg = level < perItemSegments[k].Count ? perItemSegments[k][level] : string.Empty;
+                    distinctAtLevel.Add(seg);
+                    if (seg.Length > 0 && !baseName.Contains(seg, StringComparison.OrdinalIgnoreCase))
+                        anyNotContainedInTitle = true;
+                }
+                if (distinctAtLevel.Count > 1 && anyNotContainedInTitle)
+                {
+                    chosenLevel = level;
+                    break;
+                }
+            }
+
+            if (chosenLevel < 0 && maxSegs > 0)
+            {
+                for (int level = 0; level < maxSegs; level++)
+                {
+                    var distinctAtLevel = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (int k = 0; k < indices.Count; k++)
+                    {
+                        string seg = level < perItemSegments[k].Count ? perItemSegments[k][level] : string.Empty;
+                        distinctAtLevel.Add(seg);
+                    }
+                    if (distinctAtLevel.Count > 1)
+                    {
+                        chosenLevel = level;
+                        break;
+                    }
+                }
+            }
+
+            var candidateHints = new string[indices.Count];
+            var hintCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int k = 0; k < indices.Count; k++)
+            {
+                string seg = chosenLevel >= 0 && chosenLevel < perItemSegments[k].Count
+                    ? perItemSegments[k][chosenLevel]
+                    : (perItemSegments[k].Count > 0 ? perItemSegments[k][0] : string.Empty);
+                candidateHints[k] = seg;
+                hintCounts[seg] = hintCounts.GetValueOrDefault(seg) + 1;
+            }
+
+            // If a subset still shares the same segment at chosenLevel, prepend the first higher ancestor that differs
+            for (int k = 0; k < indices.Count; k++)
+            {
+                string baseSeg = candidateHints[k];
+                if (string.IsNullOrEmpty(baseSeg) || hintCounts.GetValueOrDefault(baseSeg) <= 1)
+                    continue;
+                int startSearch = Math.Max(0, chosenLevel + 1);
+                for (int up = startSearch; up < perItemSegments[k].Count; up++)
+                {
+                    string anc = perItemSegments[k][up];
+                    if (string.IsNullOrEmpty(anc))
+                        continue;
+                    bool differsAmongPeers = false;
+                    for (int m = 0; m < indices.Count; m++)
+                    {
+                        if (m == k || !string.Equals(candidateHints[m], baseSeg, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        string peerAnc = up < perItemSegments[m].Count ? perItemSegments[m][up] : string.Empty;
+                        if (!string.Equals(anc, peerAnc, StringComparison.OrdinalIgnoreCase))
+                        {
+                            differsAmongPeers = true;
+                            break;
+                        }
+                    }
+                    if (differsAmongPeers)
+                    {
+                        candidateHints[k] = $"{CompactHint(anc)}/{CompactHint(baseSeg)}";
+                        break;
+                    }
+                }
+            }
+
+            hintCounts.Clear();
+            for (int k = 0; k < indices.Count; k++)
+            {
+                string h = candidateHints[k];
+                hintCounts[h] = hintCounts.GetValueOrDefault(h) + 1;
+            }
+
+            for (int k = 0; k < indices.Count; k++)
+            {
+                int idx = indices[k];
+                var it = result[idx];
+                string hint = candidateHints[k];
+                bool collided = string.IsNullOrEmpty(hint) || hintCounts.GetValueOrDefault(hint) > 1;
+
+                if (collided)
+                {
+                    string leafHint = !string.IsNullOrEmpty(it.TallyCompanyCode)
+                        ? $"#{it.TallyCompanyCode}"
+                        : FormatFriendlyFileName(System.IO.Path.GetFileName(it.FullPath), it.IsDirectory);
+                    if (string.Equals(leafHint, it.DisplayName, StringComparison.OrdinalIgnoreCase))
+                        leafHint = System.IO.Path.GetFileName(it.FullPath);
+
+                    if (!string.IsNullOrEmpty(hint) &&
+                        !string.IsNullOrEmpty(leafHint) &&
+                        !string.Equals(hint, leafHint, StringComparison.OrdinalIgnoreCase))
+                    {
+                        hint = $"{CompactHint(hint)} {leafHint}";
+                    }
+                    else if (!string.IsNullOrEmpty(leafHint))
+                    {
+                        hint = leafHint;
+                    }
+                }
+                else
+                {
+                    hint = CompactHint(hint);
+                }
+
+                if (!string.IsNullOrWhiteSpace(hint))
+                    result[idx] = it with { DisplayName = $"{it.DisplayName} · {hint}" };
+            }
+        }
+
+        return result;
     }
 
     internal static bool BuildLaunchInfo(
@@ -1385,10 +1620,14 @@ internal static class DeskSpacePinnedAppFilesV380
                 WorkingDirectory = exeDir
             };
 
-            if (!string.IsNullOrWhiteSpace(item.TallyDataRoot) &&
-                !MatchesAnyNormalizedDirectory(item.TallyDataRoot, primaryDirs))
+            string? cleanDataRoot = !string.IsNullOrWhiteSpace(item.TallyDataRoot)
+                ? TrimTrailingSeparatorsUnlessDriveRoot(NormalizeFullPathSafe(item.TallyDataRoot))
+                : null;
+            bool overrideDataRoot = !string.IsNullOrWhiteSpace(cleanDataRoot) &&
+                                    !MatchesAnyNormalizedDirectory(cleanDataRoot, primaryDirs);
+            if (overrideDataRoot)
             {
-                info.ArgumentList.Add(item.TallyDataRoot);
+                info.ArgumentList.Add(cleanDataRoot!);
             }
 
             if (!string.IsNullOrWhiteSpace(item.TallyCompanyCode) &&
@@ -1400,6 +1639,8 @@ internal static class DeskSpacePinnedAppFilesV380
             }
             else
             {
+                if (overrideDataRoot)
+                    info.ArgumentList.Add("/NOINILOAD");
                 statusNote = $"Launching {cap.DisplayName} (select company from {item.ParentFolder}).";
             }
 
@@ -1898,7 +2139,9 @@ internal static class DeskSpacePinnedAppFilesV380
                 return;
 
             string? prevPath = GetSelectedItem()?.FullPath;
-            var ranked = MergeAndRank(recentItems, systemItems, 300);
+            var ranked = MergeAndRank(recentItems, systemItems, 300)
+                .Where(x => IsItemStrictlyCompatible(cap, x, allowBackupArchives: true))
+                .ToList();
 
             int totalRecent = ranked.Count(x => x.IsRecent);
             int totalSystem = systemItems.Count;
@@ -3119,7 +3362,7 @@ internal static class DeskSpacePinnedAppFilesV380
         var visitedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         int totalVisitedCount = 0;
 
-        void ScanQueue(IEnumerable<string> initialRoots, int rootBudgetLimit, bool isExplicitDataRoot)
+        void ScanQueue(IEnumerable<string> initialRoots, int rootBudgetLimit, int maxDepth, bool isExplicitDataRoot)
         {
             var queue = new Queue<(string Dir, int Depth)>();
             foreach (string rawRoot in initialRoots)
@@ -3199,7 +3442,7 @@ internal static class DeskSpacePinnedAppFilesV380
 
                     if ((attrs & FileAttributes.Directory) != 0)
                     {
-                        if (depth >= MaxDriveDepth)
+                        if (depth >= maxDepth)
                             continue;
 
                         string dirName = System.IO.Path.GetFileName(entry);
@@ -3226,9 +3469,53 @@ internal static class DeskSpacePinnedAppFilesV380
 
         // Phase 1: ExtraDataRoots (e.g., Tally.ini Data folders, standard Tally/Winman folders)
         if (cap.ExtraDataRoots.Count > 0)
-            ScanQueue(cap.ExtraDataRoots, rootBudgetLimit: 1500, isExplicitDataRoot: true);
+            ScanQueue(cap.ExtraDataRoots, rootBudgetLimit: 2000, maxDepth: 10, isExplicitDataRoot: true);
 
-        // Phase 2: User profile locations (Desktop, Documents, Downloads, OneDrive)
+        // Partition ready fixed drives into non-system data drives (D:\, E:\, F:\, etc.) and OS system drive (C:\)
+        string? systemDriveRoot = null;
+        try
+        {
+            systemDriveRoot = System.IO.Path.GetPathRoot(Environment.SystemDirectory);
+        }
+        catch
+        {
+        }
+
+        var nonSystemFixedRoots = new List<string>();
+        var systemFixedRoots = new List<string>();
+        try
+        {
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if (drive.DriveType != DriveType.Fixed || !drive.IsReady)
+                        continue;
+                    string rootName = drive.RootDirectory.FullName;
+                    if (!string.IsNullOrEmpty(systemDriveRoot) &&
+                        string.Equals(rootName, systemDriveRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        systemFixedRoots.Add(rootName);
+                    }
+                    else
+                    {
+                        nonSystemFixedRoots.Add(rootName);
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        // Phase 2: Non-system data drives (E:\, F:\, D:\) — fast, pure user/accounting data without OS clutter
+        if (nonSystemFixedRoots.Count > 0 && totalVisitedCount < MaxVisitedDirs)
+            ScanQueue(nonSystemFixedRoots, rootBudgetLimit: 2500, maxDepth: 10, isExplicitDataRoot: false);
+
+        // Phase 3: User profile locations (Desktop, Documents, Downloads, OneDrive)
         var userRoots = new List<string>();
         void AddUserRoot(string? p)
         {
@@ -3248,31 +3535,12 @@ internal static class DeskSpacePinnedAppFilesV380
         AddUserRoot(Environment.GetEnvironmentVariable("OneDriveCommercial"));
         AddUserRoot(Environment.GetEnvironmentVariable("OneDriveConsumer"));
 
-        if (userRoots.Count > 0)
-            ScanQueue(userRoots, rootBudgetLimit: 2000, isExplicitDataRoot: false);
+        if (userRoots.Count > 0 && totalVisitedCount < MaxVisitedDirs)
+            ScanQueue(userRoots, rootBudgetLimit: 1500, maxDepth: 5, isExplicitDataRoot: false);
 
-        // Phase 3: Top-level directories across all ready DriveType.Fixed volumes (interleaved BFS)
-        var fixedRoots = new List<string>();
-        try
-        {
-            foreach (var drive in DriveInfo.GetDrives())
-            {
-                try
-                {
-                    if (drive.DriveType == DriveType.Fixed && drive.IsReady)
-                        fixedRoots.Add(drive.RootDirectory.FullName);
-                }
-                catch
-                {
-                }
-            }
-        }
-        catch
-        {
-        }
-
-        if (fixedRoots.Count > 0 && totalVisitedCount < MaxVisitedDirs)
-            ScanQueue(fixedRoots, rootBudgetLimit: MaxVisitedDirs - totalVisitedCount, isExplicitDataRoot: false);
+        // Phase 4: OS system drive root (C:\) with remaining directory budget
+        if (systemFixedRoots.Count > 0 && totalVisitedCount < MaxVisitedDirs)
+            ScanQueue(systemFixedRoots, rootBudgetLimit: MaxVisitedDirs - totalVisitedCount, maxDepth: MaxDriveDepth, isExplicitDataRoot: false);
     }
 
     private static bool IsLikelyProjectFolder(string dirPath, out string kindBadge)
@@ -3566,12 +3834,30 @@ internal static class DeskSpacePinnedAppFilesV380
             string effectiveExe = !string.IsNullOrWhiteSpace(resolvedExe) ? resolvedExe : fullPinned;
             string exeFile = System.IO.Path.GetFileName(effectiveExe);
 
-            if (!string.IsNullOrEmpty(exeFile) &&
+            if (exeFile.Equals("tally.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                string tallyHint = $"{fullPinned} {effectiveExe}";
+                if (tallyHint.Contains("tallyprime", StringComparison.OrdinalIgnoreCase) ||
+                    tallyHint.Contains("prime", StringComparison.OrdinalIgnoreCase))
+                {
+                    resolvedName = "TallyPrime";
+                }
+                else if (tallyHint.Contains("erp9", StringComparison.OrdinalIgnoreCase) ||
+                         tallyHint.Contains("erp 9", StringComparison.OrdinalIgnoreCase) ||
+                         tallyHint.Contains("tally 9", StringComparison.OrdinalIgnoreCase))
+                {
+                    resolvedName = "Tally.ERP 9";
+                }
+            }
+
+            if (resolvedName == null &&
+                !string.IsNullOrEmpty(exeFile) &&
                 KnownAppDisplayNamesV380.TryGetValue(exeFile, out string? knownName))
             {
                 resolvedName = knownName;
             }
-            else if (SafeFileExists(effectiveExe) &&
+            else if (resolvedName == null &&
+                     SafeFileExists(effectiveExe) &&
                      System.IO.Path.GetExtension(effectiveExe).Equals(".exe", StringComparison.OrdinalIgnoreCase))
             {
                 try
@@ -3670,7 +3956,8 @@ internal static class DeskSpacePinnedAppFilesV380
             try
             {
                 using var fs = new FileStream(metaPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                int toRead = (int)Math.Min(16384, fs.Length);
+                long fileLen = fs.Length;
+                int toRead = (int)Math.Min(32768, fileLen);
                 if (toRead < 16)
                     continue;
 
@@ -3684,6 +3971,18 @@ internal static class DeskSpacePinnedAppFilesV380
                 }
                 if (totalRead < 16)
                     continue;
+
+                byte[]? unpaged = TryUnpageTallyBlocks(buf, totalRead, fileLen);
+                if (unpaged != null)
+                {
+                    string? unpagedPrimary = ExtractTallyTaggedUtf16(unpaged, unpaged.Length, TallyCompanyNameTag);
+                    if (unpagedPrimary != null)
+                        return unpagedPrimary;
+
+                    string? unpagedMailing = ExtractTallyTaggedUtf16(unpaged, unpaged.Length, TallyMailingNameTag);
+                    if (unpagedMailing != null)
+                        return unpagedMailing;
+                }
 
                 string? primary = ExtractTallyTaggedUtf16(buf, totalRead, TallyCompanyNameTag);
                 if (primary != null)
@@ -3699,6 +3998,23 @@ internal static class DeskSpacePinnedAppFilesV380
         }
 
         return null;
+    }
+
+    internal static byte[]? TryUnpageTallyBlocks(byte[] buf, int length, long fileLength)
+    {
+        if (buf == null || length < 1024 || fileLength < 1024 || (fileLength % 512L) != 0)
+            return null;
+
+        int pageCount = length / 512;
+        if (pageCount < 2)
+            return null;
+
+        byte[] unpaged = new byte[pageCount * 496];
+        for (int p = 0; p < pageCount; p++)
+        {
+            Buffer.BlockCopy(buf, p * 512 + 16, unpaged, p * 496, 496);
+        }
+        return unpaged;
     }
 
     private static string? ExtractTallyTaggedUtf16(byte[] buf, int length, byte[] tag)
@@ -3722,7 +4038,11 @@ internal static class DeskSpacePinnedAppFilesV380
             if (strStart + byteLen > length)
                 continue;
 
-            string raw = Encoding.Unicode.GetString(buf, strStart, byteLen).TrimEnd('\0');
+            string raw = Encoding.Unicode.GetString(buf, strStart, byteLen);
+            int nulIdx = raw.IndexOf('\0');
+            if (nulIdx >= 0)
+                raw = raw.Substring(0, nulIdx);
+
             string? cleaned = CleanAndValidateInAppTitle(raw, allowShort: true);
             if (cleaned != null)
                 return cleaned;
@@ -4878,6 +5198,11 @@ internal static class DeskSpacePinnedAppFilesV380
                     }
                 }
 
+                if (cap.IncludesTallyCompanies && recent.Count + phase1Extra.Count == 0)
+                {
+                    QuickProbeNonSystemDrivesForTallyPhase1(cap, phase1Extra, maxDirs: 300, maxDepth: 5, maxMs: 250);
+                }
+
                 var phase1 = MergeAndRank(recent, phase1Extra, fullBudget)
                     .Where(x => IsItemStrictlyCompatible(cap, x, allowBackupArchives: false))
                     .ToList();
@@ -4920,10 +5245,11 @@ internal static class DeskSpacePinnedAppFilesV380
 
                         int soFar;
                         lock (phase2Lock) soFar = recent.Count + phase2Extra.Count;
-                        if (soFar < 40 && !p2Ct.IsCancellationRequested)
+                        int driveThreshold = cap.IncludesTallyCompanies ? 200 : 40;
+                        if (soFar < driveThreshold && !p2Ct.IsCancellationRequested)
                         {
                             using var driveCts = CancellationTokenSource.CreateLinkedTokenSource(p2Ct);
-                            driveCts.CancelAfter(1400);
+                            driveCts.CancelAfter(1600);
                             try
                             {
                                 RunBoundedDriveEnumeration(cap, item =>
@@ -4985,6 +5311,90 @@ internal static class DeskSpacePinnedAppFilesV380
                 }
             }
         });
+    }
+
+    private static void QuickProbeNonSystemDrivesForTallyPhase1(
+        AppFileCapabilityV380 cap,
+        List<PinnedAppFileItemV380> target,
+        int maxDirs,
+        int maxDepth,
+        int maxMs)
+    {
+        try
+        {
+            string? systemDriveRoot = null;
+            try { systemDriveRoot = System.IO.Path.GetPathRoot(Environment.SystemDirectory); }
+            catch { }
+
+            var queue = new Queue<(string Dir, int Depth)>();
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if (drive.DriveType != DriveType.Fixed || !drive.IsReady)
+                        continue;
+                    string root = drive.RootDirectory.FullName;
+                    if (!string.IsNullOrEmpty(systemDriveRoot) &&
+                        string.Equals(root, systemDriveRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    if (visited.Add(TrimTrailingSeparatorsUnlessDriveRoot(root)))
+                        queue.Enqueue((root, 0));
+                }
+                catch
+                {
+                }
+            }
+
+            if (queue.Count == 0)
+                return;
+
+            var sw = Stopwatch.StartNew();
+            int visitedCount = 0;
+            while (queue.Count > 0 && visitedCount < maxDirs && sw.ElapsedMilliseconds < maxMs)
+            {
+                var (dir, depth) = queue.Dequeue();
+                visitedCount++;
+
+                if (TryParseTallyCompanyFolder(dir, out var tItem, isRecent: false, sourceBadge: "Tally Data") &&
+                    tItem != null)
+                {
+                    if (IsTallyCompanyCompatibleWithCapability(cap, tItem))
+                        target.Add(tItem);
+                    continue;
+                }
+
+                if (depth >= maxDepth)
+                    continue;
+
+                string[] subDirs;
+                try
+                {
+                    subDirs = Directory.GetDirectories(dir);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                foreach (string sub in subDirs)
+                {
+                    if (sw.ElapsedMilliseconds >= maxMs)
+                        break;
+                    string name = System.IO.Path.GetFileName(sub);
+                    if (string.IsNullOrEmpty(name) || SkipDirectoryNames.Contains(name))
+                        continue;
+                    if (visited.Add(TrimTrailingSeparatorsUnlessDriveRoot(sub)))
+                        queue.Enqueue((sub, depth + 1));
+                }
+            }
+        }
+        catch
+        {
+        }
     }
 
     internal static bool TryOpenQuickArcItem(string pinnedPath, string targetPath, Window? owner = null)
@@ -5271,7 +5681,14 @@ internal static class DeskSpacePinnedAppFilesV380
     {
         var parts = new List<string>();
         if (cap.IncludesTallyCompanies)
-            parts.Add("Companies (.1800/.900)");
+        {
+            parts.Add(cap.TallyEdition switch
+            {
+                TallyEditionModeV380.TallyPrime1800 => "TallyPrime Companies (.1800)",
+                TallyEditionModeV380.TallyErp900 => "Tally.ERP 9 Companies (.900)",
+                _ => "Companies (.1800/.900)"
+            });
+        }
         if (cap.IncludesProjectFolders)
             parts.Add("Project Folders");
 
