@@ -2670,11 +2670,21 @@ internal static class DeskSpacePinnedAppFilesV380
         var results = new List<PinnedAppFileItemV380>();
         try
         {
-            var stats = DeskSpaceSearchIndexV13.SafeCountsV260();
-            if (stats.Names <= 0 && stats.Finished <= 0)
-                return results;
-
             var indexType = typeof(DeskSpaceSearchIndexV13);
+            var safeCounts = indexType.GetMethod("SafeCountsV260", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (safeCounts != null)
+            {
+                object? stats = safeCounts.Invoke(null, null);
+                long names = stats?.GetType().GetProperty("Names")?.GetValue(stats) is long n ? n : 0;
+                int finished = stats?.GetType().GetProperty("Finished")?.GetValue(stats) is int f ? f : 0;
+                if (names <= 0 && finished <= 0)
+                    return results;
+            }
+            else if (!DeskSpaceSearchIndexV13.IsIndexing && string.IsNullOrEmpty(DeskSpaceSearchIndexV13.Coverage))
+            {
+                return results;
+            }
+
             var gateField = indexType.GetField("Gate", BindingFlags.NonPublic | BindingFlags.Static);
             var entriesField = indexType.GetField("Entries", BindingFlags.NonPublic | BindingFlags.Static);
             object? gate = gateField?.GetValue(null);
