@@ -404,6 +404,239 @@ Swap-R380 @'
         if(owner.Top+y+estShelfHeight>screen.Bottom-8)
             y=Math.Max(screen.Top+8-owner.Top,-estShelfHeight-5);
 '@ 'DeskSpaceInformationV36 monitor-aware shelf positioning'
+Swap-R380 @'
+        var add=SmallButton("+",()=>{if(!editorActive)NewCollection();});
+        add.ToolTip="New information collection";
+        add.FontSize=17;
+        add.MinWidth=29;
+        add.Margin=new Thickness(1,2,1,2);
+        DockPanel.SetDock(add,Dock.Right);
+        header.Children.Add(add);
+'@ @'
+        var add=SmallButton("+",()=>{if(!editorActive)NewCollection();});
+        add.ToolTip="New information collection";
+        add.FontSize=17;
+        add.MinWidth=29;
+        add.Margin=new Thickness(1,2,1,2);
+        DockPanel.SetDock(add,Dock.Right);
+        header.Children.Add(add);
+        var appsBtn=SmallButton("Apps",()=>OpenAppFileInfoShelf());
+        appsBtn.ToolTip="Select an application to inspect inside-file Header → Value information";
+        appsBtn.FontSize=11;
+        appsBtn.MinWidth=40;
+        appsBtn.Margin=new Thickness(1,3,1,3);
+        DockPanel.SetDock(appsBtn,Dock.Right);
+        header.Children.Add(appsBtn);
+'@ 'DeskSpaceInformationV36 Apps shelf header button'
+Swap-R380 @'
+    private void MaskRevealed()
+'@ @'
+    private string activeShelfAppPath="";
+    private int shelfAppScanGen;
+    internal void OpenAppFileInfoShelf(string? appPath=null)
+    {
+        if(disposed)return;
+        transientPreview=false;
+        editorActive=false;
+        shownCollectionId=null;
+        LeaveEditorKeyboardMode();
+        if(!string.IsNullOrWhiteSpace(appPath))
+            activeShelfAppPath=appPath;
+
+        var apps=DeskSpaceInformationTabV380.GetAvailableAppsForInformation();
+        if(string.IsNullOrWhiteSpace(activeShelfAppPath) && apps.Count>0)
+            activeShelfAppPath=apps[0].Path;
+
+        Shelf("App Info (Header → Value)");
+        shelfBorder.Width=320;
+        shelfBorder.MaxHeight=330;
+        shelfScroll.MaxHeight=255;
+        UpdateShelfPosition();
+
+        var topRow=new WrapPanel{Margin=new Thickness(0,2,0,4)};
+        foreach(var a in apps)
+        {
+            string capPath=a.Path;
+            bool isSel=string.Equals(capPath,activeShelfAppPath,StringComparison.OrdinalIgnoreCase);
+            var btn=SmallButton(a.Label,()=>OpenAppFileInfoShelf(capPath));
+            if(isSel){btn.Background=Accent;btn.Foreground=Brushes.White;}
+            topRow.Children.Add(btn);
+        }
+        var fullBtn=SmallButton("Full ↗",()=>DeskSpaceInformationTabV380.SelectOrOpen(owner));
+        fullBtn.ToolTip="Open full Application File Information view";
+        topRow.Children.Add(fullBtn);
+        shelfBody.Children.Add(topRow);
+
+        if(string.IsNullOrWhiteSpace(activeShelfAppPath))
+        {
+            shelfBody.Children.Add(new TextBlock{
+                Text="Pin an application or click Full ↗ to browse an application.",
+                FontSize=11.5,Foreground=Ink,TextWrapping=TextWrapping.Wrap,
+                Margin=new Thickness(2,4,2,4)});
+            return;
+        }
+
+        var elig=DeskSpaceInformationTabV380.EvaluateAppEligibility(activeShelfAppPath);
+        if(!elig.IsSupported)
+        {
+            shelfBody.Children.Add(new TextBlock{
+                Text="✕ "+elig.Reason,
+                FontSize=11.5,FontWeight=FontWeights.SemiBold,
+                Foreground=new SolidColorBrush(Color.FromRgb(163,64,63)),
+                TextWrapping=TextWrapping.Wrap,
+                Margin=new Thickness(2,4,2,6)});
+            return;
+        }
+
+        var loadingTxt=new TextBlock{
+            Text="Scanning "+elig.AppDisplayName+" files for ≥ 2 matching Header → Value fields…",
+            FontSize=11.5,Foreground=Ink,TextWrapping=TextWrapping.Wrap,
+            Margin=new Thickness(2,4,2,4)};
+        shelfBody.Children.Add(loadingTxt);
+
+        string targetApp=activeShelfAppPath;
+        int myGen=++shelfAppScanGen;
+        _=System.Threading.Tasks.Task.Run(()=>{
+            var res=DeskSpaceInformationTabV380.DiscoverAppInformation(targetApp);
+            owner.Dispatcher.BeginInvoke(new Action(()=>{
+                if(disposed || !shelf.IsOpen || myGen!=shelfAppScanGen)return;
+                RenderAppFileInfoShelfResults(targetApp,res);
+            }));
+        });
+    }
+    private void RenderAppFileInfoShelfResults(string appPath,AppInfoDiscoveryResultV380 res)
+    {
+        while(shelfBody.Children.Count>1)
+            shelfBody.Children.RemoveAt(1);
+
+        if(!res.Eligibility.IsSupported || !res.MeetsMinimumTwoFilesRule)
+        {
+            shelfBody.Children.Add(new TextBlock{
+                Text=res.StatusMessage,
+                FontSize=11.5,
+                Foreground=new SolidColorBrush(Color.FromRgb(163,64,63)),
+                TextWrapping=TextWrapping.Wrap,
+                Margin=new Thickness(2,4,2,6)});
+            return;
+        }
+
+        var visibleSet=new HashSet<string>(res.VisibleHeaders,StringComparer.OrdinalIgnoreCase);
+        shelfBody.Children.Add(new TextBlock{
+            Text=$"Visible Headers ({res.MatchedHeaders.Count} matched across ≥ 2 files):",
+            FontSize=11,FontWeight=FontWeights.SemiBold,Foreground=Ink,
+            Margin=new Thickness(2,2,2,3)});
+
+        var checksWrap=new WrapPanel{Margin=new Thickness(0,0,0,6)};
+        var filesHost=new StackPanel();
+
+        void RebuildFilesList()
+        {
+            filesHost.Children.Clear();
+            var orderedVis=res.MatchedHeaders.Select(h=>h.Header).Where(visibleSet.Contains).ToList();
+            if(orderedVis.Count==0)
+            {
+                filesHost.Children.Add(new TextBlock{
+                    Text="Check at least one header above to display file information.",
+                    FontSize=11,Foreground=Brushes.Gray,Margin=new Thickness(2,2,2,4)});
+                return;
+            }
+            foreach(var file in res.MatchedFiles.Take(15))
+            {
+                var pairs=DeskSpaceInformationTabV380.GetVisibleFieldsForFile(file,orderedVis);
+                if(pairs.Count==0)continue;
+                var cardStack=new StackPanel{Margin=new Thickness(4,3,4,3)};
+                var headDock=new DockPanel{LastChildFill=true,Margin=new Thickness(0,0,0,2)};
+                var capturedFile=file;
+                var capturedPairs=pairs;
+                var saveBtn=SmallButton("+ Save",()=>{
+                    try
+                    {
+                        var data=Read();
+                        var col=new Collection{
+                            Id=Guid.NewGuid(),
+                            Name=capturedFile.DisplayName,
+                            UpdatedUtc=DateTime.UtcNow,
+                            Rows=capturedPairs.Select(kv=>new Item{Label=kv.Key,Value=kv.Value}).ToList()
+                        };
+                        int idx=data.FindIndex(x=>string.Equals(x.Name,col.Name,StringComparison.OrdinalIgnoreCase));
+                        if(idx>=0){col.Id=data[idx].Id;data[idx]=col;}
+                        else data.Add(col);
+                        Write(data);
+                        all=Read().OrderByDescending(x=>x.UpdatedUtc).ToList();
+                        RenderArc();changed();
+                        warning.Text="Saved '"+col.Name+"' to Donut Information.";
+                    }
+                    catch(Exception ex){warning.Text=ex.Message;}
+                });
+                saveBtn.FontSize=10.5;
+                saveBtn.MinHeight=21;
+                saveBtn.Padding=new Thickness(6,1,6,1);
+                DockPanel.SetDock(saveBtn,Dock.Right);
+                headDock.Children.Add(saveBtn);
+                headDock.Children.Add(new TextBlock{
+                    Text=file.DisplayName,FontSize=12,FontWeight=FontWeights.Bold,
+                    Foreground=Ink,VerticalAlignment=VerticalAlignment.Center,
+                    TextTrimming=TextTrimming.CharacterEllipsis});
+                cardStack.Children.Add(headDock);
+
+                foreach(var kv in pairs)
+                {
+                    var line=new Grid{Margin=new Thickness(0,1,0,1)};
+                    line.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(96)});
+                    line.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+                    line.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+                    line.Children.Add(new TextBlock{
+                        Text=kv.Key,FontSize=11,FontWeight=FontWeights.SemiBold,
+                        Foreground=Ink,VerticalAlignment=VerticalAlignment.Center,
+                        TextTrimming=TextTrimming.CharacterEllipsis});
+                    var valTb=new TextBlock{
+                        Text=kv.Value,FontSize=11,Foreground=Ink,
+                        VerticalAlignment=VerticalAlignment.Center,
+                        TextTrimming=TextTrimming.CharacterEllipsis,
+                        Margin=new Thickness(4,0,4,0),ToolTip=kv.Value};
+                    Grid.SetColumn(valTb,1);line.Children.Add(valTb);
+                    string copyVal=kv.Value;
+                    var cpBtn=SmallButton("⧉",()=>Clipboard.SetText(copyVal));
+                    cpBtn.FontSize=10.5;cpBtn.MinHeight=20;cpBtn.Padding=new Thickness(5,1,5,1);
+                    cpBtn.ToolTip="Copy "+kv.Key;
+                    Grid.SetColumn(cpBtn,2);line.Children.Add(cpBtn);
+                    cardStack.Children.Add(line);
+                }
+                filesHost.Children.Add(new Border{
+                    BorderBrush=new SolidColorBrush(Color.FromRgb(215,221,240)),
+                    BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(7),
+                    Margin=new Thickness(0,0,0,5),Child=cardStack});
+            }
+        }
+
+        foreach(var hdr in res.MatchedHeaders)
+        {
+            string hName=hdr.Header;
+            var cb=new CheckBox{
+                Content=$"{hName} ({hdr.MatchingFileCount})",
+                IsChecked=visibleSet.Contains(hName),
+                FontSize=11,Foreground=Ink,
+                Margin=new Thickness(2,1,6,2),
+                ToolTip=$"Sample: {hdr.SampleValue}"};
+            cb.Checked+=(_,_)=>{
+                visibleSet.Add(hName);
+                DeskSpaceInformationTabV380.SaveVisibleHeadersPreference(appPath,visibleSet);
+                RebuildFilesList();
+            };
+            cb.Unchecked+=(_,_)=>{
+                visibleSet.Remove(hName);
+                DeskSpaceInformationTabV380.SaveVisibleHeadersPreference(appPath,visibleSet);
+                RebuildFilesList();
+            };
+            checksWrap.Children.Add(cb);
+        }
+
+        shelfBody.Children.Add(checksWrap);
+        shelfBody.Children.Add(filesHost);
+        RebuildFilesList();
+    }
+    private void MaskRevealed()
+'@ 'DeskSpaceInformationV36 App Info Header->Value shelf'
 Finish-Patch $infoPath
 
 # 5. Surgical hook: DeskSpaceApplicationsV55.cs (CI R232 baseline does NOT include r262)
