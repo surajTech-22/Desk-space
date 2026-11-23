@@ -4,11 +4,14 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -18,6 +21,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Xml;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
 using Drawing = System.Drawing;
@@ -75,6 +79,25 @@ internal static class DeskSpacePinnedAppFilesV380
     private static readonly object QuickArcCacheLock = new();
     private static readonly Dictionary<string, (DateTime FetchedUtc, List<PinnedAppFileItemV380> Items)> QuickArcCache =
         new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object InAppTitleCacheLock = new();
+    private static readonly Dictionary<string, (long LastWriteTicks, string Title)> InAppTitleCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object AppDisplayNameCacheLock = new();
+    private static readonly Dictionary<string, string> AppDisplayNameCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly byte[] TallyCompanyNameTag = { 0x02, 0x10, 0x1B, 0x00, 0x00, 0x0F };
+    private static readonly byte[] TallyMailingNameTag = { 0x02, 0x10, 0x1C, 0x00, 0x00, 0x0F };
+
+    private static readonly HashSet<string> BoilerplateInAppTitles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "untitled", "document", "document1", "document 1", "book1", "book 1",
+        "sheet1", "workbook", "presentation", "presentation1", "powerpoint presentation",
+        "slide 1", "new document", "new microsoft word document", "new microsoft excel worksheet",
+        "microsoft word", "microsoft excel", "microsoft powerpoint", "word", "excel", "powerpoint",
+        "print", "output", "default", "india", "tallyprime", "tally.erp 9", "tally user",
+        "none", "n/a", "null", "template", "sample", "blank"
+    };
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -696,10 +719,8 @@ internal static class DeskSpacePinnedAppFilesV380
                 return false;
 
             var masterFiles = new List<string>(4);
-            string kindBadge;
             if (has1800)
             {
-                kindBadge = "TallyPrime (.1800)";
                 masterFiles.Add(company1800);
                 if (File.Exists(manager1800)) masterFiles.Add(manager1800);
                 if (File.Exists(tranMgr1800)) masterFiles.Add(tranMgr1800);
@@ -707,7 +728,6 @@ internal static class DeskSpacePinnedAppFilesV380
             }
             else
             {
-                kindBadge = "Tally.ERP 9 (.900)";
                 masterFiles.Add(company900);
                 if (File.Exists(manager900)) masterFiles.Add(manager900);
                 if (File.Exists(tranMgr900)) masterFiles.Add(tranMgr900);
@@ -728,7 +748,13 @@ internal static class DeskSpacePinnedAppFilesV380
                 ? folderName
                 : null;
             string? dataRoot = System.IO.Path.GetDirectoryName(fullFolder);
-            string displayName = "Tally Company #" + (code ?? folderName);
+            string? inAppName = TryReadTallyCompanyName(fullFolder);
+            string displayName = !string.IsNullOrWhiteSpace(inAppName)
+                ? inAppName
+                : "Tally Company #" + (code ?? folderName);
+            string kindBadge = has1800
+                ? (code != null ? $"TallyPrime · #{code}" : "TallyPrime (.1800)")
+                : (code != null ? $"Tally.ERP 9 · #{code}" : "Tally.ERP 9 (.900)");
 
             item = new PinnedAppFileItemV380(
                 DisplayName: displayName,
@@ -853,7 +879,7 @@ internal static class DeskSpacePinnedAppFilesV380
             {
                 string trimmed = fullPath.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
                 TryAdd(new PinnedAppFileItemV380(
-                    DisplayName: System.IO.Path.GetFileName(trimmed),
+                    DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
                     FullPath: trimmed,
                     ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
                     KindBadge: "Project Folder",
@@ -922,7 +948,7 @@ internal static class DeskSpacePinnedAppFilesV380
                                     {
                                         string trimmed = fullTarget.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
                                         TryAdd(new PinnedAppFileItemV380(
-                                            DisplayName: System.IO.Path.GetFileName(trimmed),
+                                            DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
                                             FullPath: trimmed,
                                             ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
                                             KindBadge: projBadge,
@@ -2403,7 +2429,6 @@ internal static class DeskSpacePinnedAppFilesV380
         string sourceBadge)
     {
         string full = NormalizeFullPathSafe(fullPath);
-        string fileName = System.IO.Path.GetFileName(full);
         string parent = System.IO.Path.GetDirectoryName(full) ?? string.Empty;
         string ext = GetEffectiveExtension(full);
 
@@ -2418,7 +2443,7 @@ internal static class DeskSpacePinnedAppFilesV380
         };
 
         return new PinnedAppFileItemV380(
-            DisplayName: fileName,
+            DisplayName: ResolveInAppDisplayName(full, isDirectory: false),
             FullPath: full,
             ParentFolder: parent,
             KindBadge: kindBadge,
@@ -2922,7 +2947,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 {
                     string trimmed = TrimTrailingSeparatorsUnlessDriveRoot(dir);
                     onItem(new PinnedAppFileItemV380(
-                        DisplayName: System.IO.Path.GetFileName(trimmed),
+                        DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
                         FullPath: trimmed,
                         ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
                         KindBadge: projBadge,
@@ -3269,6 +3294,1006 @@ internal static class DeskSpacePinnedAppFilesV380
         return TryLaunchAppOnly(cap, owner);
     }
 
+    // =========================================================================
+    // Universal In-App Display Name Extraction & App Discovery
+    // =========================================================================
+
+    private static readonly Dictionary<string, string> KnownAppDisplayNamesV380 = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["tallyprime.exe"] = "TallyPrime",
+        ["tally.exe"] = "Tally",
+        ["excel.exe"] = "Microsoft Excel",
+        ["winword.exe"] = "Microsoft Word",
+        ["powerpnt.exe"] = "Microsoft PowerPoint",
+        ["winman_launcher.exe"] = "Winman CA ERP",
+        ["wintax.exe"] = "Winman CA-ERP",
+        ["wintds.exe"] = "Winman TDS",
+        ["code.exe"] = "VS Code",
+        ["devenv.exe"] = "Visual Studio",
+        ["studio64.exe"] = "Android Studio",
+        ["rider64.exe"] = "Rider",
+        ["notepad++.exe"] = "Notepad++",
+        ["sublime_text.exe"] = "Sublime Text",
+        ["notepad.exe"] = "Notepad",
+        ["vlc.exe"] = "VLC Media Player",
+        ["msedge.exe"] = "Microsoft Edge",
+        ["chrome.exe"] = "Google Chrome",
+        ["firefox.exe"] = "Mozilla Firefox",
+        ["brave.exe"] = "Brave",
+        ["acrord32.exe"] = "Adobe Acrobat",
+        ["acrobat.exe"] = "Adobe Acrobat"
+    };
+
+    internal static string ResolvePinnedAppDisplayName(string pinnedPath)
+    {
+        if (string.IsNullOrWhiteSpace(pinnedPath))
+            return "Application";
+
+        string fullPinned = NormalizeFullPathSafe(pinnedPath);
+        if (string.IsNullOrEmpty(fullPinned))
+            return System.IO.Path.GetFileNameWithoutExtension(pinnedPath);
+
+        lock (AppDisplayNameCacheLock)
+        {
+            if (AppDisplayNameCache.TryGetValue(fullPinned, out string? cached))
+                return cached;
+        }
+
+        string? resolvedName = null;
+
+        if (ShouldPreferShortcutShellLaunch(fullPinned))
+        {
+            string lnkName = System.IO.Path.GetFileNameWithoutExtension(fullPinned);
+            if (!string.IsNullOrWhiteSpace(lnkName))
+                resolvedName = lnkName;
+        }
+
+        if (resolvedName == null)
+        {
+            string resolvedExe = ResolvePinnedExecutable(fullPinned);
+            string effectiveExe = !string.IsNullOrWhiteSpace(resolvedExe) ? resolvedExe : fullPinned;
+            string exeFile = System.IO.Path.GetFileName(effectiveExe);
+
+            if (!string.IsNullOrEmpty(exeFile) &&
+                KnownAppDisplayNamesV380.TryGetValue(exeFile, out string? knownName))
+            {
+                resolvedName = knownName;
+            }
+            else if (SafeFileExists(effectiveExe) &&
+                     System.IO.Path.GetExtension(effectiveExe).Equals(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var ver = FileVersionInfo.GetVersionInfo(effectiveExe);
+                    string? raw = !string.IsNullOrWhiteSpace(ver.FileDescription)
+                        ? ver.FileDescription
+                        : ver.ProductName;
+                    string? cleaned = CleanAndValidateInAppTitle(raw, allowShort: true);
+                    if (cleaned != null && cleaned.Length <= 40)
+                        resolvedName = cleaned;
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        resolvedName ??= System.IO.Path.GetFileNameWithoutExtension(fullPinned);
+        if (string.IsNullOrWhiteSpace(resolvedName))
+            resolvedName = System.IO.Path.GetFileName(fullPinned);
+
+        lock (AppDisplayNameCacheLock)
+        {
+            if (AppDisplayNameCache.Count >= 256 && !AppDisplayNameCache.ContainsKey(fullPinned))
+                AppDisplayNameCache.Clear();
+            AppDisplayNameCache[fullPinned] = resolvedName;
+        }
+        return resolvedName;
+    }
+
+    internal static string ResolveInAppDisplayName(string fullPath, bool isDirectory)
+    {
+        string normalized = NormalizeFullPathSafe(fullPath);
+        if (string.IsNullOrEmpty(normalized))
+            return System.IO.Path.GetFileName(fullPath);
+
+        string trimmed = TrimTrailingSeparatorsUnlessDriveRoot(normalized);
+        long stampTicks = GetContentStampTicks(trimmed, isDirectory);
+
+        lock (InAppTitleCacheLock)
+        {
+            if (InAppTitleCache.TryGetValue(trimmed, out var cached) &&
+                cached.LastWriteTicks == stampTicks)
+            {
+                return cached.Title;
+            }
+        }
+
+        string? extracted = TryExtractInAppTitle(trimmed, isDirectory);
+        string result = !string.IsNullOrWhiteSpace(extracted)
+            ? extracted
+            : FormatFriendlyFileName(System.IO.Path.GetFileName(trimmed), isDirectory);
+
+        if (string.IsNullOrWhiteSpace(result))
+            result = System.IO.Path.GetFileName(trimmed);
+
+        lock (InAppTitleCacheLock)
+        {
+            if (InAppTitleCache.Count >= 1024 && !InAppTitleCache.ContainsKey(trimmed))
+                InAppTitleCache.Clear();
+            InAppTitleCache[trimmed] = (stampTicks, result);
+        }
+        return result;
+    }
+
+    private static long GetContentStampTicks(string trimmedPath, bool isDirectory)
+    {
+        if (!isDirectory)
+            return SafeGetFileWriteTimeUtc(trimmedPath).Ticks;
+
+        long best = SafeGetDirectoryWriteTimeUtc(trimmedPath).Ticks;
+        foreach (string probe in new[] { "Company.1800", "Company.900", "package.json", "pubspec.yaml" })
+        {
+            string p = System.IO.Path.Combine(trimmedPath, probe);
+            if (SafeFileExists(p))
+            {
+                long t = SafeGetFileWriteTimeUtc(p).Ticks;
+                if (t > best) best = t;
+            }
+        }
+        return best;
+    }
+
+    internal static string? TryReadTallyCompanyName(string companyFolderPath)
+    {
+        if (string.IsNullOrWhiteSpace(companyFolderPath) || !SafeDirectoryExists(companyFolderPath))
+            return null;
+
+        foreach (string metaName in new[] { "Company.1800", "CmpSave.1800", "Company.900", "CmpSave.900" })
+        {
+            string metaPath = System.IO.Path.Combine(companyFolderPath, metaName);
+            if (!SafeFileExists(metaPath))
+                continue;
+
+            try
+            {
+                using var fs = new FileStream(metaPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                int toRead = (int)Math.Min(16384, fs.Length);
+                if (toRead < 16)
+                    continue;
+
+                byte[] buf = new byte[toRead];
+                int totalRead = 0;
+                while (totalRead < toRead)
+                {
+                    int n = fs.Read(buf, totalRead, toRead - totalRead);
+                    if (n <= 0) break;
+                    totalRead += n;
+                }
+                if (totalRead < 16)
+                    continue;
+
+                string? primary = ExtractTallyTaggedUtf16(buf, totalRead, TallyCompanyNameTag);
+                if (primary != null)
+                    return primary;
+
+                string? mailing = ExtractTallyTaggedUtf16(buf, totalRead, TallyMailingNameTag);
+                if (mailing != null)
+                    return mailing;
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExtractTallyTaggedUtf16(byte[] buf, int length, byte[] tag)
+    {
+        int limit = length - tag.Length - 6;
+        for (int i = 0; i <= limit; i++)
+        {
+            bool match = true;
+            for (int k = 0; k < tag.Length; k++)
+            {
+                if (buf[i + k] != tag[k]) { match = false; break; }
+            }
+            if (!match)
+                continue;
+
+            ushort byteLen = BitConverter.ToUInt16(buf, i + tag.Length);
+            if (byteLen < 4 || byteLen > 512 || (byteLen % 2) != 0)
+                continue;
+
+            int strStart = i + tag.Length + 2;
+            if (strStart + byteLen > length)
+                continue;
+
+            string raw = Encoding.Unicode.GetString(buf, strStart, byteLen).TrimEnd('\0');
+            string? cleaned = CleanAndValidateInAppTitle(raw, allowShort: true);
+            if (cleaned != null)
+                return cleaned;
+        }
+        return null;
+    }
+
+    private static string? TryExtractInAppTitle(string trimmedPath, bool isDirectory)
+    {
+        try
+        {
+            if (isDirectory)
+            {
+                string? tallyName = TryReadTallyCompanyName(trimmedPath);
+                if (tallyName != null)
+                    return tallyName;
+
+                return TryReadProjectFolderTitle(trimmedPath);
+            }
+
+            if (!SafeFileExists(trimmedPath) || IsReparsePoint(trimmedPath))
+                return null;
+
+            string ext = System.IO.Path.GetExtension(trimmedPath).ToLowerInvariant();
+            return ext switch
+            {
+                ".docx" or ".docm" or ".dotx" or ".xlsx" or ".xlsm" or ".xltx" or
+                ".pptx" or ".pptm" or ".ppsx" or ".odt" or ".ods" or ".odp"
+                    => TryReadOoxmlOrOdfTitle(trimmedPath),
+                ".pdf" => TryReadPdfTitle(trimmedPath),
+                ".html" or ".htm" or ".xhtml" or ".svg" => TryReadHtmlOrSvgTitle(trimmedPath),
+                ".md" or ".markdown" => TryReadMarkdownTitle(trimmedPath),
+                ".rtf" => TryReadRtfTitle(trimmedPath),
+                ".mp3" => TryReadMp3Title(trimmedPath),
+                ".mp4" or ".m4a" or ".mov" => TryReadMp4Title(trimmedPath),
+                ".flac" => TryReadFlacTitle(trimmedPath),
+                ".csproj" or ".vbproj" or ".fsproj" => TryReadMsBuildProjectTitle(trimmedPath),
+                ".ipynb" => TryReadNotebookTitle(trimmedPath),
+                _ => null
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryReadProjectFolderTitle(string folderPath)
+    {
+        // 1. Node / VS Code extension package.json
+        string pkgPath = System.IO.Path.Combine(folderPath, "package.json");
+        if (SafeFileExists(pkgPath))
+        {
+            string? text = ReadHeadUtf8Safe(pkgPath, 8192);
+            if (text != null)
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(text, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        if (doc.RootElement.TryGetProperty("displayName", out var dn) && dn.ValueKind == JsonValueKind.String)
+                        {
+                            string? c = CleanAndValidateInAppTitle(dn.GetString(), allowShort: true);
+                            if (c != null) return c;
+                        }
+                        if (doc.RootElement.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String)
+                        {
+                            string? c = CleanAndValidateInAppTitle(nm.GetString(), allowShort: true);
+                            if (c != null) return c;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        // 2. .NET *.csproj AssemblyTitle/Product/PackageId
+        try
+        {
+            foreach (string csproj in Directory.EnumerateFiles(folderPath, "*.csproj", SearchOption.TopDirectoryOnly).Take(2))
+            {
+                string? title = TryReadMsBuildProjectTitle(csproj);
+                if (title != null) return title;
+            }
+            string[] slns = Directory.EnumerateFiles(folderPath, "*.sln*", SearchOption.TopDirectoryOnly).Take(2).ToArray();
+            if (slns.Length == 1)
+            {
+                string? c = CleanAndValidateInAppTitle(FormatFriendlyFileName(System.IO.Path.GetFileName(slns[0]), isDirectory: false), allowShort: true);
+                if (c != null) return c;
+            }
+        }
+        catch
+        {
+        }
+
+        // 3. Flutter pubspec.yaml
+        string pubspec = System.IO.Path.Combine(folderPath, "pubspec.yaml");
+        if (SafeFileExists(pubspec))
+        {
+            string? text = ReadHeadUtf8Safe(pubspec, 2048);
+            if (text != null)
+            {
+                var m = Regex.Match(text, @"(?m)^name:\s*[""']?([^""'\r\n#]+)[""']?");
+                if (m.Success)
+                {
+                    string? c = CleanAndValidateInAppTitle(m.Groups[1].Value, allowShort: true);
+                    if (c != null) return c;
+                }
+            }
+        }
+
+        // 4. Rust Cargo.toml / Python pyproject.toml
+        foreach (string toml in new[] { "Cargo.toml", "pyproject.toml" })
+        {
+            string tp = System.IO.Path.Combine(folderPath, toml);
+            if (!SafeFileExists(tp)) continue;
+            string? text = ReadHeadUtf8Safe(tp, 4096);
+            if (text == null) continue;
+            var m = Regex.Match(text, @"(?ms)\[(?:package|project)\][^\[]*?\bname\s*=\s*[""']([^""'\r\n]+)[""']");
+            if (m.Success)
+            {
+                string? c = CleanAndValidateInAppTitle(m.Groups[1].Value, allowShort: true);
+                if (c != null) return c;
+            }
+        }
+
+        // 5. Gradle settings.gradle(.kts)
+        foreach (string gradle in new[] { "settings.gradle.kts", "settings.gradle" })
+        {
+            string gp = System.IO.Path.Combine(folderPath, gradle);
+            if (!SafeFileExists(gp)) continue;
+            string? text = ReadHeadUtf8Safe(gp, 4096);
+            if (text == null) continue;
+            var m = Regex.Match(text, @"rootProject\.name\s*=\s*[""']([^""'\r\n]+)[""']");
+            if (m.Success)
+            {
+                string? c = CleanAndValidateInAppTitle(m.Groups[1].Value, allowShort: true);
+                if (c != null) return c;
+            }
+        }
+
+        // 6. Godot project.godot
+        string godot = System.IO.Path.Combine(folderPath, "project.godot");
+        if (SafeFileExists(godot))
+        {
+            string? text = ReadHeadUtf8Safe(godot, 4096);
+            if (text != null)
+            {
+                var m = Regex.Match(text, @"(?m)^config/name=""([^""\r\n]+)""");
+                if (m.Success)
+                {
+                    string? c = CleanAndValidateInAppTitle(m.Groups[1].Value, allowShort: true);
+                    if (c != null) return c;
+                }
+            }
+        }
+
+        // 7. Unity ProjectSettings.asset
+        string unity = System.IO.Path.Combine(folderPath, "ProjectSettings", "ProjectSettings.asset");
+        if (SafeFileExists(unity))
+        {
+            string? text = ReadHeadUtf8Safe(unity, 8192);
+            if (text != null)
+            {
+                var m = Regex.Match(text, @"(?m)^\s*productName:\s*(.+)$");
+                if (m.Success)
+                {
+                    string? c = CleanAndValidateInAppTitle(m.Groups[1].Value, allowShort: true);
+                    if (c != null) return c;
+                }
+            }
+        }
+
+        // 8. Windows desktop.ini localized name (literal names only)
+        string desktopIni = System.IO.Path.Combine(folderPath, "desktop.ini");
+        if (SafeFileExists(desktopIni))
+        {
+            string? text = ReadHeadUtf8Safe(desktopIni, 2048);
+            if (text != null)
+            {
+                var m = Regex.Match(text, @"(?mi)^LocalizedResourceName\s*=\s*(.+)$");
+                if (m.Success)
+                {
+                    string val = m.Groups[1].Value.Trim();
+                    if (!val.StartsWith('@'))
+                    {
+                        string? c = CleanAndValidateInAppTitle(val, allowShort: true);
+                        if (c != null) return c;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string? TryReadMsBuildProjectTitle(string projPath)
+    {
+        string? text = ReadHeadUtf8Safe(projPath, 8192);
+        if (text == null) return null;
+        foreach (string tag in new[] { "AssemblyTitle", "Product", "PackageId" })
+        {
+            var m = Regex.Match(text, $@"<{tag}\b[^>]*>([^<]+)</{tag}>", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                string val = WebUtility.HtmlDecode(m.Groups[1].Value);
+                if (!val.Contains("$("))
+                {
+                    string? c = CleanAndValidateInAppTitle(val, allowShort: true);
+                    if (c != null) return c;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static string? TryReadOoxmlOrOdfTitle(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (fs.Length <= 0 || fs.Length > 20L * 1024 * 1024)
+            return null;
+
+        using var zip = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: false);
+        var entry = zip.Entries.FirstOrDefault(e =>
+        {
+            string norm = e.FullName.Replace('\\', '/');
+            return norm.Equals("docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
+                   norm.Equals("meta.xml", StringComparison.OrdinalIgnoreCase);
+        });
+        if (entry == null || entry.Length <= 0 || entry.Length > 256 * 1024)
+            return null;
+
+        using var es = entry.Open();
+        byte[] buf = new byte[Math.Min(32768, (int)entry.Length)];
+        int read = ReadUpTo(es, buf);
+        if (read <= 0) return null;
+
+        using var ms = new MemoryStream(buf, 0, read, writable: false);
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreComments = true,
+            IgnoreWhitespace = true
+        };
+        using var xr = XmlReader.Create(ms, settings);
+        while (xr.Read())
+        {
+            if (xr.NodeType == XmlNodeType.Element &&
+                string.Equals(xr.LocalName, "title", StringComparison.OrdinalIgnoreCase) &&
+                (string.IsNullOrEmpty(xr.NamespaceURI) ||
+                 xr.NamespaceURI.Contains("purl.org/dc/", StringComparison.OrdinalIgnoreCase) ||
+                 xr.NamespaceURI.Contains("oasis-open.org", StringComparison.OrdinalIgnoreCase)))
+            {
+                string raw = xr.ReadElementContentAsString();
+                string? cleaned = CleanAndValidateInAppTitle(raw);
+                if (cleaned != null)
+                    return cleaned;
+            }
+        }
+        return null;
+    }
+
+    private static string? TryReadPdfTitle(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (fs.Length < 16)
+            return null;
+
+        int headLen = (int)Math.Min(32768, fs.Length);
+        byte[] headBuf = new byte[headLen];
+        int headRead = ReadUpTo(fs, headBuf);
+        string headText = Encoding.Latin1.GetString(headBuf, 0, headRead);
+
+        string tailText = string.Empty;
+        if (fs.Length > headLen)
+        {
+            int tailLen = (int)Math.Min(16384, fs.Length - headLen);
+            fs.Seek(-tailLen, SeekOrigin.End);
+            byte[] tailBuf = new byte[tailLen];
+            int tailRead = ReadUpTo(fs, tailBuf);
+            tailText = Encoding.Latin1.GetString(tailBuf, 0, tailRead);
+        }
+
+        foreach (string chunk in new[] { headText, tailText })
+        {
+            if (string.IsNullOrEmpty(chunk)) continue;
+
+            // XMP dc:title
+            var xmpLi = Regex.Match(chunk, @"<dc:title\b[^>]*>(?:(?!</dc:title>).)*?<rdf:li\b[^>]*>([^<]+)</rdf:li>",
+                RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            if (xmpLi.Success)
+            {
+                string? c = CleanPdfCandidateTitle(WebUtility.HtmlDecode(xmpLi.Groups[1].Value));
+                if (c != null) return c;
+            }
+            var xmpDirect = Regex.Match(chunk, @"<dc:title\b[^>]*>([^<]+)</dc:title>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            if (xmpDirect.Success)
+            {
+                string? c = CleanPdfCandidateTitle(WebUtility.HtmlDecode(xmpDirect.Groups[1].Value));
+                if (c != null) return c;
+            }
+
+            // PDF /Title (...) or /Title <...>
+            var infoMatch = Regex.Match(chunk, @"/Title\s*(\(|<)", RegexOptions.CultureInvariant);
+            if (infoMatch.Success)
+            {
+                char delim = infoMatch.Groups[1].Value[0];
+                int valStart = infoMatch.Groups[1].Index;
+                string? decoded = delim == '('
+                    ? DecodePdfLiteralString(chunk, valStart)
+                    : DecodePdfHexString(chunk, valStart);
+                string? c = CleanPdfCandidateTitle(decoded);
+                if (c != null) return c;
+            }
+        }
+        return null;
+    }
+
+    private static string? CleanPdfCandidateTitle(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        string s = raw.Trim();
+        foreach (string prefix in new[]
+        {
+            "Microsoft Word - ", "Microsoft Excel - ",
+            "Microsoft PowerPoint - ", "PowerPoint - "
+        })
+        {
+            if (s.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                s = s.Substring(prefix.Length).Trim();
+                break;
+            }
+        }
+        foreach (string ext in new[] { ".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt", ".pdf" })
+        {
+            if (s.EndsWith(ext, StringComparison.OrdinalIgnoreCase) && s.Length > ext.Length + 1)
+            {
+                s = s.Substring(0, s.Length - ext.Length).Trim();
+                break;
+            }
+        }
+        return CleanAndValidateInAppTitle(s);
+    }
+
+    private static string? DecodePdfLiteralString(string chunk, int openParenIndex)
+    {
+        if (openParenIndex >= chunk.Length || chunk[openParenIndex] != '(')
+            return null;
+
+        var bytes = new List<byte>(128);
+        int depth = 0;
+        int limit = Math.Min(chunk.Length, openParenIndex + 512);
+        for (int i = openParenIndex; i < limit; i++)
+        {
+            char c = chunk[i];
+            if (c == '(' && depth == 0) { depth = 1; continue; }
+            if (c == '\\' && i + 1 < limit)
+            {
+                char nxt = chunk[++i];
+                switch (nxt)
+                {
+                    case 'n': bytes.Add((byte)'\n'); break;
+                    case 'r': bytes.Add((byte)'\r'); break;
+                    case 't': bytes.Add((byte)'\t'); break;
+                    case '(': bytes.Add((byte)'('); break;
+                    case ')': bytes.Add((byte)')'); break;
+                    case '\\': bytes.Add((byte)'\\'); break;
+                    case '\r': if (i + 1 < limit && chunk[i + 1] == '\n') i++; break;
+                    case '\n': break;
+                    default:
+                        if (nxt is >= '0' and <= '7')
+                        {
+                            int oct = nxt - '0';
+                            for (int d = 0; d < 2 && i + 1 < limit && chunk[i + 1] is >= '0' and <= '7'; d++)
+                                oct = (oct << 3) | (chunk[++i] - '0');
+                            bytes.Add((byte)(oct & 0xFF));
+                        }
+                        else
+                        {
+                            bytes.Add((byte)nxt);
+                        }
+                        break;
+                }
+                continue;
+            }
+            if (c == '(') { depth++; bytes.Add((byte)'('); continue; }
+            if (c == ')')
+            {
+                depth--;
+                if (depth == 0) break;
+                bytes.Add((byte)')');
+                continue;
+            }
+            bytes.Add((byte)(c & 0xFF));
+        }
+
+        if (bytes.Count == 0) return null;
+        byte[] arr = bytes.ToArray();
+        if (arr.Length >= 2 && arr[0] == 0xFE && arr[1] == 0xFF)
+            return Encoding.BigEndianUnicode.GetString(arr, 2, arr.Length - 2);
+        return Encoding.UTF8.GetString(arr);
+    }
+
+    private static string? DecodePdfHexString(string chunk, int openAngleIndex)
+    {
+        if (openAngleIndex >= chunk.Length || chunk[openAngleIndex] != '<')
+            return null;
+
+        int close = chunk.IndexOf('>', openAngleIndex + 1);
+        if (close <= openAngleIndex + 1 || close - openAngleIndex > 1024)
+            return null;
+
+        var hexOnly = new StringBuilder(close - openAngleIndex);
+        for (int i = openAngleIndex + 1; i < close; i++)
+        {
+            char c = chunk[i];
+            if (!char.IsWhiteSpace(c)) hexOnly.Append(c);
+        }
+        if (hexOnly.Length < 2) return null;
+        if ((hexOnly.Length % 2) != 0) hexOnly.Append('0');
+
+        byte[] arr = new byte[hexOnly.Length / 2];
+        for (int i = 0; i < arr.Length; i++)
+        {
+            if (!byte.TryParse(hexOnly.ToString(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out arr[i]))
+                return null;
+        }
+        if (arr.Length >= 2 && arr[0] == 0xFE && arr[1] == 0xFF)
+            return Encoding.BigEndianUnicode.GetString(arr, 2, arr.Length - 2);
+        return Encoding.UTF8.GetString(arr);
+    }
+
+    private static string? TryReadHtmlOrSvgTitle(string filePath)
+    {
+        string? text = ReadHeadUtf8Safe(filePath, 16384);
+        if (text == null) return null;
+        var m = Regex.Match(text, @"<title\b[^>]*>(.*?)</title>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        if (!m.Success) return null;
+        return CleanAndValidateInAppTitle(WebUtility.HtmlDecode(m.Groups[1].Value));
+    }
+
+    private static string? TryReadMarkdownTitle(string filePath)
+    {
+        string? text = ReadHeadUtf8Safe(filePath, 4096);
+        if (text == null) return null;
+        string trimmedStart = text.TrimStart('\uFEFF', ' ', '\t', '\r', '\n');
+        if (trimmedStart.StartsWith("---", StringComparison.Ordinal))
+        {
+            int endFront = trimmedStart.IndexOf("\n---", 3, StringComparison.Ordinal);
+            if (endFront > 3)
+            {
+                string fm = trimmedStart.Substring(3, endFront - 3);
+                var m = Regex.Match(fm, @"(?m)^\s*title\s*:\s*[""']?([^""'\r\n]+)[""']?");
+                if (m.Success)
+                {
+                    string? c = CleanAndValidateInAppTitle(m.Groups[1].Value);
+                    if (c != null) return c;
+                }
+            }
+        }
+        var h1 = Regex.Match(trimmedStart, @"(?m)^#\s+(.+)$");
+        if (h1.Success)
+        {
+            string raw = Regex.Replace(h1.Groups[1].Value, @"[`*_]+", string.Empty).Trim().TrimEnd('#').Trim();
+            return CleanAndValidateInAppTitle(raw);
+        }
+        return null;
+    }
+
+    private static string? TryReadRtfTitle(string filePath)
+    {
+        string? text = ReadHeadUtf8Safe(filePath, 8192);
+        if (text == null) return null;
+        var m = Regex.Match(text, @"\{\\title\s+([^{}\\]+)\}", RegexOptions.IgnoreCase);
+        return m.Success ? CleanAndValidateInAppTitle(m.Groups[1].Value) : null;
+    }
+
+    private static string? TryReadMp3Title(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        byte[] buf = new byte[Math.Min(32768, (int)Math.Max(0, fs.Length))];
+        int len = ReadUpTo(fs, buf);
+
+        if (len >= 10 && buf[0] == 'I' && buf[1] == 'D' && buf[2] == '3')
+        {
+            byte verMajor = buf[3];
+            int tagSize = ((buf[6] & 0x7F) << 21) | ((buf[7] & 0x7F) << 14) | ((buf[8] & 0x7F) << 7) | (buf[9] & 0x7F);
+            int limit = Math.Min(len, 10 + tagSize);
+            int pos = 10;
+            if ((buf[5] & 0x40) != 0 && verMajor >= 3 && pos + 4 <= limit)
+            {
+                int extSize = verMajor == 4
+                    ? ((buf[pos] & 0x7F) << 21) | ((buf[pos + 1] & 0x7F) << 14) | ((buf[pos + 2] & 0x7F) << 7) | (buf[pos + 3] & 0x7F)
+                    : (buf[pos] << 24) | (buf[pos + 1] << 16) | (buf[pos + 2] << 8) | buf[pos + 3];
+                pos += extSize + (verMajor == 3 ? 4 : 0);
+            }
+
+            if (verMajor is 3 or 4)
+            {
+                while (pos + 10 <= limit)
+                {
+                    if (buf[pos] == 0) break;
+                    string frameId = Encoding.ASCII.GetString(buf, pos, 4);
+                    int fSize = verMajor == 4
+                        ? ((buf[pos + 4] & 0x7F) << 21) | ((buf[pos + 5] & 0x7F) << 14) | ((buf[pos + 6] & 0x7F) << 7) | (buf[pos + 7] & 0x7F)
+                        : (buf[pos + 4] << 24) | (buf[pos + 5] << 16) | (buf[pos + 6] << 8) | buf[pos + 7];
+                    if (fSize <= 0 || pos + 10 + fSize > limit) break;
+                    if (frameId == "TIT2")
+                    {
+                        string? c = DecodeId3TextFrame(buf, pos + 10, fSize);
+                        if (c != null) return c;
+                    }
+                    pos += 10 + fSize;
+                }
+            }
+            else if (verMajor == 2)
+            {
+                while (pos + 6 <= limit)
+                {
+                    if (buf[pos] == 0) break;
+                    string frameId = Encoding.ASCII.GetString(buf, pos, 3);
+                    int fSize = (buf[pos + 3] << 16) | (buf[pos + 4] << 8) | buf[pos + 5];
+                    if (fSize <= 0 || pos + 6 + fSize > limit) break;
+                    if (frameId == "TT2")
+                    {
+                        string? c = DecodeId3TextFrame(buf, pos + 6, fSize);
+                        if (c != null) return c;
+                    }
+                    pos += 6 + fSize;
+                }
+            }
+        }
+
+        // ID3v1 fallback in last 128 bytes
+        if (fs.Length >= 128)
+        {
+            fs.Seek(-128, SeekOrigin.End);
+            byte[] tag = new byte[128];
+            if (ReadUpTo(fs, tag) == 128 && tag[0] == 'T' && tag[1] == 'A' && tag[2] == 'G')
+            {
+                string raw = Encoding.Latin1.GetString(tag, 3, 30).TrimEnd('\0', ' ');
+                return CleanAndValidateInAppTitle(raw);
+            }
+        }
+        return null;
+    }
+
+    private static string? DecodeId3TextFrame(byte[] buf, int offset, int len)
+    {
+        if (len < 2 || offset + len > buf.Length) return null;
+        byte enc = buf[offset];
+        int dataStart = offset + 1;
+        int dataLen = len - 1;
+        string raw = enc switch
+        {
+            0 => Encoding.Latin1.GetString(buf, dataStart, dataLen),
+            1 => DecodeBomUtf16(buf, dataStart, dataLen),
+            2 => Encoding.BigEndianUnicode.GetString(buf, dataStart, dataLen),
+            3 => Encoding.UTF8.GetString(buf, dataStart, dataLen),
+            _ => Encoding.UTF8.GetString(buf, dataStart, dataLen)
+        };
+        return CleanAndValidateInAppTitle(raw.TrimEnd('\0'));
+    }
+
+    private static string DecodeBomUtf16(byte[] buf, int start, int len)
+    {
+        if (len >= 2)
+        {
+            if (buf[start] == 0xFF && buf[start + 1] == 0xFE)
+                return Encoding.Unicode.GetString(buf, start + 2, len - 2);
+            if (buf[start] == 0xFE && buf[start + 1] == 0xFF)
+                return Encoding.BigEndianUnicode.GetString(buf, start + 2, len - 2);
+        }
+        return Encoding.Unicode.GetString(buf, start, len);
+    }
+
+    private static string? TryReadMp4Title(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (fs.Length < 32) return null;
+
+        byte[] head = new byte[(int)Math.Min(65536, fs.Length)];
+        int headRead = ReadUpTo(fs, head);
+        string? res = ScanMp4TitleBuffer(head, headRead);
+        if (res != null) return res;
+
+        if (fs.Length > head.Length)
+        {
+            int tailLen = (int)Math.Min(65536, fs.Length - head.Length);
+            fs.Seek(-tailLen, SeekOrigin.End);
+            byte[] tail = new byte[tailLen];
+            int tailRead = ReadUpTo(fs, tail);
+            return ScanMp4TitleBuffer(tail, tailRead);
+        }
+        return null;
+    }
+
+    private static string? ScanMp4TitleBuffer(byte[] buf, int len)
+    {
+        for (int i = 4; i <= len - 28; i++)
+        {
+            if (buf[i] == 0xA9 && buf[i + 1] == 'n' && buf[i + 2] == 'a' && buf[i + 3] == 'm')
+            {
+                int searchEnd = Math.Min(len - 16, i + 32);
+                for (int j = i + 4; j <= searchEnd; j++)
+                {
+                    if (buf[j] == 'd' && buf[j + 1] == 'a' && buf[j + 2] == 't' && buf[j + 3] == 'a' && j >= 4)
+                    {
+                        int atomSize = (buf[j - 4] << 24) | (buf[j - 3] << 16) | (buf[j - 2] << 8) | buf[j - 1];
+                        if (atomSize < 17 || atomSize > 1024 || j - 4 + atomSize > len)
+                            continue;
+                        int payloadOffset = j + 12;
+                        int payloadLen = atomSize - 16;
+                        int dataType = (buf[j + 4] << 24) | (buf[j + 5] << 16) | (buf[j + 6] << 8) | buf[j + 7];
+                        string raw = dataType == 2
+                            ? Encoding.BigEndianUnicode.GetString(buf, payloadOffset, payloadLen)
+                            : Encoding.UTF8.GetString(buf, payloadOffset, payloadLen);
+                        string? c = CleanAndValidateInAppTitle(raw.TrimEnd('\0'));
+                        if (c != null) return c;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static string? TryReadFlacTitle(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        byte[] buf = new byte[Math.Min(32768, (int)Math.Max(0, fs.Length))];
+        int len = ReadUpTo(fs, buf);
+        if (len < 12 || buf[0] != 'f' || buf[1] != 'L' || buf[2] != 'a' || buf[3] != 'C')
+            return null;
+
+        int pos = 4;
+        while (pos + 4 <= len)
+        {
+            bool isLast = (buf[pos] & 0x80) != 0;
+            int blockType = buf[pos] & 0x7F;
+            int blockLen = (buf[pos + 1] << 16) | (buf[pos + 2] << 8) | buf[pos + 3];
+            pos += 4;
+            if (blockLen < 0 || pos + blockLen > len) break;
+
+            if (blockType == 4 && blockLen >= 8)
+            {
+                int blockEnd = pos + blockLen;
+                int cur = pos;
+                int vendorLen = BitConverter.ToInt32(buf, cur);
+                cur += 4;
+                if (vendorLen < 0 || cur + vendorLen + 4 > blockEnd) break;
+                cur += vendorLen;
+                int count = Math.Min(64, BitConverter.ToInt32(buf, cur));
+                cur += 4;
+                for (int k = 0; k < count && cur + 4 <= blockEnd; k++)
+                {
+                    int clen = BitConverter.ToInt32(buf, cur);
+                    cur += 4;
+                    if (clen <= 0 || cur + clen > blockEnd) break;
+                    string entry = Encoding.UTF8.GetString(buf, cur, clen);
+                    cur += clen;
+                    if (entry.StartsWith("TITLE=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string? c = CleanAndValidateInAppTitle(entry.Substring(6));
+                        if (c != null) return c;
+                    }
+                }
+            }
+            pos += blockLen;
+            if (isLast) break;
+        }
+        return null;
+    }
+
+    private static string? TryReadNotebookTitle(string filePath)
+    {
+        string? text = ReadHeadUtf8Safe(filePath, 8192);
+        if (text == null) return null;
+        var m = Regex.Match(text, @"""#\s+([^""\\]{2,90})""");
+        return m.Success ? CleanAndValidateInAppTitle(m.Groups[1].Value) : null;
+    }
+
+    private static string? ReadHeadUtf8Safe(string path, int maxBytes)
+    {
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (fs.Length <= 0) return null;
+            byte[] buf = new byte[(int)Math.Min(maxBytes, fs.Length)];
+            int read = ReadUpTo(fs, buf);
+            return read <= 0 ? null : Encoding.UTF8.GetString(buf, 0, read);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static int ReadUpTo(Stream stream, byte[] buffer)
+    {
+        int total = 0;
+        while (total < buffer.Length)
+        {
+            int n = stream.Read(buffer, total, buffer.Length - total);
+            if (n <= 0) break;
+            total += n;
+        }
+        return total;
+    }
+
+    internal static string? CleanAndValidateInAppTitle(string? raw, bool allowShort = false)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        string trimmed = raw.TrimEnd('\0');
+        foreach (char c in trimmed)
+        {
+            if (c == '\uFFFD') return null;
+            if (char.IsControl(c) && c != '\r' && c != '\n' && c != '\t')
+                return null;
+        }
+
+        string s = Regex.Replace(trimmed, @"\s+", " ").Trim().Trim('"', '\'');
+        int minLen = allowShort ? 2 : 2;
+        if (s.Length < minLen || s.Length > 100)
+            return null;
+
+        int alnum = 0;
+        foreach (char c in s)
+        {
+            if (char.IsLetterOrDigit(c)) alnum++;
+        }
+        if (alnum < 2)
+            return null;
+
+        string noBraces = s.Trim('{', '}');
+        if (Regex.IsMatch(noBraces, @"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"))
+            return null;
+
+        if (s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            s.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+            s.StartsWith("file://", StringComparison.OrdinalIgnoreCase) ||
+            (s.Length >= 3 && char.IsLetter(s[0]) && s[1] == ':' && (s[2] == '\\' || s[2] == '/')) ||
+            s.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (BoilerplateInAppTitles.Contains(s))
+            return null;
+
+        return s;
+    }
+
+    internal static string FormatFriendlyFileName(string rawName, bool isDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(rawName))
+            return string.Empty;
+
+        string stem = rawName.Trim();
+        if (!isDirectory)
+        {
+            if (stem.EndsWith(".tax.wb", StringComparison.OrdinalIgnoreCase))
+                stem = stem.Substring(0, stem.Length - ".tax.wb".Length);
+            else if (stem.EndsWith(".wgst.wb", StringComparison.OrdinalIgnoreCase))
+                stem = stem.Substring(0, stem.Length - ".wgst.wb".Length);
+            else
+            {
+                string withoutExt = System.IO.Path.GetFileNameWithoutExtension(stem);
+                if (!string.IsNullOrWhiteSpace(withoutExt))
+                    stem = withoutExt;
+            }
+        }
+
+        string friendly = Regex.Replace(stem.Replace('_', ' '), @"\s+", " ").Trim();
+        return string.IsNullOrEmpty(friendly) ? rawName.Trim() : friendly;
+    }
+
     internal static bool TryGetCachedQuickArcFiles(
         string pinnedPath,
         out IReadOnlyList<PinnedAppFileItemV380> items)
@@ -3281,7 +4306,7 @@ internal static class DeskSpacePinnedAppFilesV380
         lock (QuickArcCacheLock)
         {
             if (QuickArcCache.TryGetValue(key, out var entry) &&
-                (DateTime.UtcNow - entry.FetchedUtc).TotalSeconds < 30)
+                (DateTime.UtcNow - entry.FetchedUtc).TotalSeconds < 45)
             {
                 items = entry.Items.ToArray();
                 return true;
@@ -3292,7 +4317,9 @@ internal static class DeskSpacePinnedAppFilesV380
 
     internal static async Task<IReadOnlyList<PinnedAppFileItemV380>> GetQuickArcFilesAsync(
         string pinnedPath,
-        int maxItems = 4)
+        int maxItems = 250,
+        Action<IReadOnlyList<PinnedAppFileItemV380>>? onProgress = null,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(pinnedPath) || maxItems <= 0)
             return Array.Empty<PinnedAppFileItemV380>();
@@ -3303,64 +4330,132 @@ internal static class DeskSpacePinnedAppFilesV380
         string key = NormalizeFullPathSafe(pinnedPath);
         return await Task.Run(() =>
         {
+            ct.ThrowIfCancellationRequested();
             var cap = ResolveCapability(pinnedPath);
             var recent = DiscoverRecentItems(cap);
             var extra = new List<PinnedAppFileItemV380>();
 
-            if (recent.Count < maxItems)
+            // Phase 1: Warm index + explicit app data roots for immediate full-arc population
+            foreach (var hit in QueryWarmSearchIndexV13(cap, ct))
             {
-                foreach (var hit in QueryWarmSearchIndexV13(cap, CancellationToken.None))
-                {
-                    extra.Add(hit);
-                    if (extra.Count >= maxItems * 3)
-                        break;
-                }
+                extra.Add(hit);
+                if (extra.Count >= MaxSystemSearchHits)
+                    break;
+            }
 
-                // Fast bounded scan of explicit app data roots (Tally Data dirs, Winman UserData, etc.)
-                foreach (string root in cap.ExtraDataRoots)
-                {
-                    if (!SafeDirectoryExists(root))
-                        continue;
+            foreach (string root in cap.ExtraDataRoots)
+            {
+                if (ct.IsCancellationRequested)
+                    break;
+                if (!SafeDirectoryExists(root))
+                    continue;
 
-                    try
+                try
+                {
+                    foreach (string dir in Directory.EnumerateDirectories(root).Take(250))
                     {
-                        foreach (string dir in Directory.EnumerateDirectories(root).Take(60))
+                        if (ct.IsCancellationRequested)
+                            break;
+
+                        if (cap.IncludesTallyCompanies)
                         {
-                            if (cap.IncludesTallyCompanies &&
-                                TryParseTallyCompanyFolder(dir, out var tItem, isRecent: false, sourceBadge: "Tally Data") &&
+                            if (TryParseTallyCompanyFolder(dir, out var tItem, isRecent: false, sourceBadge: "Tally Data") &&
                                 tItem != null)
                             {
                                 extra.Add(tItem);
+                                continue;
+                            }
+
+                            try
+                            {
+                                foreach (string nested in Directory.EnumerateDirectories(dir).Take(60))
+                                {
+                                    if (ct.IsCancellationRequested)
+                                        break;
+                                    if (TryParseTallyCompanyFolder(nested, out var nestedItem, isRecent: false, sourceBadge: "Tally Data") &&
+                                        nestedItem != null)
+                                    {
+                                        extra.Add(nestedItem);
+                                    }
+                                }
+                            }
+                            catch
+                            {
                             }
                         }
-
-                        foreach (string file in Directory.EnumerateFiles(root).Take(60))
+                        else if (cap.IncludesProjectFolders &&
+                                 IsLikelyProjectFolder(dir, out string projBadge))
                         {
-                            if (IsAllowedForCapability(cap, file, checkExtensionMatch: true))
-                                extra.Add(CreateFileItem(file, SafeGetFileWriteTimeUtc(file), isRecent: false, sourceBadge: "App Data"));
+                            string trimmed = TrimTrailingSeparatorsUnlessDriveRoot(dir);
+                            extra.Add(new PinnedAppFileItemV380(
+                                DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
+                                FullPath: trimmed,
+                                ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
+                                KindBadge: projBadge,
+                                SortTimeUtc: SafeGetDirectoryWriteTimeUtc(trimmed),
+                                IsRecent: false,
+                                SourceBadge: "Project Folder",
+                                IsDirectory: true));
                         }
                     }
-                    catch
-                    {
-                    }
 
-                    if (extra.Count >= maxItems * 4)
-                        break;
+                    foreach (string file in Directory.EnumerateFiles(root).Take(250))
+                    {
+                        if (ct.IsCancellationRequested)
+                            break;
+                        if (IsAllowedForCapability(cap, file, checkExtensionMatch: true))
+                            extra.Add(CreateFileItem(file, SafeGetFileWriteTimeUtc(file), isRecent: false, sourceBadge: "App Data"));
+                    }
+                }
+                catch
+                {
                 }
             }
 
-            var top = MergeAndRank(recent, extra, maxItems);
-            if (!string.IsNullOrEmpty(key))
+            var phase1 = MergeAndRank(recent, extra, maxItems);
+            if (phase1.Count > 0 && onProgress != null && !ct.IsCancellationRequested)
+            {
+                try { onProgress(phase1); }
+                catch { }
+            }
+
+            ct.ThrowIfCancellationRequested();
+
+            // Phase 2: Full system discovery across Windows Search + disk search + bounded scan
+            foreach (var hit in QueryWindowsSearchSystemIndex(cap, ct))
+                extra.Add(hit);
+
+            foreach (var hit in QueryDeskSpaceDiskSearchReflection(cap, ct))
+                extra.Add(hit);
+
+            var currentMerged = MergeAndRank(recent, extra, maxItems);
+            if (currentMerged.Count < Math.Min(maxItems, 40) && !ct.IsCancellationRequested)
+            {
+                using var scanCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                scanCts.CancelAfter(1600);
+                try
+                {
+                    RunBoundedDriveEnumeration(cap, item => extra.Add(item), () => { }, scanCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+            var ranked = MergeAndRank(recent, extra, maxItems);
+
+            if (!string.IsNullOrEmpty(key) && !ct.IsCancellationRequested)
             {
                 lock (QuickArcCacheLock)
                 {
                     if (QuickArcCache.Count >= 24 && !QuickArcCache.ContainsKey(key))
                         QuickArcCache.Clear();
-                    QuickArcCache[key] = (DateTime.UtcNow, top);
+                    QuickArcCache[key] = (DateTime.UtcNow, ranked);
                 }
             }
-            return (IReadOnlyList<PinnedAppFileItemV380>)top;
-        }).ConfigureAwait(false);
+            return (IReadOnlyList<PinnedAppFileItemV380>)ranked;
+        }, ct).ConfigureAwait(false);
     }
 
     internal static bool TryOpenQuickArcItem(string pinnedPath, string targetPath, Window? owner = null)
@@ -3385,7 +4480,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 {
                     string trimmed = TrimTrailingSeparatorsUnlessDriveRoot(targetPath);
                     item = new PinnedAppFileItemV380(
-                        DisplayName: System.IO.Path.GetFileName(trimmed),
+                        DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
                         FullPath: trimmed,
                         ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
                         KindBadge: "Project Folder",
@@ -3797,9 +4892,17 @@ internal static class DeskSpacePinnedAppFilesV380
 
         centerStack.Children.Add(topLine);
 
+        string rawName = System.IO.Path.GetFileName(item.FullPath);
+        string subtitleText = !string.IsNullOrWhiteSpace(rawName) &&
+                              !string.Equals(rawName, item.DisplayName, StringComparison.OrdinalIgnoreCase)
+            ? (string.IsNullOrWhiteSpace(item.ParentFolder)
+                ? rawName
+                : $"{rawName} · {item.ParentFolder}")
+            : (string.IsNullOrWhiteSpace(item.ParentFolder) ? item.FullPath : item.ParentFolder);
+
         centerStack.Children.Add(new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(item.ParentFolder) ? item.FullPath : item.ParentFolder,
+            Text = subtitleText,
             FontSize = 11.5,
             Foreground = DeskSpaceDesignV283.Solid(p.Muted),
             TextTrimming = TextTrimming.CharacterEllipsis,

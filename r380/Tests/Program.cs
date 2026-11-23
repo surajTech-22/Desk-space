@@ -1114,6 +1114,295 @@ internal static class Program
             "Primary pill button foreground must match DeskSpaceDesignV283.OnAccent");
     }
 
+    private static void TestUniversalInAppDisplayNamesV380(Assembly asm)
+    {
+        var type = asm.GetType("DeskSpace.DeskSpacePinnedAppFilesV380", true)!;
+        var tryParseTally = type.GetMethod("TryParseTallyCompanyFolder", AnyStatic)!;
+        var resolveInApp = type.GetMethod("ResolveInAppDisplayName", AnyStatic)!;
+        var resolveAppName = type.GetMethod("ResolvePinnedAppDisplayName", AnyStatic)!;
+        var resolveCap = type.GetMethod("ResolveCapability", AnyStatic)!;
+        var createFile = type.GetMethod("CreateFileItem", AnyStatic)!;
+
+        // App display names (generic pinned .exe vs .lnk)
+        Check((string)resolveAppName.Invoke(null, new object[] { @"C:\Office\EXCEL.EXE" })! == "Microsoft Excel",
+            "ResolvePinnedAppDisplayName must show friendly product name for EXCEL.EXE");
+        Check((string)resolveAppName.Invoke(null, new object[] { @"C:\Links\Winman CA ERP.lnk" })! == "Winman CA ERP",
+            "ResolvePinnedAppDisplayName must preserve friendly shortcut title for .lnk");
+
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_InAppNames_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+
+            static byte[] BuildSyntheticTallyMeta(string companyName, string mailingName = "ShortCo")
+            {
+                using var ms = new MemoryStream();
+                ms.Write(new byte[512]);
+                byte[] tag1B = { 0x02, 0x10, 0x1B, 0x00, 0x00, 0x0F };
+                byte[] nameBytes = Encoding.Unicode.GetBytes(companyName + "\0");
+                ms.Write(tag1B);
+                ms.Write(BitConverter.GetBytes((ushort)nameBytes.Length));
+                ms.Write(nameBytes);
+                byte[] tag1C = { 0x02, 0x10, 0x1C, 0x00, 0x00, 0x0F };
+                byte[] mailBytes = Encoding.Unicode.GetBytes(mailingName + "\0");
+                ms.Write(tag1C);
+                ms.Write(BitConverter.GetBytes((ushort)mailBytes.Length));
+                ms.Write(mailBytes);
+                ms.Write(new byte[128]);
+                return ms.ToArray();
+            }
+
+            // 1. TallyPrime .1800 company name + non-locking concurrent read
+            string comp1800 = Path.Combine(tempRoot, "TallyData", "100001");
+            Directory.CreateDirectory(comp1800);
+            string company1800Path = Path.Combine(comp1800, "Company.1800");
+            File.WriteAllBytes(company1800Path, BuildSyntheticTallyMeta("Acme Traders Pvt Ltd"));
+            File.WriteAllBytes(Path.Combine(comp1800, "CmpSave.1800"), new byte[] { 1, 2, 3, 4 });
+
+            using (var lockStream = new FileStream(company1800Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                object?[] args1800 = { comp1800, null, true, "★ Tally Recent" };
+                bool ok1800 = (bool)tryParseTally.Invoke(null, args1800)!;
+                Check(ok1800 && args1800[1] != null &&
+                      GetProp<string>(args1800[1]!, "DisplayName") == "Acme Traders Pvt Ltd" &&
+                      GetProp<string>(args1800[1]!, "TallyCompanyCode") == "100001" &&
+                      GetProp<string>(args1800[1]!, "KindBadge").Contains("#100001", StringComparison.Ordinal),
+                    "TallyPrime Company.1800 must resolve in-app company name non-lockingly and keep #code in KindBadge");
+            }
+
+            // 2. Tally.ERP 9 .900 company name
+            string comp900 = Path.Combine(tempRoot, "LegacyData", "10009");
+            Directory.CreateDirectory(comp900);
+            File.WriteAllBytes(Path.Combine(comp900, "Company.900"), BuildSyntheticTallyMeta("Bharat Logistics Corp"));
+            File.WriteAllBytes(Path.Combine(comp900, "Manager.900"), new byte[] { 1, 2, 3, 4 });
+            object?[] args900 = { comp900, null, false, "Tally Data" };
+            Check((bool)tryParseTally.Invoke(null, args900)! &&
+                  GetProp<string>(args900[1]!, "DisplayName") == "Bharat Logistics Corp",
+                "Tally.ERP 9 Company.900 must resolve in-app company name");
+
+            // 3. TallyVault masked company falls back safely to code label
+            string compVault = Path.Combine(tempRoot, "TallyData", "100003");
+            Directory.CreateDirectory(compVault);
+            File.WriteAllBytes(Path.Combine(compVault, "Company.1800"), BuildSyntheticTallyMeta("*****", "*****"));
+            File.WriteAllBytes(Path.Combine(compVault, "CmpSave.1800"), new byte[] { 1, 2, 3, 4 });
+            object?[] argsVault = { compVault, null, false, "Tally Data" };
+            Check((bool)tryParseTally.Invoke(null, argsVault)! &&
+                  GetProp<string>(argsVault[1]!, "DisplayName") == "Tally Company #100003",
+                "TallyVault masked company must fall back to Tally Company #100003");
+
+            // 4. OOXML .docx title vs boilerplate .xlsx fallback
+            string docxPath = Path.Combine(tempRoot, "doc_99812.docx");
+            using (var zip = ZipFile.Open(docxPath, ZipArchiveMode.Create))
+            {
+                var entry = zip.CreateEntry("docProps/core.xml");
+                using var sw = new StreamWriter(entry.Open(), Encoding.UTF8);
+                sw.Write("<?xml version=\"1.0\" encoding=\"UTF-8\"?><cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Annual Audit Summary</dc:title></cp:coreProperties>");
+            }
+            Check((string)resolveInApp.Invoke(null, new object[] { docxPath, false })! == "Annual Audit Summary",
+                "OOXML .docx core.xml dc:title must resolve in-app document title");
+
+            string xlsxPath = Path.Combine(tempRoot, "FY26_Cashflow_Plan.xlsx");
+            using (var zip = ZipFile.Open(xlsxPath, ZipArchiveMode.Create))
+            {
+                var entry = zip.CreateEntry("docProps/core.xml");
+                using var sw = new StreamWriter(entry.Open(), Encoding.UTF8);
+                sw.Write("<?xml version=\"1.0\" encoding=\"UTF-8\"?><cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Book1</dc:title></cp:coreProperties>");
+            }
+            Check((string)resolveInApp.Invoke(null, new object[] { xlsxPath, false })! == "FY26 Cashflow Plan",
+                "Boilerplate OOXML Book1 title must fall back to clean formatted filename");
+
+            // 5. PDF /Title extraction (direct literal + exporter prefix stripping)
+            string pdfPath = Path.Combine(tempRoot, "scan_0042.pdf");
+            File.WriteAllText(pdfPath, "%PDF-1.4\n1 0 obj\n<< /Title (Q4 Financial Statement) >>\nendobj\n%%EOF");
+            Check((string)resolveInApp.Invoke(null, new object[] { pdfPath, false })! == "Q4 Financial Statement",
+                "PDF /Title must resolve in-app document title");
+
+            string pdfExportPath = Path.Combine(tempRoot, "export_99.pdf");
+            File.WriteAllText(pdfExportPath, "%PDF-1.4\n1 0 obj\n<< /Title (Microsoft Word - Draft Budget 2026.docx) >>\nendobj\n%%EOF");
+            Check((string)resolveInApp.Invoke(null, new object[] { pdfExportPath, false })! == "Draft Budget 2026",
+                "PDF exporter /Title must strip printer prefix and .docx extension");
+
+            // 6. HTML, Markdown, Project Folder, Generic Tax file, Dotfile
+            string htmlPath = Path.Combine(tempRoot, "portal.html");
+            File.WriteAllText(htmlPath, "<!doctype html><html><head><title>Client Tax Portal</title></head></html>");
+            Check((string)resolveInApp.Invoke(null, new object[] { htmlPath, false })! == "Client Tax Portal",
+                "HTML <title> must resolve in-app title");
+
+            string mdPath = Path.Combine(tempRoot, "notes.md");
+            File.WriteAllText(mdPath, "# Deployment Runbook\n\nSteps...");
+            Check((string)resolveInApp.Invoke(null, new object[] { mdPath, false })! == "Deployment Runbook",
+                "Markdown H1 must resolve in-app title");
+
+            string projDir = Path.Combine(tempRoot, "repo_dir");
+            Directory.CreateDirectory(projDir);
+            File.WriteAllText(Path.Combine(projDir, "package.json"), "{ \"name\": \"raw-pkg\", \"displayName\": \"DeskSpace Studio\" }");
+            Check((string)resolveInApp.Invoke(null, new object[] { projDir, true })! == "DeskSpace Studio",
+                "Project folder must resolve package.json displayName");
+
+            string taxPath = Path.Combine(tempRoot, "Client_Return_25-26.tax");
+            File.WriteAllText(taxPath, "binary");
+            var taxItem = createFile.Invoke(null, new object[] { taxPath, DateTime.UtcNow, true, "★ Recent" })!;
+            Check(GetProp<string>(taxItem, "DisplayName") == "Client Return 25-26",
+                "Generic file CreateFileItem must format clean extension-less friendly DisplayName");
+
+            string dotPath = Path.Combine(tempRoot, ".gitignore");
+            File.WriteAllText(dotPath, "bin/\n");
+            Check((string)resolveInApp.Invoke(null, new object[] { dotPath, false })! == ".gitignore",
+                "Dotfile without stem before dot must preserve full dotfile name");
+
+            // 7. Quick-arc returns > 4 items (all discovered companies in ExtraDataRoots, not capped at 4)
+            string dataRoot = Path.Combine(tempRoot, "BulkTallyRoot");
+            Directory.CreateDirectory(dataRoot);
+            for (int k = 1; k <= 7; k++)
+            {
+                string cd = Path.Combine(dataRoot, $"20000{k}");
+                Directory.CreateDirectory(cd);
+                File.WriteAllBytes(Path.Combine(cd, "Company.1800"), BuildSyntheticTallyMeta($"Bulk Enterprise {k}"));
+                File.WriteAllBytes(Path.Combine(cd, "CmpSave.1800"), new byte[] { 1, 2 });
+            }
+            var tallyCap = resolveCap.Invoke(null, new object[] { @"C:\TallyPrime\tallyprime.exe" })!;
+            GetProp<List<string>>(tallyCap, "ExtraDataRoots").Insert(0, dataRoot);
+            // Exercise MergeAndRank directly with 7 items > 4
+            var mergeMethod = type.GetMethod("MergeAndRank", AnyStatic)!;
+            var itemList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(asm.GetType("DeskSpace.PinnedAppFileItemV380", true)!))!;
+            foreach (string cd in Directory.EnumerateDirectories(dataRoot))
+            {
+                object?[] pa = { cd, null, false, "Tally Data" };
+                if ((bool)tryParseTally.Invoke(null, pa)! && pa[1] != null)
+                    itemList.Add(pa[1]!);
+            }
+            var merged7 = ((IEnumerable)mergeMethod.Invoke(null, new object[] { itemList, Array.CreateInstance(asm.GetType("DeskSpace.PinnedAppFileItemV380", true)!, 0), 250 })!).Cast<object>().ToList();
+            Check(merged7.Count == 7 && GetProp<string>(merged7[0], "DisplayName").StartsWith("Bulk Enterprise ", StringComparison.Ordinal),
+                "Quick-arc ranking must retain all 7+ compatible items with resolved in-app names");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
+    private static void TestApplicationsDepth2ScrollAndHiddenCountersV380(Assembly asm)
+    {
+        var appsType = asm.GetType("DeskSpace.DeskSpaceApplicationsV55", true)!;
+        var itemType = asm.GetType("DeskSpace.PinnedAppFileItemV380", true)!;
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_Scroll_" + Guid.NewGuid().ToString("N"));
+        var owner = new Window
+        {
+            Width = 408,
+            Height = 408,
+            Left = 1512,
+            Top = 423,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            AllowsTransparency = true,
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+
+        object? apps = null;
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            string appOne = Path.Combine(tempRoot, "Winman CA ERP.exe");
+            string appTwo = Path.Combine(tempRoot, "TallyPrime.exe");
+            File.WriteAllText(appOne, "mock");
+            File.WriteAllText(appTwo, "mock");
+
+            var pinnedList = new[] { appOne, appTwo };
+            Func<IReadOnlyList<string>> getPinned = () => pinnedList;
+            Action<string> noopPin = _ => { };
+            Action noopSearch = () => { };
+
+            apps = Activator.CreateInstance(appsType, new object[] { owner, getPinned, noopPin, noopPin, noopSearch })!;
+            appsType.GetField("group", AnyInstance)!.SetValue(apps, "pinned");
+            appsType.GetField("activeAppPath", AnyInstance)!.SetValue(apps, appOne);
+            appsType.GetField("activeAppCenter", AnyInstance)!.SetValue(apps, 166.0);
+
+            var filesList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType))!;
+            for (int i = 0; i < 12; i++)
+            {
+                filesList.Add(Activator.CreateInstance(itemType, new object?[]
+                {
+                    $"Company Workspace {i}",
+                    Path.Combine(tempRoot, $"item_{i}.tax"),
+                    tempRoot,
+                    ".TAX",
+                    DateTime.UtcNow.AddMinutes(-i),
+                    i < 3,
+                    i < 3 ? "★ Recent" : "Drive Scan",
+                    false,
+                    null,
+                    null
+                })!);
+            }
+            appsType.GetField("activeAppFiles", AnyInstance)!.SetValue(apps, filesList);
+
+            var renderMethod = appsType.GetMethod("Render", AnyInstance)!;
+            var moveFilesMethod = appsType.GetMethod("MoveFilesV380", AnyInstance)!;
+            var filePageField = appsType.GetField("filePage", AnyInstance)!;
+            var canvas = (Canvas)appsType.GetField("canvas", AnyInstance)!.GetValue(apps)!;
+
+            // Page 0: items 0..3 + All files…, trailing counter = 8
+            renderMethod.Invoke(apps, null);
+            Check((int)filePageField.GetValue(apps)! == 0, "Initial filePage must start at 0");
+            var dividerButtons = canvas.Children.OfType<Button>().Select(b => b.Content?.ToString()).OrderBy(x => x).ToArray();
+            var inlinePaths = canvas.Children.OfType<System.Windows.Shapes.Path>()
+                .Where(p => Equals(p.Tag, "DeskSpaceHiddenCountInline")).ToArray();
+            Check(dividerButtons.SequenceEqual(new[] { "8" }) && inlinePaths.Length == 1,
+                $"Page 0 with 12 items must render single hidden counter '8', got [{string.Join(",", dividerButtons)}]");
+
+            var visibleLabels = canvas.Children.OfType<TextBlock>().Select(tb => tb.Text.Replace("\u200B", "")).ToHashSet();
+            Check(visibleLabels.Contains("Company Workspace 0") &&
+                  visibleLabels.Contains("Company Workspace 3") &&
+                  !visibleLabels.Contains("Company Workspace 4") &&
+                  visibleLabels.Contains("All files…"),
+                "Page 0 must display items 0..3 and All files…");
+
+            // Bounds and Z-order sanity (excluding divider overlay strokes)
+            int maxWedgeZ = canvas.Children.OfType<System.Windows.Shapes.Path>()
+                .Where(p => p.Fill != null && p.Tag is int)
+                .Max(System.Windows.Controls.Panel.GetZIndex);
+            foreach (var tb in canvas.Children.OfType<TextBlock>())
+            {
+                double l = Canvas.GetLeft(tb);
+                Check(l >= 0 && l + tb.Width <= canvas.Width + 0.5 &&
+                      System.Windows.Controls.Panel.GetZIndex(tb) > maxWedgeZ,
+                    $"Scrolled label '{tb.Text}' out of bounds or below wedges");
+            }
+
+            // Scroll forward by +1 -> filePage = 1, items 1..4, divider buttons "1" and "7"
+            moveFilesMethod.Invoke(apps, new object[] { 1 });
+            Check((int)filePageField.GetValue(apps)! == 1, "MoveFilesV380(+1) must advance filePage to 1");
+            dividerButtons = canvas.Children.OfType<Button>().Select(b => b.Content?.ToString()).OrderBy(x => x).ToArray();
+            Check(dividerButtons.SequenceEqual(new[] { "1", "7" }),
+                $"Page 1 with 12 items must render hidden counters '1' and '7', got [{string.Join(",", dividerButtons)}]");
+            visibleLabels = canvas.Children.OfType<TextBlock>().Select(tb => tb.Text.Replace("\u200B", "")).ToHashSet();
+            Check(!visibleLabels.Contains("Company Workspace 0") &&
+                  visibleLabels.Contains("Company Workspace 1") &&
+                  visibleLabels.Contains("Company Workspace 4"),
+                "Page 1 must shift visible slice to items 1..4");
+
+            // Scroll to end -> clamps to filePage = 8 (12 - 4), items 8..11, divider button "8"
+            moveFilesMethod.Invoke(apps, new object[] { 100 });
+            Check((int)filePageField.GetValue(apps)! == 8, "MoveFilesV380(+100) must clamp filePage to 8");
+            dividerButtons = canvas.Children.OfType<Button>().Select(b => b.Content?.ToString()).ToArray();
+            Check(dividerButtons.SequenceEqual(new[] { "8" }),
+                $"Final page with 12 items must render single leading hidden counter '8', got [{string.Join(",", dividerButtons)}]");
+            visibleLabels = canvas.Children.OfType<TextBlock>().Select(tb => tb.Text.Replace("\u200B", "")).ToHashSet();
+            Check(visibleLabels.Contains("Company Workspace 8") && visibleLabels.Contains("Company Workspace 11"),
+                "Final page must display items 8..11");
+
+            // Scroll back to start -> clamps to filePage = 0
+            moveFilesMethod.Invoke(apps, new object[] { -100 });
+            Check((int)filePageField.GetValue(apps)! == 0, "MoveFilesV380(-100) must clamp back to 0");
+        }
+        finally
+        {
+            (apps as IDisposable)?.Dispose();
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -1125,6 +1414,8 @@ internal static class Program
             TestPinnedAppFilesV380(asm);
             TestPinnedAppsDirectOpenAndWinmanV380(asm);
             TestApplicationsSubDonutLabelFitAndOrderV380(asm);
+            TestUniversalInAppDisplayNamesV380(asm);
+            TestApplicationsDepth2ScrollAndHiddenCountersV380(asm);
             TestInformationDonutGeometryAndSectorV380(asm);
             TestInformationTabSyncAndSchemaV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);

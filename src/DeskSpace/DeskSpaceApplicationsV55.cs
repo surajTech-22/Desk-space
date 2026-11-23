@@ -29,9 +29,11 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private readonly Brush selected=new SolidColorBrush(Color.FromRgb(143,172,235));
     private readonly Brush accent=new SolidColorBrush(Color.FromRgb(78,98,180));
     private const double BaseInner=202,BaseOuter=255,SubInner=257,SubOuter=323,FileInner=325,FileOuter=465;
+    private const int FilePageSize=DeskSpaceSubDonutStandardV62.Visible-1;
     private Rect bounds=Rect.Empty;
-    private int childPage,hovered=-1,placementTick;
+    private int childPage,filePage,hovered=-1,placementTick;
     private readonly DeskSpaceSubDonutStandardV62.Wheel scrollWheel=new();
+    private readonly DeskSpaceMiddleScrollV63.Controller middleScroll;
     private DeskSpaceSubDonutStandardV62.View currentChildView;
     private string group="";
     private string activeAppPath="";
@@ -39,6 +41,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private IReadOnlyList<PinnedAppFileItemV380> activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
     private bool activeAppLoading;
     private int activeAppVersion;
+    private System.Threading.CancellationTokenSource? activeAppCts;
     private bool disposed;
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -207,7 +210,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     {
         this.owner=owner;this.pinned=pinned;this.addPin=addPin;
         this.removePin=removePin;this.openSearch=openSearch;
-        canvas=new Canvas{Width=1,Height=1,Background=null};
+        canvas=new Canvas{Width=1,Height=1,Background=null,Focusable=true};
         canvas.MouseMove+=Move;
         canvas.PreviewMouseLeftButtonDown+=Down;
         // Left click retains the original open-latest pinned action. A
@@ -217,6 +220,11 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         canvas.MouseWheel+=Wheel;
         arc=new Popup{PlacementTarget=owner,Placement=PlacementMode.Relative,
             AllowsTransparency=true,StaysOpen=true,Child=canvas};
+        middleScroll=new DeskSpaceMiddleScrollV63.Controller(
+            canvas,
+            ()=>group=="pinned"&&(HasFileOverflowV380()||HasChildOverflowV380()),
+            ()=>!disposed&&arc.IsOpen&&group=="pinned",
+            ScrollActiveLayerV380);
         DeskSpaceMonitorFenceV153.TrackPopup(owner,arc);
         owner.LocationChanged+=Moved;owner.SizeChanged+=Resized;
     }
@@ -233,13 +241,16 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     {
         // The installed-app list belongs in Search. The Applications wheel
         // shows PINNED shortcuts and provides + Pin / Search actions only.
-        var source=pinned().Where(IsLaunchable).Distinct(
-            StringComparer.OrdinalIgnoreCase).OrderBy(p=>
-            System.IO.Path.GetFileNameWithoutExtension(p),
-            StringComparer.OrdinalIgnoreCase).ToList();
-        return source.Select(p=>(
-            Label:System.IO.Path.GetFileNameWithoutExtension(p),
-            Kind:"launch",Path:p)).ToList();
+        return pinned().Where(IsLaunchable)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(p=>{
+                string title=DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(p);
+                if(string.IsNullOrWhiteSpace(title))
+                    title=System.IO.Path.GetFileNameWithoutExtension(p);
+                return (Label:title,Kind:"launch",Path:p);
+            })
+            .OrderBy(x=>x.Label,StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
     private void Add(string label,string kind,string path,double a,double b,int depth)
         =>items.Add((label,kind,path,a,b,depth));
@@ -254,6 +265,9 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             Add(roots[i].Item1,roots[i].Item2,"",
                 rootPlan.From(i),rootPlan.To(i),0);
         currentChildView=default;
+        bool d2LeftHalf=false;
+        int visibleFileCount=0;
+        var fileLookup=new Dictionary<string,PinnedAppFileItemV380>(StringComparer.OrdinalIgnoreCase);
         if(group=="pinned")
         {
             var children=Children();
@@ -271,13 +285,17 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             if(!string.IsNullOrEmpty(activeAppPath) &&
                children.Any(c=>string.Equals(c.Path,activeAppPath,StringComparison.OrdinalIgnoreCase)))
             {
+                int maxFileStart=Math.Max(0,activeAppFiles.Count-FilePageSize);
+                filePage=Math.Clamp(filePage,0,maxFileStart);
+                var visibleFiles=activeAppFiles.Skip(filePage).Take(FilePageSize).ToList();
+                visibleFileCount=visibleFiles.Count;
+
                 var d2Items=new List<(string Label,string Kind,string Path)>();
-                foreach(var f in activeAppFiles.Take(4))
+                foreach(var f in visibleFiles)
                 {
-                    string lbl=f.TallyCompanyCode!=null
-                        ? "Tally #"+f.TallyCompanyCode
-                        : FormatArcLabelV380(f.DisplayName);
-                    d2Items.Add((lbl,"launchfile",f.FullPath));
+                    if(!string.IsNullOrEmpty(f.FullPath))
+                        fileLookup[f.FullPath]=f;
+                    d2Items.Add((FormatArcLabelV380(f.DisplayName),"launchfile",f.FullPath));
                 }
                 if(d2Items.Count==0 && activeAppLoading)
                     d2Items.Add(("Loading…","loading",""));
@@ -288,10 +306,10 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 double d2Start=d2Center-d2Half;
                 double d2Step=(d2Half*2)/d2Items.Count;
                 double normAngle=((d2Center%360)+360)%360;
-                bool leftHalf=normAngle>90 && normAngle<270;
+                d2LeftHalf=normAngle>90 && normAngle<270;
                 for(int i=0;i<d2Items.Count;i++)
                 {
-                    var d2=leftHalf?d2Items[d2Items.Count-1-i]:d2Items[i];
+                    var d2=d2LeftHalf?d2Items[d2Items.Count-1-i]:d2Items[i];
                     Add(d2.Label,d2.Kind,d2.Path,d2Start+d2Step*i,d2Start+d2Step*(i+1),2);
                 }
             }
@@ -302,6 +320,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         canvas.Width=bounds.Width+margin*2;
         canvas.Height=bounds.Height+margin*2;
         var clippedGeoms=new Geometry[items.Count];
+        var depth1Wedges=new List<System.Windows.Shapes.Path>();
+        var depth2FileWedges=new List<System.Windows.Shapes.Path>();
         // Pass 1: all wedge geometries at Z=1
         for(int i=0;i<items.Count;i++)
         {
@@ -314,10 +334,19 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             ToolTip tip=item.Kind=="launch"
                 ? CreateCompactTooltipV380(item.Label,"Click to open · Right-click for all files")
                 : item.Kind=="launchfile"
-                    ? CreateCompactTooltipV380(System.IO.Path.GetFileName(item.Path) is string fn && fn.Length>0?fn:item.Label,
-                        System.IO.Path.GetDirectoryName(item.Path))
+                    ? (fileLookup.TryGetValue(item.Path,out var fi)
+                        ? CreateCompactTooltipV380(fi.DisplayName,
+                            fi.TallyCompanyCode!=null
+                                ? $"{fi.KindBadge} · {fi.FullPath}"
+                                : $"{System.IO.Path.GetFileName(fi.FullPath)} · {fi.ParentFolder}")
+                        : CreateCompactTooltipV380(System.IO.Path.GetFileName(item.Path) is string fn && fn.Length>0?fn:item.Label,
+                            System.IO.Path.GetDirectoryName(item.Path)))
                     : item.Kind=="allfiles"
-                        ? CreateCompactTooltipV380("All compatible files",System.IO.Path.GetFileNameWithoutExtension(item.Path))
+                        ? CreateCompactTooltipV380(
+                            activeAppFiles.Count>0
+                                ? $"All compatible files ({activeAppFiles.Count})"
+                                : "All compatible files",
+                            DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(item.Path))
                         : CreateCompactTooltipV380(item.Label);
             var wedge=new System.Windows.Shapes.Path{
                 Data=geometry,Stroke=Brushes.White,StrokeThickness=1.5,
@@ -327,6 +356,10 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             ToolTipService.SetBetweenShowDelay(wedge,200);
             Panel.SetZIndex(wedge,1);
             fills.Add(wedge);
+            if(item.Depth==1 && item.Kind=="launch")
+                depth1Wedges.Add(wedge);
+            else if(item.Depth==2 && item.Kind=="launchfile")
+                depth2FileWedges.Add(wedge);
             hitZones.Add((geometry,item.Kind,item.Path));
             canvas.Children.Add(wedge);
         }
@@ -386,23 +419,73 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             canvas.Children.Add(label);
         }
         if(group=="pinned")
-            DeskSpaceSubDonutStandardV62.DrawHiddenCounters(canvas,
-                currentChildView,canvas.Height/2,MoveChild);
+        {
+            if(depth1Wedges.Count>0 &&
+               (currentChildView.HiddenLeft>0 || currentChildView.HiddenRight>0))
+            {
+                DeskSpaceSubDonutStandardV62.DrawHiddenCountersForWedges(
+                    canvas,depth1Wedges.ToArray(),
+                    currentChildView.HiddenLeft,currentChildView.HiddenRight,
+                    ()=>MoveChild(-1),()=>MoveChild(1));
+            }
+            if(depth2FileWedges.Count>0 && activeAppFiles.Count>FilePageSize)
+            {
+                int hiddenBefore=filePage;
+                int hiddenAfter=Math.Max(0,activeAppFiles.Count-filePage-visibleFileCount);
+                if(d2LeftHalf)
+                {
+                    DeskSpaceSubDonutStandardV62.DrawHiddenCountersForWedges(
+                        canvas,depth2FileWedges.ToArray(),
+                        hiddenAfter,hiddenBefore,
+                        ()=>MoveFilesV380(1),()=>MoveFilesV380(-1));
+                }
+                else
+                {
+                    DeskSpaceSubDonutStandardV62.DrawHiddenCountersForWedges(
+                        canvas,depth2FileWedges.ToArray(),
+                        hiddenBefore,hiddenAfter,
+                        ()=>MoveFilesV380(-1),()=>MoveFilesV380(1));
+                }
+            }
+        }
         Position();
+    }
+    private void CancelActiveAppCtsV380()
+    {
+        var prev=System.Threading.Interlocked.Exchange(ref activeAppCts,null);
+        if(prev==null)return;
+        try{prev.Cancel();}catch(ObjectDisposedException){}
+        try{prev.Dispose();}catch(ObjectDisposedException){}
+    }
+    private static bool AreFileListsEquivalentV380(
+        IReadOnlyList<PinnedAppFileItemV380> a,IReadOnlyList<PinnedAppFileItemV380> b)
+    {
+        if(a.Count!=b.Count)return false;
+        for(int i=0;i<a.Count;i++)
+        {
+            if(!string.Equals(a[i].FullPath,b[i].FullPath,StringComparison.OrdinalIgnoreCase) ||
+               !string.Equals(a[i].DisplayName,b[i].DisplayName,StringComparison.Ordinal))
+                return false;
+        }
+        return true;
     }
     private void ClearActiveAppFilesV380()
     {
+        CancelActiveAppCtsV380();
         activeAppVersion++;
         activeAppPath="";
         activeAppLoading=false;
         activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
+        filePage=0;
     }
     private void SelectAppFilesV380(string path,double centerAngle)
     {
         if(!IsLaunchable(path))return;
-        if(string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase) &&
-           Math.Abs(activeAppCenter-centerAngle)<0.5)
+        bool sameApp=string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase);
+        if(sameApp && Math.Abs(activeAppCenter-centerAngle)<0.5)
             return;
+        CancelActiveAppCtsV380();
+        if(!sameApp)filePage=0;
         activeAppPath=path;
         activeAppCenter=centerAngle;
         int version=++activeAppVersion;
@@ -416,20 +499,74 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
         activeAppLoading=true;
         Render();
-        _=DeskSpacePinnedAppFilesV380.GetQuickArcFilesAsync(path,4).ContinueWith(t=>{
-            if(disposed)return;
-            var result=t.Status==System.Threading.Tasks.TaskStatus.RanToCompletion
-                ? t.Result
-                : Array.Empty<PinnedAppFileItemV380>();
-            owner.Dispatcher.BeginInvoke(new Action(()=>{
-                if(disposed || !arc.IsOpen || version!=activeAppVersion ||
-                   !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
-                    return;
-                activeAppFiles=result;
-                activeAppLoading=false;
-                Render();
-            }));
-        });
+        var cts=new System.Threading.CancellationTokenSource();
+        activeAppCts=cts;
+        _=DeskSpacePinnedAppFilesV380.GetQuickArcFilesAsync(
+            path,250,
+            onProgress:partial=>{
+                if(disposed || cts.IsCancellationRequested)return;
+                owner.Dispatcher.BeginInvoke(new Action(()=>{
+                    if(disposed || !arc.IsOpen || version!=activeAppVersion ||
+                       cts.IsCancellationRequested ||
+                       !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
+                        return;
+                    activeAppFiles=partial;
+                    if(partial.Count>0)activeAppLoading=false;
+                    Render();
+                }));
+            },
+            ct:cts.Token).ContinueWith(t=>{
+                if(disposed || cts.IsCancellationRequested)return;
+                var result=t.Status==System.Threading.Tasks.TaskStatus.RanToCompletion
+                    ? t.Result
+                    : Array.Empty<PinnedAppFileItemV380>();
+                owner.Dispatcher.BeginInvoke(new Action(()=>{
+                    if(disposed || !arc.IsOpen || version!=activeAppVersion ||
+                       cts.IsCancellationRequested ||
+                       !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
+                        return;
+                    bool shouldRender=activeAppLoading || !AreFileListsEquivalentV380(activeAppFiles,result);
+                    activeAppFiles=result;
+                    activeAppLoading=false;
+                    if(shouldRender)Render();
+                }));
+            });
+    }
+    private bool HasChildOverflowV380()=>
+        currentChildView.HiddenLeft>0 || currentChildView.HiddenRight>0;
+    private bool HasFileOverflowV380()=>
+        !string.IsNullOrEmpty(activeAppPath) && activeAppFiles.Count>FilePageSize;
+    internal void MoveFilesV380(int delta)
+    {
+        if(group!="pinned" || !HasFileOverflowV380() || delta==0)return;
+        int maxStart=Math.Max(0,activeAppFiles.Count-FilePageSize);
+        int next=Math.Clamp(filePage+delta,0,maxStart);
+        if(next==filePage)return;
+        filePage=next;
+        Render();
+        DeskSpaceSubDonutStandardV62.Animate(canvas,delta,activeAppCenter);
+    }
+    private void ScrollActiveLayerV380(int delta)
+    {
+        if(group!="pinned" || delta==0)return;
+        int slot=-1;
+        if(canvas.IsLoaded)
+        {
+            try{slot=Slot(DeskSpaceWheelHoverV35.MouseIn(canvas));}
+            catch(InvalidOperationException){slot=hovered;}
+        }
+        else slot=hovered;
+        if(slot<0)slot=hovered;
+        if(HasFileOverflowV380())
+        {
+            if(slot>=0 && slot<items.Count && items[slot].Depth==1 && HasChildOverflowV380())
+                MoveChild(delta);
+            else
+                MoveFilesV380(delta);
+            return;
+        }
+        if(HasChildOverflowV380())
+            MoveChild(delta);
     }
     private void MoveChild(int delta)
     {
@@ -460,7 +597,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         group="";childPage=0;ClearActiveAppFilesV380();
         Render();arc.IsOpen=owner.IsVisible;
     }
-    public void HideArc(){arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
+    public void HideArc(){middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
     private int Slot(Point point)
     {
         for(int i=hitZones.Count-1;i>=0;i--)
@@ -522,6 +659,16 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     }
     private void Down(object sender,MouseButtonEventArgs e)
     {
+        if(e.OriginalSource is DependencyObject dep)
+        {
+            while(dep!=null && !ReferenceEquals(dep,canvas))
+            {
+                if(dep is Button)return;
+                dep=dep is Visual or System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(dep)
+                    : LogicalTreeHelper.GetParent(dep);
+            }
+        }
         if(arc.IsOpen&&Activate(e.GetPosition(canvas)))e.Handled=true;
     }
     public bool TryCapturedDragAtScreen(Point screenPoint,bool released)
@@ -610,7 +757,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     {
         if(group!="pinned")return;
         int delta=scrollWheel.Step(e.Delta);
-        if(delta!=0)MoveChild(delta);
+        if(delta!=0)ScrollActiveLayerV380(delta);
         e.Handled=true;
     }
     private void Moved(object? sender,EventArgs e)
@@ -623,7 +770,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     public void Dispose()
     {
         if(disposed)return;
-        disposed=true;HideArc();
+        disposed=true;HideArc();middleScroll.Dispose();
         owner.LocationChanged-=Moved;owner.SizeChanged-=Resized;
     }
 }

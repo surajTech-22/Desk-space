@@ -419,9 +419,11 @@ Swap-R380 @'
     private bool disposed;
 '@ @'
     private const double BaseInner=202,BaseOuter=255,SubInner=257,SubOuter=323,FileInner=325,FileOuter=465;
+    private const int FilePageSize=DeskSpaceSubDonutStandardV62.Visible-1;
     private Rect bounds=Rect.Empty;
-    private int childPage,hovered=-1,placementTick;
+    private int childPage,filePage,hovered=-1,placementTick;
     private readonly DeskSpaceSubDonutStandardV62.Wheel scrollWheel=new();
+    private readonly DeskSpaceMiddleScrollV63.Controller middleScroll;
     private DeskSpaceSubDonutStandardV62.View currentChildView;
     private string group="";
     private string activeAppPath="";
@@ -429,6 +431,7 @@ Swap-R380 @'
     private IReadOnlyList<PinnedAppFileItemV380> activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
     private bool activeAppLoading;
     private int activeAppVersion;
+    private System.Threading.CancellationTokenSource? activeAppCts;
     private bool disposed;
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -587,14 +590,66 @@ Swap-R380 @'
     }
 '@ 'DeskSpaceApplicationsV55 geometry, inscribed bounds and state fields'
 Swap-R380 @'
+        canvas=new Canvas{Width=1,Height=1,Background=null};
+        canvas.MouseMove+=Move;
         canvas.PreviewMouseLeftButtonDown+=Down;
         canvas.MouseWheel+=Wheel;
+        arc=new Popup{PlacementTarget=owner,Placement=PlacementMode.Relative,
+            AllowsTransparency=true,StaysOpen=true,Child=canvas};
 '@ @'
+        canvas=new Canvas{Width=1,Height=1,Background=null,Focusable=true};
+        canvas.MouseMove+=Move;
         canvas.PreviewMouseLeftButtonDown+=Down;
         canvas.PreviewMouseRightButtonDown+=OpenFilesRightClickV380;
         canvas.MouseWheel+=Wheel;
-'@ 'DeskSpaceApplicationsV55 right-click full files browser'
+        arc=new Popup{PlacementTarget=owner,Placement=PlacementMode.Relative,
+            AllowsTransparency=true,StaysOpen=true,Child=canvas};
+        middleScroll=new DeskSpaceMiddleScrollV63.Controller(
+            canvas,
+            ()=>group=="pinned"&&(HasFileOverflowV380()||HasChildOverflowV380()),
+            ()=>!disposed&&arc.IsOpen&&group=="pinned",
+            ScrollActiveLayerV380);
+'@ 'DeskSpaceApplicationsV55 right-click full files browser and middle scroll'
 Swap-R380 @'
+    private List<(string Label,string Kind,string Path)> Children()
+    {
+        // The installed-app list belongs in Search. The Applications wheel
+        // shows PINNED shortcuts and provides + Pin / Search actions only.
+        var source=pinned().Where(IsLaunchable).Distinct(
+            StringComparer.OrdinalIgnoreCase).OrderBy(p=>
+            System.IO.Path.GetFileNameWithoutExtension(p),
+            StringComparer.OrdinalIgnoreCase).ToList();
+        return source.Select(p=>(
+            Label:System.IO.Path.GetFileNameWithoutExtension(p),
+            Kind:"launch",Path:p)).ToList();
+    }
+'@ @'
+    private List<(string Label,string Kind,string Path)> Children()
+    {
+        // The installed-app list belongs in Search. The Applications wheel
+        // shows PINNED shortcuts and provides + Pin / Search actions only.
+        return pinned().Where(IsLaunchable)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(p=>{
+                string title=DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(p);
+                if(string.IsNullOrWhiteSpace(title))
+                    title=System.IO.Path.GetFileNameWithoutExtension(p);
+                return (Label:title,Kind:"launch",Path:p);
+            })
+            .OrderBy(x=>x.Label,StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+'@ 'DeskSpaceApplicationsV55 friendly pinned app display names'
+Swap-R380 @'
+        currentChildView=default;
+        if(group=="pinned")
+        {
+            var children=Children();
+            currentChildView=DeskSpaceSubDonutStandardV62.Plan(
+                children.Count,childPage,centre,rootPlan.Step);
+            childPage=currentChildView.Start;
+            if(children.Count==0)
+                Add("No pins","empty","",centre-12,centre+12,1);
             for(int i=0;i<currentChildView.Count;i++)
             {
                 var item=children[currentChildView.Start+i];
@@ -657,7 +712,24 @@ Swap-R380 @'
             Canvas.SetTop(label,labelY);
             canvas.Children.Add(label);
         }
+        if(group=="pinned")
+            DeskSpaceSubDonutStandardV62.DrawHiddenCounters(canvas,
+                currentChildView,canvas.Height/2,MoveChild);
+        Position();
+    }
 '@ @'
+        currentChildView=default;
+        bool d2LeftHalf=false;
+        int visibleFileCount=0;
+        var fileLookup=new Dictionary<string,PinnedAppFileItemV380>(StringComparer.OrdinalIgnoreCase);
+        if(group=="pinned")
+        {
+            var children=Children();
+            currentChildView=DeskSpaceSubDonutStandardV62.Plan(
+                children.Count,childPage,centre,rootPlan.Step);
+            childPage=currentChildView.Start;
+            if(children.Count==0)
+                Add("No pins","empty","",centre-12,centre+12,1);
             for(int i=0;i<currentChildView.Count;i++)
             {
                 var item=children[currentChildView.Start+i];
@@ -667,13 +739,17 @@ Swap-R380 @'
             if(!string.IsNullOrEmpty(activeAppPath) &&
                children.Any(c=>string.Equals(c.Path,activeAppPath,StringComparison.OrdinalIgnoreCase)))
             {
+                int maxFileStart=Math.Max(0,activeAppFiles.Count-FilePageSize);
+                filePage=Math.Clamp(filePage,0,maxFileStart);
+                var visibleFiles=activeAppFiles.Skip(filePage).Take(FilePageSize).ToList();
+                visibleFileCount=visibleFiles.Count;
+
                 var d2Items=new List<(string Label,string Kind,string Path)>();
-                foreach(var f in activeAppFiles.Take(4))
+                foreach(var f in visibleFiles)
                 {
-                    string lbl=f.TallyCompanyCode!=null
-                        ? "Tally #"+f.TallyCompanyCode
-                        : FormatArcLabelV380(f.DisplayName);
-                    d2Items.Add((lbl,"launchfile",f.FullPath));
+                    if(!string.IsNullOrEmpty(f.FullPath))
+                        fileLookup[f.FullPath]=f;
+                    d2Items.Add((FormatArcLabelV380(f.DisplayName),"launchfile",f.FullPath));
                 }
                 if(d2Items.Count==0 && activeAppLoading)
                     d2Items.Add(("Loading…","loading",""));
@@ -684,10 +760,10 @@ Swap-R380 @'
                 double d2Start=d2Center-d2Half;
                 double d2Step=(d2Half*2)/d2Items.Count;
                 double normAngle=((d2Center%360)+360)%360;
-                bool leftHalf=normAngle>90 && normAngle<270;
+                d2LeftHalf=normAngle>90 && normAngle<270;
                 for(int i=0;i<d2Items.Count;i++)
                 {
-                    var d2=leftHalf?d2Items[d2Items.Count-1-i]:d2Items[i];
+                    var d2=d2LeftHalf?d2Items[d2Items.Count-1-i]:d2Items[i];
                     Add(d2.Label,d2.Kind,d2.Path,d2Start+d2Step*i,d2Start+d2Step*(i+1),2);
                 }
             }
@@ -698,6 +774,8 @@ Swap-R380 @'
         canvas.Width=bounds.Width+margin*2;
         canvas.Height=bounds.Height+margin*2;
         var clippedGeoms=new Geometry[items.Count];
+        var depth1Wedges=new List<System.Windows.Shapes.Path>();
+        var depth2FileWedges=new List<System.Windows.Shapes.Path>();
         // Pass 1: all wedge geometries at Z=1
         for(int i=0;i<items.Count;i++)
         {
@@ -710,10 +788,19 @@ Swap-R380 @'
             ToolTip tip=item.Kind=="launch"
                 ? CreateCompactTooltipV380(item.Label,"Click to open · Right-click for all files")
                 : item.Kind=="launchfile"
-                    ? CreateCompactTooltipV380(System.IO.Path.GetFileName(item.Path) is string fn && fn.Length>0?fn:item.Label,
-                        System.IO.Path.GetDirectoryName(item.Path))
+                    ? (fileLookup.TryGetValue(item.Path,out var fi)
+                        ? CreateCompactTooltipV380(fi.DisplayName,
+                            fi.TallyCompanyCode!=null
+                                ? $"{fi.KindBadge} · {fi.FullPath}"
+                                : $"{System.IO.Path.GetFileName(fi.FullPath)} · {fi.ParentFolder}")
+                        : CreateCompactTooltipV380(System.IO.Path.GetFileName(item.Path) is string fn && fn.Length>0?fn:item.Label,
+                            System.IO.Path.GetDirectoryName(item.Path)))
                     : item.Kind=="allfiles"
-                        ? CreateCompactTooltipV380("All compatible files",System.IO.Path.GetFileNameWithoutExtension(item.Path))
+                        ? CreateCompactTooltipV380(
+                            activeAppFiles.Count>0
+                                ? $"All compatible files ({activeAppFiles.Count})"
+                                : "All compatible files",
+                            DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(item.Path))
                         : CreateCompactTooltipV380(item.Label);
             var wedge=new System.Windows.Shapes.Path{
                 Data=geometry,Stroke=Brushes.White,StrokeThickness=1.5,
@@ -723,6 +810,10 @@ Swap-R380 @'
             ToolTipService.SetBetweenShowDelay(wedge,200);
             Panel.SetZIndex(wedge,1);
             fills.Add(wedge);
+            if(item.Depth==1 && item.Kind=="launch")
+                depth1Wedges.Add(wedge);
+            else if(item.Depth==2 && item.Kind=="launchfile")
+                depth2FileWedges.Add(wedge);
             hitZones.Add((geometry,item.Kind,item.Path));
             canvas.Children.Add(wedge);
         }
@@ -781,7 +872,39 @@ Swap-R380 @'
             Panel.SetZIndex(label,10);
             canvas.Children.Add(label);
         }
-'@ 'DeskSpaceApplicationsV55 inscribed two-pass Z-order depth-2 rendering'
+        if(group=="pinned")
+        {
+            if(depth1Wedges.Count>0 &&
+               (currentChildView.HiddenLeft>0 || currentChildView.HiddenRight>0))
+            {
+                DeskSpaceSubDonutStandardV62.DrawHiddenCountersForWedges(
+                    canvas,depth1Wedges.ToArray(),
+                    currentChildView.HiddenLeft,currentChildView.HiddenRight,
+                    ()=>MoveChild(-1),()=>MoveChild(1));
+            }
+            if(depth2FileWedges.Count>0 && activeAppFiles.Count>FilePageSize)
+            {
+                int hiddenBefore=filePage;
+                int hiddenAfter=Math.Max(0,activeAppFiles.Count-filePage-visibleFileCount);
+                if(d2LeftHalf)
+                {
+                    DeskSpaceSubDonutStandardV62.DrawHiddenCountersForWedges(
+                        canvas,depth2FileWedges.ToArray(),
+                        hiddenAfter,hiddenBefore,
+                        ()=>MoveFilesV380(1),()=>MoveFilesV380(-1));
+                }
+                else
+                {
+                    DeskSpaceSubDonutStandardV62.DrawHiddenCountersForWedges(
+                        canvas,depth2FileWedges.ToArray(),
+                        hiddenBefore,hiddenAfter,
+                        ()=>MoveFilesV380(-1),()=>MoveFilesV380(1));
+                }
+            }
+        }
+        Position();
+    }
+'@ 'DeskSpaceApplicationsV55 inscribed two-pass Z-order depth-2 rendering and hidden counters'
 Swap-R380 @'
     private void MoveChild(int delta)
     {
@@ -794,19 +917,42 @@ Swap-R380 @'
             ApplicationsParentCenter);
     }
 '@ @'
+    private void CancelActiveAppCtsV380()
+    {
+        var prev=System.Threading.Interlocked.Exchange(ref activeAppCts,null);
+        if(prev==null)return;
+        try{prev.Cancel();}catch(ObjectDisposedException){}
+        try{prev.Dispose();}catch(ObjectDisposedException){}
+    }
+    private static bool AreFileListsEquivalentV380(
+        IReadOnlyList<PinnedAppFileItemV380> a,IReadOnlyList<PinnedAppFileItemV380> b)
+    {
+        if(a.Count!=b.Count)return false;
+        for(int i=0;i<a.Count;i++)
+        {
+            if(!string.Equals(a[i].FullPath,b[i].FullPath,StringComparison.OrdinalIgnoreCase) ||
+               !string.Equals(a[i].DisplayName,b[i].DisplayName,StringComparison.Ordinal))
+                return false;
+        }
+        return true;
+    }
     private void ClearActiveAppFilesV380()
     {
+        CancelActiveAppCtsV380();
         activeAppVersion++;
         activeAppPath="";
         activeAppLoading=false;
         activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
+        filePage=0;
     }
     private void SelectAppFilesV380(string path,double centerAngle)
     {
         if(!IsLaunchable(path))return;
-        if(string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase) &&
-           Math.Abs(activeAppCenter-centerAngle)<0.5)
+        bool sameApp=string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase);
+        if(sameApp && Math.Abs(activeAppCenter-centerAngle)<0.5)
             return;
+        CancelActiveAppCtsV380();
+        if(!sameApp)filePage=0;
         activeAppPath=path;
         activeAppCenter=centerAngle;
         int version=++activeAppVersion;
@@ -820,20 +966,74 @@ Swap-R380 @'
         activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
         activeAppLoading=true;
         Render();
-        _=DeskSpacePinnedAppFilesV380.GetQuickArcFilesAsync(path,4).ContinueWith(t=>{
-            if(disposed)return;
-            var result=t.Status==System.Threading.Tasks.TaskStatus.RanToCompletion
-                ? t.Result
-                : Array.Empty<PinnedAppFileItemV380>();
-            owner.Dispatcher.BeginInvoke(new Action(()=>{
-                if(disposed || !arc.IsOpen || version!=activeAppVersion ||
-                   !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
-                    return;
-                activeAppFiles=result;
-                activeAppLoading=false;
-                Render();
-            }));
-        });
+        var cts=new System.Threading.CancellationTokenSource();
+        activeAppCts=cts;
+        _=DeskSpacePinnedAppFilesV380.GetQuickArcFilesAsync(
+            path,250,
+            onProgress:partial=>{
+                if(disposed || cts.IsCancellationRequested)return;
+                owner.Dispatcher.BeginInvoke(new Action(()=>{
+                    if(disposed || !arc.IsOpen || version!=activeAppVersion ||
+                       cts.IsCancellationRequested ||
+                       !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
+                        return;
+                    activeAppFiles=partial;
+                    if(partial.Count>0)activeAppLoading=false;
+                    Render();
+                }));
+            },
+            ct:cts.Token).ContinueWith(t=>{
+                if(disposed || cts.IsCancellationRequested)return;
+                var result=t.Status==System.Threading.Tasks.TaskStatus.RanToCompletion
+                    ? t.Result
+                    : Array.Empty<PinnedAppFileItemV380>();
+                owner.Dispatcher.BeginInvoke(new Action(()=>{
+                    if(disposed || !arc.IsOpen || version!=activeAppVersion ||
+                       cts.IsCancellationRequested ||
+                       !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
+                        return;
+                    bool shouldRender=activeAppLoading || !AreFileListsEquivalentV380(activeAppFiles,result);
+                    activeAppFiles=result;
+                    activeAppLoading=false;
+                    if(shouldRender)Render();
+                }));
+            });
+    }
+    private bool HasChildOverflowV380()=>
+        currentChildView.HiddenLeft>0 || currentChildView.HiddenRight>0;
+    private bool HasFileOverflowV380()=>
+        !string.IsNullOrEmpty(activeAppPath) && activeAppFiles.Count>FilePageSize;
+    internal void MoveFilesV380(int delta)
+    {
+        if(group!="pinned" || !HasFileOverflowV380() || delta==0)return;
+        int maxStart=Math.Max(0,activeAppFiles.Count-FilePageSize);
+        int next=Math.Clamp(filePage+delta,0,maxStart);
+        if(next==filePage)return;
+        filePage=next;
+        Render();
+        DeskSpaceSubDonutStandardV62.Animate(canvas,delta,activeAppCenter);
+    }
+    private void ScrollActiveLayerV380(int delta)
+    {
+        if(group!="pinned" || delta==0)return;
+        int slot=-1;
+        if(canvas.IsLoaded)
+        {
+            try{slot=Slot(DeskSpaceWheelHoverV35.MouseIn(canvas));}
+            catch(InvalidOperationException){slot=hovered;}
+        }
+        else slot=hovered;
+        if(slot<0)slot=hovered;
+        if(HasFileOverflowV380())
+        {
+            if(slot>=0 && slot<items.Count && items[slot].Depth==1 && HasChildOverflowV380())
+                MoveChild(delta);
+            else
+                MoveFilesV380(delta);
+            return;
+        }
+        if(HasChildOverflowV380())
+            MoveChild(delta);
     }
     private void MoveChild(int delta)
     {
@@ -846,7 +1046,7 @@ Swap-R380 @'
         DeskSpaceSubDonutStandardV62.Animate(canvas,delta,
             ApplicationsParentCenter);
     }
-'@ 'DeskSpaceApplicationsV55 async quick arc files loader'
+'@ 'DeskSpaceApplicationsV55 async quick arc files loader and depth-2 scroll'
 Swap-R380 @'
     public void Show()
     {
@@ -879,6 +1079,9 @@ Swap-R380 @'
         if(!disposed&&arc.IsOpen)Hover(e.GetPosition(canvas));
     }
     private void Down(object sender,MouseButtonEventArgs e)
+    {
+        if(arc.IsOpen&&Activate(e.GetPosition(canvas)))e.Handled=true;
+    }
 '@ @'
     public void Show()
     {
@@ -886,7 +1089,7 @@ Swap-R380 @'
         group="";childPage=0;ClearActiveAppFilesV380();
         Render();arc.IsOpen=owner.IsVisible;
     }
-    public void HideArc(){arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
+    public void HideArc(){middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
     private int Slot(Point point)
     {
         for(int i=hitZones.Count-1;i>=0;i--)
@@ -947,7 +1150,20 @@ Swap-R380 @'
         e.Handled=true;
     }
     private void Down(object sender,MouseButtonEventArgs e)
-'@ 'DeskSpaceApplicationsV55 hover expand and right-click handler'
+    {
+        if(e.OriginalSource is DependencyObject dep)
+        {
+            while(dep!=null && !ReferenceEquals(dep,canvas))
+            {
+                if(dep is Button)return;
+                dep=dep is Visual or System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(dep)
+                    : LogicalTreeHelper.GetParent(dep);
+            }
+        }
+        if(arc.IsOpen&&Activate(e.GetPosition(canvas)))e.Handled=true;
+    }
+'@ 'DeskSpaceApplicationsV55 hover expand, right-click handler and button guard'
 Swap-R380 @'
             case "launch":
                 if(IsLaunchable(item.Path))
@@ -994,7 +1210,109 @@ Swap-R380 @'
                 }
                 return true;
 '@ 'DeskSpaceApplicationsV55 direct open + depth-2 launchfile + allfiles'
+Swap-R380 @'
+    private void Wheel(object sender,MouseWheelEventArgs e)
+    {
+        if(group!="pinned")return;
+        int delta=scrollWheel.Step(e.Delta);
+        if(delta!=0)MoveChild(delta);
+        e.Handled=true;
+    }
+'@ @'
+    private void Wheel(object sender,MouseWheelEventArgs e)
+    {
+        if(group!="pinned")return;
+        int delta=scrollWheel.Step(e.Delta);
+        if(delta!=0)ScrollActiveLayerV380(delta);
+        e.Handled=true;
+    }
+'@ 'DeskSpaceApplicationsV55 wheel depth routing'
+Swap-R380 @'
+    public void Dispose()
+    {
+        if(disposed)return;
+        disposed=true;HideArc();
+        owner.LocationChanged-=Moved;owner.SizeChanged-=Resized;
+    }
+'@ @'
+    public void Dispose()
+    {
+        if(disposed)return;
+        disposed=true;HideArc();middleScroll.Dispose();
+        owner.LocationChanged-=Moved;owner.SizeChanged-=Resized;
+    }
+'@ 'DeskSpaceApplicationsV55 dispose middleScroll'
 Finish-Patch $appsPath
+
+# 5b. Surgical hook: DeskSpaceSubDonutStandardV62.cs
+$subDonutPath = "$dstRoot/DeskSpaceSubDonutStandardV62.cs"
+Begin-Patch $subDonutPath
+Swap-R380 @'
+    internal static void DrawHiddenCounters(Canvas canvas,View view,
+        double verticalCentre,Action<int> move)
+    {
+        if(view.HiddenLeft==0&&view.HiddenRight==0)return;
+        var wedges=canvas.Children.OfType<System.Windows.Shapes.Path>()
+            .Where(p=>p.Data!=null&&!p.Data.Bounds.IsEmpty)
+            .ToArray();
+        int count=Math.Min(view.Count,wedges.Length);
+        if(count==0)return;
+        // Break the actual existing divider stroke rather than hiding it
+        // beneath a rectangle. Keep the original wedge fill and hit region.
+        if(count==1 && view.HiddenLeft>0 && view.HiddenRight>0)
+            SplitDividerStroke(canvas,wedges[0],true,true);
+        else
+        {
+            if(view.HiddenLeft>0)
+                SplitDividerStroke(canvas,wedges[0],true,false);
+            if(view.HiddenRight>0)
+                SplitDividerStroke(canvas,wedges[count-1],false,true);
+        }
+        if(view.HiddenLeft>0)
+            AddDividerCount(canvas,wedges[0],view.HiddenLeft,true,
+                ()=>move(-1));
+        if(view.HiddenRight>0)
+            AddDividerCount(canvas,wedges[count-1],view.HiddenRight,false,
+                ()=>move(1));
+    }
+'@ @'
+    internal static void DrawHiddenCountersForWedges(Canvas canvas,
+        System.Windows.Shapes.Path[] wedges,int hiddenLeading,int hiddenTrailing,
+        Action onLeading,Action onTrailing)
+    {
+        if((hiddenLeading<=0&&hiddenTrailing<=0)||wedges.Length==0)return;
+        int count=wedges.Length;
+        // Break the actual existing divider stroke rather than hiding it
+        // beneath a rectangle. Keep the original wedge fill and hit region.
+        if(count==1 && hiddenLeading>0 && hiddenTrailing>0)
+            SplitDividerStroke(canvas,wedges[0],true,true);
+        else
+        {
+            if(hiddenLeading>0)
+                SplitDividerStroke(canvas,wedges[0],true,false);
+            if(hiddenTrailing>0)
+                SplitDividerStroke(canvas,wedges[count-1],false,true);
+        }
+        if(hiddenLeading>0)
+            AddDividerCount(canvas,wedges[0],hiddenLeading,true,onLeading);
+        if(hiddenTrailing>0)
+            AddDividerCount(canvas,wedges[count-1],hiddenTrailing,false,onTrailing);
+    }
+
+    internal static void DrawHiddenCounters(Canvas canvas,View view,
+        double verticalCentre,Action<int> move)
+    {
+        if(view.HiddenLeft==0&&view.HiddenRight==0)return;
+        var wedges=canvas.Children.OfType<System.Windows.Shapes.Path>()
+            .Where(p=>p.Data!=null&&!p.Data.Bounds.IsEmpty)
+            .ToArray();
+        int count=Math.Min(view.Count,wedges.Length);
+        if(count==0)return;
+        DrawHiddenCountersForWedges(canvas,wedges.Take(count).ToArray(),
+            view.HiddenLeft,view.HiddenRight,()=>move(-1),()=>move(1));
+    }
+'@ 'DeskSpaceSubDonutStandardV62 DrawHiddenCountersForWedges'
+Finish-Patch $subDonutPath
 
 # 6. Surgical hook: DeskSpaceFeatureHubV199.cs
 $hubPath = "$dstRoot/DeskSpaceFeatureHubV199.cs"

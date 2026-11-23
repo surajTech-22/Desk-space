@@ -76,6 +76,29 @@ internal static class DeskSpaceSubDonutStandardV62
     // radial divider at the end of the visible arc. Never add an exterior
     // badge, a mini wedge or a top-of-canvas label. This uses the actual WPF
     // sector geometry, so it works at any submenu angle, radius and depth.
+    internal static void DrawHiddenCountersForWedges(Canvas canvas,
+        System.Windows.Shapes.Path[] wedges,int hiddenLeading,int hiddenTrailing,
+        Action onLeading,Action onTrailing)
+    {
+        if((hiddenLeading<=0&&hiddenTrailing<=0)||wedges.Length==0)return;
+        int count=wedges.Length;
+        // Break the actual existing divider stroke rather than hiding it
+        // beneath a rectangle. Keep the original wedge fill and hit region.
+        if(count==1 && hiddenLeading>0 && hiddenTrailing>0)
+            SplitDividerStroke(canvas,wedges[0],true,true);
+        else
+        {
+            if(hiddenLeading>0)
+                SplitDividerStroke(canvas,wedges[0],true,false);
+            if(hiddenTrailing>0)
+                SplitDividerStroke(canvas,wedges[count-1],false,true);
+        }
+        if(hiddenLeading>0)
+            AddDividerCount(canvas,wedges[0],hiddenLeading,true,onLeading);
+        if(hiddenTrailing>0)
+            AddDividerCount(canvas,wedges[count-1],hiddenTrailing,false,onTrailing);
+    }
+
     internal static void DrawHiddenCounters(Canvas canvas,View view,
         double verticalCentre,Action<int> move)
     {
@@ -85,23 +108,8 @@ internal static class DeskSpaceSubDonutStandardV62
             .ToArray();
         int count=Math.Min(view.Count,wedges.Length);
         if(count==0)return;
-        // Break the actual existing divider stroke rather than hiding it
-        // beneath a rectangle. Keep the original wedge fill and hit region.
-        if(count==1 && view.HiddenLeft>0 && view.HiddenRight>0)
-            SplitDividerStroke(canvas,wedges[0],true,true);
-        else
-        {
-            if(view.HiddenLeft>0)
-                SplitDividerStroke(canvas,wedges[0],true,false);
-            if(view.HiddenRight>0)
-                SplitDividerStroke(canvas,wedges[count-1],false,true);
-        }
-        if(view.HiddenLeft>0)
-            AddDividerCount(canvas,wedges[0],view.HiddenLeft,true,
-                ()=>move(-1));
-        if(view.HiddenRight>0)
-            AddDividerCount(canvas,wedges[count-1],view.HiddenRight,false,
-                ()=>move(1));
+        DrawHiddenCountersForWedges(canvas,wedges.Take(count).ToArray(),
+            view.HiddenLeft,view.HiddenRight,()=>move(-1),()=>move(1));
     }
 
     // Start side: first arc's OUTER start to the second arc's INNER end.
