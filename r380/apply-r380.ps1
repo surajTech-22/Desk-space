@@ -84,6 +84,15 @@ Swap-R380 @'
         DeskSpaceModernHubV380.AddMainTraySubmenu(trayMenu, this, () => data ?? new Workspace());
         tray.ContextMenuStrip = trayMenu;
 '@ 'MainWindow tray submenu'
+Swap-R380 @'
+        DeskSpaceSettingsStudioV148.Show(this,settings,()=>{
+            settings.Save();settings.ApplyWindowsStartup();
+        },()=>new WidgetOptionsWindow(settings,
+'@ @'
+        DeskSpaceSettingsStudioV148.Show(this,settings,()=>{
+            settings.Save();settings.ApplyWindowsStartup();DeskSpaceFluentBackdropV380.ReapplyLiveTheme();
+        },()=>new WidgetOptionsWindow(settings,
+'@ 'MainWindow WidgetSettings live theme refresh'
 Finish-Patch $mainPath
 
 # 4. Surgical hook: WidgetHost.cs
@@ -127,7 +136,10 @@ Swap-R380 @'
                     HideArc();
                     string pinnedTarget=item.Path;
                     owner.Dispatcher.BeginInvoke(new Action(()=>
-                        DeskSpacePinnedAppFilesV380.Show(owner,pinnedTarget)));
+                    {
+                        try{DeskSpacePinnedAppFilesV380.Show(owner,pinnedTarget);}
+                        catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
+                    }));
                 }
                 return true;
 '@ 'DeskSpaceApplicationsV55 left-click compatible files browser'
@@ -209,6 +221,56 @@ Swap-R380 @'
         }
 '@ 'DeskSpaceActionPaletteV197 V380 command dispatch'
 Finish-Patch $palettePath
+
+# 8b. Surgical hook: DeskSpaceSearchV11.cs (fix R337 Unloaded/Dispose CancellationTokenSource ObjectDisposedException crash)
+$searchPath = "$dstRoot/DeskSpaceSearchV11.cs"
+Begin-Patch $searchPath
+Swap-R380 @'
+        frame.Unloaded+=(_,_)=>{
+            slowNoticeV337.Stop();
+            indexRefresh?.Stop();
+            pending?.Cancel();
+        };
+        return frame;
+    }
+    public void Dispose()
+    {
+        disposed=true;appRefresh?.Stop();
+        debounce?.Stop();indexRefresh?.Stop();pending?.Cancel();pending?.Dispose();
+    }
+'@ @'
+        frame.Unloaded+=(_,_)=>{
+            slowNoticeV337.Stop();
+            appRefresh?.Stop();
+            indexRefresh?.Stop();
+            SafeCancelPendingV380(dispose:true);
+        };
+        return frame;
+    }
+    private void SafeCancelPendingV380(bool dispose)
+    {
+        var cts=dispose?Interlocked.Exchange(ref pending,null):Volatile.Read(ref pending);
+        if(cts==null)return;
+        try{cts.Cancel();}catch(ObjectDisposedException){}
+        if(dispose)
+        {
+            try{cts.Dispose();}catch(ObjectDisposedException){}
+        }
+    }
+    public void Dispose()
+    {
+        disposed=true;appRefresh?.Stop();
+        debounce?.Stop();indexRefresh?.Stop();
+        SafeCancelPendingV380(dispose:true);
+    }
+'@ 'DeskSpaceSearchV11 Unloaded and Dispose CTS safety'
+Swap-R380 'pending?.Cancel();pending?.Dispose();' 'SafeCancelPendingV380(dispose:true);' 'DeskSpaceSearchV11 debounce Tick CTS safety'
+$cancelCount = ([regex]::Matches($script:code, [regex]::Escape('pending?.Cancel();'))).Count
+if ($cancelCount -ne 3) {
+    throw "R380 DeskSpaceSearchV11: expected 3 remaining pending?.Cancel() sites, got $cancelCount"
+}
+$script:code = $script:code.Replace('pending?.Cancel();', 'SafeCancelPendingV380(dispose:false);')
+Finish-Patch $searchPath
 
 # 9. Post-patch invariants check
 $deckCheck = [IO.File]::ReadAllText("$dstRoot/DeskSpaceDropShelfV15.cs")

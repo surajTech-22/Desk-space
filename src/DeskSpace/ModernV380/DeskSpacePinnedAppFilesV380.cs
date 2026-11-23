@@ -1574,9 +1574,9 @@ internal static class DeskSpacePinnedAppFilesV380
             foreach (var pair in chipButtons)
             {
                 bool active = pair.Key == activeChip;
-                pair.Value.Background = DeskSpaceDesignV283.Solid(active ? p.AccentSoft : p.Raised);
+                pair.Value.Background = DeskSpaceDesignV283.Solid(active ? p.AccentSoft : DeskSpaceDesignV283.SecondaryButtonBg(p));
                 pair.Value.BorderBrush = DeskSpaceDesignV283.Solid(active ? p.Accent : p.Border);
-                pair.Value.Foreground = DeskSpaceDesignV283.Solid(active ? p.Accent : p.Text);
+                pair.Value.Foreground = DeskSpaceDesignV283.Solid(active ? DeskSpaceDesignV283.AccentText(p) : p.Text);
                 pair.Value.FontWeight = active ? FontWeights.SemiBold : FontWeights.Medium;
             }
         }
@@ -1716,12 +1716,21 @@ internal static class DeskSpacePinnedAppFilesV380
         folderBtn.Click += (_, _) => RevealSelectedInExplorer();
         copyPathBtn.Click += (_, _) => CopySelectedPath();
 
+        void DisposeActiveCts()
+        {
+            var prev = Interlocked.Exchange(ref activeCts, null);
+            if (prev == null)
+                return;
+            try { prev.Cancel(); } catch (ObjectDisposedException) { }
+            try { prev.Dispose(); } catch (ObjectDisposedException) { }
+        }
+
         void StartDiscovery()
         {
-            activeCts?.Cancel();
-            activeCts?.Dispose();
-            activeCts = new CancellationTokenSource();
-            var ct = activeCts.Token;
+            DisposeActiveCts();
+            var nextCts = new CancellationTokenSource();
+            activeCts = nextCts;
+            var ct = nextCts.Token;
             int myGen = ++scanGeneration;
 
             isScanning = true;
@@ -1908,15 +1917,7 @@ internal static class DeskSpacePinnedAppFilesV380
         {
             isClosed = true;
             scanGeneration++;
-            try
-            {
-                activeCts?.Cancel();
-                activeCts?.Dispose();
-            }
-            catch
-            {
-            }
-            activeCts = null;
+            DisposeActiveCts();
 
             lock (OpenWindowsLock)
             {
@@ -3429,7 +3430,7 @@ internal static class DeskSpacePinnedAppFilesV380
 
         if (item.IsRecent)
         {
-            topLine.Children.Add(CreatePillTag("★ RECENT", p.Accent, p.HighContrast ? p.Text : Color.FromRgb(8, 16, 33)));
+            topLine.Children.Add(CreatePillTag("★ RECENT", p.Accent, DeskSpaceDesignV283.OnAccent(p.Accent, p.HighContrast)));
         }
 
         topLine.Children.Add(CreatePillTag(item.KindBadge, p.Navigation, p.Muted));

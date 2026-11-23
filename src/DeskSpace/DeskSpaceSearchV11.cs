@@ -325,7 +325,7 @@ internal sealed class DeskSpaceSearchV11 : IDisposable
         };
         debounce=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(180)};
         debounce.Tick+=async (_,_)=>{
-            debounce.Stop();pending?.Cancel();pending?.Dispose();
+            debounce.Stop();SafeCancelPendingV380(dispose:true);
             pending=new CancellationTokenSource();var token=pending.Token;
             var term=field.Text.Trim();
             if(term.Length==0 && !appPinMode)
@@ -390,11 +390,26 @@ internal sealed class DeskSpaceSearchV11 : IDisposable
                 debounce.Start();
             }
         };
+        frame.Unloaded+=(_,_)=>{
+            indexRefresh?.Stop();
+            SafeCancelPendingV380(dispose:true);
+        };
         return frame;
+    }
+    private void SafeCancelPendingV380(bool dispose)
+    {
+        var cts=dispose?Interlocked.Exchange(ref pending,null):Volatile.Read(ref pending);
+        if(cts==null)return;
+        try{cts.Cancel();}catch(ObjectDisposedException){}
+        if(dispose)
+        {
+            try{cts.Dispose();}catch(ObjectDisposedException){}
+        }
     }
     public void Dispose()
     {
         disposed=true;appRefresh?.Stop();
-        debounce?.Stop();pending?.Cancel();pending?.Dispose();
+        debounce?.Stop();indexRefresh?.Stop();
+        SafeCancelPendingV380(dispose:true);
     }
 }

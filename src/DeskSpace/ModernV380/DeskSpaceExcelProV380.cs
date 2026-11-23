@@ -933,12 +933,12 @@ internal static class DeskSpaceExcelProV380
                 string norm = val.Trim().ToUpperInvariant();
                 string embeddedPan = norm.Substring(2, 10);
                 gstinResult.Text = $"{reason}  ·  State Code: {norm[..2]}  ·  Embedded PAN: {embeddedPan}";
-                gstinResult.Foreground = DeskSpaceDesignV283.Solid(WpfColor.FromRgb(74, 222, 128));
+                gstinResult.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Success(p));
             }
             else
             {
                 gstinResult.Text = reason;
-                gstinResult.Foreground = DeskSpaceDesignV283.Solid(WpfColor.FromRgb(248, 113, 113));
+                gstinResult.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Danger(p));
             }
         }
 
@@ -964,12 +964,12 @@ internal static class DeskSpaceExcelProV380
             else if (AccountingNormalizerV380.ValidatePan(val))
             {
                 panResult.Text = $"Valid PAN format (Entity type code: '{val[3]}').";
-                panResult.Foreground = DeskSpaceDesignV283.Solid(WpfColor.FromRgb(74, 222, 128));
+                panResult.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Success(p));
             }
             else
             {
                 panResult.Text = "Invalid PAN format. Expected 5 letters + 4 digits + 1 letter.";
-                panResult.Foreground = DeskSpaceDesignV283.Solid(WpfColor.FromRgb(248, 113, 113));
+                panResult.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Danger(p));
             }
         };
 
@@ -1113,10 +1113,10 @@ internal static class DeskSpaceExcelProV380
         WpfBrush decisionBrush = isHeader
             ? DeskSpaceDesignV283.Solid(p.Muted)
             : isWritable
-                ? DeskSpaceDesignV283.Solid(WpfColor.FromRgb(74, 222, 128))
+                ? DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Success(p))
                 : isFormula
-                    ? DeskSpaceDesignV283.Solid(WpfColor.FromRgb(96, 165, 250))
-                    : DeskSpaceDesignV283.Solid(WpfColor.FromRgb(251, 191, 36));
+                    ? DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Info(p))
+                    : DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Warning(p));
 
         void AddText(int col, string value, WpfBrush brush, FontWeight weight, WpfHorizontalAlignment align = WpfHorizontalAlignment.Left)
         {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -9,6 +10,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -53,7 +55,11 @@ internal static class DeskSpaceFluentBackdropV380
     private static readonly List<WeakReference<Window>> TrackedWindows = new();
     private static string? _cachedMode;
 
+    private const string HeroBannerTag = "DeskSpaceHeroBannerV380";
+    private const string BentoContainerTag = "DeskSpaceBentoDashboardV380";
+
     internal static event Action? BackdropChanged;
+    internal static event Action? ThemeChanged;
 
     private static string PrefsPath => System.IO.Path.Combine(WorkspaceStore.Root, "fluent-v380.json");
 
@@ -306,6 +312,8 @@ internal static class DeskSpaceFluentBackdropV380
             {
             }
         }
+
+        ThemeChanged?.Invoke();
     }
 
     private static void TrackWindow(Window window, bool transient)
@@ -334,7 +342,7 @@ internal static class DeskSpaceFluentBackdropV380
     {
         // Button style matching MainWindow.xaml structure with live palette tokens
         var btnStyle = new Style(typeof(Button));
-        btnStyle.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Raised)));
+        btnStyle.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.SecondaryButtonBg(p))));
         btnStyle.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(p.Text)));
         btnStyle.Setters.Add(new Setter(Control.BorderBrushProperty, DeskSpaceDesignV283.Solid(p.Border)));
         btnStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(p.HighContrast ? 2 : 1)));
@@ -394,54 +402,59 @@ internal static class DeskSpaceFluentBackdropV380
 
         // TextBox style
         var tbStyle = new Style(typeof(TextBox));
-        tbStyle.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Raised)));
+        tbStyle.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.InputBg(p))));
         tbStyle.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(p.Text)));
         tbStyle.Setters.Add(new Setter(Control.BorderBrushProperty, DeskSpaceDesignV283.Solid(p.Border)));
         tbStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
         tbStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(9, 7, 9, 7)));
-        tbStyle.Setters.Add(new Setter(TextBoxBase.CaretBrushProperty, DeskSpaceDesignV283.Solid(p.Accent)));
+        tbStyle.Setters.Add(new Setter(TextBoxBase.CaretBrushProperty, DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.AccentText(p))));
         tbStyle.Setters.Add(new Setter(TextBoxBase.SelectionBrushProperty, DeskSpaceDesignV283.Solid(p.AccentSoft)));
         window.Resources[typeof(TextBox)] = tbStyle;
 
         // ListBox style
         var lbStyle = new Style(typeof(ListBox));
-        lbStyle.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Surface)));
+        lbStyle.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Raised)));
         lbStyle.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(p.Text)));
         lbStyle.Setters.Add(new Setter(Control.BorderBrushProperty, DeskSpaceDesignV283.Solid(p.Border)));
         lbStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
         window.Resources[typeof(ListBox)] = lbStyle;
+
+        // ComboBoxItem style so dropdown menus always match the active theme cleanly
+        var cbiStyle = new Style(typeof(ComboBoxItem));
+        cbiStyle.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Raised)));
+        cbiStyle.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(p.Text)));
+        cbiStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 6, 10, 6)));
+        var cbiHover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        cbiHover.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Hover)));
+        cbiStyle.Triggers.Add(cbiHover);
+        var cbiSelected = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
+        cbiSelected.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(p.AccentSoft)));
+        cbiSelected.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.AccentText(p))));
+        cbiStyle.Triggers.Add(cbiSelected);
+        window.Resources[typeof(ComboBoxItem)] = cbiStyle;
+
+        // Keep dark ink on native Aero2 ComboBox toggle surface when High Contrast is off so text never washes out
+        var cbStyle = new Style(typeof(ComboBox));
+        cbStyle.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(
+            p.HighContrast ? p.Text : Color.FromRgb(15, 23, 42))));
+        cbStyle.Setters.Add(new Setter(Control.BorderBrushProperty, DeskSpaceDesignV283.Solid(p.Border)));
+        window.Resources[typeof(ComboBox)] = cbStyle;
     }
 
     private static void ApplyMainWindowChrome(MainWindow window, DeskSpaceDesignV283.Palette p)
     {
+        window.Background = DeskSpaceDesignV283.Solid(p.Navigation);
+
         if (window.Content is DockPanel rootDock)
         {
             foreach (UIElement child in rootDock.Children)
             {
                 if (child is Border header && DockPanel.GetDock(header) == Dock.Top)
                 {
-                    if (p.HighContrast)
-                    {
-                        header.Background = DeskSpaceDesignV283.Solid(p.Navigation);
-                    }
-                    else
-                    {
-                        var c1 = DeskSpaceAppearanceV148.Mix(p.Accent, p.Navigation, p.Dark ? 0.80 : 0.88);
-                        var c2 = DeskSpaceAppearanceV148.Mix(p.Accent, p.Raised, p.Dark ? 0.68 : 0.82);
-                        var c3 = DeskSpaceAppearanceV148.Mix(p.Accent, p.Surface, p.Dark ? 0.56 : 0.76);
-                        var grad = new LinearGradientBrush(
-                            new GradientStopCollection
-                            {
-                                new GradientStop(c1, 0),
-                                new GradientStop(c2, 0.66),
-                                new GradientStop(c3, 1)
-                            },
-                            new Point(0, 0),
-                            new Point(1, 0));
-                        grad.Freeze();
-                        header.Background = grad;
-                    }
+                    header.Background = DeskSpaceDesignV283.Solid(
+                        p.HighContrast ? p.Navigation : (p.Dark ? p.Navigation : p.Raised));
                     header.BorderBrush = DeskSpaceDesignV283.Solid(p.Border);
+                    header.BorderThickness = new Thickness(0, 0, 0, 1);
 
                     if (header.Child is DockPanel headerDock)
                     {
@@ -474,8 +487,10 @@ internal static class DeskSpaceFluentBackdropV380
         if (window.VersionButton != null)
         {
             window.VersionButton.Background = DeskSpaceDesignV283.Solid(p.AccentSoft);
-            window.VersionButton.Foreground = DeskSpaceDesignV283.Solid(p.Text);
-            window.VersionButton.BorderBrush = DeskSpaceDesignV283.Solid(p.Border);
+            window.VersionButton.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.AccentText(p));
+            window.VersionButton.BorderBrush = DeskSpaceDesignV283.Solid(
+                p.HighContrast ? p.Border : DeskSpaceAppearanceV148.Mix(p.Accent, p.Border, 0.50));
+            window.VersionButton.BorderThickness = new Thickness(1);
         }
 
         if (window.StatusText != null)
@@ -487,6 +502,8 @@ internal static class DeskSpaceFluentBackdropV380
             window.MainTabs.Foreground = DeskSpaceDesignV283.Solid(p.Text);
             window.MainTabs.BorderBrush = DeskSpaceDesignV283.Solid(p.Border);
             window.MainTabs.ItemContainerStyle = CreateFluentTabItemStyle(p);
+
+            HarmonizeStaticMainWindowSurfaces(window, p);
 
             foreach (var tab in window.MainTabs.Items.OfType<TabItem>())
             {
@@ -527,10 +544,102 @@ internal static class DeskSpaceFluentBackdropV380
         }
 
         if (window.GridWarning != null)
+            window.GridWarning.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Danger(p));
+    }
+
+    private static void HarmonizeStaticMainWindowSurfaces(MainWindow window, DeskSpaceDesignV283.Palette p)
+    {
+        if (window.MainTabs == null)
+            return;
+
+        // 1. Harmonize R349 Hero Banner and Launch Pad card inside the Home tab
+        var homeTab = window.MainTabs.Items.OfType<TabItem>()
+            .FirstOrDefault(t => string.Equals(t.Tag as string, "Home", StringComparison.OrdinalIgnoreCase));
+        if (homeTab?.Content is ScrollViewer homeScroll && homeScroll.Content is StackPanel homeStack)
         {
-            window.GridWarning.Foreground = p.HighContrast
-                ? DeskSpaceDesignV283.Solid(p.Text)
-                : DeskSpaceDesignV283.Solid(p.Dark ? Color.FromRgb(252, 165, 165) : Color.FromRgb(185, 28, 28));
+            homeScroll.Background = DeskSpaceDesignV283.Solid(p.Surface);
+            foreach (UIElement child in homeStack.Children)
+            {
+                if (child is Border border &&
+                    !Equals(border.Tag, BentoContainerTag))
+                {
+                    if (border.CornerRadius.TopLeft >= 18 && border.Child is StackPanel heroStack)
+                    {
+                        border.Tag = HeroBannerTag;
+                        if (p.HighContrast)
+                        {
+                            border.Background = DeskSpaceDesignV283.Solid(p.Navigation);
+                            border.BorderBrush = DeskSpaceDesignV283.Solid(p.Text);
+                        }
+                        else
+                        {
+                            Color g0 = p.Dark
+                                ? DeskSpaceAppearanceV148.Mix(p.Accent, Color.FromRgb(25, 32, 48), 0.72)
+                                : DeskSpaceAppearanceV148.Mix(p.Accent, Color.FromRgb(22, 28, 45), 0.72);
+                            Color g1 = p.Dark
+                                ? Color.FromRgb(22, 28, 42)
+                                : DeskSpaceAppearanceV148.Mix(p.Accent, Color.FromRgb(15, 23, 42), 0.84);
+                            Color g2 = p.Dark
+                                ? DeskSpaceAppearanceV148.Mix(p.Accent, Color.FromRgb(32, 40, 60), 0.78)
+                                : DeskSpaceAppearanceV148.Mix(p.Accent, Color.FromRgb(36, 44, 68), 0.66);
+                            var grad = new LinearGradientBrush(
+                                new GradientStopCollection
+                                {
+                                    new GradientStop(g0, 0),
+                                    new GradientStop(g1, 0.55),
+                                    new GradientStop(g2, 1)
+                                },
+                                new Point(0, 0),
+                                new Point(1, 0));
+                            grad.Freeze();
+                            border.Background = grad;
+                            border.BorderBrush = DeskSpaceDesignV283.Solid(
+                                DeskSpaceAppearanceV148.Mix(p.Accent, p.Dark ? p.Border : Color.FromRgb(51, 65, 85), 0.5));
+                        }
+
+                        var heroTexts = heroStack.Children.OfType<TextBlock>().ToList();
+                        if (heroTexts.Count > 0)
+                        {
+                            heroTexts[0].Foreground = DeskSpaceDesignV283.Solid(
+                                p.HighContrast ? p.Text : DeskSpaceAppearanceV148.Mix(p.Accent, Colors.White, 0.68));
+                        }
+                        if (heroTexts.Count > 1)
+                        {
+                            heroTexts[1].Foreground = DeskSpaceDesignV283.Solid(
+                                p.HighContrast ? p.Text : Colors.White);
+                        }
+                        for (int i = 2; i < heroTexts.Count; i++)
+                        {
+                            heroTexts[i].Foreground = DeskSpaceDesignV283.Solid(
+                                p.HighContrast ? p.Text : Color.FromRgb(215, 224, 238));
+                        }
+                    }
+                    else if (border.CornerRadius.TopLeft >= 15 && border.Child is WrapPanel)
+                    {
+                        border.Background = DeskSpaceDesignV283.Solid(p.Raised);
+                        border.BorderBrush = DeskSpaceDesignV283.Solid(p.Border);
+                    }
+                }
+            }
+        }
+
+        // 2. Harmonize R351 Settings tab surface, inherited text foreground, and picker
+        var settingsTab = window.MainTabs.Items.OfType<TabItem>()
+            .FirstOrDefault(t => string.Equals(t.Tag as string, "Settings", StringComparison.OrdinalIgnoreCase));
+        if (settingsTab?.Content is ScrollViewer settingsScroll)
+        {
+            settingsScroll.Background = DeskSpaceDesignV283.Solid(p.Surface);
+            if (settingsScroll.Content is StackPanel settingsStack)
+                TextElement.SetForeground(settingsStack, DeskSpaceDesignV283.Solid(p.Text));
+        }
+
+        if (window.FindName("UpdateChannelPickerV104") is ComboBox channelPicker)
+        {
+            channelPicker.Background = DeskSpaceDesignV283.Solid(
+                p.HighContrast ? p.Surface : (p.Dark ? Color.FromRgb(241, 245, 249) : DeskSpaceDesignV283.InputBg(p)));
+            channelPicker.Foreground = DeskSpaceDesignV283.Solid(
+                p.HighContrast ? p.Text : Color.FromRgb(15, 23, 42));
+            channelPicker.BorderBrush = DeskSpaceDesignV283.Solid(p.Border);
         }
     }
 
@@ -543,7 +652,7 @@ internal static class DeskSpaceFluentBackdropV380
         style.Setters.Add(new Setter(Control.FontSizeProperty, 14.0));
         style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
         style.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(p.Muted)));
-        style.Setters.Add(new Setter(Control.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Navigation)));
+        style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
         style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
         style.Setters.Add(new Setter(FrameworkElement.CursorProperty, System.Windows.Input.Cursors.Hand));
@@ -593,10 +702,13 @@ internal static class DeskSpaceFluentBackdropV380
         hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Hover), "TabChrome"));
         template.Triggers.Add(hoverTrigger);
 
+        var selectedBorder = p.HighContrast
+            ? p.Accent
+            : DeskSpaceAppearanceV148.Mix(p.Accent, p.Border, 0.45);
         var selectedTrigger = new Trigger { Property = TabItem.IsSelectedProperty, Value = true };
-        selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(p.Text)));
+        selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.AccentText(p))));
         selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, DeskSpaceDesignV283.Solid(p.AccentSoft), "TabChrome"));
-        selectedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, DeskSpaceDesignV283.Solid(p.Accent), "TabChrome"));
+        selectedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, DeskSpaceDesignV283.Solid(selectedBorder), "TabChrome"));
         selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Accent), "ActivePill"));
         template.Triggers.Add(selectedTrigger);
 
@@ -611,6 +723,10 @@ internal static class DeskSpaceFluentBackdropV380
 
     private static void RetintMainTabTextBlocks(DependencyObject node, DeskSpaceDesignV283.Palette p)
     {
+        if (node is FrameworkElement fe &&
+            (Equals(fe.Tag, HeroBannerTag) || Equals(fe.Tag, BentoContainerTag)))
+            return;
+
         if (node is TextBlock tb)
         {
             var src = DependencyPropertyHelper.GetValueSource(tb, TextBlock.ForegroundProperty);
@@ -619,14 +735,25 @@ internal static class DeskSpaceFluentBackdropV380
                 if (tb.Foreground is SolidColorBrush scb)
                 {
                     Color c = scb.Color;
-                    // Preserve warning/amber intent while ensuring legible contrast in both themes
-                    if (c == Color.FromRgb(0xA4, 0x3E, 0x1C) || c == Color.FromRgb(0xFC, 0xA5, 0xA5) || c == Color.FromRgb(0xB9, 0x1C, 0x1C))
+                    // Preserve danger/warning semantic intent while keeping contrast readable
+                    if (c == Color.FromRgb(0xA4, 0x3E, 0x1C) ||
+                        c == Color.FromRgb(0xFC, 0xA5, 0xA5) ||
+                        c == Color.FromRgb(0xB9, 0x1C, 0x1C) ||
+                        c == Color.FromRgb(0xF8, 0x71, 0x71) ||
+                        c == Color.FromRgb(0xDC, 0x26, 0x26))
                     {
-                        tb.Foreground = DeskSpaceDesignV283.Solid(p.HighContrast ? p.Text : (p.Dark ? Color.FromRgb(252, 165, 165) : Color.FromRgb(185, 28, 28)));
+                        tb.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Danger(p));
                     }
-                    else if (c == Color.FromRgb(0xE3, 0xBD, 0x81) || c == Color.FromRgb(0x92, 0x40, 0x0E))
+                    else if (c == Color.FromRgb(0xE3, 0xBD, 0x81) ||
+                             c == Color.FromRgb(0x92, 0x40, 0x0E) ||
+                             c == Color.FromRgb(0xFB, 0xBF, 0x24) ||
+                             c == Color.FromRgb(0xB4, 0x53, 0x09))
                     {
-                        tb.Foreground = DeskSpaceDesignV283.Solid(p.HighContrast ? p.Text : (p.Dark ? Color.FromRgb(227, 189, 129) : Color.FromRgb(146, 64, 14)));
+                        tb.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Warning(p));
+                    }
+                    else if (tb.FontSize >= 16 || tb.FontWeight >= FontWeights.SemiBold)
+                    {
+                        tb.Foreground = DeskSpaceDesignV283.Solid(p.Text);
                     }
                     else
                     {
@@ -675,8 +802,8 @@ internal static class DeskSpaceFluentBackdropV380
             Padding = new Thickness(15, 7, 15, 7),
             MinHeight = 32,
             Cursor = System.Windows.Input.Cursors.Hand,
-            Background = DeskSpaceDesignV283.Solid(primary ? p.Accent : p.Raised),
-            Foreground = DeskSpaceDesignV283.Solid(primary && !p.HighContrast ? Color.FromRgb(8, 16, 33) : p.Text),
+            Background = DeskSpaceDesignV283.Solid(primary ? p.Accent : DeskSpaceDesignV283.SecondaryButtonBg(p)),
+            Foreground = DeskSpaceDesignV283.Solid(primary ? DeskSpaceDesignV283.OnAccent(p.Accent, p.HighContrast) : p.Text),
             BorderBrush = DeskSpaceDesignV283.Solid(primary ? p.Accent : p.Border),
             BorderThickness = new Thickness(p.HighContrast ? 2 : 1),
             FontWeight = primary ? FontWeights.SemiBold : FontWeights.Medium,
@@ -711,8 +838,8 @@ internal static class DeskSpaceFluentBackdropV380
         var template = new ControlTemplate(typeof(Button)) { VisualTree = chrome };
 
         var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-        if (!primary)
-            hover.Setters.Add(new Setter(Border.BackgroundProperty, DeskSpaceDesignV283.Solid(p.Hover), "PillChrome"));
+        hover.Setters.Add(new Setter(Border.BackgroundProperty, DeskSpaceDesignV283.Solid(
+            primary ? DeskSpaceDesignV283.AccentHover(p) : p.Hover), "PillChrome"));
         hover.Setters.Add(new Setter(Border.BorderBrushProperty, DeskSpaceDesignV283.Solid(p.Accent), "PillChrome"));
         template.Triggers.Add(hover);
 
@@ -739,7 +866,7 @@ internal static class DeskSpaceFluentBackdropV380
             Text = text,
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
-            Foreground = DeskSpaceDesignV283.Solid(p.Accent),
+            Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.AccentText(p)),
             Margin = new Thickness(0, 8, 0, 6)
         };
     }

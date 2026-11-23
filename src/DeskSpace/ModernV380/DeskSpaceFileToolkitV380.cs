@@ -1299,7 +1299,7 @@ internal static class DeskSpaceFileToolkitV380
             }
             bool match = HashToolkitV380.VerifySha256(actualBox.Text, expectedBox.Text);
             verdict.Text = match ? "MATCH — SHA-256 digest verified." : "MISMATCH — Digest does not match expected hash.";
-            verdict.Foreground = DeskSpaceDesignV283.Solid(match ? WpfColor.FromRgb(74, 222, 128) : WpfColor.FromRgb(248, 113, 113));
+            verdict.Foreground = DeskSpaceDesignV283.Solid(match ? DeskSpaceDesignV283.Success(p) : DeskSpaceDesignV283.Danger(p));
         }
 
         expectedBox.TextChanged += (_, _) => UpdateVerdict();
@@ -1324,7 +1324,7 @@ internal static class DeskSpaceFileToolkitV380
             catch (Exception ex)
             {
                 verdict.Text = ex.Message;
-                verdict.Foreground = DeskSpaceDesignV283.Solid(WpfColor.FromRgb(248, 113, 113));
+                verdict.Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Danger(p));
             }
         }, true, "Compute lowercase SHA-256 hex");
 

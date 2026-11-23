@@ -136,7 +136,7 @@ public partial class MainWindow : Window
     {
         var settings=WidgetSettingsV3.Load();
         DeskSpaceSettingsStudioV148.Show(this,settings,()=>{
-            settings.Save();settings.ApplyWindowsStartup();
+            settings.Save();settings.ApplyWindowsStartup();DeskSpaceFluentBackdropV380.ReapplyLiveTheme();
         },()=>new WidgetOptionsWindow(settings,
             ()=>{settings.Save();settings.ApplyWindowsStartup();}).Show());
     }

@@ -13,8 +13,11 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using DeskSpace;
 using Drawing = System.Drawing;
+using Color = System.Windows.Media.Color;
+using Button = System.Windows.Controls.Button;
 
 internal static class Program
 {
@@ -608,6 +611,151 @@ internal static class Program
             "ActionPalette must register V380 commands while preserving built-in commands");
     }
 
+    private static void PumpDispatcher(DispatcherPriority priority)
+    {
+        var frame = new DispatcherFrame();
+        Dispatcher.CurrentDispatcher.BeginInvoke(priority, new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
+    }
+
+    private static void TestPinnedAppSearchDisposeUnloadV380(Assembly asm)
+    {
+        var searchType = asm.GetType("DeskSpace.DeskSpaceSearchV11", true)!;
+        var pendingField = searchType.GetField("pending", AnyInstance)!;
+
+        // 1. Reproduce exact crash order: Content swap -> Dispose() -> resize triggers Unloaded
+        InvokeStatic(searchType, "RequestApplicationPinMode");
+        var search1 = Activator.CreateInstance(searchType, new object[]
+        {
+            new WidgetSettingsV3(),
+            new Action(() => { }),
+            new Action<double>(_ => { })
+        })!;
+        var frame1 = (FrameworkElement)searchType.GetMethod("Create", AnyInstance)!.Invoke(search1, null)!;
+
+        var win1 = new Window
+        {
+            Width = 340,
+            Height = 140,
+            Left = -3200,
+            Top = -3200,
+            ShowInTaskbar = false,
+            WindowStyle = WindowStyle.None,
+            Content = frame1
+        };
+        win1.Show();
+        PumpDispatcher(DispatcherPriority.Loaded);
+
+        var liveCts = new CancellationTokenSource();
+        pendingField.SetValue(search1, liveCts);
+
+        win1.Content = new Border();
+        ((IDisposable)search1).Dispose();
+        win1.Width = 116;
+        win1.Height = 116;
+        PumpDispatcher(DispatcherPriority.Background);
+        win1.Close();
+        PumpDispatcher(DispatcherPriority.Background);
+
+        Check(pendingField.GetValue(search1) == null, "DeskSpaceSearchV11 pending CTS must be cleared on Dispose/Unload");
+
+        // 2. Reverse order: Unloaded fires first, followed by double Dispose()
+        var search2 = Activator.CreateInstance(searchType, new object[]
+        {
+            new WidgetSettingsV3(),
+            new Action(() => { }),
+            new Action<double>(_ => { })
+        })!;
+        var frame2 = (FrameworkElement)searchType.GetMethod("Create", AnyInstance)!.Invoke(search2, null)!;
+        var win2 = new Window
+        {
+            Width = 340,
+            Height = 140,
+            Left = -3200,
+            Top = -3200,
+            ShowInTaskbar = false,
+            WindowStyle = WindowStyle.None,
+            Content = frame2
+        };
+        win2.Show();
+        PumpDispatcher(DispatcherPriority.Loaded);
+        pendingField.SetValue(search2, new CancellationTokenSource());
+
+        win2.Content = null;
+        win2.Close();
+        PumpDispatcher(DispatcherPriority.Background);
+        ((IDisposable)search2).Dispose();
+        ((IDisposable)search2).Dispose();
+    }
+
+    private static void TestColorPaletteContrastAndHeroV380(Assembly asm)
+    {
+        var designType = asm.GetType("DeskSpace.DeskSpaceDesignV283", true)!;
+        var appType = asm.GetType("DeskSpace.DeskSpaceAppearanceV148", true)!;
+        var fluentType = asm.GetType("DeskSpace.DeskSpaceFluentBackdropV380", true)!;
+
+        var tryColor = appType.GetMethod("TryColor", AnyStatic)!;
+        var resolve = designType.GetMethod("Resolve", AnyStatic)!;
+        var contrastRatio = designType.GetMethod("ContrastRatio", AnyStatic)!;
+        var onAccent = designType.GetMethod("OnAccent", AnyStatic)!;
+        var accentText = designType.GetMethod("AccentText", AnyStatic)!;
+        var secBg = designType.GetMethod("SecondaryButtonBg", AnyStatic)!;
+        var inputBg = designType.GetMethod("InputBg", AnyStatic)!;
+        var successM = designType.GetMethod("Success", AnyStatic)!;
+        var dangerM = designType.GetMethod("Danger", AnyStatic)!;
+        var warningM = designType.GetMethod("Warning", AnyStatic)!;
+        var infoM = designType.GetMethod("Info", AnyStatic)!;
+
+        double Ratio(Color a, Color b) => (double)contrastRatio.Invoke(null, new object[] { a, b })!;
+
+        string[] accents = { "#7364D3", "#199978", "#DA633E", "#3589DE", "#D64D80", "#B77615", "#629924", "#5F5F63", "#8291FF" };
+        foreach (bool dark in new[] { false, true })
+        {
+            foreach (string hex in accents)
+            {
+                object?[] cArgs = { hex, null };
+                Check((bool)tryColor.Invoke(null, cArgs)!, "TryColor failed for " + hex);
+                Color accent = (Color)cArgs[1]!;
+
+                object p = resolve.Invoke(null, new object[] { dark, false, accent })!;
+                Color text = GetProp<Color>(p, "Text");
+                Color muted = GetProp<Color>(p, "Muted");
+                Color raised = GetProp<Color>(p, "Raised");
+                Color surface = GetProp<Color>(p, "Surface");
+
+                Check(raised != surface, $"Raised and Surface must differ cleanly (dark={dark})");
+                Color sec = (Color)secBg.Invoke(null, new[] { p })!;
+                Color inp = (Color)inputBg.Invoke(null, new[] { p })!;
+                Check(sec != raised && inp != raised, $"SecondaryButtonBg and InputBg must separate from Raised card (dark={dark})");
+
+                Check(Ratio(text, raised) >= 7.0, $"Primary text contrast < 7.0 on Raised ({hex}, dark={dark})");
+                Check(Ratio(muted, raised) >= 4.5, $"Muted text contrast < 4.5 on Raised ({hex}, dark={dark})");
+
+                Color fgOnAcc = (Color)onAccent.Invoke(null, new object[] { accent, false })!;
+                Check(Ratio(fgOnAcc, accent) >= 4.2, $"OnAccent contrast < 4.2 for {hex}");
+
+                Color accTxt = (Color)accentText.Invoke(null, new[] { p })!;
+                Check(Ratio(accTxt, raised) >= 4.5 && Ratio(accTxt, surface) >= 4.5,
+                    $"AccentText contrast < 4.5 for {hex} (dark={dark})");
+
+                foreach (var sem in new[] { successM, dangerM, warningM, infoM })
+                {
+                    Color sc = (Color)sem.Invoke(null, new[] { p })!;
+                    Check(Ratio(sc, raised) >= 4.5, $"{sem.Name} semantic contrast < 4.5 (dark={dark})");
+                }
+            }
+        }
+
+        // Verify CreatePillButton(primary=true) uses OnAccent instead of hardcoded dark navy
+        object curP = designType.GetProperty("Current", AnyStatic)!.GetValue(null)!;
+        Color curAccent = GetProp<Color>(curP, "Accent");
+        bool curHc = GetProp<bool>(curP, "HighContrast");
+        Color expectedFg = (Color)onAccent.Invoke(null, new object[] { curAccent, curHc })!;
+        var pill = (Button)InvokeStatic(fluentType, "CreatePillButton", "Pin App", new Action(() => { }), true, null)!;
+        Check(pill.Foreground is SolidColorBrush fgBrush && fgBrush.Color == expectedFg,
+            "Primary pill button foreground must match DeskSpaceDesignV283.OnAccent");
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -617,6 +765,8 @@ internal static class Program
             var asm = typeof(Workspace).Assembly;
             TestCommandBarV380(asm);
             TestPinnedAppFilesV380(asm);
+            TestPinnedAppSearchDisposeUnloadV380(asm);
+            TestColorPaletteContrastAndHeroV380(asm);
             TestVaultProV380(asm);
             TestNotesSnippetsV380(asm);
             TestExcelProV380(asm);

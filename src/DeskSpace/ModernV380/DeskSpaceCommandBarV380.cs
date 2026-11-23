@@ -1355,14 +1355,21 @@ internal static class DeskSpaceCommandBarV380
         bool closing = false;
         CancellationTokenSource? asyncSearchCts = null;
 
+        void DisposeSearchCts()
+        {
+            var prev = Interlocked.Exchange(ref asyncSearchCts, null);
+            if (prev == null)
+                return;
+            try { prev.Cancel(); } catch (ObjectDisposedException) { }
+            try { prev.Dispose(); } catch (ObjectDisposedException) { }
+        }
+
         void CloseCleanly()
         {
             if (closing)
                 return;
             closing = true;
-            asyncSearchCts?.Cancel();
-            asyncSearchCts?.Dispose();
-            asyncSearchCts = null;
+            DisposeSearchCts();
             try { win.Close(); } catch { }
         }
 
@@ -1514,8 +1521,8 @@ internal static class DeskSpaceCommandBarV380
                         FontSize = 10.5,
                         FontWeight = FontWeights.SemiBold,
                         HorizontalAlignment = HorizontalAlignment.Center,
-                        Foreground = DeskSpaceDesignV283.Solid(isCalc && !p.HighContrast
-                            ? Color.FromRgb(8, 16, 33)
+                        Foreground = DeskSpaceDesignV283.Solid(isCalc
+                            ? DeskSpaceDesignV283.OnAccent(p.Accent, p.HighContrast)
                             : p.Text)
                     }
                 };
@@ -1583,9 +1590,7 @@ internal static class DeskSpaceCommandBarV380
 
         void UpdateQuery(string q)
         {
-            asyncSearchCts?.Cancel();
-            asyncSearchCts?.Dispose();
-            asyncSearchCts = null;
+            DisposeSearchCts();
 
             var baseHits = Search(q, cachedWorkspace).ToList();
             RenderHits(baseHits);
@@ -1699,8 +1704,8 @@ internal static class DeskSpaceCommandBarV380
         win.Deactivated += (_, _) => CloseCleanly();
         win.Closed += (_, _) =>
         {
-            asyncSearchCts?.Cancel();
-            asyncSearchCts?.Dispose();
+            closing = true;
+            DisposeSearchCts();
             if (ReferenceEquals(_activeBar, win))
                 _activeBar = null;
         };

@@ -698,8 +698,8 @@ internal static class DeskSpaceDeskTouchEcosystemV380
             foreach (var kv in profileButtons)
             {
                 bool activeProf = string.Equals(snap.ActiveProfile, kv.Key, StringComparison.OrdinalIgnoreCase);
-                kv.Value.Background = DeskSpaceDesignV283.Solid(activeProf ? p.Accent : p.Raised);
-                kv.Value.Foreground = DeskSpaceDesignV283.Solid(activeProf && !p.HighContrast ? Color.FromRgb(8, 16, 33) : p.Text);
+                kv.Value.Background = DeskSpaceDesignV283.Solid(activeProf ? p.Accent : DeskSpaceDesignV283.SecondaryButtonBg(p));
+                kv.Value.Foreground = DeskSpaceDesignV283.Solid(activeProf ? DeskSpaceDesignV283.OnAccent(p.Accent, p.HighContrast) : p.Text);
                 kv.Value.BorderBrush = DeskSpaceDesignV283.Solid(activeProf ? p.Accent : p.Border);
             }
 
@@ -733,7 +733,7 @@ internal static class DeskSpaceDeskTouchEcosystemV380
                         Text = device.Platform,
                         FontSize = 10,
                         FontWeight = FontWeights.SemiBold,
-                        Foreground = DeskSpaceDesignV283.Solid(active && !p.HighContrast ? Color.FromRgb(8, 16, 33) : p.Text)
+                        Foreground = DeskSpaceDesignV283.Solid(active ? DeskSpaceDesignV283.OnAccent(p.Accent, p.HighContrast) : p.Text)
                     }
                 };
                 DockPanel.SetDock(platformBadge, Dock.Right);

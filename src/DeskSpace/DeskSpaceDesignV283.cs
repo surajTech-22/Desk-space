@@ -29,20 +29,92 @@ internal static class DeskSpaceDesignV283
                 SystemColors.HighlightColor,SystemColors.HighlightColor);
         if(dark)
             return new(true,false,
-                Color.FromRgb(12,18,35),Color.FromRgb(20,29,49),
-                Color.FromRgb(30,42,66),Color.FromRgb(15,23,41),
-                Color.FromRgb(75,94,127),Color.FromRgb(244,247,255),
-                Color.FromRgb(167,185,216),accent,
-                DeskSpaceAppearanceV148.Mix(accent,Color.FromRgb(35,45,78),.72),
-                Color.FromRgb(47,61,91));
+                Color.FromRgb(15,18,25),Color.FromRgb(21,26,36),
+                Color.FromRgb(30,37,52),Color.FromRgb(19,23,32),
+                Color.FromRgb(45,54,74),Color.FromRgb(241,245,249),
+                Color.FromRgb(148,163,184),accent,
+                DeskSpaceAppearanceV148.Mix(accent,Color.FromRgb(30,37,52),.76),
+                Color.FromRgb(40,49,69));
         return new(false,false,
-            Color.FromRgb(242,245,251),Colors.White,
-            Color.FromRgb(248,250,255),Color.FromRgb(232,237,249),
-            Color.FromRgb(210,218,235),Color.FromRgb(28,40,68),
-            Color.FromRgb(91,108,142),accent,
-            DeskSpaceAppearanceV148.Mix(accent,Colors.White,.84),
-            Color.FromRgb(235,240,252));
+            Color.FromRgb(243,245,249),Color.FromRgb(246,248,252),
+            Colors.White,Color.FromRgb(234,238,245),
+            Color.FromRgb(220,227,238),Color.FromRgb(15,23,42),
+            Color.FromRgb(71,85,105),accent,
+            DeskSpaceAppearanceV148.Mix(accent,Colors.White,.88),
+            Color.FromRgb(232,238,247));
     }
+
+    internal static double RelativeLuminance(Color c)
+    {
+        static double Linearize(byte v)
+        {
+            double s=v/255.0;
+            return s<=0.03928?s/12.92:Math.Pow((s+0.055)/1.055,2.4);
+        }
+        return 0.2126*Linearize(c.R)+0.7152*Linearize(c.G)+0.0722*Linearize(c.B);
+    }
+
+    internal static double ContrastRatio(Color a,Color b)
+    {
+        double la=RelativeLuminance(a);
+        double lb=RelativeLuminance(b);
+        return (Math.Max(la,lb)+0.05)/(Math.Min(la,lb)+0.05);
+    }
+
+    internal static Color OnAccent(Color accent,bool highContrast=false)
+    {
+        if(highContrast)return SystemColors.HighlightTextColor;
+        var darkInk=Color.FromRgb(15,23,42);
+        return ContrastRatio(Colors.White,accent)>=ContrastRatio(darkInk,accent)
+            ?Colors.White:darkInk;
+    }
+
+    internal static Color AccentText(Palette p)
+    {
+        if(p.HighContrast)return p.Accent;
+        var target=p.Dark?Colors.White:Color.FromRgb(15,23,42);
+        var candidate=p.Accent;
+        for(int i=0;i<=20;i++)
+        {
+            if(ContrastRatio(candidate,p.Raised)>=4.6 &&
+               ContrastRatio(candidate,p.Surface)>=4.6)
+                return candidate;
+            double frac=Math.Min(1.0,(i+1)*0.05);
+            candidate=DeskSpaceAppearanceV148.Mix(p.Accent,target,frac);
+        }
+        return target;
+    }
+
+    internal static Color AccentHover(Palette p)
+    {
+        if(p.HighContrast)return p.Hover;
+        return DeskSpaceAppearanceV148.Mix(
+            p.Accent,p.Dark?Colors.White:Color.FromRgb(15,23,42),.14);
+    }
+
+    internal static Color SecondaryButtonBg(Palette p)
+    {
+        if(p.HighContrast)return p.Raised;
+        return p.Dark?Color.FromRgb(38,48,68):Color.FromRgb(238,242,247);
+    }
+
+    internal static Color InputBg(Palette p)
+    {
+        if(p.HighContrast)return p.Surface;
+        return p.Dark?Color.FromRgb(19,24,35):Color.FromRgb(248,250,252);
+    }
+
+    internal static Color Success(Palette p)=>
+        p.HighContrast?p.Text:(p.Dark?Color.FromRgb(52,211,153):Color.FromRgb(21,128,61));
+
+    internal static Color Danger(Palette p)=>
+        p.HighContrast?p.Text:(p.Dark?Color.FromRgb(248,113,113):Color.FromRgb(220,38,38));
+
+    internal static Color Warning(Palette p)=>
+        p.HighContrast?p.Text:(p.Dark?Color.FromRgb(251,191,36):Color.FromRgb(180,83,9));
+
+    internal static Color Info(Palette p)=>
+        p.HighContrast?p.Text:(p.Dark?Color.FromRgb(96,165,250):Color.FromRgb(29,78,216));
 
     internal static Palette Current=>Resolve(
         DeskSpaceAppearanceV148.IsDarkFor(DeskSpaceAppearanceV148.Current),
@@ -108,9 +180,8 @@ internal static class DeskSpaceDesignV283
         Palette? palette=null)
     {
         var p=palette??Current;
-        button.Background=Solid(primary?p.Accent:p.Raised);
-        button.Foreground=Solid(primary && !p.HighContrast?
-            Color.FromRgb(8,16,33):p.Text);
+        button.Background=Solid(primary?p.Accent:SecondaryButtonBg(p));
+        button.Foreground=Solid(primary?OnAccent(p.Accent,p.HighContrast):p.Text);
         button.BorderBrush=Solid(primary?p.Accent:p.Border);
         button.BorderThickness=new Thickness(p.HighContrast?2:1);
         button.Padding=new Thickness(13,9,13,9);
@@ -158,6 +229,8 @@ internal static class DeskSpaceDesignV283
         var hovered=new Trigger{
             Property=UIElement.IsMouseOverProperty,Value=true
         };
+        hovered.Setters.Add(new Setter(Border.BackgroundProperty,
+            Solid(primary?AccentHover(p):p.Hover),"Chrome"));
         hovered.Setters.Add(new Setter(Border.BorderBrushProperty,
             Solid(p.Accent),"Chrome"));
         template.Triggers.Add(hovered);
@@ -170,12 +243,12 @@ internal static class DeskSpaceDesignV283
     internal static void Input(TextBox text,Palette? palette=null)
     {
         var p=palette??Current;
-        text.Background=Solid(p.Raised);
+        text.Background=Solid(InputBg(p));
         text.Foreground=Solid(p.Text);
         text.BorderBrush=Solid(p.Border);
         text.BorderThickness=new Thickness(1);
         text.Padding=new Thickness(11,9,11,9);
-        text.CaretBrush=Solid(p.Accent);
+        text.CaretBrush=Solid(AccentText(p));
         text.SelectionBrush=Solid(p.AccentSoft);
         text.MinHeight=Math.Max(36,text.MinHeight);
     }
@@ -193,11 +266,17 @@ internal static class DeskSpaceDesignV283
     {
         var p=palette??Current;
         return new Border{
-            Child=child,CornerRadius=new CornerRadius(15),
+            Child=child,CornerRadius=new CornerRadius(14),
             Padding=new Thickness(16),
             Background=Solid(p.Raised),BorderBrush=Solid(p.Border),
             BorderThickness=new Thickness(1),
-            SnapsToDevicePixels=true
+            SnapsToDevicePixels=true,
+            Effect=p.HighContrast?null:new DropShadowEffect
+            {
+                Color=p.Dark?Color.FromRgb(4,6,12):Color.FromRgb(15,23,42),
+                BlurRadius=12,ShadowDepth=2,
+                Opacity=p.Dark?.22:.06,Direction=270
+            }
         };
     }
 
@@ -206,7 +285,7 @@ internal static class DeskSpaceDesignV283
         var p=palette??Current;
         return new TextBlock{
             Text=text,FontSize=11,FontWeight=FontWeights.SemiBold,
-            Foreground=Solid(p.Accent),
+            Foreground=Solid(AccentText(p)),
             Margin=new Thickness(0,0,0,6)
         };
     }

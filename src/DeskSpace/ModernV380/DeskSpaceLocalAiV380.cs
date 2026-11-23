@@ -518,10 +518,10 @@ internal static class DeskSpaceLocalAiV380
         {
             bool valid = IsValidEndpoint(endpointBox.Text, out bool local, out string reason);
             WpfColor tone = !valid
-                ? WpfColor.FromRgb(239, 68, 68)
+                ? DeskSpaceDesignV283.Danger(p)
                 : local
-                    ? WpfColor.FromRgb(34, 197, 94)
-                    : WpfColor.FromRgb(245, 158, 11);
+                    ? DeskSpaceDesignV283.Success(p)
+                    : DeskSpaceDesignV283.Warning(p);
             privacyBadge.Background = DeskSpaceDesignV283.Solid(WpfColor.FromArgb(30, tone.R, tone.G, tone.B));
             privacyBadge.BorderBrush = DeskSpaceDesignV283.Solid(tone);
             privacyText.Foreground = DeskSpaceDesignV283.Solid(p.Text);
@@ -668,6 +668,15 @@ internal static class DeskSpaceLocalAiV380
         System.Windows.Controls.Button? runBtn = null;
         System.Windows.Controls.Button? cancelBtn = null;
 
+        void DisposeRunCts()
+        {
+            var prev = Interlocked.Exchange(ref runCts, null);
+            if (prev == null)
+                return;
+            try { prev.Cancel(); } catch (ObjectDisposedException) { }
+            try { prev.Dispose(); } catch (ObjectDisposedException) { }
+        }
+
         runBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Run Task", async () =>
         {
             PersistDraft();
@@ -677,9 +686,9 @@ internal static class DeskSpaceLocalAiV380
                 return;
             }
 
-            runCts?.Cancel();
-            runCts?.Dispose();
-            runCts = new CancellationTokenSource();
+            DisposeRunCts();
+            var nextCts = new CancellationTokenSource();
+            runCts = nextCts;
             if (runBtn != null) runBtn.IsEnabled = false;
             if (cancelBtn != null) cancelBtn.IsEnabled = true;
 
@@ -687,7 +696,7 @@ internal static class DeskSpaceLocalAiV380
             {
                 statusBar.Text = $"Running {taskCombo.SelectedItem} with {Config.Model}...";
                 var kind = taskCombo.SelectedItem is AiTaskKind k ? k : AiTaskKind.Summarize;
-                string result = await RunTaskAsync(kind, inputBox.Text, instructionBox.Text, runCts.Token);
+                string result = await RunTaskAsync(kind, inputBox.Text, instructionBox.Text, nextCts.Token);
                 outputBox.Text = result;
                 statusBar.Text = $"Completed ({result.Length} chars).";
             }
@@ -709,7 +718,9 @@ internal static class DeskSpaceLocalAiV380
 
         cancelBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Cancel", () =>
         {
-            runCts?.Cancel();
+            var current = Volatile.Read(ref runCts);
+            if (current == null) return;
+            try { current.Cancel(); } catch (ObjectDisposedException) { }
         }, false, "Cancel running AI request");
         cancelBtn.IsEnabled = false;
         cancelBtn.Margin = new Thickness(0, 0, 8, 4);
@@ -755,11 +766,7 @@ internal static class DeskSpaceLocalAiV380
 
         body.Children.Add(DeskSpaceFluentBackdropV380.CreateCard(taskStack, p));
 
-        win.Closed += (_, _) =>
-        {
-            runCts?.Cancel();
-            runCts?.Dispose();
-        };
+        win.Closed += (_, _) => DisposeRunCts();
 
         root.Children.Add(new ScrollViewer
         {

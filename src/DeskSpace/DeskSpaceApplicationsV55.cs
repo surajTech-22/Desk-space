@@ -264,7 +264,10 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                     HideArc();
                     string pinnedTarget=item.Path;
                     owner.Dispatcher.BeginInvoke(new Action(()=>
-                        DeskSpacePinnedAppFilesV380.Show(owner,pinnedTarget)));
+                    {
+                        try{DeskSpacePinnedAppFilesV380.Show(owner,pinnedTarget);}
+                        catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
+                    }));
                 }
                 return true;
             case "pageback":MoveChild(-1);return true;

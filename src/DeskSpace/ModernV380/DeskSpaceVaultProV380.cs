@@ -265,8 +265,8 @@ internal static class DeskSpaceVaultProV380
             void StyleTab(Button? b, bool active)
             {
                 if (b == null) return;
-                b.Background = DeskSpaceDesignV283.Solid(active ? palette.Accent : palette.Raised);
-                b.Foreground = DeskSpaceDesignV283.Solid(active && !palette.HighContrast ? Color.FromRgb(8, 16, 33) : palette.Text);
+                b.Background = DeskSpaceDesignV283.Solid(active ? palette.Accent : DeskSpaceDesignV283.SecondaryButtonBg(palette));
+                b.Foreground = DeskSpaceDesignV283.Solid(active ? DeskSpaceDesignV283.OnAccent(palette.Accent, palette.HighContrast) : palette.Text);
                 b.BorderBrush = DeskSpaceDesignV283.Solid(active ? palette.Accent : palette.Border);
             }
             StyleTab(tabVaultBtn, tab == "vault");
@@ -314,7 +314,7 @@ internal static class DeskSpaceVaultProV380
         var lockErrorText = new TextBlock
         {
             FontSize = 12,
-            Foreground = DeskSpaceDesignV283.Solid(Color.FromRgb(248, 113, 113)),
+            Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Danger(palette)),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
             Visibility = Visibility.Collapsed
@@ -961,10 +961,10 @@ internal static class DeskSpaceVaultProV380
             entropyBar.Value = Math.Min(140, bits);
             entropyBar.Foreground = DeskSpaceDesignV283.Solid(rating switch
             {
-                "Very Strong" => Color.FromRgb(52, 211, 153),
+                "Very Strong" => DeskSpaceDesignV283.Success(palette),
                 "Strong" => palette.Accent,
-                "Fair" => Color.FromRgb(251, 191, 36),
-                _ => Color.FromRgb(248, 113, 113)
+                "Fair" => DeskSpaceDesignV283.Warning(palette),
+                _ => DeskSpaceDesignV283.Danger(palette)
             });
             entropyLabel.Text = $"Estimated entropy: {bits:0.0} bits · {rating}";
         }
