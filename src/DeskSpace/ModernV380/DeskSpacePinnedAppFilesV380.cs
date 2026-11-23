@@ -538,13 +538,30 @@ internal static class DeskSpacePinnedAppFilesV380
         string? exeDir = System.IO.Path.GetDirectoryName(effectiveExe);
         string pinnedBaseName = System.IO.Path.GetFileNameWithoutExtension(safePinned);
 
+        bool isExplicitWinmanGstShortcut =
+            pinnedBaseName.Contains("gst", StringComparison.OrdinalIgnoreCase) &&
+            !pinnedBaseName.Contains("ca", StringComparison.OrdinalIgnoreCase) &&
+            !pinnedBaseName.Contains("erp", StringComparison.OrdinalIgnoreCase) &&
+            !pinnedBaseName.Contains("saral", StringComparison.OrdinalIgnoreCase);
+
         void ApplyWinmanProfile(string displayTitle, bool tdsPrimary)
         {
             kind = PinnedAppKindV380.WinmanAccounting;
-            profileDisplayName = displayTitle;
-            AddExtensions(".tax", ".wgst", ".tax.wb", ".wgst.wb", ".24q", ".26q", ".27q", ".27eq", ".7eq", ".wt");
-            if (tdsPrimary)
+            if (isExplicitWinmanGstShortcut)
+            {
+                profileDisplayName = "Winman GST";
+                AddExtensions(".wgst", ".wgst.wb");
+            }
+            else if (tdsPrimary || pinnedBaseName.Contains("tds", StringComparison.OrdinalIgnoreCase))
+            {
+                profileDisplayName = "Winman TDS";
                 AddExtensions(".24q", ".26q", ".27q", ".27eq", ".7eq", ".wt");
+            }
+            else
+            {
+                profileDisplayName = displayTitle;
+                AddExtensions(".tax", ".wgst", ".tax.wb", ".wgst.wb", ".24q", ".26q", ".27q", ".27eq", ".7eq", ".wt");
+            }
             if (!string.IsNullOrWhiteSpace(exeDir))
             {
                 AddRoot(System.IO.Path.Combine(exeDir, "UserData"), requireExisting: true);
@@ -747,13 +764,16 @@ internal static class DeskSpacePinnedAppFilesV380
         // (.xml, .txt, .json, .html, etc.) into structured productivity/accounting apps.
         bool ideSafe = kind == PinnedAppKindV380.IdeWorkspace;
         bool hasPrimaryNonNoisy = extensions.Any(e => !NoisyGlobalExtensions.Contains(e));
-        foreach (string regExt in DiscoverRegistryExtensions(exeName))
+        if (!isExplicitWinmanGstShortcut)
         {
-            if (!IsSafeTargetExtension(regExt, ideSafe))
-                continue;
-            if (hasPrimaryNonNoisy && !ideSafe && NoisyGlobalExtensions.Contains(regExt))
-                continue;
-            extensions.Add(regExt);
+            foreach (string regExt in DiscoverRegistryExtensions(exeName))
+            {
+                if (!IsSafeTargetExtension(regExt, ideSafe))
+                    continue;
+                if (hasPrimaryNonNoisy && !ideSafe && NoisyGlobalExtensions.Contains(regExt))
+                    continue;
+                extensions.Add(regExt);
+            }
         }
 
         string displayName = ResolveAppDisplayName(safePinned, effectiveExe, profileDisplayName);
@@ -4081,6 +4101,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 ".flac" => TryReadFlacTitle(trimmedPath),
                 ".csproj" or ".vbproj" or ".fsproj" => TryReadMsBuildProjectTitle(trimmedPath),
                 ".ipynb" => TryReadNotebookTitle(trimmedPath),
+                ".wgst" or ".tax" => DeskSpaceInformationTabV380.TryReadWinmanInAppDisplayName(trimmedPath),
                 _ => null
             };
         }

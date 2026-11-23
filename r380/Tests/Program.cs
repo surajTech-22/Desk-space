@@ -1835,6 +1835,253 @@ internal static class Program
         }
     }
 
+    private static void TestApplicationFileHeaderValueInformationV380(Assembly asm)
+    {
+        var tabType = asm.GetType("DeskSpace.DeskSpaceInformationTabV380", true)!;
+        var evalElig = tabType.GetMethod("EvaluateAppEligibility", AnyStatic)!;
+        var isValidPair = tabType.GetMethod("IsValidHeaderValuePair", AnyStatic)!;
+        var buildWinmanRec = tabType.GetMethod("BuildSyntheticWinmanRecord", AnyStatic)!;
+        var discoverInfo = tabType.GetMethod("DiscoverAppInformation", AnyStatic)!;
+        var savePref = tabType.GetMethod("SaveVisibleHeadersPreference", AnyStatic)!;
+        var getVisibleFields = tabType.GetMethod("GetVisibleFieldsForFile", AnyStatic)!;
+
+        // 1. App Eligibility: Structured Header->Value apps vs Unstructured prose/media apps
+        var wordElig = evalElig.Invoke(null, new object[] { @"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE" })!;
+        Check(!GetProp<bool>(wordElig, "IsSupported") &&
+              GetProp<string>(wordElig, "Reason").Contains("prose", StringComparison.OrdinalIgnoreCase),
+            "Microsoft Word must be rejected as an unstructured prose application");
+
+        var pptElig = evalElig.Invoke(null, new object[] { @"C:\Program Files\Microsoft Office\root\Office16\POWERPNT.EXE" })!;
+        Check(!GetProp<bool>(pptElig, "IsSupported"),
+            "PowerPoint must be rejected as an unstructured presentation application");
+
+        var vlcElig = evalElig.Invoke(null, new object[] { @"C:\Program Files\VideoLAN\VLC\vlc.exe" })!;
+        Check(!GetProp<bool>(vlcElig, "IsSupported"),
+            "VLC must be rejected as a media player application");
+
+        var wgstElig = evalElig.Invoke(null, new object[] { @"C:\StartMenu\Winman GST.lnk" })!;
+        Check(GetProp<bool>(wgstElig, "IsSupported") &&
+              GetProp<string>(wgstElig, "AppDisplayName") == "Winman GST" &&
+              GetProp<IReadOnlyList<string>>(wgstElig, "SupportedExtensions").Contains(".wgst"),
+            "Winman GST must be eligible as a structured Header -> Value application (.wgst)");
+
+        var caErpElig = evalElig.Invoke(null, new object[] { @"C:\StartMenu\Winman CA ERP.lnk" })!;
+        Check(GetProp<bool>(caErpElig, "IsSupported") &&
+              GetProp<IReadOnlyList<string>>(caErpElig, "SupportedExtensions").Contains(".tax"),
+            "Winman CA ERP must be eligible as a structured Header -> Value application (.tax)");
+
+        var excelElig = evalElig.Invoke(null, new object[] { @"C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE" })!;
+        Check(GetProp<bool>(excelElig, "IsSupported") &&
+              GetProp<IReadOnlyList<string>>(excelElig, "SupportedExtensions").Contains(".xlsx"),
+            "Microsoft Excel must be eligible as a structured Header -> Value application");
+
+        // 2. Strict Header -> Value pair validation (rejects random prose paragraphs, paths, and placeholders)
+        Check((bool)isValidPair.Invoke(null, new object?[] { "GSTIN", "29AABCA1234F1Z5" })! &&
+              !(bool)isValidPair.Invoke(null, new object?[] { "12345", "Value" })! &&
+              !(bool)isValidPair.Invoke(null, new object?[] { "Notes", "This is a very long random unstructured paragraph of prose text from a document that does not represent a concise header value field at all and exceeds word limits." })! &&
+              !(bool)isValidPair.Invoke(null, new object?[] { "Tax", "`k`CurCellVal`k`" })! &&
+              !(bool)isValidPair.Invoke(null, new object?[] { "Status", "NA" })!,
+            "IsValidHeaderValuePair must accept concise Header->Value pairs and reject random prose or internal placeholders");
+
+        // 3. Inside-file Winman GST (.wgst) binary + embedded JSON decoding & >= 2 matching files rule
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_AppInfo_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            string prefPath = Path.Combine(tempRoot, "app-info-prefs.json");
+            string wgstLnk = Path.Combine(tempRoot, "Winman GST.lnk");
+            File.WriteAllText(wgstLnk, "mock");
+
+            byte[] WriteWgstBytes(
+                string legalName,
+                string tradeName,
+                string gstin,
+                string fy,
+                string dealerType,
+                string constitution,
+                string returnForm,
+                string mobile,
+                string? extraOnlyOne = null)
+            {
+                var row0 = new string?[35];
+                row0[0] = "CLIENT-" + constitution;
+                row0[4] = "10042025120000000000";
+                row0[5] = "2";
+                row0[6] = "23112026183000000000";
+                row0[8] = "Original";
+                row0[9] = "23112026183000000000";
+                row0[15] = legalName;
+                row0[16] = "0";
+                row0[17] = dealerType;
+                row0[22] = gstin;
+                row0[23] = fy;
+                row0[26] = constitution;
+                row0[27] = "Version-8.9.7";
+                row0[29] = returnForm;
+                row0[30] = "1526";
+                row0[31] = constitution;
+                row0[33] = mobile;
+
+                var row1 = new string?[35];
+                row1[0] = "head";
+                row1[10] = "0-0-0-0-0-0-0-0-1-";
+
+                var row2 = new string?[35];
+                row2[0] = "MAIN";
+                row2[2] = legalName;
+                row2[4] = fy;
+                row2[10] = "0.01.00.00.00.00";
+                string qrJson = extraOnlyOne != null ? $"\"Quarterly_Return\":\"{extraOnlyOne}\"," : "\"Quarterly_Return\":\" \",";
+                row2[30] = $"{{\"Legal_name\":\"{legalName}\",\"Taxpayer_type\":\"{dealerType}\",\"GSTIN\":\"{gstin}\",\"Trade_Name\":\"{tradeName}\",\"State\":\"GSTIN\",\"Mobile_number\":\"{mobile}\",\"EMail_ID\":\"info@example.in\",{qrJson}\"Fin_Year\":\"{fy}\",\"MISPriority\":\"Original\",\"Created_by_PC_User\":\"CA-ADMIN\"}}";
+
+                using var ms = new MemoryStream();
+                foreach (var r in new[] { row0, row1, row2 })
+                {
+                    byte[] enc = (byte[])buildWinmanRec.Invoke(null, new object[] { r })!;
+                    ms.Write(enc, 0, enc.Length);
+                }
+                return ms.ToArray();
+            }
+
+            string wgst1 = Path.Combine(tempRoot, "Alpha_25_26.wgst");
+            string wgst2 = Path.Combine(tempRoot, "Beta_25_26.wgst");
+            File.WriteAllBytes(wgst1, WriteWgstBytes(
+                "Alpha Traders Pvt Ltd", "Alpha Traders", "29 AABCA1234F 1Z5",
+                "2025-2026", "Regular", "Private Limited Company", "GSTR-3B", "9876543210",
+                extraOnlyOne: "Yes"));
+            File.WriteAllBytes(wgst2, WriteWgstBytes(
+                "Beta Exports LLP", "Beta Exports", "33 AABCB5678G 1Z2",
+                "2025-2026", "Composition Supplier", "LLP", "CMP-08", "9123456780",
+                extraOnlyOne: null));
+
+            // Single file must fail the >= 2 similar files rule
+            var singleRes = discoverInfo.Invoke(null, new object?[] { wgstLnk, new[] { wgst1 }, prefPath })!;
+            Check(!GetProp<bool>(singleRes, "MeetsMinimumTwoFilesRule"),
+                "DiscoverAppInformation must reject when only 1 file exists (< 2 similar files)");
+
+            // Two matching .wgst files must pass and extract only headers present in >= 2 files
+            var pairRes = discoverInfo.Invoke(null, new object?[] { wgstLnk, new[] { wgst1, wgst2 }, prefPath })!;
+            Check(GetProp<bool>(pairRes, "MeetsMinimumTwoFilesRule") &&
+                  GetProp<int>(pairRes, "QualifyingFileCount") == 2,
+                "DiscoverAppInformation must succeed when >= 2 .wgst files share inside-file Header -> Value fields");
+
+            var matchedHeaders = ((IEnumerable)GetProp<object>(pairRes, "MatchedHeaders")).Cast<object>()
+                .Select(h => GetProp<string>(h, "Header"))
+                .ToList();
+            Check(matchedHeaders.Contains("Legal Name") &&
+                  matchedHeaders.Contains("Trade Name") &&
+                  matchedHeaders.Contains("GSTIN") &&
+                  matchedHeaders.Contains("PAN") &&
+                  matchedHeaders.Contains("State & State Code") &&
+                  matchedHeaders.Contains("Financial Year") &&
+                  matchedHeaders.Contains("Taxpayer / Dealer Type") &&
+                  matchedHeaders.Contains("Constitution / Status") &&
+                  matchedHeaders.Contains("Return Form") &&
+                  matchedHeaders.Contains("Filing Type") &&
+                  matchedHeaders.Contains("Mobile Number") &&
+                  matchedHeaders.Contains("Email ID") &&
+                  matchedHeaders.Contains("Created By User") &&
+                  !matchedHeaders.Contains("Quarterly Return"),
+                $"Winman GST >= 2 matched headers mismatch: [{string.Join(", ", matchedHeaders)}]");
+
+            var matchedFiles = ((IEnumerable)GetProp<object>(pairRes, "MatchedFiles")).Cast<object>().ToList();
+            var alphaFields = GetProp<IReadOnlyDictionary<string, string>>(matchedFiles[0], "Fields");
+            Check(alphaFields["Legal Name"] == "Alpha Traders Pvt Ltd" &&
+                  alphaFields["Trade Name"] == "Alpha Traders" &&
+                  alphaFields["GSTIN"] == "29AABCA1234F1Z5" &&
+                  alphaFields["PAN"] == "AABCA1234F" &&
+                  alphaFields["State & State Code"] == "29 · Karnataka" &&
+                  alphaFields["Financial Year"] == "2025-2026" &&
+                  alphaFields["Return Form"] == "GSTR-3B",
+                "Inside-file .wgst header decoding must recover Legal Name, Trade Name, GSTIN, PAN, State, Financial Year, and Return Form");
+
+            // 4. User header visibility selection persistence and filtering
+            var customVisible = new[] { "Legal Name", "GSTIN", "Financial Year" };
+            savePref.Invoke(null, new object?[] { wgstLnk, customVisible, prefPath });
+
+            var reloadedRes = discoverInfo.Invoke(null, new object?[] { wgstLnk, new[] { wgst1, wgst2 }, prefPath })!;
+            var reloadedVis = GetProp<IReadOnlyList<string>>(reloadedRes, "VisibleHeaders");
+            Check(reloadedVis.SequenceEqual(customVisible),
+                "Saved user header visibility selection must persist and reload accurately");
+
+            var filteredAlpha = (IReadOnlyList<KeyValuePair<string, string>>)getVisibleFields.Invoke(
+                null, new object[] { matchedFiles[0], reloadedVis })!;
+            Check(filteredAlpha.Count == 3 &&
+                  filteredAlpha[0].Key == "Legal Name" && filteredAlpha[0].Value == "Alpha Traders Pvt Ltd" &&
+                  filteredAlpha[1].Key == "GSTIN" && filteredAlpha[1].Value == "29AABCA1234F1Z5" &&
+                  filteredAlpha[2].Key == "Financial Year" && filteredAlpha[2].Value == "2025-2026",
+                "GetVisibleFieldsForFile must return only the user-selected visible headers in exact order");
+
+            // 5. Inside-file Winman CA-ERP (.tax) binary + embedded JSON decoding across >= 2 files
+            string taxLnk = Path.Combine(tempRoot, "Winman CA ERP.lnk");
+            File.WriteAllText(taxLnk, "mock");
+            byte[] WriteTaxBytes(string name, string father, string pan, string status, string ay, string dob, string mobile, string city, string pin, string gti, string netTax)
+            {
+                var r0 = new string?[35];
+                r0[0] = "CLIENT-" + status;
+                r0[3] = pin;
+                r0[4] = "15072025120000000000";
+                r0[6] = "23112026183000000000";
+                r0[8] = "Original";
+                r0[10] = city;
+                r0[12] = "01-Resident";
+                r0[13] = " " + pan + " ";
+                r0[14] = "Karnataka";
+                r0[15] = name;
+                r0[17] = dob;
+                r0[20] = "31-Oct-2025";
+                r0[21] = "MG Road";
+                r0[23] = ay;
+                r0[26] = status;
+                r0[27] = "Version-9.6.4";
+                r0[33] = mobile;
+
+                var r1 = new string?[35];
+                r1[0] = "head";
+                var r2 = new string?[35];
+                r2[0] = "MAIN";
+                r2[10] = "0.01.00.00.00.00";
+                r2[30] = $"{{\"Name\":\"{name}\",\"Father_name\":\"{father}\",\"PAN\":\"{pan}\",\"Status\":\"{status}\",\"Asstyear\":\"{ay}\",\"DOB__DOI__DOF\":\"{dob}\",\"Mobile_Number\":\"{mobile}\",\"City\":\"{city}\",\"Pincode\":\"{pin}\",\"Gross_Total_Income\":\"{gti}\",\"Net_Tax\":\"{netTax}\",\"MISPriority\":\"Original\"}}";
+
+                using var ms = new MemoryStream();
+                foreach (var r in new[] { r0, r1, r2 })
+                {
+                    byte[] enc = (byte[])buildWinmanRec.Invoke(null, new object[] { r })!;
+                    ms.Write(enc, 0, enc.Length);
+                }
+                return ms.ToArray();
+            }
+
+            string tax1 = Path.Combine(tempRoot, "Client1_25_26.tax");
+            string tax2 = Path.Combine(tempRoot, "Client2_25_26.tax");
+            File.WriteAllBytes(tax1, WriteTaxBytes("Ramesh Kumar", "Suresh Kumar", "ABCDE1234F", "Individual", "2025-2026", "15-Aug-1985", "9876543210", "Mangaluru", "575 001", "1450000", "185000"));
+            File.WriteAllBytes(tax2, WriteTaxBytes("Kiran Rao", "Mohan Rao", "FGHIJ5678K", "Individual", "2025-2026", "20-Jan-1990", "9123456789", "Bengaluru", "560 001", "2100000", "312000"));
+
+            var taxRes = discoverInfo.Invoke(null, new object?[] { taxLnk, new[] { tax1, tax2 }, prefPath })!;
+            var taxHeaders = ((IEnumerable)GetProp<object>(taxRes, "MatchedHeaders")).Cast<object>()
+                .Select(h => GetProp<string>(h, "Header"))
+                .ToList();
+            Check(GetProp<bool>(taxRes, "MeetsMinimumTwoFilesRule") &&
+                  taxHeaders.Contains("Assessee Name") &&
+                  taxHeaders.Contains("Father Name") &&
+                  taxHeaders.Contains("PAN") &&
+                  taxHeaders.Contains("Status / Category") &&
+                  taxHeaders.Contains("Assessment Year") &&
+                  taxHeaders.Contains("Date of Birth / Incorporation") &&
+                  taxHeaders.Contains("Mobile Number") &&
+                  taxHeaders.Contains("City / Town") &&
+                  taxHeaders.Contains("State") &&
+                  taxHeaders.Contains("PIN Code") &&
+                  taxHeaders.Contains("Gross Total Income") &&
+                  taxHeaders.Contains("Net Tax"),
+                $"Winman .tax >= 2 matched headers mismatch: [{string.Join(", ", taxHeaders)}]");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -1851,6 +2098,7 @@ internal static class Program
             TestStrictPerAppIsolationAndNoMixingV380(asm);
             TestQuickArcNoStuckLoadingAndIsolationV380(asm);
             TestTallyErp9FixesAndUniversalDisambiguationV380(asm);
+            TestApplicationFileHeaderValueInformationV380(asm);
             TestInformationDonutGeometryAndSectorV380(asm);
             TestInformationTabSyncAndSchemaV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);
