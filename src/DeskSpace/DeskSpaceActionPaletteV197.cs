@@ -40,6 +40,7 @@ internal static class DeskSpaceActionPaletteV197
             "Review, apply, undo or recover an interrupted batch rename","Files"),
         new("downloads","Open Downloads folder","Show the ordinary Windows Downloads folder","Files"),
         new("v380_commandbar","Command Bar · Search, Math, GST & Units","Open Spotlight launcher with calculator, converters & quick actions","Tools"),
+        new("v380_information","Information Collections · Saved Info & Vault PW","View, search, copy & edit saved Information collections synced with donut","Workspace"),
         new("v380_pinnedfiles","Pinned Apps · Compatible Files","Browse all compatible files & Tally companies for pinned apps (Recent first)","Files"),
         new("v380_clipboard","Rich Clipboard History & Transforms","Event-driven text, image, color & file clipboard history","Text"),
         new("v380_snip","Screen Snip, Table OCR & Pin on Screen","Capture region to OCR text, Excel TSV or floating pin","Tools"),

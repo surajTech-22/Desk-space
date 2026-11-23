@@ -34,6 +34,11 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private readonly DeskSpaceSubDonutStandardV62.Wheel scrollWheel=new();
     private DeskSpaceSubDonutStandardV62.View currentChildView;
     private string group="";
+    private string activeAppPath="";
+    private double activeAppCenter;
+    private IReadOnlyList<PinnedAppFileItemV380> activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
+    private bool activeAppLoading;
+    private int activeAppVersion;
     private bool disposed;
     public bool IsArcOpen=>arc.IsOpen;
     public int PinnedCount=>pinned().Count;
@@ -108,6 +113,30 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 Add(item.Label,item.Kind,item.Path,
                     currentChildView.From(i),currentChildView.To(i),1);
             }
+            if(!string.IsNullOrEmpty(activeAppPath) &&
+               children.Any(c=>string.Equals(c.Path,activeAppPath,StringComparison.OrdinalIgnoreCase)))
+            {
+                var d2Items=new List<(string Label,string Kind,string Path)>();
+                foreach(var f in activeAppFiles.Take(4))
+                {
+                    string lbl=f.TallyCompanyCode!=null
+                        ? "Tally Co #"+f.TallyCompanyCode
+                        : f.DisplayName;
+                    d2Items.Add((lbl,"launchfile",f.FullPath));
+                }
+                if(d2Items.Count==0 && activeAppLoading)
+                    d2Items.Add(("Loading…","loading",""));
+                d2Items.Add(("All files…","allfiles",activeAppPath));
+                double d2Sweep=Math.Clamp(Math.Max(currentChildView.Step,48.0),28.0,56.0);
+                double d2Half=DeskSpaceSubArcGeometryV48.Half(d2Items.Count);
+                double d2Center=DeskSpaceSubArcGeometryV48.FitAngle(owner,2,activeAppCenter,d2Half);
+                var d2View=DeskSpaceSubDonutStandardV62.Plan(d2Items.Count,0,d2Center,d2Sweep);
+                for(int i=0;i<d2View.Count;i++)
+                {
+                    var d2=d2Items[i];
+                    Add(d2.Label,d2.Kind,d2.Path,d2View.From(i),d2View.To(i),2);
+                }
+            }
         }
         var shapes=items.Select(x=>
             DeskSpaceSubArcGeometryV48.Sector(x.Depth,x.A,x.B)).ToArray();
@@ -119,10 +148,20 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         {
             var item=items[i];
             var geometry=DeskSpaceSubArcGeometryV48.Clip(shapes[i],bounds);
+            bool isAction=item.Kind is "add" or "allfiles";
+            bool isSelectedApp=item.Kind=="launch" && !string.IsNullOrEmpty(activeAppPath) &&
+                string.Equals(item.Path,activeAppPath,StringComparison.OrdinalIgnoreCase);
+            string tip=item.Kind=="launch"
+                ? item.Label+"\nClick: Open app directly · Hover: Recent files · Right-click: All files"
+                : item.Kind=="launchfile"
+                    ? item.Label+"\nClick to open directly in "+System.IO.Path.GetFileNameWithoutExtension(activeAppPath)+"\n"+item.Path
+                    : item.Kind=="allfiles"
+                        ? "Open full compatible files browser for "+System.IO.Path.GetFileNameWithoutExtension(item.Path)
+                        : item.Label;
             var wedge=new System.Windows.Shapes.Path{
                 Data=geometry,Stroke=Brushes.White,StrokeThickness=1.5,
-                Fill=item.Kind=="add"?accent:normal,
-                Cursor=Cursors.Hand,ToolTip=item.Label,Tag=i};
+                Fill=isAction?accent:(isSelectedApp?selected:normal),
+                Cursor=Cursors.Hand,ToolTip=tip,Tag=i};
             fills.Add(wedge);
             hitZones.Add((geometry,item.Kind,item.Path));
             canvas.Children.Add(wedge);
@@ -133,13 +172,15 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             double arcWidth=(DeskSpaceSubArcGeometryV48.Inner(item.Depth)+
                 DeskSpaceSubArcGeometryV48.Outer(item.Depth))*.5*
                 (item.B-item.A)*Math.PI/180;
-            double textWidth=Math.Clamp(arcWidth*.94,34,86);
+            double textWidth=Math.Clamp(arcWidth*.94,34,item.Depth>=2?96:86);
             var label=new TextBlock{Text=item.Label,Width=textWidth,MaxHeight=27,
-                FontSize=10,TextTrimming=TextTrimming.CharacterEllipsis,
+                FontSize=item.Depth>=2?9.5:10,
+                FontWeight=isAction?FontWeights.SemiBold:FontWeights.Normal,
+                TextTrimming=TextTrimming.CharacterEllipsis,
                 TextWrapping=TextWrapping.Wrap,
                 TextAlignment=TextAlignment.Center,
-                IsHitTestVisible=false,ToolTip=item.Label,
-                Foreground=item.Kind=="add"?Brushes.White:
+                IsHitTestVisible=false,ToolTip=tip,
+                Foreground=isAction?Brushes.White:
                     new SolidColorBrush(Color.FromRgb(37,51,79))};
             Canvas.SetLeft(label,DeskSpaceSubArcGeometryV48.CX+p.X-
                 bounds.Left+margin-textWidth/2);
@@ -169,12 +210,54 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 currentChildView,canvas.Height/2,MoveChild);
         Position();
     }
+    private void ClearActiveAppFilesV380()
+    {
+        activeAppVersion++;
+        activeAppPath="";
+        activeAppLoading=false;
+        activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
+    }
+    private void SelectAppFilesV380(string path,double centerAngle)
+    {
+        if(!IsLaunchable(path))return;
+        if(string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase) &&
+           Math.Abs(activeAppCenter-centerAngle)<0.5)
+            return;
+        activeAppPath=path;
+        activeAppCenter=centerAngle;
+        int version=++activeAppVersion;
+        if(DeskSpacePinnedAppFilesV380.TryGetCachedQuickArcFiles(path,out var cached))
+        {
+            activeAppFiles=cached;
+            activeAppLoading=false;
+            Render();
+            return;
+        }
+        activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
+        activeAppLoading=true;
+        Render();
+        _=DeskSpacePinnedAppFilesV380.GetQuickArcFilesAsync(path,4).ContinueWith(t=>{
+            if(disposed)return;
+            var result=t.Status==System.Threading.Tasks.TaskStatus.RanToCompletion
+                ? t.Result
+                : Array.Empty<PinnedAppFileItemV380>();
+            owner.Dispatcher.BeginInvoke(new Action(()=>{
+                if(disposed || !arc.IsOpen || version!=activeAppVersion ||
+                   !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
+                    return;
+                activeAppFiles=result;
+                activeAppLoading=false;
+                Render();
+            }));
+        });
+    }
     private void MoveChild(int delta)
     {
         if(group!="pinned")return;
         int next=DeskSpaceSubDonutStandardV62.Advance(currentChildView,delta);
         if(next==childPage)return;
         childPage=next;
+        ClearActiveAppFilesV380();
         Render();
         DeskSpaceSubDonutStandardV62.Animate(canvas,delta,
             ApplicationsParentCenter);
@@ -194,10 +277,10 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     public void Show()
     {
         if(disposed)return;
-        group="";childPage=0;
+        group="";childPage=0;ClearActiveAppFilesV380();
         Render();arc.IsOpen=owner.IsVisible;
     }
-    public void HideArc(){arc.IsOpen=false;group="";childPage=0;}
+    public void HideArc(){arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
     private int Slot(Point point)
     {
         for(int i=hitZones.Count-1;i>=0;i--)
@@ -210,12 +293,33 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         if(i==hovered)return;
         hovered=i;
         for(int j=0;j<fills.Count;j++)
-            fills[j].Fill=j==i?selected:
-                hitZones[j].Kind=="add"?accent:normal;
+        {
+            bool activeParent=hitZones[j].Kind=="launch" && !string.IsNullOrEmpty(activeAppPath) &&
+                string.Equals(hitZones[j].Path,activeAppPath,StringComparison.OrdinalIgnoreCase);
+            fills[j].Fill=(j==i || activeParent)
+                ?selected
+                :(hitZones[j].Kind is "add" or "allfiles"?accent:normal);
+        }
         if(i<0)return;
         var kind=hitZones[i].Kind;
         if(kind=="pinned"&&group!=kind)
-        {group=kind;childPage=0;Render();}
+        {
+            group=kind;childPage=0;ClearActiveAppFilesV380();Render();
+            return;
+        }
+        if(kind=="launch")
+        {
+            double mid=(items[i].A+items[i].B)/2.0;
+            SelectAppFilesV380(hitZones[i].Path,mid);
+            return;
+        }
+        if(kind is "launchfile" or "allfiles" or "loading")
+            return;
+        if(!string.IsNullOrEmpty(activeAppPath))
+        {
+            ClearActiveAppFilesV380();
+            Render();
+        }
     }
     private void Move(object sender,MouseEventArgs e)
     {
@@ -230,7 +334,10 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         if(!IsLaunchable(pinnedPath))return;
         HideArc();
         owner.Dispatcher.BeginInvoke(new Action(()=>
-            DeskSpacePinnedRecentPickerV262.Show(owner,pinnedPath)));
+        {
+            try{DeskSpacePinnedAppFilesV380.Show(owner,pinnedPath);}
+            catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
+        }));
         e.Handled=true;
     }
     private void Down(object sender,MouseButtonEventArgs e)
@@ -261,11 +368,35 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             case "launch":
                 if(IsLaunchable(item.Path))
                 {
-                    HideArc();
                     string pinnedTarget=item.Path;
+                    HideArc();
                     owner.Dispatcher.BeginInvoke(new Action(()=>
                     {
-                        try{DeskSpacePinnedAppFilesV380.Show(owner,pinnedTarget);}
+                        try{DeskSpacePinnedAppFilesV380.TryLaunchPinnedAppDirect(pinnedTarget,owner);}
+                        catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
+                    }));
+                }
+                return true;
+            case "launchfile":
+                {
+                    string appTarget=activeAppPath;
+                    string fileTarget=item.Path;
+                    HideArc();
+                    owner.Dispatcher.BeginInvoke(new Action(()=>
+                    {
+                        try{DeskSpacePinnedAppFilesV380.TryOpenQuickArcItem(appTarget,fileTarget,owner);}
+                        catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
+                    }));
+                }
+                return true;
+            case "allfiles":
+                if(IsLaunchable(item.Path))
+                {
+                    string appTarget=item.Path;
+                    HideArc();
+                    owner.Dispatcher.BeginInvoke(new Action(()=>
+                    {
+                        try{DeskSpacePinnedAppFilesV380.Show(owner,appTarget);}
                         catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
                     }));
                 }

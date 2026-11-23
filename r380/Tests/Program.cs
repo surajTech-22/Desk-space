@@ -246,6 +246,244 @@ internal static class Program
             var loadedHist = ((IEnumerable<ValueTuple<string, DateTime>>)InvokeStatic(type, "GetRecentLaunches", "excel.exe", histFile)!).ToList();
             Check(loadedHist.Count == 1 && loadedHist[0].Item1.Equals(Path.GetFullPath(xlsFile), StringComparison.OrdinalIgnoreCase),
                 "RecordLaunch/GetRecentLaunches must persist per-app recent launch history atomically");
+
+            // 7. TallyPrime CmpSave.1800 company detection
+            string compSaveOnly = Path.Combine(tempRoot, "Data", "100001");
+            Directory.CreateDirectory(compSaveOnly);
+            File.WriteAllText(Path.Combine(compSaveOnly, "Company.1800"), "mock");
+            File.WriteAllText(Path.Combine(compSaveOnly, "CmpSave.1800"), "mock");
+            object?[] argsSave = { compSaveOnly, null, false, "Tally Data" };
+            bool okSaveOnly = (bool)tryParseTally.Invoke(null, argsSave)!;
+            Check(okSaveOnly && argsSave[1] != null &&
+                  GetProp<string>(argsSave[1]!, "TallyCompanyCode") == "100001",
+                "TryParseTallyCompanyFolder must detect .1800 TallyPrime company with Company.1800 + CmpSave.1800");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
+    private static void TestPinnedAppsDirectOpenAndWinmanV380(Assembly asm)
+    {
+        var type = asm.GetType("DeskSpace.DeskSpacePinnedAppFilesV380", true)!;
+        var itemType = asm.GetType("DeskSpace.PinnedAppFileItemV380", true)!;
+
+        // 1. Shortcut direct-open shell preference preserves .lnk args (e.g. Winman CA ERP.lnk)
+        Check((bool)InvokeStatic(type, "ShouldPreferShortcutShellLaunch", @"C:\Desktop\Winman CA ERP.lnk")! &&
+              (bool)InvokeStatic(type, "ShouldPreferShortcutShellLaunch", @"C:\Links\app.url")! &&
+              !(bool)InvokeStatic(type, "ShouldPreferShortcutShellLaunch", @"C:\Apps\tally.exe")!,
+            "ShouldPreferShortcutShellLaunch must prefer .lnk/.url over bare .exe");
+
+        // 2. Quoted shell-retry argument formatter
+        string quoted = (string)InvokeStatic(type, "QuoteWindowsArguments",
+            new object[] { new[] { @"F:\", "/NOINILOAD", "/LOAD:100001", @"C:\My Folder\Report 1.xlsx", @"C:\Trailing Space\" } })!;
+        Check(quoted == @"F:\ /NOINILOAD /LOAD:100001 ""C:\My Folder\Report 1.xlsx"" ""C:\Trailing Space\\""",
+            "QuoteWindowsArguments mismatch: " + quoted);
+
+        // 3. Winman_Launcher.exe capability + routing to sibling WinTax.exe / winTds.exe
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_Winman_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            string launcherExe = Path.Combine(tempRoot, "Winman_Launcher.exe");
+            string winTaxExe = Path.Combine(tempRoot, "WinTax.exe");
+            string winTdsExe = Path.Combine(tempRoot, "winTds.exe");
+            string taxFile = Path.Combine(tempRoot, "ClientFY26.tax");
+            string tdsFile = Path.Combine(tempRoot, "Q4Form.26q");
+            File.WriteAllText(launcherExe, "mock");
+            File.WriteAllText(winTaxExe, "mock");
+            File.WriteAllText(winTdsExe, "mock");
+            File.WriteAllText(taxFile, "mock");
+            File.WriteAllText(tdsFile, "mock");
+
+            var cap = InvokeStatic(type, "ResolveCapability", launcherExe)!;
+            Check(GetProp<object>(cap, "Kind").ToString() == "WinmanAccounting",
+                "Winman_Launcher.exe must resolve to WinmanAccounting capability");
+            var exts = GetProp<HashSet<string>>(cap, "Extensions");
+            Check(exts.Contains(".tax") && exts.Contains(".wgst") && exts.Contains(".26q") && exts.Contains(".24q"),
+                "Winman_Launcher.exe capability must include .tax, .wgst, .26q, and .24q");
+
+            var buildLaunch = type.GetMethod("BuildLaunchInfo", AnyStatic)!;
+            var taxItem = Activator.CreateInstance(itemType, new object?[]
+            {
+                "ClientFY26.tax", taxFile, tempRoot, ".TAX", DateTime.UtcNow, true, "★ Recent", false, null, null
+            })!;
+            object?[] taxArgs = { cap, taxItem, null, null, null };
+            Check((bool)buildLaunch.Invoke(null, taxArgs)!, "BuildLaunchInfo failed for .tax");
+            var taxPsi = (ProcessStartInfo)taxArgs[2]!;
+            Check(taxPsi.FileName.Equals(winTaxExe, StringComparison.OrdinalIgnoreCase) &&
+                  taxPsi.ArgumentList.Contains(taxFile),
+                ".tax file must route to sibling WinTax.exe");
+
+            var tdsItem = Activator.CreateInstance(itemType, new object?[]
+            {
+                "Q4Form.26q", tdsFile, tempRoot, ".26Q", DateTime.UtcNow, true, "★ Recent", false, null, null
+            })!;
+            object?[] tdsArgs = { cap, tdsItem, null, null, null };
+            Check((bool)buildLaunch.Invoke(null, tdsArgs)!, "BuildLaunchInfo failed for .26q");
+            var tdsPsi = (ProcessStartInfo)tdsArgs[2]!;
+            Check(tdsPsi.FileName.Equals(winTdsExe, StringComparison.OrdinalIgnoreCase) &&
+                  tdsPsi.ArgumentList.Contains(tdsFile),
+                ".26q file must route to sibling winTds.exe");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
+    private static void TestInformationDonutGeometryAndSectorV380(Assembly asm)
+    {
+        var hostType = asm.GetType("DeskSpace.WidgetShellWindow", true)!;
+        var segs = (string[])hostType.GetField("Segments", AnyStatic)!.GetValue(null)!;
+        Check(Array.IndexOf(segs, "Information") == 6 &&
+              Array.IndexOf(segs, "Applications") == 10 &&
+              Array.IndexOf(segs, "Excel Functions") == 11,
+            "WidgetShellWindow donut outer indices must keep Information=6, Applications=10, Excel Functions=11");
+
+        var infoType = asm.GetType("DeskSpace.DeskSpaceInformationV36", true)!;
+        var owner = new Window
+        {
+            Width = 408,
+            Height = 408,
+            Left = 1512,
+            Top = 423,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            AllowsTransparency = true,
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+
+        var info = Activator.CreateInstance(
+            infoType,
+            AnyInstance,
+            null,
+            new object[] { owner, new Action(() => { }), new Action(() => { }) },
+            null)!;
+
+        try
+        {
+            var allList = (IList)infoType.GetField("all", AnyInstance)!.GetValue(info)!;
+            var colType = infoType.GetNestedType("Collection", AnyInstance | BindingFlags.Public)!;
+            for (int i = 0; i < 6; i++)
+            {
+                var c = Activator.CreateInstance(colType, true)!;
+                colType.GetProperty("Name")!.SetValue(c, "Info " + (i + 1));
+                allList.Add(c);
+            }
+
+            infoType.GetMethod("RenderArc", AnyInstance)!.Invoke(info, null);
+            var canvas = (Canvas)infoType.GetField("arcCanvas", AnyInstance)!.GetValue(info)!;
+            var popup = (System.Windows.Controls.Primitives.Popup)infoType.GetField("arc", AnyInstance)!.GetValue(info)!;
+
+            // Tight clipped bounds (much smaller than legacy 488x222 padded box)
+            Check(canvas.Width > 350 && canvas.Width < 430 && canvas.Height > 110 && canvas.Height < 170,
+                $"Information arc canvas must be tightly clipped around sectors, got {canvas.Width:F1}x{canvas.Height:F1}");
+
+            var geomType = asm.GetType("DeskSpace.DeskSpaceDonutGeometryV43", true)!;
+            double scale = (double)geomType.GetMethod("Scale", AnyStatic, new[] { typeof(Window) })!.Invoke(null, new object[] { owner })!;
+            double renderedCenter = popup.HorizontalOffset + (canvas.Width * scale) / 2.0;
+            Check(Math.Abs(renderedCenter - 204.0) < 2.0,
+                $"Information arc must be concentric with donut center (expected ~204.0, got {renderedCenter:F2})");
+
+            // At right edge Left=1512 on 1920px monitor, scaled arc right edge must fit inside 1920 without clamping
+            double rightEdge = owner.Left + popup.HorizontalOffset + canvas.Width * scale;
+            Check(rightEdge <= 1920.0,
+                $"Information arc must fit within 1920px right monitor edge without detachment (right={rightEdge:F1})");
+
+            // R158 hidden count invariant preserved: 4 visible saved items + 1 '+ New' = 5 wedges, 1 inline counter
+            var wedges = canvas.Children.OfType<System.Windows.Shapes.Path>()
+                .Where(p => p.Tag is int)
+                .ToArray();
+            Check(wedges.Length == 5, "Expected 5 visible Information wedges for 6 saved items, got " + wedges.Length);
+            var inline = canvas.Children.OfType<System.Windows.Shapes.Path>()
+                .Where(p => (p.Tag as string) == "DeskSpaceHiddenCountInline")
+                .ToArray();
+            Check(inline.Length == 1, "Expected 1 R158 inline divider counter for 6 saved items, got " + inline.Length);
+        }
+        finally
+        {
+            ((IDisposable)info).Dispose();
+        }
+    }
+
+    private static void TestInformationTabSyncAndSchemaV380(Assembly asm)
+    {
+        var tabType = asm.GetType("DeskSpace.DeskSpaceInformationTabV380", true)!;
+        var colType = asm.GetType("DeskSpace.InfoCollectionV380", true)!;
+        var rowType = asm.GetType("DeskSpace.InfoRowV380", true)!;
+
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_InfoTab_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            string colPath = Path.Combine(tempRoot, "information-collections-v26.json");
+            string legPath = Path.Combine(tempRoot, "information-items-v22.json");
+
+            var listType = typeof(List<>).MakeGenericType(colType);
+            var rowListType = typeof(List<>).MakeGenericType(rowType);
+
+            var col1 = Activator.CreateInstance(colType)!;
+            Guid col1Id = Guid.NewGuid();
+            Guid rowVaultId = Guid.NewGuid();
+            SetProp(col1, "Id", col1Id);
+            SetProp(col1, "Name", "GST Portal");
+            SetProp(col1, "UpdatedUtc", DateTime.UtcNow.AddMinutes(-5));
+            var rows1 = (IList)Activator.CreateInstance(rowListType)!;
+            var r1 = Activator.CreateInstance(rowType)!;
+            SetProp(r1, "Label", "UI");
+            SetProp(r1, "Value", "CA_USER_01");
+            var r2 = Activator.CreateInstance(rowType)!;
+            SetProp(r2, "Label", "PW");
+            SetProp(r2, "Value", "");
+            SetProp(r2, "VaultId", (Guid?)rowVaultId);
+            rows1.Add(r1);
+            rows1.Add(r2);
+            SetProp(col1, "Rows", rows1);
+
+            var list = (IList)Activator.CreateInstance(listType)!;
+            list.Add(col1);
+
+            InvokeStatic(tabType, "SaveCollections", list, colPath);
+            Check(File.Exists(colPath) && !File.Exists(colPath + ".pending"),
+                "SaveCollections must write target atomically with no leftover .pending file");
+
+            string rawJson = File.ReadAllText(colPath);
+            using (var doc = System.Text.Json.JsonDocument.Parse(rawJson))
+            {
+                var first = doc.RootElement[0];
+                Check(first.TryGetProperty("Name", out var nameEl) && nameEl.GetString() == "GST Portal" &&
+                      first.TryGetProperty("Rows", out var rowsEl) && rowsEl.GetArrayLength() == 2 &&
+                      rowsEl[1].TryGetProperty("VaultId", out var vidEl) && vidEl.GetGuid() == rowVaultId,
+                    "Saved JSON must match DeskSpaceInformationV36 exact schema");
+            }
+
+            // Second write creates .previous atomic backup
+            InvokeStatic(tabType, "SaveCollections", list, colPath);
+            Check(File.Exists(colPath + ".previous"),
+                "Second SaveCollections call must create .previous backup");
+
+            var reloaded = ((IEnumerable)InvokeStatic(tabType, "LoadCollections", colPath, legPath)!).Cast<object>().ToList();
+            Check(reloaded.Count == 1 &&
+                  GetProp<Guid>(reloaded[0], "Id") == col1Id &&
+                  GetProp<IList>(reloaded[0], "Rows").Count == 2,
+                "LoadCollections must round-trip DeskSpaceInformationV36 collection format cleanly");
+
+            // Read-only legacy V22 fallback when V26 collections file does not exist
+            File.WriteAllText(legPath, "[{\"Title\":\"PAN Card\",\"Value\":\"ABCDE1234F\",\"Category\":\"Tax\"}]");
+            var legacyLoaded = ((IEnumerable)InvokeStatic(tabType, "LoadCollections",
+                Path.Combine(tempRoot, "missing-v26.json"), legPath)!).Cast<object>().ToList();
+            Check(legacyLoaded.Count == 1 &&
+                  GetProp<string>(legacyLoaded[0], "Name") == "PAN Card",
+                "LoadCollections must read-only import V22 items when V26 file does not exist");
+
+            // Verify Action Palette exposes in-app Information command
+            var paletteType = asm.GetType("DeskSpace.DeskSpaceActionPaletteV197", true)!;
+            var commands = ((IEnumerable)paletteType.GetField("Commands", AnyStatic)!.GetValue(null)!).Cast<object>().ToList();
+            Check(commands.Any(c => GetProp<string>(c, "Id") == "v380_information"),
+                "DeskSpaceActionPaletteV197 must expose v380_information command");
         }
         finally
         {
@@ -765,6 +1003,9 @@ internal static class Program
             var asm = typeof(Workspace).Assembly;
             TestCommandBarV380(asm);
             TestPinnedAppFilesV380(asm);
+            TestPinnedAppsDirectOpenAndWinmanV380(asm);
+            TestInformationDonutGeometryAndSectorV380(asm);
+            TestInformationTabSyncAndSchemaV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);
             TestColorPaletteContrastAndHeroV380(asm);
             TestVaultProV380(asm);

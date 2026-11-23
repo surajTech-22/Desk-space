@@ -130,7 +130,7 @@ public partial class MainWindow : Window
     }
     private void PinnedApps_Click(object sender,RoutedEventArgs e)
     {
-        WidgetHostLauncher.OpenSearch();
+        DeskSpaceModernHubV380.ShowPinnedAppsSelector(this);
     }
     private void WidgetSettings_Click(object sender,RoutedEventArgs e)
     {

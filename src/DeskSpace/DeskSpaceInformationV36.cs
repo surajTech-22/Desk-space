@@ -152,7 +152,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     {
         owner=window;changed=onChanged;
         onCommitted=onSelected??(()=>{});
-        arcCanvas=new Canvas{Width=488,Height=222,Focusable=true};
+        arcCanvas=new Canvas{Width=1,Height=1,Focusable=true};
         arcCanvas.PreviewKeyDown+=OnSubmenuKeyDown;
         // The popup has its own HWND. Dispatch gestures from the CANVAS,
         // not from labels or individual wedge mouse events: WPF popup
@@ -388,31 +388,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         editorKeyboardMode=false;
         DeskSpaceWindowBehavior.AllowInput(owner,false);
     }
-    // Radially connected wedges instead of R26's detached horizontal
-    // arc. Both radii exceed the parent donut's 195-DIP outer edge.
-    private static Geometry ChildSector(double first, double last)
-    {
-        const double cx=244,cy=306,r0=207,r1=260;
-        static Point At(double x,double y,double radius,double angle)
-        {
-            double a=angle*Math.PI/180;
-            return new Point(x+radius*Math.Cos(a),y+radius*Math.Sin(a));
-        }
-        var figure=new PathFigure{
-            StartPoint=At(cx,cy,r1,first),IsClosed=true};
-        figure.Segments.Add(new ArcSegment{
-            Point=At(cx,cy,r1,last),Size=new Size(r1,r1),
-            SweepDirection=SweepDirection.Clockwise});
-        figure.Segments.Add(new LineSegment(At(cx,cy,r0,last),true));
-        figure.Segments.Add(new ArcSegment{
-            Point=At(cx,cy,r0,first),Size=new Size(r0,r0),
-            SweepDirection=SweepDirection.Counterclockwise});
-        return new PathGeometry(new[]{figure});
-    }
-    private const double ArcCenterX=244;
-    private const double ArcCenterY=306;
-    private const double ArcInnerRadius=207;
-    private const double ArcOuterRadius=260;
+    private Rect arcBounds=Rect.Empty;
+    private const double ArcMargin=6;
     private const int PageSize=DeskSpaceSubDonutStandardV62.Visible-1;
     private readonly DeskSpaceSubDonutStandardV62.Wheel standardWheel=new();
     private readonly List<(int index, Guid? id, Geometry hit)> arcHitZones=new();
@@ -422,9 +399,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     private TextBox? editorNameField;
 
     // Child sectors are placed ONLY across a partial arc centered over the
-    // Information parent at the top of the existing outer ring. For an
-    // empty collection list, + New occupies the top-middle, not the far
-    // right edge of a five-slot arc with four invisible empty sectors.
+    // Information parent at the top of the existing outer ring, tightly clipped
+    // to exact sector bounds so WPF/monitor fencing keeps them concentric.
     private void RenderArc()
     {
         newHoverTimer.Stop();
@@ -437,13 +413,20 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         double halfSweep=layout.Half;
         double start=layout.From(0);
         double step=layout.Step;
+        var rawShapes=new Geometry[count];
+        for(int i=0;i<count;i++)
+            rawShapes[i]=DeskSpaceSubArcGeometryV48.Sector(0,start+step*i,start+step*(i+1));
+        arcBounds=DeskSpaceSubArcGeometryV48.Bounds(rawShapes);
+        arcCanvas.Width=arcBounds.Width+ArcMargin*2;
+        arcCanvas.Height=arcBounds.Height+ArcMargin*2;
+        double rMid=(DeskSpaceSubArcGeometryV48.Inner(0)+DeskSpaceSubArcGeometryV48.Outer(0))/2;
         for(int i=0;i<count;i++)
         {
             bool add=i==visible.Length;
             Guid? id=add?null:visible[i].Id;
             string name=add?"+ New":visible[i].Name;
             double a=start+step*i,b=start+step*(i+1);
-            Geometry hit=ChildSector(a,b);
+            Geometry hit=DeskSpaceSubArcGeometryV48.Clip(rawShapes[i],arcBounds,ArcMargin);
             var sector=new System.Windows.Shapes.Path{
                 Data=hit,
                 Stroke=Brushes.White,StrokeThickness=2,
@@ -455,10 +438,9 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             arcCanvas.Children.Add(sector);
             childWedges.Add(sector);
             arcHitZones.Add((i,id,hit));
-            double angle=(a+b)*Math.PI/360;
-            double radius=(ArcInnerRadius+ArcOuterRadius)/2;
-            double x=ArcCenterX+radius*Math.Cos(angle);
-            double y=ArcCenterY+radius*Math.Sin(angle);
+            var p=DeskSpaceSubArcGeometryV48.Polar(rMid,(a+b)/2);
+            double x=DeskSpaceSubArcGeometryV48.CX+p.X-arcBounds.Left+ArcMargin;
+            double y=DeskSpaceSubArcGeometryV48.CY+p.Y-arcBounds.Top+ArcMargin;
             var label=new TextBlock{
                 Text=name,
                 Width=62,
@@ -483,6 +465,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             arcCanvas,countView,arcCanvas.Height/2,Slide);
         arcCanvas.MouseWheel-=ScrollArc;
         arcCanvas.MouseWheel+=ScrollArc;
+        PositionArc();
     }
     private int SlotAtPoint(Point point)
     {
@@ -549,9 +532,11 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         // controls. Pointer-position polling continues when the cursor
         // remains motionless even if pagination rebuilds its child wedges.
         // These bands lie OUTSIDE the curved saved-item sectors.
-        int direction=point.Y>=0 && point.Y<=222 ?
-            point.X<=82 && CanPage(-1)?-1:
-            point.X>=406 && CanPage(1)?1:0:0;
+        double cw=arcCanvas.Width,ch=arcCanvas.Height;
+        double edgeBand=Math.Min(48,cw*0.14);
+        int direction=point.Y>=0 && point.Y<=ch ?
+            point.X<=edgeBand && CanPage(-1)?-1:
+            point.X>=cw-edgeBand && CanPage(1)?1:0:0;
         // Actual wedges take priority over edge corridors. A user pointing
         // at item 4 must be able to scroll, not trigger edge-page polling.
         int overItem=SlotAtPoint(point);
@@ -770,12 +755,11 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
 
     private void PositionArc()
     {
-        if(disposed)return;
+        if(disposed || arcBounds.IsEmpty)return;
         double scale=DeskSpaceDonutGeometryV43.Scale(owner);
         arcCanvas.LayoutTransform=new ScaleTransform(scale,scale);
-        Point point=DeskSpaceDonutGeometryV43.PopupOffset(owner,
-            ArcCenterX,ArcCenterY,-5,-6);
-        arc.HorizontalOffset=point.X;
+        Point point=DeskSpaceSubArcGeometryV48.PopupOffset(owner,arcBounds,ArcMargin);
+        arc.HorizontalOffset=point.X+(++positionTick%2)*0.001;
         arc.VerticalOffset=point.Y;
     }
     private void OwnerLocationChanged(object? sender,EventArgs e)
@@ -807,14 +791,20 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         if(double.IsNaN(height)||height<=0)height=owner.Height;
         double panelWidth=shelfBorder.Width;
         double x=(diameter-panelWidth)/2;
-        // Constrain the shelf to the working area without repositioning the
-        // circle or moving the information panel into a remote screen region.
-        var screen=SystemParameters.WorkArea;
+        // Constrain the shelf to the assigned monitor working area (DIPs).
+        Rect rawWork=DeskSpaceSubArcGeometryV48.MonitorWorkArea(owner);
+        var dpi=VisualTreeHelper.GetDpi(owner);
+        double dx=dpi.DpiScaleX>0?dpi.DpiScaleX:1.0;
+        double dy=dpi.DpiScaleY>0?dpi.DpiScaleY:1.0;
+        var screen=new Rect(rawWork.Left/dx,rawWork.Top/dy,rawWork.Width/dx,rawWork.Height/dy);
         double left=owner.Left+x;
         if(left<screen.Left+8)x+=screen.Left+8-left;
         if(owner.Left+x+panelWidth>screen.Right-8)
             x-=(owner.Left+x+panelWidth)-(screen.Right-8);
         double y=height+5; // five-DIP gap under the currently visible circle
+        double estShelfHeight=shelfBorder.ActualHeight>1?shelfBorder.ActualHeight:Math.Min(shelfBorder.MaxHeight,186);
+        if(owner.Top+y+estShelfHeight>screen.Bottom-8)
+            y=Math.Max(screen.Top+8-owner.Top,-estShelfHeight-5);
         // Force WPF Popup.UpdatePosition even during animation frames whose
         // geometric offsets may otherwise round to the same whole pixel.
         var epsilon=(++positionTick%2)*0.001;

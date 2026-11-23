@@ -47,6 +47,9 @@ internal static class DeskSpaceModernHubV380
 
         DeskSpaceCommandBarV380.RegisterExtraCommands(new[]
         {
+            new PaletteCommandV380("v380.information", "Information Collections (Synced with Donut)",
+                "View, search, copy & edit saved Information collections & Security Vault PW rows",
+                "Workspace", "", owner => DeskSpaceInformationTabV380.SelectOrOpen(owner)),
             new PaletteCommandV380("v380.pinnedfiles", "Pinned App Files & Recent Browser",
                 "Show all system files & Tally companies a pinned app can open (Recent first)",
                 "Applications", "", owner => ShowPinnedAppsSelector(owner)),
@@ -84,6 +87,8 @@ internal static class DeskSpaceModernHubV380
 
         DeskSpaceBentoDashboardV380.RegisterToolShortcuts(new (string Label, string Tooltip, Action<Window?> Open)[]
         {
+            ("Information", "View, copy & edit saved Information collections synced with the Donut & Security Vault",
+                owner => DeskSpaceInformationTabV380.SelectOrOpen(owner)),
             ("Pinned App Files", "Browse all system files & Tally companies for pinned apps (Recent first)",
                 owner => ShowPinnedAppsSelector(owner)),
             ("Excel & GST Pro", "GSTIN/PAN validator, accounting normalizer & paste rollback history",
@@ -109,6 +114,7 @@ internal static class DeskSpaceModernHubV380
         EnsureInitialized(getWorkspace);
         DeskSpaceFluentBackdropV380.ApplyRuntimeThemeToMainWindow(window);
         DeskSpaceBentoDashboardV380.AttachToHomeTab(window, getWorkspace, saveWorkspace, refreshDashboard);
+        DeskSpaceInformationTabV380.AttachToMainWindow(window);
         DeskSpaceNotesSnippetsV380.EnhanceMainWindowNotesAndSnippets(window, getWorkspace, saveWorkspace);
         MonitorTopologyV380.InitializeWatcher(window.Dispatcher);
         DeskSpaceRichClipboardV380.EnsureStartedOnUi(window);
@@ -194,8 +200,12 @@ internal static class DeskSpaceModernHubV380
             {
                 string captured = appPath;
                 string label = System.IO.Path.GetFileNameWithoutExtension(captured);
-                pinnedFilesMenu.DropDownItems.Add($"{label} · Compatible Files", null,
+                var appSub = new Forms.ToolStripMenuItem(label);
+                appSub.DropDownItems.Add($"Open {label} Directly", null,
+                    (_, _) => owner.Dispatcher.Invoke(() => DeskSpacePinnedAppFilesV380.TryLaunchPinnedAppDirect(captured, owner)));
+                appSub.DropDownItems.Add("Browse Compatible Files…", null,
                     (_, _) => owner.Dispatcher.Invoke(() => DeskSpacePinnedAppFilesV380.Show(owner, captured)));
+                pinnedFilesMenu.DropDownItems.Add(appSub);
             }
             pinnedFilesMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
             pinnedFilesMenu.DropDownItems.Add("Manage / Pick Any App...", null,
@@ -205,6 +215,8 @@ internal static class DeskSpaceModernHubV380
         var modernMenu = new Forms.ToolStripMenuItem("Modern Suite (V380)");
         modernMenu.DropDownItems.Add("Command Bar (Alt+Space / Ctrl+Shift+P)", null,
             (_, _) => owner.Dispatcher.Invoke(() => DeskSpaceCommandBarV380.Show(owner, ws)));
+        modernMenu.DropDownItems.Add("Information Collections (Synced)...", null,
+            (_, _) => owner.Dispatcher.Invoke(() => DeskSpaceInformationTabV380.SelectOrOpen(owner)));
         modernMenu.DropDownItems.Add("Pinned App Files Browser...", null,
             (_, _) => owner.Dispatcher.Invoke(() => ShowPinnedAppsSelector(owner)));
         modernMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
@@ -254,6 +266,9 @@ internal static class DeskSpaceModernHubV380
         addButton("Command Bar (Alt+Space / Ctrl+Shift+P)",
             "Spotlight-style launcher with instant math, GST calculator, unit/date conversion & fuzzy search.",
             () => DeskSpaceCommandBarV380.Show(owner, ws));
+        addButton("Information Collections (Synced with Donut)",
+            "View, search, copy & edit saved Information collections & Security Vault PW secrets right inside DeskSpace.",
+            () => DeskSpaceInformationTabV380.SelectOrOpen(owner));
         addButton("Pinned Apps · Compatible Files Browser",
             "Browse all compatible files & Tally company folders across the PC for any pinned app (Recent first).",
             () => ShowPinnedAppsSelector(owner));
@@ -299,6 +314,7 @@ internal static class DeskSpaceModernHubV380
         switch (id)
         {
             case "v380_commandbar": DeskSpaceCommandBarV380.Show(owner, ws); break;
+            case "v380_information": DeskSpaceInformationTabV380.SelectOrOpen(owner); break;
             case "v380_pinnedfiles": ShowPinnedAppsSelector(owner); break;
             case "v380_clipboard": DeskSpaceRichClipboardV380.Show(owner); break;
             case "v380_snip": DeskSpaceScreenToolsV380.StartRegionSnip(owner, ws, null); break;
@@ -320,14 +336,9 @@ internal static class DeskSpaceModernHubV380
     internal static void ShowPinnedAppsSelector(Window? owner)
     {
         var pins = LoadUniquePinnedApps();
-        if (pins.Count == 1)
-        {
-            DeskSpacePinnedAppFilesV380.Show(owner, pins[0]);
-            return;
-        }
 
         var win = DeskSpaceFluentBackdropV380.CreateModernWindow(
-            "DeskSpace · Pinned App Compatible Files", 620, 480, owner);
+            "DeskSpace · Pinned Apps & Compatible Files", 660, 490, owner);
         var p = DeskSpaceDesignV283.Current;
 
         var root = new DockPanel { Margin = new Thickness(18) };
@@ -433,13 +444,26 @@ internal static class DeskSpaceModernHubV380
                 Grid.SetColumn(info, 1);
                 rowGrid.Children.Add(info);
 
-                var openBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Browse Files ->", () =>
+                var btnRow = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                var launchBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Open App ↗", () =>
+                {
+                    if (DeskSpacePinnedAppFilesV380.TryLaunchPinnedAppDirect(captured, win))
+                        win.Close();
+                }, primary: true);
+                launchBtn.Margin = new Thickness(0, 0, 8, 0);
+                var openBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Files…", () =>
                 {
                     win.Close();
                     DeskSpacePinnedAppFilesV380.Show(owner, captured);
-                }, primary: true);
-                Grid.SetColumn(openBtn, 2);
-                rowGrid.Children.Add(openBtn);
+                }, primary: false);
+                btnRow.Children.Add(launchBtn);
+                btnRow.Children.Add(openBtn);
+                Grid.SetColumn(btnRow, 2);
+                rowGrid.Children.Add(btnRow);
 
                 var card = DeskSpaceFluentBackdropV380.CreateCard(rowGrid, p);
                 card.Margin = new Thickness(0, 0, 0, 8);

@@ -509,7 +509,8 @@ internal static class DeskSpaceFluentBackdropV380
             {
                 string? tag = tab.Tag as string;
                 if (string.Equals(tag, "Excel", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(tag, "DeskSpaceFeatures", StringComparison.OrdinalIgnoreCase))
+                    string.Equals(tag, "DeskSpaceFeatures", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(tag, "Information", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 if (tab.Content is DependencyObject contentRoot)

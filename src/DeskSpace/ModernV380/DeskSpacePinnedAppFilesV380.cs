@@ -72,6 +72,9 @@ internal static class DeskSpacePinnedAppFilesV380
     private static readonly object HistoryLock = new();
     private static readonly object OpenWindowsLock = new();
     private static readonly Dictionary<string, Window> OpenWindows = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object QuickArcCacheLock = new();
+    private static readonly Dictionary<string, (DateTime FetchedUtc, List<PinnedAppFileItemV380> Items)> QuickArcCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -476,6 +479,27 @@ internal static class DeskSpacePinnedAppFilesV380
         bool includesTallyCompanies = false;
         bool includesProjectFolders = false;
         string? profileDisplayName = null;
+        string? exeDir = System.IO.Path.GetDirectoryName(effectiveExe);
+        string pinnedBaseName = System.IO.Path.GetFileNameWithoutExtension(safePinned);
+
+        void ApplyWinmanProfile(string displayTitle, bool tdsPrimary)
+        {
+            kind = PinnedAppKindV380.WinmanAccounting;
+            profileDisplayName = displayTitle;
+            AddExtensions(".tax", ".wgst", ".tax.wb", ".wgst.wb", ".24q", ".26q", ".27q", ".27eq", ".7eq", ".wt");
+            if (tdsPrimary)
+                AddExtensions(".24q", ".26q", ".27q", ".27eq", ".7eq", ".wt");
+            if (!string.IsNullOrWhiteSpace(exeDir))
+            {
+                AddRoot(exeDir, requireExisting: true);
+                AddRoot(System.IO.Path.Combine(exeDir, "UserData"), requireExisting: true);
+                AddRoot(System.IO.Path.Combine(exeDir, "Data"), requireExisting: true);
+            }
+            AddRoot(@"C:\Winman", requireExisting: true);
+            AddRoot(@"D:\Winman", requireExisting: true);
+            AddRoot(@"E:\Winman", requireExisting: true);
+            AddRoot(@"F:\Winman", requireExisting: true);
+        }
 
         switch (exeLower)
         {
@@ -486,7 +510,6 @@ internal static class DeskSpacePinnedAppFilesV380
                 profileDisplayName = exeLower == "tallyprime.exe" ? "TallyPrime" : "Tally";
                 AddExtensions(".tbk", ".tsf", ".tcp", ".tdl", ".xml");
 
-                string? exeDir = System.IO.Path.GetDirectoryName(effectiveExe);
                 if (!string.IsNullOrWhiteSpace(exeDir))
                 {
                     string iniPath = System.IO.Path.Combine(exeDir, "Tally.ini");
@@ -523,20 +546,16 @@ internal static class DeskSpacePinnedAppFilesV380
                 AddExtensions(".xlsx", ".xls", ".xlsm", ".xlsb", ".csv", ".tsv", ".ods", ".xltx", ".xltm", ".xlam", ".xml");
                 break;
 
+            case "winman_launcher.exe":
+                ApplyWinmanProfile("Winman CA ERP", tdsPrimary: false);
+                break;
+
             case "wintax.exe":
-                kind = PinnedAppKindV380.WinmanAccounting;
-                profileDisplayName = "Winman CA-ERP / GST";
-                AddExtensions(".tax", ".wgst", ".tax.wb", ".wgst.wb");
-                AddRoot(@"C:\Winman", requireExisting: true);
-                AddRoot(@"D:\Winman", requireExisting: true);
+                ApplyWinmanProfile("Winman CA-ERP / GST", tdsPrimary: false);
                 break;
 
             case "wintds.exe":
-                kind = PinnedAppKindV380.WinmanAccounting;
-                profileDisplayName = "Winman TDS";
-                AddExtensions(".24q", ".26q", ".27q", ".27eq", ".7eq", ".wt");
-                AddRoot(@"C:\Winman", requireExisting: true);
-                AddRoot(@"D:\Winman", requireExisting: true);
+                ApplyWinmanProfile("Winman TDS", tdsPrimary: true);
                 break;
 
             case "winword.exe":
@@ -611,6 +630,12 @@ internal static class DeskSpacePinnedAppFilesV380
                 break;
         }
 
+        if (kind == PinnedAppKindV380.StandardDocument &&
+            (exeLower.Contains("winman") || pinnedBaseName.Contains("winman", StringComparison.OrdinalIgnoreCase)))
+        {
+            ApplyWinmanProfile("Winman CA ERP", tdsPrimary: false);
+        }
+
         // Merge registry & OS association discoveries safely.
         bool ideSafe = kind == PinnedAppKindV380.IdeWorkspace;
         foreach (string regExt in DiscoverRegistryExtensions(exeName))
@@ -657,18 +682,20 @@ internal static class DeskSpacePinnedAppFilesV380
             string company1800 = System.IO.Path.Combine(fullFolder, "Company.1800");
             string manager1800 = System.IO.Path.Combine(fullFolder, "Manager.1800");
             string tranMgr1800 = System.IO.Path.Combine(fullFolder, "TranMgr.1800");
+            string cmpSave1800 = System.IO.Path.Combine(fullFolder, "CmpSave.1800");
 
             string company900 = System.IO.Path.Combine(fullFolder, "Company.900");
             string manager900 = System.IO.Path.Combine(fullFolder, "Manager.900");
             string tranMgr900 = System.IO.Path.Combine(fullFolder, "TranMgr.900");
 
-            bool has1800 = File.Exists(company1800) && (File.Exists(manager1800) || File.Exists(tranMgr1800));
+            bool has1800 = File.Exists(company1800) &&
+                (File.Exists(manager1800) || File.Exists(tranMgr1800) || File.Exists(cmpSave1800));
             bool has900 = File.Exists(company900) && (File.Exists(manager900) || File.Exists(tranMgr900));
 
             if (!has1800 && !has900)
                 return false;
 
-            var masterFiles = new List<string>(3);
+            var masterFiles = new List<string>(4);
             string kindBadge;
             if (has1800)
             {
@@ -676,6 +703,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 masterFiles.Add(company1800);
                 if (File.Exists(manager1800)) masterFiles.Add(manager1800);
                 if (File.Exists(tranMgr1800)) masterFiles.Add(tranMgr1800);
+                if (File.Exists(cmpSave1800)) masterFiles.Add(cmpSave1800);
             }
             else
             {
@@ -754,6 +782,9 @@ internal static class DeskSpacePinnedAppFilesV380
 
             WriteHistoryMapLocked(targetFile, dict);
         }
+
+        lock (QuickArcCacheLock)
+            QuickArcCache.Clear();
     }
 
     internal static IReadOnlyList<(string FullPath, DateTime LastOpenedUtc)> GetRecentLaunches(
@@ -1194,24 +1225,62 @@ internal static class DeskSpacePinnedAppFilesV380
         string effectiveExt = GetEffectiveExtension(item.FullPath);
         if (BackupOnlyExtensions.Contains(effectiveExt))
         {
-            psi = new ProcessStartInfo
+            if (cap.Kind == PinnedAppKindV380.WinmanAccounting &&
+                ShouldPreferShortcutShellLaunch(cap.PinnedPath) &&
+                SafeFileExists(cap.PinnedPath))
             {
-                FileName = cap.ExecutablePath,
-                UseShellExecute = false,
-                WorkingDirectory = exeDir
-            };
+                psi = new ProcessStartInfo(cap.PinnedPath)
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = System.IO.Path.GetDirectoryName(cap.PinnedPath) ?? string.Empty
+                };
+            }
+            else
+            {
+                psi = new ProcessStartInfo
+                {
+                    FileName = cap.ExecutablePath,
+                    UseShellExecute = false,
+                    WorkingDirectory = exeDir
+                };
+            }
             statusNote = $"Opened {cap.DisplayName}. Restore backup from inside app: {item.FullPath}";
             return true;
         }
 
-        // 3. Standard document / IDE file or project folder
+        // 3. Standard document / Winman return / IDE file or project folder
         string workingDir = !string.IsNullOrWhiteSpace(item.ParentFolder)
             ? item.ParentFolder
             : (System.IO.Path.GetDirectoryName(item.FullPath) ?? string.Empty);
 
+        string launchExe = cap.ExecutablePath;
+        if (cap.Kind == PinnedAppKindV380.WinmanAccounting &&
+            cap.ExeName.Equals("winman_launcher.exe", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrEmpty(exeDir))
+        {
+            if (effectiveExt is ".tax" or ".wgst")
+            {
+                string winTax = System.IO.Path.Combine(exeDir, "WinTax.exe");
+                if (SafeFileExists(winTax))
+                {
+                    launchExe = winTax;
+                    workingDir = exeDir;
+                }
+            }
+            else if (effectiveExt is ".24q" or ".26q" or ".27q" or ".27eq" or ".7eq")
+            {
+                string winTds = System.IO.Path.Combine(exeDir, "winTds.exe");
+                if (SafeFileExists(winTds))
+                {
+                    launchExe = winTds;
+                    workingDir = exeDir;
+                }
+            }
+        }
+
         var stdInfo = new ProcessStartInfo
         {
-            FileName = cap.ExecutablePath,
+            FileName = launchExe,
             UseShellExecute = false,
             WorkingDirectory = workingDir
         };
@@ -1238,6 +1307,21 @@ internal static class DeskSpacePinnedAppFilesV380
         if (!string.IsNullOrWhiteSpace(psi.WorkingDirectory) && !SafeDirectoryExists(psi.WorkingDirectory))
             psi.WorkingDirectory = string.Empty;
 
+        if (psi.UseShellExecute)
+        {
+            try
+            {
+                Process.Start(psi);
+                RecordLaunch(cap.ExeName, item.FullPath, historyStoragePath);
+                return true;
+            }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException or UnauthorizedAccessException)
+            {
+                ShowError(owner, $"Unable to open \"{item.DisplayName}\":\n{ex.Message}", cap.DisplayName);
+                return false;
+            }
+        }
+
         // If shortcut target could not be resolved to an exe and pinnedPath is a .lnk, use shell launch.
         if (psi.FileName.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
         {
@@ -1259,6 +1343,25 @@ internal static class DeskSpacePinnedAppFilesV380
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException or UnauthorizedAccessException)
         {
+            // Retry the exact target + properly quoted arguments via ShellExecute
+            // (handles UAC elevation 740 / protected accounting apps such as Tally & Winman).
+            try
+            {
+                var shellRetry = new ProcessStartInfo
+                {
+                    FileName = psi.FileName,
+                    Arguments = QuoteWindowsArguments(psi.ArgumentList),
+                    WorkingDirectory = psi.WorkingDirectory,
+                    UseShellExecute = true
+                };
+                Process.Start(shellRetry);
+                RecordLaunch(cap.ExeName, item.FullPath, historyStoragePath);
+                return true;
+            }
+            catch
+            {
+            }
+
             if (TryShellFallbackOpen(cap, item, historyStoragePath))
                 return true;
 
@@ -1323,11 +1426,11 @@ internal static class DeskSpacePinnedAppFilesV380
             Margin = new Thickness(10, 0, 0, 0)
         };
 
-        var openAppBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Open App Only", () =>
+        var openAppBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Open App Directly ↗", () =>
         {
             if (TryLaunchAppOnly(cap, win))
                 win.Close();
-        }, primary: false, tooltip: $"Launch {cap.DisplayName} without opening a specific file");
+        }, primary: true, tooltip: $"Launch {cap.DisplayName} directly");
         openAppBtn.Margin = new Thickness(0, 0, 8, 0);
         headerActions.Children.Add(openAppBtn);
 
@@ -1369,7 +1472,7 @@ internal static class DeskSpacePinnedAppFilesV380
                     Text = cap.DisplayName.Length > 0 ? cap.DisplayName.Substring(0, 1).ToUpperInvariant() : "A",
                     FontSize = 18,
                     FontWeight = FontWeights.Bold,
-                    Foreground = DeskSpaceDesignV283.Solid(p.Accent),
+                    Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.AccentText(p)),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 }
@@ -1403,7 +1506,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 Text = typeSummary,
                 FontSize = 11.5,
                 FontWeight = FontWeights.Medium,
-                Foreground = DeskSpaceDesignV283.Solid(p.Accent),
+                Foreground = DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.AccentText(p)),
                 TextTrimming = TextTrimming.CharacterEllipsis
             }
         };
@@ -1581,6 +1684,8 @@ internal static class DeskSpacePinnedAppFilesV380
             }
         }
 
+        Action<PinnedAppFileItemV380>? openSpecificHandler = null;
+
         void RefreshListView()
         {
             if (isClosed)
@@ -1618,7 +1723,7 @@ internal static class DeskSpacePinnedAppFilesV380
             ListBoxItem? toSelect = null;
             foreach (var item in filtered)
             {
-                var rowVisual = BuildItemRowVisual(item, p);
+                var rowVisual = BuildItemRowVisual(item, p, clickedItem => openSpecificHandler?.Invoke(clickedItem));
                 var lbi = new ListBoxItem
                 {
                     Tag = item,
@@ -1661,18 +1766,22 @@ internal static class DeskSpacePinnedAppFilesV380
         }
         UpdateChipStyles();
 
-        void OpenSelectedItem()
+        void OpenSpecificItem(PinnedAppFileItemV380 target)
         {
-            var sel = GetSelectedItem();
-            if (sel == null)
-                return;
-
-            if (TryOpenItem(cap, sel, win))
+            if (TryOpenItem(cap, target, win))
             {
                 recentItems = DiscoverRecentItems(cap);
                 RefreshListView();
                 win.Close();
             }
+        }
+        openSpecificHandler = OpenSpecificItem;
+
+        void OpenSelectedItem()
+        {
+            var sel = GetSelectedItem();
+            if (sel != null)
+                OpenSpecificItem(sel);
         }
 
         void RevealSelectedInExplorer()
@@ -3093,35 +3202,282 @@ internal static class DeskSpacePinnedAppFilesV380
         }
     }
 
+    internal static bool ShouldPreferShortcutShellLaunch(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+        string ext = System.IO.Path.GetExtension(path);
+        return ext.Equals(".lnk", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".url", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".appref-ms", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".bat", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".cmd", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string QuoteWindowsArgument(string? arg)
+    {
+        if (arg == null)
+            return "\"\"";
+        if (arg.Length > 0 &&
+            arg.IndexOfAny(new[] { ' ', '\t', '\n', '\v', '"' }) < 0)
+        {
+            return arg;
+        }
+
+        var sb = new StringBuilder(arg.Length + 4);
+        sb.Append('"');
+        int i = 0;
+        while (i < arg.Length)
+        {
+            int backslashes = 0;
+            while (i < arg.Length && arg[i] == '\\')
+            {
+                backslashes++;
+                i++;
+            }
+
+            if (i == arg.Length)
+            {
+                sb.Append('\\', backslashes * 2);
+                break;
+            }
+
+            if (arg[i] == '"')
+            {
+                sb.Append('\\', backslashes * 2 + 1);
+                sb.Append('"');
+            }
+            else
+            {
+                sb.Append('\\', backslashes);
+                sb.Append(arg[i]);
+            }
+            i++;
+        }
+        sb.Append('"');
+        return sb.ToString();
+    }
+
+    internal static string QuoteWindowsArguments(IEnumerable<string>? args) =>
+        args == null ? string.Empty : string.Join(" ", args.Select(QuoteWindowsArgument));
+
+    internal static bool TryLaunchPinnedAppDirect(string pinnedPath, Window? owner = null)
+    {
+        if (string.IsNullOrWhiteSpace(pinnedPath))
+            return false;
+        var cap = ResolveCapability(pinnedPath);
+        return TryLaunchAppOnly(cap, owner);
+    }
+
+    internal static bool TryGetCachedQuickArcFiles(
+        string pinnedPath,
+        out IReadOnlyList<PinnedAppFileItemV380> items)
+    {
+        items = Array.Empty<PinnedAppFileItemV380>();
+        string key = NormalizeFullPathSafe(pinnedPath);
+        if (string.IsNullOrEmpty(key))
+            return false;
+
+        lock (QuickArcCacheLock)
+        {
+            if (QuickArcCache.TryGetValue(key, out var entry) &&
+                (DateTime.UtcNow - entry.FetchedUtc).TotalSeconds < 30)
+            {
+                items = entry.Items.ToArray();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal static async Task<IReadOnlyList<PinnedAppFileItemV380>> GetQuickArcFilesAsync(
+        string pinnedPath,
+        int maxItems = 4)
+    {
+        if (string.IsNullOrWhiteSpace(pinnedPath) || maxItems <= 0)
+            return Array.Empty<PinnedAppFileItemV380>();
+
+        if (TryGetCachedQuickArcFiles(pinnedPath, out var cached))
+            return cached.Take(maxItems).ToArray();
+
+        string key = NormalizeFullPathSafe(pinnedPath);
+        return await Task.Run(() =>
+        {
+            var cap = ResolveCapability(pinnedPath);
+            var recent = DiscoverRecentItems(cap);
+            var extra = new List<PinnedAppFileItemV380>();
+
+            if (recent.Count < maxItems)
+            {
+                foreach (var hit in QueryWarmSearchIndexV13(cap, CancellationToken.None))
+                {
+                    extra.Add(hit);
+                    if (extra.Count >= maxItems * 3)
+                        break;
+                }
+
+                // Fast bounded scan of explicit app data roots (Tally Data dirs, Winman UserData, etc.)
+                foreach (string root in cap.ExtraDataRoots)
+                {
+                    if (!SafeDirectoryExists(root))
+                        continue;
+
+                    try
+                    {
+                        foreach (string dir in Directory.EnumerateDirectories(root).Take(60))
+                        {
+                            if (cap.IncludesTallyCompanies &&
+                                TryParseTallyCompanyFolder(dir, out var tItem, isRecent: false, sourceBadge: "Tally Data") &&
+                                tItem != null)
+                            {
+                                extra.Add(tItem);
+                            }
+                        }
+
+                        foreach (string file in Directory.EnumerateFiles(root).Take(60))
+                        {
+                            if (IsAllowedForCapability(cap, file, checkExtensionMatch: true))
+                                extra.Add(CreateFileItem(file, SafeGetFileWriteTimeUtc(file), isRecent: false, sourceBadge: "App Data"));
+                        }
+                    }
+                    catch
+                    {
+                    }
+
+                    if (extra.Count >= maxItems * 4)
+                        break;
+                }
+            }
+
+            var top = MergeAndRank(recent, extra, maxItems);
+            if (!string.IsNullOrEmpty(key))
+            {
+                lock (QuickArcCacheLock)
+                {
+                    if (QuickArcCache.Count >= 24 && !QuickArcCache.ContainsKey(key))
+                        QuickArcCache.Clear();
+                    QuickArcCache[key] = (DateTime.UtcNow, top);
+                }
+            }
+            return (IReadOnlyList<PinnedAppFileItemV380>)top;
+        }).ConfigureAwait(false);
+    }
+
+    internal static bool TryOpenQuickArcItem(string pinnedPath, string targetPath, Window? owner = null)
+    {
+        if (string.IsNullOrWhiteSpace(pinnedPath) || string.IsNullOrWhiteSpace(targetPath))
+            return false;
+
+        var cap = ResolveCapability(pinnedPath);
+        PinnedAppFileItemV380? item = null;
+
+        if (TryGetCachedQuickArcFiles(pinnedPath, out var cached))
+        {
+            item = cached.FirstOrDefault(x =>
+                string.Equals(x.FullPath, targetPath, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (item == null)
+        {
+            if (SafeDirectoryExists(targetPath))
+            {
+                if (!TryParseTallyCompanyFolder(targetPath, out item, isRecent: false, sourceBadge: "Quick Arc") || item == null)
+                {
+                    string trimmed = TrimTrailingSeparatorsUnlessDriveRoot(targetPath);
+                    item = new PinnedAppFileItemV380(
+                        DisplayName: System.IO.Path.GetFileName(trimmed),
+                        FullPath: trimmed,
+                        ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
+                        KindBadge: "Project Folder",
+                        SortTimeUtc: SafeGetDirectoryWriteTimeUtc(trimmed),
+                        IsRecent: false,
+                        SourceBadge: "Quick Arc",
+                        IsDirectory: true);
+                }
+            }
+            else if (SafeFileExists(targetPath))
+            {
+                item = CreateFileItem(targetPath, SafeGetFileWriteTimeUtc(targetPath), isRecent: false, sourceBadge: "Quick Arc");
+            }
+        }
+
+        if (item == null)
+        {
+            ShowError(owner, $"Target could not be found:\n{targetPath}", cap.DisplayName);
+            return false;
+        }
+
+        return TryOpenItem(cap, item, owner);
+    }
+
     private static bool TryLaunchAppOnly(AppFileCapabilityV380 cap, Window? owner)
     {
-        try
+        Exception? lastError = null;
+
+        // 1. Prefer launching shortcuts/links via Shell so embedded arguments
+        // (such as Winman_Launcher.exe #OpenApp$SARAL|) and elevation metadata are preserved.
+        if (SafeFileExists(cap.PinnedPath) && ShouldPreferShortcutShellLaunch(cap.PinnedPath))
         {
-            if (SafeFileExists(cap.ExecutablePath) &&
-                System.IO.Path.GetExtension(cap.ExecutablePath).Equals(".exe", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                Process.Start(new ProcessStartInfo(cap.ExecutablePath)
+                string? lnkDir = System.IO.Path.GetDirectoryName(cap.PinnedPath);
+                Process.Start(new ProcessStartInfo(cap.PinnedPath)
                 {
-                    UseShellExecute = false,
-                    WorkingDirectory = System.IO.Path.GetDirectoryName(cap.ExecutablePath) ?? string.Empty
+                    UseShellExecute = true,
+                    WorkingDirectory = !string.IsNullOrWhiteSpace(lnkDir) && SafeDirectoryExists(lnkDir)
+                        ? lnkDir
+                        : string.Empty
                 });
                 return true;
             }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException or UnauthorizedAccessException)
+            {
+                lastError = ex;
+            }
+        }
 
-            if (SafeFileExists(cap.PinnedPath))
+        // 2. Direct executable launch via ShellExecute = true
+        if (SafeFileExists(cap.ExecutablePath))
+        {
+            try
+            {
+                string? exeDir = System.IO.Path.GetDirectoryName(cap.ExecutablePath);
+                Process.Start(new ProcessStartInfo(cap.ExecutablePath)
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = !string.IsNullOrWhiteSpace(exeDir) && SafeDirectoryExists(exeDir)
+                        ? exeDir
+                        : string.Empty
+                });
+                return true;
+            }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException or UnauthorizedAccessException)
+            {
+                lastError = ex;
+            }
+        }
+
+        // 3. Final fallback on raw PinnedPath
+        if (SafeFileExists(cap.PinnedPath) &&
+            !string.Equals(cap.PinnedPath, cap.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+        {
+            try
             {
                 Process.Start(new ProcessStartInfo(cap.PinnedPath) { UseShellExecute = true });
                 return true;
             }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException or UnauthorizedAccessException)
+            {
+                lastError = ex;
+            }
+        }
 
-            ShowError(owner, $"Application executable could not be found:\n{cap.ExecutablePath}", cap.DisplayName);
-            return false;
-        }
-        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException or UnauthorizedAccessException)
-        {
-            ShowError(owner, $"Unable to launch {cap.DisplayName}:\n{ex.Message}", cap.DisplayName);
-            return false;
-        }
+        ShowError(owner,
+            lastError != null
+                ? $"Unable to launch {cap.DisplayName}:\n{lastError.Message}"
+                : $"Application executable could not be found:\n{cap.ExecutablePath}",
+            cap.DisplayName);
+        return false;
     }
 
     private static void ShowError(Window? owner, string message, string title)
@@ -3378,11 +3734,15 @@ internal static class DeskSpacePinnedAppFilesV380
         return style;
     }
 
-    private static FrameworkElement BuildItemRowVisual(PinnedAppFileItemV380 item, DeskSpaceDesignV283.Palette p)
+    private static FrameworkElement BuildItemRowVisual(
+        PinnedAppFileItemV380 item,
+        DeskSpaceDesignV283.Palette p,
+        Action<PinnedAppFileItemV380> onOpenItem)
     {
         var rowGrid = new Grid { Margin = new Thickness(11, 9, 11, 9) };
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         // Left glyph/extension badge
@@ -3405,7 +3765,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 Text = leftLabel,
                 FontSize = 10.5,
                 FontWeight = FontWeights.Bold,
-                Foreground = DeskSpaceDesignV283.Solid(item.IsRecent ? p.Accent : p.Muted),
+                Foreground = DeskSpaceDesignV283.Solid(item.IsRecent ? DeskSpaceDesignV283.AccentText(p) : p.Muted),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             }
@@ -3449,7 +3809,7 @@ internal static class DeskSpacePinnedAppFilesV380
         Grid.SetColumn(centerStack, 1);
         rowGrid.Children.Add(centerStack);
 
-        // Right timestamp & source badge
+        // Timestamp & source badge
         var rightStack = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -3479,7 +3839,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 Text = item.SourceBadge,
                 FontSize = 10.5,
                 FontWeight = item.IsRecent ? FontWeights.SemiBold : FontWeights.Normal,
-                Foreground = DeskSpaceDesignV283.Solid(item.IsRecent ? p.Accent : p.Muted),
+                Foreground = DeskSpaceDesignV283.Solid(item.IsRecent ? DeskSpaceDesignV283.AccentText(p) : p.Muted),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 2, 0, 0)
             });
@@ -3487,6 +3847,18 @@ internal static class DeskSpacePinnedAppFilesV380
 
         Grid.SetColumn(rightStack, 2);
         rowGrid.Children.Add(rightStack);
+
+        // One-click direct Open pill per row
+        var capturedItem = item;
+        var rowOpenBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Open ↗", () => onOpenItem(capturedItem),
+            primary: item.IsRecent, tooltip: $"Open {item.DisplayName} directly");
+        rowOpenBtn.Padding = new Thickness(11, 4, 11, 4);
+        rowOpenBtn.MinHeight = 28;
+        rowOpenBtn.FontSize = 11.5;
+        rowOpenBtn.Margin = new Thickness(10, 0, 0, 0);
+        rowOpenBtn.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(rowOpenBtn, 3);
+        rowGrid.Children.Add(rowOpenBtn);
 
         return rowGrid;
     }

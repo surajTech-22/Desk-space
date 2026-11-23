@@ -252,7 +252,7 @@ public sealed class WidgetShellWindow : Window
             // Moving away without holding must close the opened donut.
             // With a button held, the existing outer-boundary gesture takes
             // precedence and moves the widget without choosing any module.
-            if (ringExpanded && informationOverlay?.IsArcOpen!=true && !ringGesture && !draggingGesture &&
+            if (ringExpanded && informationOverlay?.IsArcOpen!=true && appsWheel?.IsArcOpen!=true && excelWheel?.IsArcOpen!=true && !ringGesture && !draggingGesture &&
                 Mouse.LeftButton != MouseButtonState.Pressed &&
                 Mouse.RightButton != MouseButtonState.Pressed &&
                 DateTime.UtcNow > rightClickOpenedUntil && !keyboardDonutModeV207) CollapseRing();
@@ -615,7 +615,7 @@ public sealed class WidgetShellWindow : Window
                 // Ordinary pointer motion selects the parent donut segment.
                 // No click, hold or mouse capture is needed to open children.
                 UpdateHighlightedSector(p);
-                if(informationOverlay?.IsArcOpen==true)return;
+                if(informationOverlay?.IsArcOpen==true || appsWheel?.IsArcOpen==true || excelWheel?.IsArcOpen==true)return;
                 if(!ringGesture &&
                    Mouse.RightButton!=MouseButtonState.Pressed &&
                    DateTime.UtcNow>rightClickOpenedUntil)
@@ -1391,13 +1391,13 @@ public sealed class WidgetShellWindow : Window
         }
         // Leaving Information and moving into any other main sector closes
         // its old arc and passive shelf. Never discard an active editor.
-        if(selected!=7 && informationOverlay?.IsOpen==true &&
+        if(selected!=6 && informationOverlay?.IsOpen==true &&
             informationOverlay.IsEditing==false)informationOverlay.Hide();
         UpdateHighlightedSector(p);
-        if(selected==7)
+        if(selected==6 || selected==10 || selected==11)
         {
             mainWheelSector=selected;mainWheelQuick=-1;
-            return; // Information opens its own child wheel immediately
+            return; // Information, Applications and Excel open their own child arcs immediately
         }
         if(selected!=mainWheelSector || add!=mainWheelQuick)
         {
