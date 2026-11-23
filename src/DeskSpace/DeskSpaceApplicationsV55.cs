@@ -28,7 +28,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private readonly Brush normal=new SolidColorBrush(Color.FromRgb(217,229,248));
     private readonly Brush selected=new SolidColorBrush(Color.FromRgb(143,172,235));
     private readonly Brush accent=new SolidColorBrush(Color.FromRgb(78,98,180));
-    private const double BaseInner=202,BaseOuter=255,SubInner=257,SubOuter=310;
+    private const double BaseInner=202,BaseOuter=255,SubInner=257,SubOuter=323,FileInner=325,FileOuter=465;
     private Rect bounds=Rect.Empty;
     private int childPage,hovered=-1,placementTick;
     private readonly DeskSpaceSubDonutStandardV62.Wheel scrollWheel=new();
@@ -40,6 +40,161 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private bool activeAppLoading;
     private int activeAppVersion;
     private bool disposed;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativeRect { public int Left,Top,Right,Bottom; }
+    [System.Runtime.InteropServices.DllImport("user32.dll",ExactSpelling=true)]
+    [return:System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hwnd,out NativeRect rect);
+
+    private static double AppInner(int depth)=>depth switch{
+        0=>BaseInner,
+        1=>SubInner,
+        2=>FileInner,
+        _=>DeskSpaceSubArcGeometryV48.Inner(depth)
+    };
+    private static double AppOuter(int depth)=>depth switch{
+        0=>BaseOuter,
+        1=>SubOuter,
+        2=>FileOuter,
+        _=>DeskSpaceSubArcGeometryV48.Outer(depth)
+    };
+    private static Geometry AppSector(int depth,double from,double to)
+    {
+        double r0=AppInner(depth),r1=AppOuter(depth);
+        if(to<=from||to-from>180)
+            throw new ArgumentOutOfRangeException(nameof(to));
+        Point At(double r,double deg)
+        {
+            var p=DeskSpaceSubArcGeometryV48.Polar(r,deg);
+            return new Point(DeskSpaceSubArcGeometryV48.CX+p.X,DeskSpaceSubArcGeometryV48.CY+p.Y);
+        }
+        var fig=new PathFigure{StartPoint=At(r1,from),IsClosed=true};
+        fig.Segments.Add(new ArcSegment{
+            Point=At(r1,to),Size=new Size(r1,r1),
+            SweepDirection=SweepDirection.Clockwise,IsLargeArc=false});
+        fig.Segments.Add(new LineSegment(At(r0,to),true));
+        fig.Segments.Add(new ArcSegment{
+            Point=At(r0,from),Size=new Size(r0,r0),
+            SweepDirection=SweepDirection.Counterclockwise,IsLargeArc=false});
+        return new PathGeometry(new[]{fig});
+    }
+    private double FitDepth2Angle(double preferred,double half,double outerRadius)
+    {
+        Rect work=DeskSpaceSubArcGeometryV48.MonitorWorkArea(owner);
+        var handle=new System.Windows.Interop.WindowInteropHelper(owner).Handle;
+        double dpiX=PresentationSource.FromVisual(owner)?
+            .CompositionTarget?.TransformToDevice.M11??1.0;
+        double dpiY=PresentationSource.FromVisual(owner)?
+            .CompositionTarget?.TransformToDevice.M22??1.0;
+        double scale=DeskSpaceDonutGeometryV43.Scale(owner)*Math.Max(dpiX,dpiY);
+        Point centre=new(work.Left+work.Width/2,work.Top+work.Height/2);
+        if(handle!=IntPtr.Zero && GetWindowRect(handle,out var rect) &&
+           rect.Right>rect.Left && rect.Bottom>rect.Top)
+            centre=new Point((rect.Left+rect.Right)/2.0,(rect.Top+rect.Bottom)/2.0);
+        double[] shifts={0,-8,8,-16,16,-24,24,-32,32};
+        double best=preferred,bestScore=double.PositiveInfinity;
+        foreach(double shift in shifts)
+        {
+            double candidate=preferred+shift;
+            double penalty=Math.Abs(shift)*1.5;
+            for(int n=0;n<=16;n++)
+            {
+                double angle=candidate-half+(2*half*n/16.0);
+                var p=DeskSpaceSubArcGeometryV48.Polar(outerRadius,angle);
+                double x=centre.X+p.X*scale;
+                double y=centre.Y+p.Y*scale;
+                const double pad=12;
+                penalty+=80*(Math.Max(0,work.Left+pad-x)+
+                    Math.Max(0,x-(work.Right-pad))+
+                    Math.Max(0,work.Top+pad-y)+
+                    Math.Max(0,y-(work.Bottom-pad)));
+            }
+            if(penalty<bestScore){bestScore=penalty;best=candidate;}
+        }
+        return best;
+    }
+    private static string FormatArcLabelV380(string text)
+    {
+        if(string.IsNullOrEmpty(text))return text;
+        return text.Replace("_","_\u200B").Replace("-","-\u200B");
+    }
+    private static ToolTip CreateCompactTooltipV380(string title,string? subtitle=null)
+    {
+        var panel=new StackPanel{MaxWidth=250};
+        panel.Children.Add(new TextBlock{
+            Text=title,FontWeight=FontWeights.SemiBold,FontSize=12,
+            TextWrapping=TextWrapping.Wrap});
+        if(!string.IsNullOrWhiteSpace(subtitle))
+            panel.Children.Add(new TextBlock{
+                Text=subtitle,FontSize=11,Opacity=0.82,
+                TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,2,0,0)});
+        return new ToolTip{Content=panel,MaxWidth=268};
+    }
+    private static (double Left,double Width) InscribedHorizontalSpanV380(
+        Geometry geom,double cx,double cy,double halfHeight,double pad,
+        double minWidth,double maxWidth,double canvasWidth)
+    {
+        double leftBound=double.NegativeInfinity,rightBound=double.PositiveInfinity;
+        var gb=geom.Bounds;
+        double scanMin=Math.Max(0,gb.Left);
+        double scanMax=Math.Min(canvasWidth,gb.Right);
+        double[] ys=halfHeight>1?new[]{cy-halfHeight,cy,cy+halfHeight}:new[]{cy};
+        foreach(double y in ys)
+        {
+            double seed=cx;
+            if(!geom.FillContains(new Point(cx,y)))
+            {
+                seed=-1;double bestDist=double.MaxValue;
+                for(int s=0;s<=24;s++)
+                {
+                    double px=scanMin+(scanMax-scanMin)*s/24.0;
+                    if(geom.FillContains(new Point(px,y)))
+                    {
+                        double d=Math.Abs(px-cx);
+                        if(d<bestDist){bestDist=d;seed=px;}
+                    }
+                }
+                if(seed<0)continue;
+            }
+            double lo=scanMin,hi=seed;
+            for(int k=0;k<12;k++)
+            {
+                double mid=(lo+hi)*.5;
+                if(geom.FillContains(new Point(mid,y)))hi=mid;else lo=mid;
+            }
+            double yLeft=hi;
+            lo=seed;hi=scanMax;
+            for(int k=0;k<12;k++)
+            {
+                double mid=(lo+hi)*.5;
+                if(geom.FillContains(new Point(mid,y)))lo=mid;else hi=mid;
+            }
+            double yRight=lo;
+            if(yLeft>leftBound)leftBound=yLeft;
+            if(yRight<rightBound)rightBound=yRight;
+        }
+        if(double.IsNegativeInfinity(leftBound) || double.IsPositiveInfinity(rightBound) || rightBound<=leftBound)
+        {
+            double fallbackW=Math.Clamp(gb.Width-pad*2,minWidth,maxWidth);
+            double fallbackL=Math.Clamp(cx-fallbackW/2,2,Math.Max(2,canvasWidth-fallbackW-2));
+            return (fallbackL,fallbackW);
+        }
+        double innerL=Math.Max(2,leftBound+pad);
+        double innerR=Math.Min(canvasWidth-2,rightBound-pad);
+        double span=innerR-innerL;
+        if(span<=8)
+        {
+            double mid=(leftBound+rightBound)*.5;
+            double narrowW=Math.Clamp(Math.Min(minWidth,canvasWidth-4),18,maxWidth);
+            double narrowL=Math.Clamp(mid-narrowW/2,2,Math.Max(2,canvasWidth-narrowW-2));
+            return (narrowL,narrowW);
+        }
+        double finalW=Math.Clamp(span,Math.Min(minWidth,span),maxWidth);
+        double finalMid=(innerL+innerR)*.5;
+        double finalL=Math.Clamp(finalMid-finalW/2,2,Math.Max(2,canvasWidth-finalW-2));
+        return (finalL,finalW);
+    }
     public bool IsArcOpen=>arc.IsOpen;
     public int PinnedCount=>pinned().Count;
     // Main parent outer slot #4 starts at this physical direction (the
@@ -120,89 +275,114 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 foreach(var f in activeAppFiles.Take(4))
                 {
                     string lbl=f.TallyCompanyCode!=null
-                        ? "Tally Co #"+f.TallyCompanyCode
-                        : f.DisplayName;
+                        ? "Tally #"+f.TallyCompanyCode
+                        : FormatArcLabelV380(f.DisplayName);
                     d2Items.Add((lbl,"launchfile",f.FullPath));
                 }
                 if(d2Items.Count==0 && activeAppLoading)
                     d2Items.Add(("Loading…","loading",""));
                 d2Items.Add(("All files…","allfiles",activeAppPath));
-                double d2Sweep=Math.Clamp(Math.Max(currentChildView.Step,48.0),28.0,56.0);
-                double d2Half=DeskSpaceSubArcGeometryV48.Half(d2Items.Count);
-                double d2Center=DeskSpaceSubArcGeometryV48.FitAngle(owner,2,activeAppCenter,d2Half);
-                var d2View=DeskSpaceSubDonutStandardV62.Plan(d2Items.Count,0,d2Center,d2Sweep);
-                for(int i=0;i<d2View.Count;i++)
+                double d2Half=Math.Clamp(d2Items.Count*5.25,11.0,28.0);
+                double d2Preferred=activeAppCenter*0.45+centre*0.55;
+                double d2Center=FitDepth2Angle(d2Preferred,d2Half,AppOuter(2));
+                double d2Start=d2Center-d2Half;
+                double d2Step=(d2Half*2)/d2Items.Count;
+                double normAngle=((d2Center%360)+360)%360;
+                bool leftHalf=normAngle>90 && normAngle<270;
+                for(int i=0;i<d2Items.Count;i++)
                 {
-                    var d2=d2Items[i];
-                    Add(d2.Label,d2.Kind,d2.Path,d2View.From(i),d2View.To(i),2);
+                    var d2=leftHalf?d2Items[d2Items.Count-1-i]:d2Items[i];
+                    Add(d2.Label,d2.Kind,d2.Path,d2Start+d2Step*i,d2Start+d2Step*(i+1),2);
                 }
             }
         }
-        var shapes=items.Select(x=>
-            DeskSpaceSubArcGeometryV48.Sector(x.Depth,x.A,x.B)).ToArray();
+        var shapes=items.Select(x=>AppSector(x.Depth,x.A,x.B)).ToArray();
         bounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
         const double margin=10;
         canvas.Width=bounds.Width+margin*2;
         canvas.Height=bounds.Height+margin*2;
+        var clippedGeoms=new Geometry[items.Count];
+        // Pass 1: all wedge geometries at Z=1
         for(int i=0;i<items.Count;i++)
         {
             var item=items[i];
-            var geometry=DeskSpaceSubArcGeometryV48.Clip(shapes[i],bounds);
+            var geometry=DeskSpaceSubArcGeometryV48.Clip(shapes[i],bounds,margin);
+            clippedGeoms[i]=geometry;
             bool isAction=item.Kind is "add" or "allfiles";
             bool isSelectedApp=item.Kind=="launch" && !string.IsNullOrEmpty(activeAppPath) &&
                 string.Equals(item.Path,activeAppPath,StringComparison.OrdinalIgnoreCase);
-            string tip=item.Kind=="launch"
-                ? item.Label+"\nClick: Open app directly · Hover: Recent files · Right-click: All files"
+            ToolTip tip=item.Kind=="launch"
+                ? CreateCompactTooltipV380(item.Label,"Click to open · Right-click for all files")
                 : item.Kind=="launchfile"
-                    ? item.Label+"\nClick to open directly in "+System.IO.Path.GetFileNameWithoutExtension(activeAppPath)+"\n"+item.Path
+                    ? CreateCompactTooltipV380(System.IO.Path.GetFileName(item.Path) is string fn && fn.Length>0?fn:item.Label,
+                        System.IO.Path.GetDirectoryName(item.Path))
                     : item.Kind=="allfiles"
-                        ? "Open full compatible files browser for "+System.IO.Path.GetFileNameWithoutExtension(item.Path)
-                        : item.Label;
+                        ? CreateCompactTooltipV380("All compatible files",System.IO.Path.GetFileNameWithoutExtension(item.Path))
+                        : CreateCompactTooltipV380(item.Label);
             var wedge=new System.Windows.Shapes.Path{
                 Data=geometry,Stroke=Brushes.White,StrokeThickness=1.5,
                 Fill=isAction?accent:(isSelectedApp?selected:normal),
                 Cursor=Cursors.Hand,ToolTip=tip,Tag=i};
+            ToolTipService.SetInitialShowDelay(wedge,item.Kind=="launchfile"?650:850);
+            ToolTipService.SetBetweenShowDelay(wedge,200);
+            Panel.SetZIndex(wedge,1);
             fills.Add(wedge);
             hitZones.Add((geometry,item.Kind,item.Path));
             canvas.Children.Add(wedge);
-            var p=DeskSpaceSubArcGeometryV48.Polar(
-                (DeskSpaceSubArcGeometryV48.Inner(item.Depth)+
-                 DeskSpaceSubArcGeometryV48.Outer(item.Depth))/2,
-                (item.A+item.B)/2);
-            double arcWidth=(DeskSpaceSubArcGeometryV48.Inner(item.Depth)+
-                DeskSpaceSubArcGeometryV48.Outer(item.Depth))*.5*
-                (item.B-item.A)*Math.PI/180;
-            double textWidth=Math.Clamp(arcWidth*.94,34,item.Depth>=2?96:86);
-            var label=new TextBlock{Text=item.Label,Width=textWidth,MaxHeight=27,
-                FontSize=item.Depth>=2?9.5:10,
+        }
+        // Pass 2: all icons & labels strictly inscribed inside each wedge at Z=10
+        for(int i=0;i<items.Count;i++)
+        {
+            var item=items[i];
+            bool isAction=item.Kind is "add" or "allfiles";
+            double midR=(AppInner(item.Depth)+AppOuter(item.Depth))/2;
+            double midA=(item.A+item.B)/2;
+            var p=DeskSpaceSubArcGeometryV48.Polar(midR,midA);
+            double midX=DeskSpaceSubArcGeometryV48.CX+p.X-bounds.Left+margin;
+            double midY=DeskSpaceSubArcGeometryV48.CY+p.Y-bounds.Top+margin;
+            bool isAppIcon=item.Kind=="launch" && DeskSpaceApplicationIconsV65.Get(item.Path)!=null;
+            double maxLabelH=item.Depth>=2?29:(isAppIcon?24:26);
+            double probeHalfH=item.Depth>=2?13:(isAppIcon?17:11);
+            double pad=item.Depth>=2?8:4;
+            double maxW=item.Depth>=2?120:(item.Depth==1?66:82);
+            var (boxLeft,boxWidth)=InscribedHorizontalSpanV380(
+                clippedGeoms[i],midX,midY,probeHalfH,pad,item.Depth>=2?46:34,maxW,canvas.Width);
+            double unitCenterX=boxLeft+boxWidth*.5;
+            var label=new TextBlock{
+                Text=item.Label,
+                Width=boxWidth,
+                MaxHeight=maxLabelH,
+                FontSize=item.Depth==1?9.5:10,
                 FontWeight=isAction?FontWeights.SemiBold:FontWeights.Normal,
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 TextWrapping=TextWrapping.Wrap,
                 TextAlignment=TextAlignment.Center,
-                IsHitTestVisible=false,ToolTip=tip,
+                IsHitTestVisible=false,
                 Foreground=isAction?Brushes.White:
                     new SolidColorBrush(Color.FromRgb(37,51,79))};
-            Canvas.SetLeft(label,DeskSpaceSubArcGeometryV48.CX+p.X-
-                bounds.Left+margin-textWidth/2);
-            // Display the actual Windows app or shortcut icon alongside
-            // its readable label; never launch the app to discover artwork.
-            double labelY=DeskSpaceSubArcGeometryV48.CY+p.Y-
-                bounds.Top+margin-13;
-            if(item.Kind=="launch")
+            label.Measure(new Size(boxWidth,maxLabelH));
+            double actualH=Math.Min(maxLabelH,Math.Max(12,label.DesiredSize.Height));
+            if(isAppIcon)
             {
-                var iconSource=DeskSpaceApplicationIconsV65.Get(item.Path);
-                if(iconSource!=null)
-                {
-                    var appIcon=new Image{Source=iconSource,Width=19,Height=19,
-                        Stretch=Stretch.Uniform,IsHitTestVisible=false};
-                    Canvas.SetLeft(appIcon,DeskSpaceSubArcGeometryV48.CX+p.X-
-                        bounds.Left+margin-9.5);
-                    Canvas.SetTop(appIcon,labelY-14);
-                    canvas.Children.Add(appIcon);
-                    labelY+=8;
-                }
+                var iconSource=DeskSpaceApplicationIconsV65.Get(item.Path)!;
+                const double iconSize=18,gap=2;
+                double totalH=iconSize+gap+actualH;
+                double topY=Math.Clamp(midY-totalH*.5,2,Math.Max(2,canvas.Height-totalH-2));
+                var appIcon=new Image{Source=iconSource,Width=iconSize,Height=iconSize,
+                    Stretch=Stretch.Uniform,IsHitTestVisible=false};
+                Panel.SetZIndex(appIcon,10);
+                Canvas.SetLeft(appIcon,Math.Clamp(unitCenterX-iconSize*.5,2,Math.Max(2,canvas.Width-iconSize-2)));
+                Canvas.SetTop(appIcon,topY);
+                canvas.Children.Add(appIcon);
+                Canvas.SetLeft(label,boxLeft);
+                Canvas.SetTop(label,topY+iconSize+gap);
             }
-            Canvas.SetTop(label,labelY);
+            else
+            {
+                Canvas.SetLeft(label,boxLeft);
+                Canvas.SetTop(label,Math.Clamp(midY-actualH*.5,2,Math.Max(2,canvas.Height-actualH-2)));
+            }
+            Panel.SetZIndex(label,10);
             canvas.Children.Add(label);
         }
         if(group=="pinned")

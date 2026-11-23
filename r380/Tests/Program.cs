@@ -491,6 +491,126 @@ internal static class Program
         }
     }
 
+    private static void TestApplicationsSubDonutLabelFitAndOrderV380(Assembly asm)
+    {
+        var appsType = asm.GetType("DeskSpace.DeskSpaceApplicationsV55", true)!;
+        var itemType = asm.GetType("DeskSpace.PinnedAppFileItemV380", true)!;
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_AppsSub_" + Guid.NewGuid().ToString("N"));
+        var owner = new Window
+        {
+            Width = 408,
+            Height = 408,
+            Left = 1512,
+            Top = 423,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            AllowsTransparency = true,
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+
+        object? apps = null;
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            string winmanExe = Path.Combine(tempRoot, "Winman CA ERP.exe");
+            string tallyPrimeExe = Path.Combine(tempRoot, "TallyPrime.exe");
+            string tallyErpExe = Path.Combine(tempRoot, "Tally.ERP 9.exe");
+            File.WriteAllText(winmanExe, "mock");
+            File.WriteAllText(tallyPrimeExe, "mock");
+            File.WriteAllText(tallyErpExe, "mock");
+
+            var pinnedList = new[] { tallyErpExe, tallyPrimeExe, winmanExe };
+            Func<IReadOnlyList<string>> getPinned = () => pinnedList;
+            Action<string> noopPin = _ => { };
+            Action noopSearch = () => { };
+
+            apps = Activator.CreateInstance(appsType, new object[] { owner, getPinned, noopPin, noopPin, noopSearch })!;
+            appsType.GetField("group", AnyInstance)!.SetValue(apps, "pinned");
+            appsType.GetField("activeAppPath", AnyInstance)!.SetValue(apps, winmanExe);
+            appsType.GetField("activeAppCenter", AnyInstance)!.SetValue(apps, 166.0);
+
+            var filesList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType))!;
+            filesList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Chandrashekharayya_Hiremath_25-26.tax",
+                Path.Combine(tempRoot, "Chandrashekharayya_Hiremath_25-26.tax"),
+                tempRoot, ".TAX", DateTime.UtcNow.AddMinutes(-1), true, "★ Recent", false, null, null
+            })!);
+            filesList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Chandrashekharayya Hiremath_26-27.tax",
+                Path.Combine(tempRoot, "Chandrashekharayya Hiremath_26-27.tax"),
+                tempRoot, ".TAX", DateTime.UtcNow.AddMinutes(-2), true, "★ Recent", false, null, null
+            })!);
+            filesList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Bangalore Ananda Sudhir_26-27.tax",
+                Path.Combine(tempRoot, "Bangalore Ananda Sudhir_26-27.tax"),
+                tempRoot, ".TAX", DateTime.UtcNow.AddMinutes(-3), true, "★ Recent", false, null, null
+            })!);
+            filesList.Add(Activator.CreateInstance(itemType, new object?[]
+            {
+                "Venugopal_25-26.tax",
+                Path.Combine(tempRoot, "Venugopal_25-26.tax"),
+                tempRoot, ".TAX", DateTime.UtcNow.AddMinutes(-4), true, "★ Recent", false, null, null
+            })!);
+            appsType.GetField("activeAppFiles", AnyInstance)!.SetValue(apps, filesList);
+
+            appsType.GetMethod("Render", AnyInstance)!.Invoke(apps, null);
+
+            var canvas = (Canvas)appsType.GetField("canvas", AnyInstance)!.GetValue(apps)!;
+            var wedges = canvas.Children.OfType<System.Windows.Shapes.Path>().ToArray();
+            var labels = canvas.Children.OfType<TextBlock>().ToArray();
+            Check(wedges.Length > 0 && labels.Length >= 8,
+                $"Expected Applications sub-donut wedges & labels, got {wedges.Length} wedges / {labels.Length} labels");
+
+            int maxWedgeZ = wedges.Max(System.Windows.Controls.Panel.GetZIndex);
+            TextBlock? topFileLabel = null;
+            TextBlock? allFilesLabel = null;
+
+            foreach (var tb in labels)
+            {
+                double l = Canvas.GetLeft(tb);
+                double t = Canvas.GetTop(tb);
+                Check(!double.IsNaN(l) && !double.IsNaN(t), $"Label '{tb.Text}' missing Canvas coordinates");
+                Check(l >= 0 && l + tb.Width <= canvas.Width + 0.5,
+                    $"Label '{tb.Text}' horizontally exceeds canvas ({l:F1}..{l + tb.Width:F1} vs width {canvas.Width:F1})");
+                Check(t >= 0 && t + Math.Min(tb.MaxHeight, 30) <= canvas.Height + 2.0,
+                    $"Label '{tb.Text}' vertically exceeds canvas ({t:F1} vs height {canvas.Height:F1})");
+                Check(tb.Width <= 130, $"Label '{tb.Text}' width {tb.Width:F1} exceeds cap 130");
+                Check(System.Windows.Controls.Panel.GetZIndex(tb) > maxWedgeZ,
+                    $"Label '{tb.Text}' Z-index ({System.Windows.Controls.Panel.GetZIndex(tb)}) must exceed wedges ({maxWedgeZ})");
+
+                string cleanText = tb.Text.Replace("\u200B", "");
+                if (cleanText == "Winman CA ERP")
+                    Check(tb.Width <= 66, "Winman CA ERP depth-1 label width must stay inside wedge, got " + tb.Width);
+                if (cleanText.Contains("Chandrashekharayya_Hiremath_25", StringComparison.Ordinal))
+                    topFileLabel = tb;
+                if (cleanText == "All files…")
+                    allFilesLabel = tb;
+            }
+
+            Check(topFileLabel != null && allFilesLabel != null,
+                "Depth-2 must render first recent file and All files… label");
+            Check(Canvas.GetTop(topFileLabel!) < Canvas.GetTop(allFilesLabel!),
+                $"Left-half Depth-2 must place most-recent file above All files… (topFile={Canvas.GetTop(topFileLabel!):F1}, allFiles={Canvas.GetTop(allFilesLabel!):F1})");
+
+            // Verify compact Depth-2 angular span
+            var itemsRaw = ((IEnumerable)appsType.GetField("items", AnyInstance)!.GetValue(apps)!).Cast<object>().ToList();
+            var d2Items = itemsRaw.Where(x => (int)x.GetType().GetField("Item6")!.GetValue(x)! == 2).ToList();
+            Check(d2Items.Count == 5, "Expected 5 depth-2 wedges (4 files + All files…), got " + d2Items.Count);
+            double minA = d2Items.Min(x => (double)x.GetType().GetField("Item4")!.GetValue(x)!);
+            double maxB = d2Items.Max(x => (double)x.GetType().GetField("Item5")!.GetValue(x)!);
+            Check(maxB - minA <= 62.0, $"Depth-2 angular sweep must stay compact (<=62°), got {(maxB - minA):F1}°");
+        }
+        finally
+        {
+            (apps as IDisposable)?.Dispose();
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
     private static void TestVaultProV380(Assembly asm)
     {
         var vaultType = asm.GetType("DeskSpace.DeskSpaceVaultProV380", true)!;
@@ -1004,6 +1124,7 @@ internal static class Program
             TestCommandBarV380(asm);
             TestPinnedAppFilesV380(asm);
             TestPinnedAppsDirectOpenAndWinmanV380(asm);
+            TestApplicationsSubDonutLabelFitAndOrderV380(asm);
             TestInformationDonutGeometryAndSectorV380(asm);
             TestInformationTabSyncAndSchemaV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);
