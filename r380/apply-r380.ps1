@@ -431,7 +431,7 @@ Swap-R380 @'
     private IReadOnlyList<PinnedAppFileItemV380> activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
     private bool activeAppLoading;
     private int activeAppVersion;
-    private System.Threading.CancellationTokenSource? activeAppCts;
+    private readonly DispatcherTimer loadingGuardTimer;
     private bool disposed;
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -596,6 +596,7 @@ Swap-R380 @'
         canvas.MouseWheel+=Wheel;
         arc=new Popup{PlacementTarget=owner,Placement=PlacementMode.Relative,
             AllowsTransparency=true,StaysOpen=true,Child=canvas};
+        DeskSpaceMonitorFenceV153.TrackPopup(owner,arc);
 '@ @'
         canvas=new Canvas{Width=1,Height=1,Background=null,Focusable=true};
         canvas.MouseMove+=Move;
@@ -609,6 +610,14 @@ Swap-R380 @'
             ()=>group=="pinned"&&(HasFileOverflowV380()||HasChildOverflowV380()),
             ()=>!disposed&&arc.IsOpen&&group=="pinned",
             ScrollActiveLayerV380);
+        DeskSpaceMonitorFenceV153.TrackPopup(owner,arc);
+        loadingGuardTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(3000)};
+        loadingGuardTimer.Tick+=(_,_)=>{
+            loadingGuardTimer.Stop();
+            if(disposed || !arc.IsOpen || !activeAppLoading)return;
+            activeAppLoading=false;
+            Render();
+        };
 '@ 'DeskSpaceApplicationsV55 right-click full files browser and middle scroll'
 Swap-R380 @'
     private List<(string Label,string Kind,string Path)> Children()
@@ -753,6 +762,8 @@ Swap-R380 @'
                 }
                 if(d2Items.Count==0 && activeAppLoading)
                     d2Items.Add(("Loading…","loading",""));
+                else if(d2Items.Count==0)
+                    d2Items.Add(("No files found","empty",""));
                 d2Items.Add(("All files…","allfiles",activeAppPath));
                 double d2Half=Math.Clamp(d2Items.Count*5.25,11.0,28.0);
                 double d2Preferred=activeAppCenter*0.45+centre*0.55;
@@ -917,13 +928,6 @@ Swap-R380 @'
             ApplicationsParentCenter);
     }
 '@ @'
-    private void CancelActiveAppCtsV380()
-    {
-        var prev=System.Threading.Interlocked.Exchange(ref activeAppCts,null);
-        if(prev==null)return;
-        try{prev.Cancel();}catch(ObjectDisposedException){}
-        try{prev.Dispose();}catch(ObjectDisposedException){}
-    }
     private static bool AreFileListsEquivalentV380(
         IReadOnlyList<PinnedAppFileItemV380> a,IReadOnlyList<PinnedAppFileItemV380> b)
     {
@@ -938,21 +942,33 @@ Swap-R380 @'
     }
     private void ClearActiveAppFilesV380()
     {
-        CancelActiveAppCtsV380();
+        loadingGuardTimer.Stop();
         activeAppVersion++;
         activeAppPath="";
         activeAppLoading=false;
         activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
         filePage=0;
     }
+    private void PrewarmVisibleAppsV380()
+    {
+        if(disposed || group!="pinned")return;
+        DeskSpacePinnedAppFilesV380.PrewarmQuickArcApps(
+            items.Where(x=>x.Depth==1 && x.Kind=="launch" && !string.IsNullOrEmpty(x.Path))
+                 .Select(x=>x.Path));
+    }
     private void SelectAppFilesV380(string path,double centerAngle)
     {
         if(!IsLaunchable(path))return;
         bool sameApp=string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase);
-        if(sameApp && Math.Abs(activeAppCenter-centerAngle)<0.5)
+        if(sameApp)
+        {
+            bool angleChanged=Math.Abs(activeAppCenter-centerAngle)>=0.5;
+            activeAppCenter=centerAngle;
+            if(angleChanged)Render();
             return;
-        CancelActiveAppCtsV380();
-        if(!sameApp)filePage=0;
+        }
+        loadingGuardTimer.Stop();
+        filePage=0;
         activeAppPath=path;
         activeAppCenter=centerAngle;
         int version=++activeAppVersion;
@@ -963,35 +979,44 @@ Swap-R380 @'
             Render();
             return;
         }
-        activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
-        activeAppLoading=true;
+        if(DeskSpacePinnedAppFilesV380.TryGetPartialQuickArcFiles(path,out var partial))
+        {
+            activeAppFiles=partial;
+            activeAppLoading=false;
+        }
+        else
+        {
+            activeAppFiles=Array.Empty<PinnedAppFileItemV380>();
+            activeAppLoading=true;
+            loadingGuardTimer.Start();
+        }
         Render();
-        var cts=new System.Threading.CancellationTokenSource();
-        activeAppCts=cts;
         _=DeskSpacePinnedAppFilesV380.GetQuickArcFilesAsync(
             path,250,
-            onProgress:partial=>{
-                if(disposed || cts.IsCancellationRequested)return;
+            onProgress:partialBatch=>{
+                if(disposed)return;
                 owner.Dispatcher.BeginInvoke(new Action(()=>{
                     if(disposed || !arc.IsOpen || version!=activeAppVersion ||
-                       cts.IsCancellationRequested ||
                        !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
                         return;
-                    activeAppFiles=partial;
-                    if(partial.Count>0)activeAppLoading=false;
+                    activeAppFiles=partialBatch;
+                    if(partialBatch.Count>0)
+                    {
+                        activeAppLoading=false;
+                        loadingGuardTimer.Stop();
+                    }
                     Render();
                 }));
-            },
-            ct:cts.Token).ContinueWith(t=>{
-                if(disposed || cts.IsCancellationRequested)return;
+            }).ContinueWith(t=>{
+                if(disposed)return;
                 var result=t.Status==System.Threading.Tasks.TaskStatus.RanToCompletion
                     ? t.Result
                     : Array.Empty<PinnedAppFileItemV380>();
                 owner.Dispatcher.BeginInvoke(new Action(()=>{
                     if(disposed || !arc.IsOpen || version!=activeAppVersion ||
-                       cts.IsCancellationRequested ||
                        !string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
                         return;
+                    loadingGuardTimer.Stop();
                     bool shouldRender=activeAppLoading || !AreFileListsEquivalentV380(activeAppFiles,result);
                     activeAppFiles=result;
                     activeAppLoading=false;
@@ -1043,6 +1068,7 @@ Swap-R380 @'
         childPage=next;
         ClearActiveAppFilesV380();
         Render();
+        PrewarmVisibleAppsV380();
         DeskSpaceSubDonutStandardV62.Animate(canvas,delta,
             ApplicationsParentCenter);
     }
@@ -1113,7 +1139,7 @@ Swap-R380 @'
         var kind=hitZones[i].Kind;
         if(kind=="pinned"&&group!=kind)
         {
-            group=kind;childPage=0;ClearActiveAppFilesV380();Render();
+            group=kind;childPage=0;ClearActiveAppFilesV380();Render();PrewarmVisibleAppsV380();
             return;
         }
         if(kind=="launch")
@@ -1122,7 +1148,7 @@ Swap-R380 @'
             SelectAppFilesV380(hitZones[i].Path,mid);
             return;
         }
-        if(kind is "launchfile" or "allfiles" or "loading")
+        if(kind is "launchfile" or "allfiles" or "loading" or "empty")
             return;
         if(!string.IsNullOrEmpty(activeAppPath))
         {
@@ -1165,6 +1191,8 @@ Swap-R380 @'
     }
 '@ 'DeskSpaceApplicationsV55 hover expand, right-click handler and button guard'
 Swap-R380 @'
+            case "pinned":
+                group=item.Kind;childPage=0;Render();return true;
             case "launch":
                 if(IsLaunchable(item.Path))
                 {
@@ -1173,6 +1201,8 @@ Swap-R380 @'
                 }
                 return true;
 '@ @'
+            case "pinned":
+                group=item.Kind;childPage=0;Render();PrewarmVisibleAppsV380();return true;
             case "launch":
                 if(IsLaunchable(item.Path))
                 {

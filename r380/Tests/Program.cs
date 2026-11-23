@@ -1403,6 +1403,247 @@ internal static class Program
         }
     }
 
+    private static void TestStrictPerAppIsolationAndNoMixingV380(Assembly asm)
+    {
+        var type = asm.GetType("DeskSpace.DeskSpacePinnedAppFilesV380", true)!;
+        var itemType = asm.GetType("DeskSpace.PinnedAppFileItemV380", true)!;
+        var resolveCap = type.GetMethod("ResolveCapability", AnyStatic)!;
+        var isStrictlyCompat = type.GetMethod("IsItemStrictlyCompatible", AnyStatic)!;
+        var getHistoryKey = type.GetMethod("GetHistoryKey", AnyStatic)!;
+        var discoverRecent = type.GetMethod("DiscoverRecentItems", AnyStatic)!;
+        var recordLaunch = type.GetMethod("RecordLaunch", AnyStatic)!;
+        var tryParseTally = type.GetMethod("TryParseTallyCompanyFolder", AnyStatic)!;
+        var tryParseLnk = type.GetMethod("TryParseShortcutTargetBinary", AnyStatic, new[] { typeof(string) })!;
+
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_Isolation_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            string primeDir = Path.Combine(tempRoot, "TallyPrime");
+            string erpDir = Path.Combine(tempRoot, "Tally.ERP9");
+            string comp1800Dir = Path.Combine(tempRoot, "Data", "100001");
+            string comp900Dir = Path.Combine(tempRoot, "Data", "10001");
+            string winmanDir = Path.Combine(tempRoot, "Winman");
+            Directory.CreateDirectory(primeDir);
+            Directory.CreateDirectory(erpDir);
+            Directory.CreateDirectory(comp1800Dir);
+            Directory.CreateDirectory(comp900Dir);
+            Directory.CreateDirectory(winmanDir);
+
+            string primeExe = Path.Combine(primeDir, "tally.exe");
+            string erpExe = Path.Combine(erpDir, "tally.exe");
+            File.WriteAllText(primeExe, "mock");
+            File.WriteAllText(erpExe, "mock");
+
+            File.WriteAllText(Path.Combine(comp1800Dir, "Company.1800"), "mock");
+            File.WriteAllText(Path.Combine(comp1800Dir, "CmpSave.1800"), "mock");
+            File.WriteAllText(Path.Combine(comp900Dir, "Company.900"), "mock");
+            File.WriteAllText(Path.Combine(comp900Dir, "Manager.900"), "mock");
+
+            object?[] aPrimeComp = { comp1800Dir, null, true, "Tally Data" };
+            Check((bool)tryParseTally.Invoke(null, aPrimeComp)! && aPrimeComp[1] != null,
+                "Synthetic .1800 company fixture must parse");
+            object primeCompItem = aPrimeComp[1]!;
+
+            object?[] aErpComp = { comp900Dir, null, true, "Tally Data" };
+            Check((bool)tryParseTally.Invoke(null, aErpComp)! && aErpComp[1] != null,
+                "Synthetic .900 company fixture must parse");
+            object erpCompItem = aErpComp[1]!;
+
+            var primeCap = resolveCap.Invoke(null, new object[] { primeExe })!;
+            var erpCap = resolveCap.Invoke(null, new object[] { erpExe })!;
+            Check(GetProp<object>(primeCap, "TallyEdition").ToString() == "TallyPrime1800",
+                "TallyPrime install path must resolve TallyPrime1800 edition");
+            Check(GetProp<object>(erpCap, "TallyEdition").ToString() == "TallyErp900",
+                "Tally.ERP9 install path must resolve TallyErp900 edition");
+
+            // Strict edition isolation: Prime rejects .900 & .xml; ERP 9 rejects .1800 & .xml
+            string strayXml = Path.Combine(winmanDir, "winman_config.xml");
+            File.WriteAllText(strayXml, "<cfg/>");
+            var xmlItem = Activator.CreateInstance(itemType, new object?[]
+            {
+                "winman_config", strayXml, winmanDir, ".XML", DateTime.UtcNow, false, "Drive Scan", false, null, null
+            })!;
+
+            Check((bool)isStrictlyCompat.Invoke(null, new object[] { primeCap, primeCompItem, false })!,
+                "TallyPrime must accept .1800 company");
+            Check(!(bool)isStrictlyCompat.Invoke(null, new object[] { primeCap, erpCompItem, false })!,
+                "TallyPrime must reject .900 company");
+            Check(!(bool)isStrictlyCompat.Invoke(null, new object[] { primeCap, xmlItem, false })!,
+                "TallyPrime must reject stray .xml files");
+
+            Check((bool)isStrictlyCompat.Invoke(null, new object[] { erpCap, erpCompItem, false })!,
+                "Tally.ERP 9 must accept .900 company");
+            Check(!(bool)isStrictlyCompat.Invoke(null, new object[] { erpCap, primeCompItem, false })!,
+                "Tally.ERP 9 must reject .1800 company");
+            Check(!(bool)isStrictlyCompat.Invoke(null, new object[] { erpCap, xmlItem, false })!,
+                "Tally.ERP 9 must reject stray .xml files");
+
+            // Per-installation history keys prevent same-exe-name collisions (tally.exe in two folders)
+            string primeHistKey = (string)getHistoryKey.Invoke(null, new object[] { primeCap })!;
+            string erpHistKey = (string)getHistoryKey.Invoke(null, new object[] { erpCap })!;
+            Check(!string.Equals(primeHistKey, erpHistKey, StringComparison.OrdinalIgnoreCase),
+                "Separate TallyPrime and Tally.ERP 9 installs must use distinct history keys");
+
+            string histFile = Path.Combine(tempRoot, "launches.json");
+            recordLaunch.Invoke(null, new object?[] { primeHistKey, comp1800Dir, histFile });
+            var erpRecent = ((IEnumerable)discoverRecent.Invoke(null, new object?[] { erpCap, histFile })!).Cast<object>().ToList();
+            Check(erpRecent.All(x => GetProp<string>(x, "FullPath") != comp1800Dir),
+                "Launch history recorded for TallyPrime must never appear under Tally.ERP 9");
+
+            // Excel must not pull .xml or Winman .tax files
+            var excelCap = resolveCap.Invoke(null, new object[] { @"C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE" })!;
+            var excelExts = GetProp<HashSet<string>>(excelCap, "Extensions");
+            Check(!excelExts.Contains(".xml"), "Excel capability must not include noisy .xml extension");
+            Check(!(bool)isStrictlyCompat.Invoke(null, new object[] { excelCap, xmlItem, false })!,
+                "Excel must reject stray .xml files");
+
+            // Winman rejects backup-only .tax.wb in Quick Arc (allowBackupArchives: false) while keeping .tax
+            string winmanExe = Path.Combine(winmanDir, "Winman_Launcher.exe");
+            File.WriteAllText(winmanExe, "mock");
+            var winmanCap = resolveCap.Invoke(null, new object[] { winmanExe })!;
+            string taxFile = Path.Combine(tempRoot, "Client_25_26.tax");
+            string taxBackup = Path.Combine(tempRoot, "Client_25_26.tax.wb");
+            File.WriteAllText(taxFile, "tax");
+            File.WriteAllText(taxBackup, "wb");
+            var taxItem = Activator.CreateInstance(itemType, new object?[]
+            {
+                "Client 25 26", taxFile, tempRoot, ".TAX", DateTime.UtcNow, false, "Drive Scan", false, null, null
+            })!;
+            var backupItem = Activator.CreateInstance(itemType, new object?[]
+            {
+                "Client 25 26", taxBackup, tempRoot, "Winman Tax Backup", DateTime.UtcNow, false, "Drive Scan", false, null, null
+            })!;
+            Check((bool)isStrictlyCompat.Invoke(null, new object[] { winmanCap, taxItem, false })!,
+                "Winman Quick Arc must accept direct .tax return file");
+            Check(!(bool)isStrictlyCompat.Invoke(null, new object[] { winmanCap, backupItem, false })!,
+                "Winman Quick Arc must filter out .tax.wb backup archives");
+            Check((bool)isStrictlyCompat.Invoke(null, new object[] { winmanCap, backupItem, true })!,
+                "Winman full browser (allowBackupArchives=true) retains .tax.wb backup archives");
+
+            // Managed Shell Link binary parser (.lnk local vs network share)
+            static byte[] BuildMinimalLnk(string targetPath, bool networkFlag)
+            {
+                using var ms = new MemoryStream();
+                byte[] header = new byte[0x4C];
+                BitConverter.GetBytes(0x4C).CopyTo(header, 0);
+                byte[] clsid = { 0x01, 0x14, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 };
+                clsid.CopyTo(header, 4);
+                BitConverter.GetBytes(0x02u).CopyTo(header, 20); // HasLinkInfo
+                ms.Write(header);
+
+                byte[] pathBytes = Encoding.ASCII.GetBytes(targetPath + "\0");
+                int linkInfoHeaderSize = 0x1C;
+                int localBasePathOffset = networkFlag ? 0 : linkInfoHeaderSize + 1;
+                int linkInfoSize = linkInfoHeaderSize + 1 + pathBytes.Length + 1;
+                byte[] info = new byte[linkInfoSize];
+                BitConverter.GetBytes(linkInfoSize).CopyTo(info, 0);
+                BitConverter.GetBytes(linkInfoHeaderSize).CopyTo(info, 4);
+                BitConverter.GetBytes(networkFlag ? 0x02 : 0x01).CopyTo(info, 8);
+                BitConverter.GetBytes(localBasePathOffset).CopyTo(info, 16);
+                BitConverter.GetBytes(linkInfoSize - 1).CopyTo(info, 24);
+                if (!networkFlag)
+                    pathBytes.CopyTo(info, localBasePathOffset);
+                ms.Write(info);
+                return ms.ToArray();
+            }
+
+            string localLnk = Path.Combine(tempRoot, "local.lnk");
+            string netLnk = Path.Combine(tempRoot, "net.lnk");
+            File.WriteAllBytes(localLnk, BuildMinimalLnk(taxFile, networkFlag: false));
+            File.WriteAllBytes(netLnk, BuildMinimalLnk(@"\\SERVER\Share\file.xlsx", networkFlag: true));
+            Check(string.Equals((string?)tryParseLnk.Invoke(null, new object[] { localLnk }), Path.GetFullPath(taxFile), StringComparison.OrdinalIgnoreCase),
+                "TryParseShortcutTargetBinary must decode local .lnk target path cleanly");
+            Check(tryParseLnk.Invoke(null, new object[] { netLnk }) == null,
+                "TryParseShortcutTargetBinary must skip network/UNC links");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
+    private static void TestQuickArcNoStuckLoadingAndIsolationV380(Assembly asm)
+    {
+        var appsType = asm.GetType("DeskSpace.DeskSpaceApplicationsV55", true)!;
+        var itemType = asm.GetType("DeskSpace.PinnedAppFileItemV380", true)!;
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_Loading_" + Guid.NewGuid().ToString("N"));
+        var owner = new Window
+        {
+            Width = 408,
+            Height = 408,
+            Left = 1512,
+            Top = 423,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            AllowsTransparency = true,
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+
+        object? apps = null;
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            string appA = Path.Combine(tempRoot, "AppAlpha.exe");
+            string appB = Path.Combine(tempRoot, "AppBeta.exe");
+            File.WriteAllText(appA, "mock");
+            File.WriteAllText(appB, "mock");
+
+            var pinnedList = new[] { appA, appB };
+            apps = Activator.CreateInstance(appsType, new object[]
+            {
+                owner,
+                (Func<IReadOnlyList<string>>)(() => pinnedList),
+                (Action<string>)(_ => { }),
+                (Action<string>)(_ => { }),
+                (Action)(() => { })
+            })!;
+
+            var canvas = (Canvas)appsType.GetField("canvas", AnyInstance)!.GetValue(apps)!;
+            var renderMethod = appsType.GetMethod("Render", AnyInstance)!;
+
+            // 1. While activeAppLoading == true and 0 files, show Loading…
+            appsType.GetField("group", AnyInstance)!.SetValue(apps, "pinned");
+            appsType.GetField("activeAppPath", AnyInstance)!.SetValue(apps, appA);
+            appsType.GetField("activeAppCenter", AnyInstance)!.SetValue(apps, 166.0);
+            appsType.GetField("activeAppLoading", AnyInstance)!.SetValue(apps, true);
+            renderMethod.Invoke(apps, null);
+            var loadingLabels = canvas.Children.OfType<TextBlock>().Select(tb => tb.Text.Replace("\u200B", "")).ToHashSet();
+            Check(loadingLabels.Contains("Loading…") && loadingLabels.Contains("All files…"),
+                "Depth-2 must display Loading… while scan is active");
+
+            // 2. When activeAppLoading == false and still 0 files, show No files found (never stuck on Loading…)
+            appsType.GetField("activeAppLoading", AnyInstance)!.SetValue(apps, false);
+            renderMethod.Invoke(apps, null);
+            var emptyLabels = canvas.Children.OfType<TextBlock>().Select(tb => tb.Text.Replace("\u200B", "")).ToHashSet();
+            Check(!emptyLabels.Contains("Loading…") && emptyLabels.Contains("No files found") && emptyLabels.Contains("All files…"),
+                "Depth-2 must transition from Loading… to No files found when scan completes with 0 items");
+
+            // 3. Scroll offset resets when switching apps
+            var filesList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType))!;
+            for (int i = 0; i < 6; i++)
+            {
+                filesList.Add(Activator.CreateInstance(itemType, new object?[]
+                {
+                    $"Doc {i}", Path.Combine(tempRoot, $"d{i}.xlsx"), tempRoot, ".XLSX",
+                    DateTime.UtcNow.AddMinutes(-i), true, "★ Recent", false, null, null
+                })!);
+            }
+            appsType.GetField("activeAppFiles", AnyInstance)!.SetValue(apps, filesList);
+            appsType.GetField("filePage", AnyInstance)!.SetValue(apps, 2);
+            appsType.GetMethod("ClearActiveAppFilesV380", AnyInstance)!.Invoke(apps, null);
+            Check((int)appsType.GetField("filePage", AnyInstance)!.GetValue(apps)! == 0 &&
+                  string.IsNullOrEmpty((string)appsType.GetField("activeAppPath", AnyInstance)!.GetValue(apps)!),
+                "ClearActiveAppFilesV380 must clear active app path and reset filePage");
+        }
+        finally
+        {
+            (apps as IDisposable)?.Dispose();
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -1416,6 +1657,8 @@ internal static class Program
             TestApplicationsSubDonutLabelFitAndOrderV380(asm);
             TestUniversalInAppDisplayNamesV380(asm);
             TestApplicationsDepth2ScrollAndHiddenCountersV380(asm);
+            TestStrictPerAppIsolationAndNoMixingV380(asm);
+            TestQuickArcNoStuckLoadingAndIsolationV380(asm);
             TestInformationDonutGeometryAndSectorV380(asm);
             TestInformationTabSyncAndSchemaV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);

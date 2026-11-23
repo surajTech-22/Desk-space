@@ -36,6 +36,14 @@ internal enum PinnedAppKindV380
     IdeWorkspace
 }
 
+internal enum TallyEditionModeV380
+{
+    None,
+    Any,
+    TallyPrime1800,
+    TallyErp900
+}
+
 internal sealed record AppFileCapabilityV380(
     string PinnedPath,
     string ExecutablePath,
@@ -46,7 +54,8 @@ internal sealed record AppFileCapabilityV380(
     bool IncludesTallyCompanies,
     bool IncludesProjectFolders,
     List<string> ExtraDataRoots,
-    List<string> TallyAutoLoadCodes);
+    List<string> TallyAutoLoadCodes,
+    TallyEditionModeV380 TallyEdition = TallyEditionModeV380.None);
 
 internal sealed record PinnedAppFileItemV380(
     string DisplayName,
@@ -79,6 +88,14 @@ internal static class DeskSpacePinnedAppFilesV380
     private static readonly object QuickArcCacheLock = new();
     private static readonly Dictionary<string, (DateTime FetchedUtc, List<PinnedAppFileItemV380> Items)> QuickArcCache =
         new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, List<PinnedAppFileItemV380>> QuickArcPartialCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object QuickArcInFlightLock = new();
+    private static readonly Dictionary<string, Task<IReadOnlyList<PinnedAppFileItemV380>>> QuickArcInFlightTasks =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object RecentShortcutsCacheLock = new();
+    private static (DateTime FetchedUtc, List<(string Target, DateTime LnkTimeUtc, bool IsDir)> Items) RecentShortcutsCache =
+        (DateTime.MinValue, new List<(string, DateTime, bool)>());
     private static readonly object InAppTitleCacheLock = new();
     private static readonly Dictionary<string, (long LastWriteTicks, string Title)> InAppTitleCache =
         new(StringComparer.OrdinalIgnoreCase);
@@ -141,6 +158,21 @@ internal static class DeskSpacePinnedAppFilesV380
         ".mp4", ".mkv", ".avi", ".mov", ".webm", ".mp3", ".wav", ".flac", ".m4a", ".aac",
         ".zip", ".7z", ".rar", ".tar", ".gz", ".xz",
         ".tax", ".wgst", ".24q", ".26q", ".27q", ".27eq", ".7eq", ".tbk", ".tsf", ".tcp", ".tdl"
+    };
+
+    private static readonly string[] TallyPrimeDataPaths =
+    {
+        @"C:\Users\Public\TallyPrime\Data",
+        @"C:\TallyPrime\Data",
+        @"D:\TallyPrime\Data",
+        @"D:\TallyData"
+    };
+
+    private static readonly string[] TallyErp9DataPaths =
+    {
+        @"C:\Users\Public\Tally.ERP9\Data",
+        @"C:\Tally.ERP9\Data",
+        @"D:\TallyData"
     };
 
     private static readonly string[] StandardTallyDataPaths =
@@ -499,6 +531,7 @@ internal static class DeskSpacePinnedAppFilesV380
         }
 
         PinnedAppKindV380 kind = PinnedAppKindV380.StandardDocument;
+        TallyEditionModeV380 tallyEdition = TallyEditionModeV380.None;
         bool includesTallyCompanies = false;
         bool includesProjectFolders = false;
         string? profileDisplayName = null;
@@ -514,7 +547,6 @@ internal static class DeskSpacePinnedAppFilesV380
                 AddExtensions(".24q", ".26q", ".27q", ".27eq", ".7eq", ".wt");
             if (!string.IsNullOrWhiteSpace(exeDir))
             {
-                AddRoot(exeDir, requireExisting: true);
                 AddRoot(System.IO.Path.Combine(exeDir, "UserData"), requireExisting: true);
                 AddRoot(System.IO.Path.Combine(exeDir, "Data"), requireExisting: true);
             }
@@ -530,8 +562,27 @@ internal static class DeskSpacePinnedAppFilesV380
             case "tallyprime.exe":
                 kind = PinnedAppKindV380.TallyAccounting;
                 includesTallyCompanies = true;
-                profileDisplayName = exeLower == "tallyprime.exe" ? "TallyPrime" : "Tally";
-                AddExtensions(".tbk", ".tsf", ".tcp", ".tdl", ".xml");
+                string tallyHint = $"{safePinned} {effectiveExe}";
+                if (tallyHint.Contains("tallyprime", StringComparison.OrdinalIgnoreCase) ||
+                    tallyHint.Contains("prime", StringComparison.OrdinalIgnoreCase))
+                {
+                    tallyEdition = TallyEditionModeV380.TallyPrime1800;
+                    profileDisplayName = "TallyPrime";
+                }
+                else if (tallyHint.Contains("erp9", StringComparison.OrdinalIgnoreCase) ||
+                         tallyHint.Contains("erp 9", StringComparison.OrdinalIgnoreCase) ||
+                         tallyHint.Contains("tally 9", StringComparison.OrdinalIgnoreCase))
+                {
+                    tallyEdition = TallyEditionModeV380.TallyErp900;
+                    profileDisplayName = "Tally.ERP 9";
+                }
+                else
+                {
+                    tallyEdition = TallyEditionModeV380.Any;
+                    profileDisplayName = exeLower == "tallyprime.exe" ? "TallyPrime" : "Tally";
+                }
+
+                AddExtensions(".tbk");
 
                 if (!string.IsNullOrWhiteSpace(exeDir))
                 {
@@ -560,13 +611,19 @@ internal static class DeskSpacePinnedAppFilesV380
                     }
                 }
 
-                foreach (string stdPath in StandardTallyDataPaths)
+                string[] editionRoots = tallyEdition switch
+                {
+                    TallyEditionModeV380.TallyPrime1800 => TallyPrimeDataPaths,
+                    TallyEditionModeV380.TallyErp900 => TallyErp9DataPaths,
+                    _ => StandardTallyDataPaths
+                };
+                foreach (string stdPath in editionRoots)
                     AddRoot(stdPath, requireExisting: true);
                 break;
 
             case "excel.exe":
                 profileDisplayName = "Microsoft Excel";
-                AddExtensions(".xlsx", ".xls", ".xlsm", ".xlsb", ".csv", ".tsv", ".ods", ".xltx", ".xltm", ".xlam", ".xml");
+                AddExtensions(".xlsx", ".xls", ".xlsm", ".xlsb", ".csv", ".tsv", ".ods", ".xltx", ".xltm", ".xlam");
                 break;
 
             case "winman_launcher.exe":
@@ -659,12 +716,17 @@ internal static class DeskSpacePinnedAppFilesV380
             ApplyWinmanProfile("Winman CA ERP", tdsPrimary: false);
         }
 
-        // Merge registry & OS association discoveries safely.
+        // Merge registry & OS association discoveries safely without injecting noisy global extensions
+        // (.xml, .txt, .json, .html, etc.) into structured productivity/accounting apps.
         bool ideSafe = kind == PinnedAppKindV380.IdeWorkspace;
+        bool hasPrimaryNonNoisy = extensions.Any(e => !NoisyGlobalExtensions.Contains(e));
         foreach (string regExt in DiscoverRegistryExtensions(exeName))
         {
-            if (IsSafeTargetExtension(regExt, ideSafe))
-                extensions.Add(regExt);
+            if (!IsSafeTargetExtension(regExt, ideSafe))
+                continue;
+            if (hasPrimaryNonNoisy && !ideSafe && NoisyGlobalExtensions.Contains(regExt))
+                continue;
+            extensions.Add(regExt);
         }
 
         string displayName = ResolveAppDisplayName(safePinned, effectiveExe, profileDisplayName);
@@ -678,7 +740,8 @@ internal static class DeskSpacePinnedAppFilesV380
             includesTallyCompanies,
             includesProjectFolders,
             extraRoots,
-            loadCodes);
+            loadCodes,
+            tallyEdition);
     }
 
     internal static bool TryParseTallyCompanyFolder(
@@ -810,7 +873,148 @@ internal static class DeskSpacePinnedAppFilesV380
         }
 
         lock (QuickArcCacheLock)
+        {
             QuickArcCache.Clear();
+            QuickArcPartialCache.Clear();
+        }
+    }
+
+    internal static string GetHistoryKey(AppFileCapabilityV380 cap)
+    {
+        if (cap == null)
+            return string.Empty;
+
+        if (cap.Kind == PinnedAppKindV380.WinmanAccounting &&
+            ShouldPreferShortcutShellLaunch(cap.PinnedPath))
+        {
+            string normPin = NormalizeFullPathSafe(cap.PinnedPath);
+            if (!string.IsNullOrEmpty(normPin))
+                return normPin.ToLowerInvariant();
+        }
+
+        string normExe = NormalizeFullPathSafe(cap.ExecutablePath);
+        if (!string.IsNullOrEmpty(normExe))
+            return normExe.ToLowerInvariant();
+
+        return NormalizeExeKey(cap.ExeName);
+    }
+
+    internal static bool IsTallyCompanyCompatibleWithCapability(
+        AppFileCapabilityV380 cap,
+        PinnedAppFileItemV380 item)
+    {
+        if (cap == null || item == null || !cap.IncludesTallyCompanies)
+            return false;
+
+        return cap.TallyEdition switch
+        {
+            TallyEditionModeV380.TallyPrime1800 =>
+                item.KindBadge.StartsWith("TallyPrime", StringComparison.OrdinalIgnoreCase) ||
+                SafeFileExists(System.IO.Path.Combine(item.FullPath, "Company.1800")),
+            TallyEditionModeV380.TallyErp900 =>
+                item.KindBadge.StartsWith("Tally.ERP 9", StringComparison.OrdinalIgnoreCase) ||
+                (!item.KindBadge.StartsWith("TallyPrime", StringComparison.OrdinalIgnoreCase) &&
+                 SafeFileExists(System.IO.Path.Combine(item.FullPath, "Company.900"))),
+            _ => true
+        };
+    }
+
+    internal static bool IsAllowedForSystemCrawl(
+        AppFileCapabilityV380 cap,
+        string filePath,
+        bool allowBackupArchives = true)
+    {
+        if (cap == null || string.IsNullOrWhiteSpace(filePath))
+            return false;
+
+        if (!IsAllowedForCapability(cap, filePath, checkExtensionMatch: true))
+            return false;
+
+        string effectiveExt = GetEffectiveExtension(filePath);
+        if (!allowBackupArchives && BackupOnlyExtensions.Contains(effectiveExt))
+            return false;
+
+        string full = NormalizeFullPathSafe(filePath);
+        if (string.IsNullOrEmpty(full))
+            return false;
+
+        // Do not surface files living directly inside the app's own install directory
+        // unless they are under an explicit UserData/Data subfolder.
+        string? exeDir = !string.IsNullOrEmpty(cap.ExecutablePath)
+            ? System.IO.Path.GetDirectoryName(cap.ExecutablePath)
+            : null;
+        if (!string.IsNullOrEmpty(exeDir))
+        {
+            string normExeDir = TrimTrailingSeparatorsUnlessDriveRoot(NormalizeFullPathSafe(exeDir)) + System.IO.Path.DirectorySeparatorChar;
+            if (full.StartsWith(normExeDir, StringComparison.OrdinalIgnoreCase))
+            {
+                string userDataDir = normExeDir + "UserData" + System.IO.Path.DirectorySeparatorChar;
+                string dataDir = normExeDir + "Data" + System.IO.Path.DirectorySeparatorChar;
+                if (!full.StartsWith(userDataDir, StringComparison.OrdinalIgnoreCase) &&
+                    !full.StartsWith(dataDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (NoisyGlobalExtensions.Contains(effectiveExt))
+        {
+            if (cap.Kind == PinnedAppKindV380.IdeWorkspace ||
+                string.Equals(cap.ExeName, "notepad.exe", StringComparison.OrdinalIgnoreCase) ||
+                cap.Extensions.All(NoisyGlobalExtensions.Contains))
+            {
+                return true;
+            }
+
+            bool isBrowser = cap.ExeName.ToLowerInvariant() is "chrome.exe" or "msedge.exe" or "firefox.exe" or "brave.exe";
+            if (isBrowser && IsUnderUserDocumentsArea(full))
+                return true;
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsUnderUserDocumentsArea(string fullPath)
+    {
+        foreach (var root in new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
+            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OneDrive")
+        })
+        {
+            if (string.IsNullOrWhiteSpace(root))
+                continue;
+            string prefix = TrimTrailingSeparatorsUnlessDriveRoot(root) + System.IO.Path.DirectorySeparatorChar;
+            if (fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    internal static bool IsItemStrictlyCompatible(
+        AppFileCapabilityV380 cap,
+        PinnedAppFileItemV380 item,
+        bool allowBackupArchives = true)
+    {
+        if (cap == null || item == null || string.IsNullOrWhiteSpace(item.FullPath))
+            return false;
+
+        if (item.IsDirectory)
+        {
+            if (item.TallyCompanyCode != null ||
+                item.KindBadge.StartsWith("Tally", StringComparison.OrdinalIgnoreCase))
+            {
+                return IsTallyCompanyCompatibleWithCapability(cap, item);
+            }
+            return cap.IncludesProjectFolders;
+        }
+
+        return IsAllowedForSystemCrawl(cap, item.FullPath, allowBackupArchives);
     }
 
     internal static IReadOnlyList<(string FullPath, DateTime LastOpenedUtc)> GetRecentLaunches(
@@ -861,13 +1065,23 @@ internal static class DeskSpacePinnedAppFilesV380
                 collected.Add(candidate);
         }
 
-        // Tier 1: Per-app DeskSpace launch history
-        foreach (var (fullPath, lastOpenedUtc) in GetRecentLaunches(cap.ExeName, historyStoragePath))
+        // Tier 1: Per-app DeskSpace launch history (strictly keyed per install/shortcut and filtered by compatibility)
+        string primaryHistoryKey = GetHistoryKey(cap);
+        var historyEntries = new List<(string FullPath, DateTime LastOpenedUtc)>();
+        historyEntries.AddRange(GetRecentLaunches(primaryHistoryKey, historyStoragePath));
+        if (string.IsNullOrWhiteSpace(historyStoragePath) &&
+            !string.Equals(primaryHistoryKey, NormalizeExeKey(cap.ExeName), StringComparison.OrdinalIgnoreCase))
+        {
+            historyEntries.AddRange(GetRecentLaunches(cap.ExeName, null));
+        }
+
+        foreach (var (fullPath, lastOpenedUtc) in historyEntries)
         {
             if (cap.IncludesTallyCompanies && SafeDirectoryExists(fullPath))
             {
                 if (TryParseTallyCompanyFolder(fullPath, out var tallyItem, isRecent: true, sourceBadge: "★ Opened in DeskSpace") &&
-                    tallyItem != null)
+                    tallyItem != null &&
+                    IsTallyCompanyCompatibleWithCapability(cap, tallyItem))
                 {
                     DateTime bestTime = tallyItem.SortTimeUtc > lastOpenedUtc ? tallyItem.SortTimeUtc : lastOpenedUtc;
                     TryAdd(tallyItem with { SortTimeUtc = bestTime });
@@ -890,7 +1104,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 continue;
             }
 
-            if (SafeFileExists(fullPath) && IsAllowedForCapability(cap, fullPath, checkExtensionMatch: false))
+            if (SafeFileExists(fullPath) && IsAllowedForSystemCrawl(cap, fullPath, allowBackupArchives: true))
             {
                 DateTime fileTime = SafeGetFileWriteTimeUtc(fullPath);
                 DateTime bestTime = fileTime > lastOpenedUtc ? fileTime : lastOpenedUtc;
@@ -898,81 +1112,45 @@ internal static class DeskSpacePinnedAppFilesV380
             }
         }
 
-        // Tier 2: Windows Recent folder .lnk targets
+        // Tier 2: Windows Recent folder .lnk targets (shared 60s cache + fast managed parser)
         try
         {
-            string recentDir = Environment.GetFolderPath(Environment.SpecialFolder.Recent);
-            if (!string.IsNullOrWhiteSpace(recentDir) && Directory.Exists(recentDir))
+            foreach (var (fullTarget, lnkTime, isDir) in GetRecentResolvedTargetsCached())
             {
-                string[] recentShortcuts = Directory.EnumerateFiles(recentDir, "*.lnk")
-                    .OrderByDescending(SafeGetFileWriteTimeUtc)
-                    .Take(120)
-                    .ToArray();
+                if (string.Equals(fullTarget, cap.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-                if (recentShortcuts.Length > 0)
+                if (isDir)
                 {
-                    object? wsh = null;
-                    try
+                    if (cap.IncludesTallyCompanies &&
+                        TryParseTallyCompanyFolder(fullTarget, out var tallyItem, isRecent: true, sourceBadge: "★ Windows Recent") &&
+                        tallyItem != null &&
+                        IsTallyCompanyCompatibleWithCapability(cap, tallyItem))
                     {
-                        var shellType = Type.GetTypeFromProgID("WScript.Shell");
-                        if (shellType != null)
-                            wsh = Activator.CreateInstance(shellType);
-
-                        if (wsh != null)
-                        {
-                            foreach (string lnk in recentShortcuts)
-                            {
-                                string target = ResolveShortcutWithShell(wsh, lnk);
-                                if (string.IsNullOrWhiteSpace(target))
-                                    continue;
-
-                                string fullTarget = NormalizeFullPathSafe(target);
-                                if (string.IsNullOrEmpty(fullTarget) ||
-                                    string.Equals(fullTarget, cap.ExecutablePath, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    continue;
-                                }
-
-                                DateTime lnkTime = SafeGetFileWriteTimeUtc(lnk);
-
-                                if (SafeDirectoryExists(fullTarget))
-                                {
-                                    if (cap.IncludesTallyCompanies &&
-                                        TryParseTallyCompanyFolder(fullTarget, out var tallyItem, isRecent: true, sourceBadge: "★ Windows Recent") &&
-                                        tallyItem != null)
-                                    {
-                                        DateTime bestTime = tallyItem.SortTimeUtc > lnkTime ? tallyItem.SortTimeUtc : lnkTime;
-                                        TryAdd(tallyItem with { SortTimeUtc = bestTime });
-                                    }
-                                    else if (cap.IncludesProjectFolders && IsLikelyProjectFolder(fullTarget, out string projBadge))
-                                    {
-                                        string trimmed = fullTarget.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
-                                        TryAdd(new PinnedAppFileItemV380(
-                                            DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
-                                            FullPath: trimmed,
-                                            ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
-                                            KindBadge: projBadge,
-                                            SortTimeUtc: lnkTime,
-                                            IsRecent: true,
-                                            SourceBadge: "★ Windows Recent",
-                                            IsDirectory: true));
-                                    }
-                                    continue;
-                                }
-
-                                if (!SafeFileExists(fullTarget) || IsReparsePoint(fullTarget))
-                                    continue;
-
-                                if (MatchesCapabilityOrExecutable(cap, fullTarget))
-                                    TryAdd(CreateFileItem(fullTarget, lnkTime, isRecent: true, sourceBadge: "★ Windows Recent"));
-                            }
-                        }
+                        DateTime bestTime = tallyItem.SortTimeUtc > lnkTime ? tallyItem.SortTimeUtc : lnkTime;
+                        TryAdd(tallyItem with { SortTimeUtc = bestTime });
                     }
-                    finally
+                    else if (cap.IncludesProjectFolders && IsLikelyProjectFolder(fullTarget, out string projBadge))
                     {
-                        ReleaseComObject(wsh);
+                        string trimmed = fullTarget.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+                        TryAdd(new PinnedAppFileItemV380(
+                            DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
+                            FullPath: trimmed,
+                            ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
+                            KindBadge: projBadge,
+                            SortTimeUtc: lnkTime,
+                            IsRecent: true,
+                            SourceBadge: "★ Windows Recent",
+                            IsDirectory: true));
                     }
+                    continue;
                 }
+
+                if (!SafeFileExists(fullTarget) || IsReparsePoint(fullTarget) || IsNoiseSystemPath(fullTarget))
+                    continue;
+
+                if (IsAllowedForSystemCrawl(cap, fullTarget, allowBackupArchives: true))
+                    TryAdd(CreateFileItem(fullTarget, lnkTime, isRecent: true, sourceBadge: "★ Windows Recent"));
             }
         }
         catch
@@ -993,7 +1171,7 @@ internal static class DeskSpacePinnedAppFilesV380
             foreach (var (mruPath, mruTimeUtc) in DiscoverOfficeMruPaths(officeAppSubKey))
             {
                 if (SafeFileExists(mruPath) && !IsReparsePoint(mruPath) &&
-                    IsAllowedForCapability(cap, mruPath, checkExtensionMatch: false))
+                    IsAllowedForCapability(cap, mruPath, checkExtensionMatch: true))
                 {
                     DateTime fileTime = SafeGetFileWriteTimeUtc(mruPath);
                     DateTime bestTime = mruTimeUtc > fileTime ? mruTimeUtc : fileTime;
@@ -1002,7 +1180,7 @@ internal static class DeskSpacePinnedAppFilesV380
             }
         }
 
-        // Tier 4: Tally auto-load / recently active companies
+        // Tier 4: Tally auto-load / recently active companies (edition-matched)
         if (cap.IncludesTallyCompanies)
         {
             var autoCodes = new HashSet<string>(cap.TallyAutoLoadCodes, StringComparer.OrdinalIgnoreCase);
@@ -1019,7 +1197,8 @@ internal static class DeskSpacePinnedAppFilesV380
                     foreach (string subDir in Directory.EnumerateDirectories(root))
                     {
                         if (!TryParseTallyCompanyFolder(subDir, out var companyItem, isRecent: true, sourceBadge: "★ Tally Recent") ||
-                            companyItem == null)
+                            companyItem == null ||
+                            !IsTallyCompanyCompatibleWithCapability(cap, companyItem))
                         {
                             continue;
                         }
@@ -1170,6 +1349,7 @@ internal static class DeskSpacePinnedAppFilesV380
 
         return merged.Values
             .OrderByDescending(x => x.IsRecent)
+            .ThenBy(x => BackupOnlyExtensions.Contains(GetEffectiveExtension(x.FullPath)) ? 1 : 0)
             .ThenByDescending(x => x.SortTimeUtc)
             .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
             .Take(maxResults)
@@ -1338,7 +1518,7 @@ internal static class DeskSpacePinnedAppFilesV380
             try
             {
                 Process.Start(psi);
-                RecordLaunch(cap.ExeName, item.FullPath, historyStoragePath);
+                RecordLaunch(GetHistoryKey(cap), item.FullPath, historyStoragePath);
                 return true;
             }
             catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException or UnauthorizedAccessException)
@@ -1364,7 +1544,7 @@ internal static class DeskSpacePinnedAppFilesV380
         try
         {
             Process.Start(psi);
-            RecordLaunch(cap.ExeName, item.FullPath, historyStoragePath);
+            RecordLaunch(GetHistoryKey(cap), item.FullPath, historyStoragePath);
             return true;
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException or UnauthorizedAccessException)
@@ -1381,7 +1561,7 @@ internal static class DeskSpacePinnedAppFilesV380
                     UseShellExecute = true
                 };
                 Process.Start(shellRetry);
-                RecordLaunch(cap.ExeName, item.FullPath, historyStoragePath);
+                RecordLaunch(GetHistoryKey(cap), item.FullPath, historyStoragePath);
                 return true;
             }
             catch
@@ -2288,7 +2468,20 @@ internal static class DeskSpacePinnedAppFilesV380
 
     private static string NormalizeExeKey(string exeName)
     {
-        string file = System.IO.Path.GetFileName(exeName.Trim().Trim('"'));
+        if (string.IsNullOrWhiteSpace(exeName))
+            return string.Empty;
+
+        string cleaned = exeName.Trim().Trim('"');
+        if (cleaned.Contains(System.IO.Path.DirectorySeparatorChar) ||
+            cleaned.Contains(System.IO.Path.AltDirectorySeparatorChar) ||
+            cleaned.Contains(':'))
+        {
+            string full = NormalizeFullPathSafe(cleaned);
+            if (!string.IsNullOrEmpty(full))
+                return full.ToLowerInvariant();
+        }
+
+        string file = System.IO.Path.GetFileName(cleaned);
         if (string.IsNullOrWhiteSpace(file))
             return string.Empty;
         if (!file.Contains('.', StringComparison.Ordinal))
@@ -2542,17 +2735,23 @@ internal static class DeskSpacePinnedAppFilesV380
                 return hits;
 
             dynamic db = conn;
-            db.ConnectionTimeout = 2;
-            db.CommandTimeout = 4;
+            db.ConnectionTimeout = 1;
+            db.CommandTimeout = 2;
             db.Open("Provider=Search.CollatorDSO.1;Extended Properties='Application=Windows';");
 
-            // Query 1: Tally Company.1800 / Company.900 folders
+            // Query 1: Tally Company.1800 / Company.900 folders (edition-matched)
             if (cap.IncludesTallyCompanies)
             {
+                string tallyFileFilter = cap.TallyEdition switch
+                {
+                    TallyEditionModeV380.TallyPrime1800 => "System.FileName = 'Company.1800'",
+                    TallyEditionModeV380.TallyErp900 => "System.FileName = 'Company.900'",
+                    _ => "(System.FileName = 'Company.1800' OR System.FileName = 'Company.900')"
+                };
                 string tallySql =
                     $"SELECT TOP {MaxSystemSearchHits} System.ItemPathDisplay " +
                     "FROM SYSTEMINDEX " +
-                    "WHERE scope='file:' AND (System.FileName = 'Company.1800' OR System.FileName = 'Company.900') " +
+                    $"WHERE scope='file:' AND {tallyFileFilter} " +
                     "ORDER BY System.DateModified DESC";
 
                 foreach (string filePath in ExecuteAdodbPathQuery(db, tallySql, ct))
@@ -2560,7 +2759,8 @@ internal static class DeskSpacePinnedAppFilesV380
                     string? folder = System.IO.Path.GetDirectoryName(filePath);
                     if (!string.IsNullOrWhiteSpace(folder) &&
                         TryParseTallyCompanyFolder(folder, out var companyItem, isRecent: false, sourceBadge: "Windows Search") &&
-                        companyItem != null)
+                        companyItem != null &&
+                        IsTallyCompanyCompatibleWithCapability(cap, companyItem))
                     {
                         hits.Add(companyItem);
                         if (hits.Count >= MaxSystemSearchHits)
@@ -2569,10 +2769,13 @@ internal static class DeskSpacePinnedAppFilesV380
                 }
             }
 
-            // Query 2: Primary high-signal extensions first, then noisier extensions if budget remains
+            // Query 2: Primary high-signal extensions first; include noisy extensions ONLY for IDE/text apps
             var singleDotPrimary = new List<string>();
             var singleDotNoisy = new List<string>();
             var compoundFilePatterns = new List<string>();
+            bool allowNoisy = cap.Kind == PinnedAppKindV380.IdeWorkspace ||
+                              string.Equals(cap.ExeName, "notepad.exe", StringComparison.OrdinalIgnoreCase) ||
+                              cap.Extensions.All(NoisyGlobalExtensions.Contains);
 
             foreach (string ext in cap.Extensions)
             {
@@ -2587,9 +2790,14 @@ internal static class DeskSpacePinnedAppFilesV380
                     continue;
 
                 if (NoisyGlobalExtensions.Contains(norm))
-                    singleDotNoisy.Add($"'{norm}'");
+                {
+                    if (allowNoisy)
+                        singleDotNoisy.Add($"'{norm}'");
+                }
                 else
+                {
                     singleDotPrimary.Add($"'{norm}'");
+                }
             }
 
             void RunExtensionBatch(List<string> extLiterals, List<string> extraClauses)
@@ -2615,7 +2823,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 {
                     if (IsNoiseSystemPath(path) || !SafeFileExists(path) || IsReparsePoint(path))
                         continue;
-                    if (!IsAllowedForCapability(cap, path, checkExtensionMatch: true))
+                    if (!IsAllowedForSystemCrawl(cap, path, allowBackupArchives: true))
                         continue;
 
                     hits.Add(CreateFileItem(path, SafeGetFileWriteTimeUtc(path), isRecent: false, sourceBadge: "Windows Search"));
@@ -2626,7 +2834,7 @@ internal static class DeskSpacePinnedAppFilesV380
 
             RunExtensionBatch(singleDotPrimary, compoundFilePatterns);
 
-            if (hits.Count < MaxSystemSearchHits && singleDotNoisy.Count > 0)
+            if (hits.Count < MaxSystemSearchHits && allowNoisy && singleDotNoisy.Count > 0)
                 RunExtensionBatch(singleDotNoisy, new List<string>());
         }
         catch (OperationCanceledException)
@@ -2782,7 +2990,8 @@ internal static class DeskSpacePinnedAppFilesV380
                     string? dir = System.IO.Path.GetDirectoryName(path);
                     if (!string.IsNullOrWhiteSpace(dir) &&
                         TryParseTallyCompanyFolder(dir, out var tallyItem, isRecent: false, sourceBadge: sourceBadge) &&
-                        tallyItem != null)
+                        tallyItem != null &&
+                        IsTallyCompanyCompatibleWithCapability(cap, tallyItem))
                     {
                         results.Add(tallyItem);
                     }
@@ -2790,7 +2999,7 @@ internal static class DeskSpacePinnedAppFilesV380
                 }
             }
 
-            if (SafeFileExists(path) && !IsReparsePoint(path) && IsAllowedForCapability(cap, path, checkExtensionMatch: true))
+            if (SafeFileExists(path) && !IsReparsePoint(path) && IsAllowedForSystemCrawl(cap, path, allowBackupArchives: true))
                 results.Add(CreateFileItem(path, SafeGetFileWriteTimeUtc(path), isRecent: false, sourceBadge: sourceBadge));
 
             if (results.Count >= MaxSystemSearchHits)
@@ -2855,7 +3064,8 @@ internal static class DeskSpacePinnedAppFilesV380
                     {
                         if (cap.IncludesTallyCompanies &&
                             TryParseTallyCompanyFolder(entry.Path, out var tallyItem, isRecent: false, sourceBadge: "DeskSpace Index") &&
-                            tallyItem != null)
+                            tallyItem != null &&
+                            IsTallyCompanyCompatibleWithCapability(cap, tallyItem))
                         {
                             results.Add(tallyItem);
                         }
@@ -2869,7 +3079,8 @@ internal static class DeskSpacePinnedAppFilesV380
                         string? parent = System.IO.Path.GetDirectoryName(entry.Path);
                         if (!string.IsNullOrWhiteSpace(parent) &&
                             TryParseTallyCompanyFolder(parent, out var tallyItem, isRecent: false, sourceBadge: "DeskSpace Index") &&
-                            tallyItem != null)
+                            tallyItem != null &&
+                            IsTallyCompanyCompatibleWithCapability(cap, tallyItem))
                         {
                             results.Add(tallyItem);
                         }
@@ -2879,7 +3090,7 @@ internal static class DeskSpacePinnedAppFilesV380
                     if (MatchesCapabilityExtension(entry.Path, cap.Extensions) &&
                         SafeFileExists(entry.Path) &&
                         !IsReparsePoint(entry.Path) &&
-                        IsAllowedForCapability(cap, entry.Path, checkExtensionMatch: true))
+                        IsAllowedForSystemCrawl(cap, entry.Path, allowBackupArchives: true))
                     {
                         results.Add(CreateFileItem(entry.Path, SafeGetFileWriteTimeUtc(entry.Path), isRecent: false, sourceBadge: "DeskSpace Index"));
                         if (results.Count >= MaxSystemSearchHits)
@@ -2938,7 +3149,8 @@ internal static class DeskSpacePinnedAppFilesV380
                     TryParseTallyCompanyFolder(dir, out var tallySelf, isRecent: false, sourceBadge: "Drive Scan") &&
                     tallySelf != null)
                 {
-                    onItem(tallySelf);
+                    if (IsTallyCompanyCompatibleWithCapability(cap, tallySelf))
+                        onItem(tallySelf);
                     continue;
                 }
 
@@ -3006,7 +3218,7 @@ internal static class DeskSpacePinnedAppFilesV380
                     if ((attrs & (FileAttributes.Hidden | FileAttributes.System | FileAttributes.Temporary)) != 0)
                         continue;
 
-                    if (IsAllowedForCapability(cap, entry, checkExtensionMatch: true))
+                    if (IsAllowedForSystemCrawl(cap, entry, allowBackupArchives: true))
                         onItem(CreateFileItem(entry, SafeGetFileWriteTimeUtc(entry), isRecent: false, sourceBadge: "Drive Scan"));
                 }
             }
@@ -3218,7 +3430,7 @@ internal static class DeskSpacePinnedAppFilesV380
         try
         {
             Process.Start(new ProcessStartInfo(item.FullPath) { UseShellExecute = true });
-            RecordLaunch(cap.ExeName, item.FullPath, historyStoragePath);
+            RecordLaunch(GetHistoryKey(cap), item.FullPath, historyStoragePath);
             return true;
         }
         catch
@@ -4294,6 +4506,178 @@ internal static class DeskSpacePinnedAppFilesV380
         return string.IsNullOrEmpty(friendly) ? rawName.Trim() : friendly;
     }
 
+    internal static string? TryParseShortcutTargetBinary(string lnkPath) =>
+        TryParseShortcutTargetBinary(lnkPath, out _);
+
+    private static string? TryParseShortcutTargetBinary(string lnkPath, out bool isNetworkTarget)
+    {
+        isNetworkTarget = false;
+        if (string.IsNullOrWhiteSpace(lnkPath) || !SafeFileExists(lnkPath))
+            return null;
+
+        try
+        {
+            using var fs = new FileStream(lnkPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            int toRead = (int)Math.Min(4096, fs.Length);
+            if (toRead < 0x4C)
+                return null;
+
+            byte[] buf = new byte[toRead];
+            int len = ReadUpTo(fs, buf);
+            if (len < 0x4C || BitConverter.ToInt32(buf, 0) != 0x4C)
+                return null;
+
+            // Validate Shell Link CLSID: 00021401-0000-0000-C000-000000000046
+            byte[] expectedClsid = { 0x01, 0x14, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 };
+            for (int k = 0; k < expectedClsid.Length; k++)
+            {
+                if (buf[4 + k] != expectedClsid[k])
+                    return null;
+            }
+
+            uint linkFlags = BitConverter.ToUInt32(buf, 20);
+            int pos = 0x4C;
+            if ((linkFlags & 0x01u) != 0) // HasLinkTargetIDList
+            {
+                if (pos + 2 > len) return null;
+                ushort idListSize = BitConverter.ToUInt16(buf, pos);
+                pos += 2 + idListSize;
+            }
+
+            if ((linkFlags & 0x02u) == 0 || pos + 28 > len) // HasLinkInfo
+                return null;
+
+            int infoStart = pos;
+            int infoHeaderSize = BitConverter.ToInt32(buf, pos + 4);
+            int infoFlags = BitConverter.ToInt32(buf, pos + 8);
+            if ((infoFlags & 0x01) == 0)
+            {
+                if ((infoFlags & 0x02) != 0)
+                    isNetworkTarget = true;
+                return null;
+            }
+
+            string ReadZAnsi(int offset)
+            {
+                if (offset <= 0 || infoStart + offset >= len) return string.Empty;
+                int s = infoStart + offset;
+                int e = s;
+                while (e < len && buf[e] != 0) e++;
+                return e > s ? Encoding.Default.GetString(buf, s, e - s) : string.Empty;
+            }
+
+            string ReadZUnicode(int offset)
+            {
+                if (offset <= 0 || infoStart + offset + 1 >= len) return string.Empty;
+                int s = infoStart + offset;
+                int e = s;
+                while (e + 1 < len && (buf[e] != 0 || buf[e + 1] != 0)) e += 2;
+                return e > s ? Encoding.Unicode.GetString(buf, s, e - s) : string.Empty;
+            }
+
+            string basePath = string.Empty;
+            string suffix = string.Empty;
+            if (infoHeaderSize >= 0x24 && pos + 36 <= len)
+            {
+                basePath = ReadZUnicode(BitConverter.ToInt32(buf, pos + 28));
+                suffix = ReadZUnicode(BitConverter.ToInt32(buf, pos + 32));
+            }
+            if (string.IsNullOrEmpty(basePath))
+            {
+                basePath = ReadZAnsi(BitConverter.ToInt32(buf, pos + 16));
+                suffix = ReadZAnsi(BitConverter.ToInt32(buf, pos + 24));
+            }
+
+            string combined = string.IsNullOrEmpty(suffix) ? basePath : basePath + suffix;
+            if (string.IsNullOrWhiteSpace(combined) || combined.StartsWith(@"\\", StringComparison.Ordinal))
+                return null;
+
+            return NormalizeFullPathSafe(combined);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static List<(string Target, DateTime LnkTimeUtc, bool IsDir)> GetRecentResolvedTargetsCached()
+    {
+        lock (RecentShortcutsCacheLock)
+        {
+            if (RecentShortcutsCache.FetchedUtc != DateTime.MinValue &&
+                (DateTime.UtcNow - RecentShortcutsCache.FetchedUtc).TotalSeconds < 60)
+            {
+                return new List<(string, DateTime, bool)>(RecentShortcutsCache.Items);
+            }
+        }
+
+        var resolved = new List<(string Target, DateTime LnkTimeUtc, bool IsDir)>();
+        try
+        {
+            string recentDir = Environment.GetFolderPath(Environment.SpecialFolder.Recent);
+            if (!string.IsNullOrWhiteSpace(recentDir) && Directory.Exists(recentDir))
+            {
+                string[] recentShortcuts = Directory.EnumerateFiles(recentDir, "*.lnk")
+                    .OrderByDescending(SafeGetFileWriteTimeUtc)
+                    .Take(80)
+                    .ToArray();
+
+                object? wsh = null;
+                int wshFallbackCount = 0;
+                try
+                {
+                    foreach (string lnk in recentShortcuts)
+                    {
+                        DateTime lnkTime = SafeGetFileWriteTimeUtc(lnk);
+                        string? fullTarget = TryParseShortcutTargetBinary(lnk, out bool isNet);
+                        if (isNet)
+                            continue;
+
+                        if (string.IsNullOrEmpty(fullTarget) && wshFallbackCount < 8)
+                        {
+                            if (wsh == null)
+                            {
+                                var shellType = Type.GetTypeFromProgID("WScript.Shell");
+                                if (shellType != null) wsh = Activator.CreateInstance(shellType);
+                            }
+                            if (wsh != null)
+                            {
+                                wshFallbackCount++;
+                                string rawTarget = ResolveShortcutWithShell(wsh, lnk);
+                                if (!string.IsNullOrWhiteSpace(rawTarget) &&
+                                    !rawTarget.StartsWith(@"\\", StringComparison.Ordinal))
+                                {
+                                    fullTarget = NormalizeFullPathSafe(rawTarget);
+                                }
+                            }
+                        }
+
+                        if (string.IsNullOrEmpty(fullTarget))
+                            continue;
+
+                        if (SafeDirectoryExists(fullTarget))
+                            resolved.Add((fullTarget, lnkTime, true));
+                        else if (SafeFileExists(fullTarget) && !IsReparsePoint(fullTarget))
+                            resolved.Add((fullTarget, lnkTime, false));
+                    }
+                }
+                finally
+                {
+                    ReleaseComObject(wsh);
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        lock (RecentShortcutsCacheLock)
+        {
+            RecentShortcutsCache = (DateTime.UtcNow, resolved);
+        }
+        return new List<(string, DateTime, bool)>(resolved);
+    }
+
     internal static bool TryGetCachedQuickArcFiles(
         string pinnedPath,
         out IReadOnlyList<PinnedAppFileItemV380> items)
@@ -4306,13 +4690,62 @@ internal static class DeskSpacePinnedAppFilesV380
         lock (QuickArcCacheLock)
         {
             if (QuickArcCache.TryGetValue(key, out var entry) &&
-                (DateTime.UtcNow - entry.FetchedUtc).TotalSeconds < 45)
+                (DateTime.UtcNow - entry.FetchedUtc).TotalSeconds < 90)
             {
                 items = entry.Items.ToArray();
                 return true;
             }
         }
         return false;
+    }
+
+    internal static bool TryGetPartialQuickArcFiles(
+        string pinnedPath,
+        out IReadOnlyList<PinnedAppFileItemV380> items)
+    {
+        items = Array.Empty<PinnedAppFileItemV380>();
+        string key = NormalizeFullPathSafe(pinnedPath);
+        if (string.IsNullOrEmpty(key))
+            return false;
+
+        lock (QuickArcCacheLock)
+        {
+            if (QuickArcPartialCache.TryGetValue(key, out var list) && list.Count > 0)
+            {
+                items = list.ToArray();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal static void PrewarmQuickArcApps(IEnumerable<string>? pinnedPaths)
+    {
+        if (pinnedPaths == null)
+            return;
+
+        int scheduled = 0;
+        foreach (string rawPath in pinnedPaths)
+        {
+            if (string.IsNullOrWhiteSpace(rawPath) || !SafeFileExists(rawPath))
+                continue;
+            if (TryGetCachedQuickArcFiles(rawPath, out _))
+                continue;
+
+            string key = NormalizeFullPathSafe(rawPath);
+            if (string.IsNullOrEmpty(key))
+                continue;
+
+            bool alreadyInFlight;
+            lock (QuickArcInFlightLock)
+                alreadyInFlight = QuickArcInFlightTasks.ContainsKey(key);
+            if (alreadyInFlight)
+                continue;
+
+            _ = GetQuickArcFilesAsync(rawPath, 250);
+            if (++scheduled >= 5)
+                break;
+        }
     }
 
     internal static async Task<IReadOnlyList<PinnedAppFileItemV380>> GetQuickArcFilesAsync(
@@ -4328,134 +4761,230 @@ internal static class DeskSpacePinnedAppFilesV380
             return cached.Take(maxItems).ToArray();
 
         string key = NormalizeFullPathSafe(pinnedPath);
-        return await Task.Run(() =>
+        Task<IReadOnlyList<PinnedAppFileItemV380>> sharedTask;
+        bool createdHere = false;
+
+        lock (QuickArcInFlightLock)
         {
-            ct.ThrowIfCancellationRequested();
-            var cap = ResolveCapability(pinnedPath);
-            var recent = DiscoverRecentItems(cap);
-            var extra = new List<PinnedAppFileItemV380>();
-
-            // Phase 1: Warm index + explicit app data roots for immediate full-arc population
-            foreach (var hit in QueryWarmSearchIndexV13(cap, ct))
+            if (QuickArcInFlightTasks.TryGetValue(key, out var existing))
             {
-                extra.Add(hit);
-                if (extra.Count >= MaxSystemSearchHits)
-                    break;
+                sharedTask = existing;
             }
-
-            foreach (string root in cap.ExtraDataRoots)
+            else
             {
-                if (ct.IsCancellationRequested)
-                    break;
-                if (!SafeDirectoryExists(root))
-                    continue;
+                sharedTask = RunSingleFlightQuickArcDiscoveryAsync(key, pinnedPath, onProgress);
+                QuickArcInFlightTasks[key] = sharedTask;
+                createdHere = true;
+            }
+        }
 
-                try
+        if (!createdHere && onProgress != null && TryGetPartialQuickArcFiles(pinnedPath, out var partial))
+        {
+            try { onProgress(partial.Take(maxItems).ToArray()); }
+            catch { }
+        }
+
+        IReadOnlyList<PinnedAppFileItemV380> fullResult = ct.CanBeCanceled
+            ? await sharedTask.WaitAsync(ct).ConfigureAwait(false)
+            : await sharedTask.ConfigureAwait(false);
+        return fullResult.Take(maxItems).ToArray();
+    }
+
+    private static Task<IReadOnlyList<PinnedAppFileItemV380>> RunSingleFlightQuickArcDiscoveryAsync(
+        string key,
+        string pinnedPath,
+        Action<IReadOnlyList<PinnedAppFileItemV380>>? onProgress)
+    {
+        return Task.Run(async () =>
+        {
+            try
+            {
+                const int fullBudget = 250;
+                var cap = ResolveCapability(pinnedPath);
+                var recent = DiscoverRecentItems(cap)
+                    .Where(x => IsItemStrictlyCompatible(cap, x, allowBackupArchives: false))
+                    .ToList();
+                var phase1Extra = new List<PinnedAppFileItemV380>();
+
+                foreach (var hit in QueryWarmSearchIndexV13(cap, CancellationToken.None))
                 {
-                    foreach (string dir in Directory.EnumerateDirectories(root).Take(250))
+                    if (IsItemStrictlyCompatible(cap, hit, allowBackupArchives: false))
                     {
-                        if (ct.IsCancellationRequested)
+                        phase1Extra.Add(hit);
+                        if (phase1Extra.Count >= MaxSystemSearchHits)
                             break;
+                    }
+                }
 
-                        if (cap.IncludesTallyCompanies)
+                foreach (string root in cap.ExtraDataRoots)
+                {
+                    if (!SafeDirectoryExists(root))
+                        continue;
+
+                    try
+                    {
+                        foreach (string dir in Directory.EnumerateDirectories(root).Take(250))
                         {
-                            if (TryParseTallyCompanyFolder(dir, out var tItem, isRecent: false, sourceBadge: "Tally Data") &&
-                                tItem != null)
+                            if (cap.IncludesTallyCompanies)
                             {
-                                extra.Add(tItem);
-                                continue;
-                            }
-
-                            try
-                            {
-                                foreach (string nested in Directory.EnumerateDirectories(dir).Take(60))
+                                if (TryParseTallyCompanyFolder(dir, out var tItem, isRecent: false, sourceBadge: "Tally Data") &&
+                                    tItem != null &&
+                                    IsTallyCompanyCompatibleWithCapability(cap, tItem))
                                 {
-                                    if (ct.IsCancellationRequested)
-                                        break;
-                                    if (TryParseTallyCompanyFolder(nested, out var nestedItem, isRecent: false, sourceBadge: "Tally Data") &&
-                                        nestedItem != null)
+                                    phase1Extra.Add(tItem);
+                                    continue;
+                                }
+
+                                try
+                                {
+                                    foreach (string nested in Directory.EnumerateDirectories(dir).Take(60))
                                     {
-                                        extra.Add(nestedItem);
+                                        if (TryParseTallyCompanyFolder(nested, out var nestedItem, isRecent: false, sourceBadge: "Tally Data") &&
+                                            nestedItem != null &&
+                                            IsTallyCompanyCompatibleWithCapability(cap, nestedItem))
+                                        {
+                                            phase1Extra.Add(nestedItem);
+                                        }
                                     }
                                 }
+                                catch
+                                {
+                                }
                             }
-                            catch
+                            else if (cap.IncludesProjectFolders &&
+                                     IsLikelyProjectFolder(dir, out string projBadge))
+                            {
+                                string trimmed = TrimTrailingSeparatorsUnlessDriveRoot(dir);
+                                phase1Extra.Add(new PinnedAppFileItemV380(
+                                    DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
+                                    FullPath: trimmed,
+                                    ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
+                                    KindBadge: projBadge,
+                                    SortTimeUtc: SafeGetDirectoryWriteTimeUtc(trimmed),
+                                    IsRecent: false,
+                                    SourceBadge: "Project Folder",
+                                    IsDirectory: true));
+                            }
+                        }
+
+                        foreach (string file in Directory.EnumerateFiles(root).Take(250))
+                        {
+                            if (IsAllowedForSystemCrawl(cap, file, allowBackupArchives: false))
+                                phase1Extra.Add(CreateFileItem(file, SafeGetFileWriteTimeUtc(file), isRecent: false, sourceBadge: "App Data"));
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                var phase1 = MergeAndRank(recent, phase1Extra, fullBudget)
+                    .Where(x => IsItemStrictlyCompatible(cap, x, allowBackupArchives: false))
+                    .ToList();
+                if (!string.IsNullOrEmpty(key) && phase1.Count > 0)
+                {
+                    lock (QuickArcCacheLock)
+                        QuickArcPartialCache[key] = phase1;
+                    if (onProgress != null)
+                    {
+                        try { onProgress(phase1.ToArray()); }
+                        catch { }
+                    }
+                }
+
+                // Phase 2: bounded hard-deadline full system scan (never hangs on Windows Search or COM)
+                var phase2Lock = new object();
+                var phase2Extra = new List<PinnedAppFileItemV380>(phase1Extra);
+                var phase2Cts = new CancellationTokenSource(2200);
+                var p2Ct = phase2Cts.Token;
+
+                var phase2Task = Task.Run(() =>
+                {
+                    try
+                    {
+                        foreach (var hit in QueryWindowsSearchSystemIndex(cap, p2Ct))
+                        {
+                            if (IsItemStrictlyCompatible(cap, hit, allowBackupArchives: false))
+                            {
+                                lock (phase2Lock) phase2Extra.Add(hit);
+                            }
+                        }
+
+                        foreach (var hit in QueryDeskSpaceDiskSearchReflection(cap, p2Ct))
+                        {
+                            if (IsItemStrictlyCompatible(cap, hit, allowBackupArchives: false))
+                            {
+                                lock (phase2Lock) phase2Extra.Add(hit);
+                            }
+                        }
+
+                        int soFar;
+                        lock (phase2Lock) soFar = recent.Count + phase2Extra.Count;
+                        if (soFar < 40 && !p2Ct.IsCancellationRequested)
+                        {
+                            using var driveCts = CancellationTokenSource.CreateLinkedTokenSource(p2Ct);
+                            driveCts.CancelAfter(1400);
+                            try
+                            {
+                                RunBoundedDriveEnumeration(cap, item =>
+                                {
+                                    if (IsItemStrictlyCompatible(cap, item, allowBackupArchives: false))
+                                    {
+                                        lock (phase2Lock) phase2Extra.Add(item);
+                                    }
+                                }, () => { }, driveCts.Token);
+                            }
+                            catch (OperationCanceledException)
                             {
                             }
                         }
-                        else if (cap.IncludesProjectFolders &&
-                                 IsLikelyProjectFolder(dir, out string projBadge))
-                        {
-                            string trimmed = TrimTrailingSeparatorsUnlessDriveRoot(dir);
-                            extra.Add(new PinnedAppFileItemV380(
-                                DisplayName: ResolveInAppDisplayName(trimmed, isDirectory: true),
-                                FullPath: trimmed,
-                                ParentFolder: System.IO.Path.GetDirectoryName(trimmed) ?? string.Empty,
-                                KindBadge: projBadge,
-                                SortTimeUtc: SafeGetDirectoryWriteTimeUtc(trimmed),
-                                IsRecent: false,
-                                SourceBadge: "Project Folder",
-                                IsDirectory: true));
-                        }
                     }
-
-                    foreach (string file in Directory.EnumerateFiles(root).Take(250))
+                    catch (OperationCanceledException)
                     {
-                        if (ct.IsCancellationRequested)
-                            break;
-                        if (IsAllowedForCapability(cap, file, checkExtensionMatch: true))
-                            extra.Add(CreateFileItem(file, SafeGetFileWriteTimeUtc(file), isRecent: false, sourceBadge: "App Data"));
+                    }
+                    catch
+                    {
+                    }
+                    finally
+                    {
+                        try { phase2Cts.Dispose(); }
+                        catch (ObjectDisposedException) { }
+                    }
+                });
+
+                await Task.WhenAny(phase2Task, Task.Delay(2200)).ConfigureAwait(false);
+                try { phase2Cts.Cancel(); }
+                catch (ObjectDisposedException) { }
+
+                List<PinnedAppFileItemV380> extraSnapshot;
+                lock (phase2Lock)
+                    extraSnapshot = phase2Extra.ToList();
+
+                var ranked = MergeAndRank(recent, extraSnapshot, fullBudget)
+                    .Where(x => IsItemStrictlyCompatible(cap, x, allowBackupArchives: false))
+                    .ToList();
+
+                if (!string.IsNullOrEmpty(key))
+                {
+                    lock (QuickArcCacheLock)
+                    {
+                        QuickArcPartialCache.Remove(key);
+                        if (QuickArcCache.Count >= 24 && !QuickArcCache.ContainsKey(key))
+                            QuickArcCache.Clear();
+                        QuickArcCache[key] = (DateTime.UtcNow, ranked);
                     }
                 }
-                catch
-                {
-                }
+                return (IReadOnlyList<PinnedAppFileItemV380>)ranked;
             }
-
-            var phase1 = MergeAndRank(recent, extra, maxItems);
-            if (phase1.Count > 0 && onProgress != null && !ct.IsCancellationRequested)
+            finally
             {
-                try { onProgress(phase1); }
-                catch { }
-            }
-
-            ct.ThrowIfCancellationRequested();
-
-            // Phase 2: Full system discovery across Windows Search + disk search + bounded scan
-            foreach (var hit in QueryWindowsSearchSystemIndex(cap, ct))
-                extra.Add(hit);
-
-            foreach (var hit in QueryDeskSpaceDiskSearchReflection(cap, ct))
-                extra.Add(hit);
-
-            var currentMerged = MergeAndRank(recent, extra, maxItems);
-            if (currentMerged.Count < Math.Min(maxItems, 40) && !ct.IsCancellationRequested)
-            {
-                using var scanCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                scanCts.CancelAfter(1600);
-                try
+                if (!string.IsNullOrEmpty(key))
                 {
-                    RunBoundedDriveEnumeration(cap, item => extra.Add(item), () => { }, scanCts.Token);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
+                    lock (QuickArcInFlightLock)
+                        QuickArcInFlightTasks.Remove(key);
                 }
             }
-
-            ct.ThrowIfCancellationRequested();
-            var ranked = MergeAndRank(recent, extra, maxItems);
-
-            if (!string.IsNullOrEmpty(key) && !ct.IsCancellationRequested)
-            {
-                lock (QuickArcCacheLock)
-                {
-                    if (QuickArcCache.Count >= 24 && !QuickArcCache.ContainsKey(key))
-                        QuickArcCache.Clear();
-                    QuickArcCache[key] = (DateTime.UtcNow, ranked);
-                }
-            }
-            return (IReadOnlyList<PinnedAppFileItemV380>)ranked;
-        }, ct).ConfigureAwait(false);
+        });
     }
 
     internal static bool TryOpenQuickArcItem(string pinnedPath, string targetPath, Window? owner = null)

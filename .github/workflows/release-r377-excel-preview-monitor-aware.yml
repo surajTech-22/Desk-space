@@ -371,11 +371,11 @@ jobs:
           if($latest.Major -ne 1 -or $latest.Minor -ne 5){
               throw 'Unexpected DeskSpace stable version family'
           }
-          $nextBuild=1155
+          $nextBuild=1156
           $version="1.5.$nextBuild"
           $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
           if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
-          foreach($tag in @('v1.5.1155','tester-v1.5.1155')){
+          foreach($tag in @('v1.5.1156','tester-v1.5.1156')){
             if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
               throw ('Refuse to overwrite existing release: '+$tag)
             }
@@ -609,7 +609,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1155: Applications sub-donut now shows real in-app names universally across every pinned app, file, project folder, and Tally company (from document/media/project/company metadata with clean friendly fallback) instead of raw folder codes, and removes the 4-item limit so you can scroll through all discovered compatible files (recent first) right inside the Depth-2 arc using the built-in wheel, touchpad, middle-scroll, and divider counters."
+              $notes="DeskSpace 1.5.1156: Fixed cross-app file mixing and slow/stuck Loading in the Applications Depth-2 sub-donut — each pinned app and edition (TallyPrime vs Tally.ERP 9, Winman CA ERP, Excel, Word, etc.) now isolates its own files, launch history, and data roots without pulling stray .xml/system noise or backup archives into the quick ring, pre-warms visible pinned apps, parses Recent shortcuts via fast managed binary IO, and enforces a 2.2s–3.0s hard watchdog so Loading never stalls."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Modern Suite & Pinned App Files" --notes $notes
               }else{
@@ -631,14 +631,14 @@ jobs:
               }
           }
           Write-Host "R377 Excel Preview & Monitor-Aware Widgets release SUCCESS: same SHA256 installer published to Tester and Stable."
-      - name: Send fresh SHA256-verified v1.5.1155 notification hints to both installed channels
+      - name: Send fresh SHA256-verified v1.5.1156 notification hints to both installed channels
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
-          foreach($hint in @('stable|v1.5.1155','tester|tester-v1.5.1155')){
+          foreach($hint in @('stable|v1.5.1156','tester|tester-v1.5.1156')){
             try{
-              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1155 available' }
+              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1156 available' }
               if($response.event -ne 'message'){throw ('Relay rejected '+$hint)}
               Write-Host ('ACKNOWLEDGED official release hint: '+$hint)
             }catch{
