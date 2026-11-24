@@ -8,6 +8,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -2127,6 +2128,332 @@ internal static class Program
         }
     }
 
+    private static void TestAppRemovalAndRadialInformationModesV380(Assembly asm)
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_UnpinRadial_" + Guid.NewGuid().ToString("N"));
+        Window? owner = null;
+        object? apps = null;
+        object? info = null;
+        try
+        {
+            Directory.CreateDirectory(tempRoot);
+            string appOne = Path.Combine(tempRoot, "Winman GST.exe");
+            string appTwo = Path.Combine(tempRoot, "TallyPrime.exe");
+            File.WriteAllText(appOne, "mock");
+            File.WriteAllText(appTwo, "mock");
+
+            // A. DeskSpacePinnedAppFilesV380.IsApplicationPinned & UnpinApplication (isolated widget-v3.json)
+            string settingsPath = Path.Combine(tempRoot, "widget-v3.json");
+            File.WriteAllText(settingsPath, JsonSerializer.Serialize(new { PinnedApps = new[] { appOne, appTwo } }));
+            var pinnedType = asm.GetType("DeskSpace.DeskSpacePinnedAppFilesV380", true)!;
+            var isPinned = pinnedType.GetMethod("IsApplicationPinned", AnyStatic)!;
+            var unpinApp = pinnedType.GetMethod("UnpinApplication", AnyStatic)!;
+            Check((bool)isPinned.Invoke(null, new object?[] { appOne, settingsPath })!,
+                "IsApplicationPinned must return true for appOne");
+            Check((bool)isPinned.Invoke(null, new object?[] { appTwo, settingsPath })!,
+                "IsApplicationPinned must return true for appTwo");
+            Check((bool)unpinApp.Invoke(null, new object?[] { appOne, settingsPath })!,
+                "UnpinApplication must return true when removing appOne");
+            Check(!(bool)isPinned.Invoke(null, new object?[] { appOne, settingsPath })!,
+                "IsApplicationPinned must return false for appOne after UnpinApplication");
+            Check((bool)isPinned.Invoke(null, new object?[] { appTwo, settingsPath })!,
+                "appTwo must remain pinned after unpinning appOne");
+            Check(!(bool)unpinApp.Invoke(null, new object?[] { appOne, settingsPath })!,
+                "Second UnpinApplication call on removed appOne must return false");
+
+            // B. DeskSpaceApplicationsV55.UnpinAppV380
+            owner = new Window
+            {
+                Width = 408,
+                Height = 408,
+                Left = 1512,
+                Top = 423,
+                WindowStyle = WindowStyle.None,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+                AllowsTransparency = true,
+                Background = System.Windows.Media.Brushes.Transparent
+            };
+            var mutablePins = new List<string> { appOne, appTwo };
+            Func<IReadOnlyList<string>> getPins = () => mutablePins;
+            Action<string> noopAdd = _ => { };
+            Action<string> removePin = p => mutablePins.RemoveAll(x => string.Equals(x, p, StringComparison.OrdinalIgnoreCase));
+            Action noopSearch = () => { };
+
+            var appsType = asm.GetType("DeskSpace.DeskSpaceApplicationsV55", true)!;
+            apps = Activator.CreateInstance(appsType, new object[] { owner, getPins, noopAdd, removePin, noopSearch })!;
+            appsType.GetField("group", AnyInstance)!.SetValue(apps, "pinned");
+            appsType.GetField("activeAppPath", AnyInstance)!.SetValue(apps, appOne);
+            appsType.GetField("activeAppCenter", AnyInstance)!.SetValue(apps, 166.0);
+            appsType.GetMethod("Render", AnyInstance)!.Invoke(apps, null);
+
+            var v55HitZonesField = appsType.GetField("hitZones", AnyInstance)!;
+            var hitZonesBefore = (IList)v55HitZonesField.GetValue(apps)!;
+            int launchBefore = 0;
+            foreach (object z in hitZonesBefore)
+            {
+                if ((string)z.GetType().GetField("Item2")!.GetValue(z)! == "launch")
+                    launchBefore++;
+            }
+            Check(launchBefore == 2, $"Expected 2 launch wedges before UnpinAppV380, got {launchBefore}");
+
+            bool v55Unpinned = (bool)appsType.GetMethod("UnpinAppV380", AnyInstance)!.Invoke(apps, new object[] { appOne })!;
+            Check(v55Unpinned, "DeskSpaceApplicationsV55.UnpinAppV380 must return true");
+            Check(mutablePins.Count == 1 && string.Equals(mutablePins[0], appTwo, StringComparison.OrdinalIgnoreCase),
+                "UnpinAppV380 must invoke removePin and leave only appTwo");
+            Check(string.IsNullOrEmpty((string)appsType.GetField("activeAppPath", AnyInstance)!.GetValue(apps)!),
+                "UnpinAppV380 must clear activeAppPath when active app is unpinned");
+
+            var hitZonesAfter = (IList)v55HitZonesField.GetValue(apps)!;
+            var remainingLaunchPaths = new List<string>();
+            foreach (object z in hitZonesAfter)
+            {
+                if ((string)z.GetType().GetField("Item2")!.GetValue(z)! == "launch")
+                    remainingLaunchPaths.Add((string)z.GetType().GetField("Item3")!.GetValue(z)!);
+            }
+            Check(remainingLaunchPaths.Count == 1 && string.Equals(remainingLaunchPaths[0], appTwo, StringComparison.OrdinalIgnoreCase),
+                $"Expected 1 remaining launch wedge (appTwo) after UnpinAppV380, got {remainingLaunchPaths.Count}");
+
+            // C. DeskSpaceInformationTabV380 App Management (isolated information-apps-v382.json)
+            var tabType = asm.GetType("DeskSpace.DeskSpaceInformationTabV380", true)!;
+            string infoConfigPath = Path.Combine(tempRoot, "information-apps-v382.json");
+            File.WriteAllText(infoConfigPath, "{\"Initialized\":true,\"AppPaths\":[],\"RemovedAppKeys\":[]}");
+
+            var tryAddInfoApp = tabType.GetMethod("TryAddAppToInformation", AnyStatic)!;
+            var getSelectedInfoApps = tabType.GetMethod("GetSelectedAppsForInformation", AnyStatic)!;
+            var removeInfoApp = tabType.GetMethod("RemoveAppFromInformation", AnyStatic)!;
+
+            var wordArgs = new object?[] { @"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE", null, infoConfigPath };
+            bool wordAdded = (bool)tryAddInfoApp.Invoke(null, wordArgs)!;
+            Check(!wordAdded &&
+                  wordArgs[1] != null &&
+                  !GetProp<bool>(wordArgs[1]!, "IsSupported") &&
+                  GetProp<string>(wordArgs[1]!, "Reason").Contains("prose", StringComparison.OrdinalIgnoreCase),
+                "TryAddAppToInformation must reject WINWORD.EXE with unstructured prose reason");
+
+            string wgstLnk = Path.Combine(tempRoot, "Winman GST.lnk");
+            // Mock .lnk files are not real shortcuts, so use a second app that resolves by name (Winman CA ERP).
+            string tallyLnk = Path.Combine(tempRoot, "Winman CA ERP.lnk");
+            File.WriteAllText(wgstLnk, "mock");
+            File.WriteAllText(tallyLnk, "mock");
+
+            Check((bool)tryAddInfoApp.Invoke(null, new object?[] { wgstLnk, null, infoConfigPath })!,
+                "TryAddAppToInformation must accept Winman GST.lnk");
+            Check((bool)tryAddInfoApp.Invoke(null, new object?[] { tallyLnk, null, infoConfigPath })!,
+                "TryAddAppToInformation must accept Winman CA ERP.lnk");
+
+            var selectedTwo = (List<(string Label, string Path)>)getSelectedInfoApps.Invoke(null, new object?[] { infoConfigPath })!;
+            Check(selectedTwo.Count == 2, $"Expected 2 selected Information apps, got {selectedTwo.Count}");
+
+            Check((bool)removeInfoApp.Invoke(null, new object?[] { tallyLnk, infoConfigPath })!,
+                "RemoveAppFromInformation must return true when removing Winman CA ERP.lnk");
+            var selectedOne = (List<(string Label, string Path)>)getSelectedInfoApps.Invoke(null, new object?[] { infoConfigPath })!;
+            Check(selectedOne.Count == 1 && string.Equals(selectedOne[0].Path, wgstLnk, StringComparison.OrdinalIgnoreCase),
+                $"Expected 1 remaining Information app (Winman GST), got {selectedOne.Count}");
+
+            string removedKey = (string)tabType.GetMethod("GetAppPreferenceKey", AnyStatic)!.Invoke(null, new object[] { tallyLnk })!;
+            string savedInfoCfg = File.ReadAllText(infoConfigPath);
+            Check(savedInfoCfg.Contains("RemovedAppKeys", StringComparison.Ordinal) &&
+                  savedInfoCfg.Contains(removedKey, StringComparison.OrdinalIgnoreCase),
+                "Removed app key must persist in RemovedAppKeys inside information-apps config JSON");
+
+            // D. DeskSpaceInformationV36 Multi-App, 1-App, and Clean Below-Circle Shelf
+            var evalElig = tabType.GetMethod("EvaluateAppEligibility", AnyStatic)!;
+            var cacheApp = tabType.GetMethod("CacheAppInformationForApp", AnyStatic)!;
+            var wgstElig = evalElig.Invoke(null, new object[] { wgstLnk })!;
+            var tallyElig = evalElig.Invoke(null, new object[] { tallyLnk })!;
+            var headerType = asm.GetType("DeskSpace.AppInfoHeaderFieldV380", true)!;
+            var recordType = asm.GetType("DeskSpace.AppInfoFileRecordV380", true)!;
+            var resultType = asm.GetType("DeskSpace.AppInfoDiscoveryResultV380", true)!;
+
+            var wgstHeaders = Array.CreateInstance(headerType, 2);
+            wgstHeaders.SetValue(Activator.CreateInstance(headerType, new object[] { "GSTIN", 10, 10, "29AABCT0000A1Z5", true })!, 0);
+            wgstHeaders.SetValue(Activator.CreateInstance(headerType, new object[] { "Trade Name", 10, 10, "Synthetic Demo Co 0", true })!, 1);
+
+            var wgstRecords = Array.CreateInstance(recordType, 10);
+            string firstWgstFile = Path.Combine(tempRoot, "SyntheticDemo_0.wgst");
+            for (int i = 0; i < 10; i++)
+            {
+                string fPath = Path.Combine(tempRoot, $"SyntheticDemo_{i}.wgst");
+                string coName = $"Synthetic Demo Co {i}";
+                var fieldsDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["GSTIN"] = "29AABCT0000A1Z5",
+                    ["Trade Name"] = coName
+                };
+                var ordered = new List<KeyValuePair<string, string>>
+                {
+                    new("GSTIN", "29AABCT0000A1Z5"),
+                    new("Trade Name", coName)
+                };
+                wgstRecords.SetValue(Activator.CreateInstance(recordType, new object[]
+                {
+                    coName, fPath, ".WGST", DateTime.UtcNow.AddMinutes(-i), fieldsDict, ordered
+                })!, i);
+            }
+
+            var wgstResult = Activator.CreateInstance(resultType, new object[]
+            {
+                wgstElig, 10, 10, true, "OK", wgstHeaders, wgstRecords, new[] { "GSTIN", "Trade Name" }
+            })!;
+            cacheApp.Invoke(null, new object[] { wgstLnk, wgstResult });
+
+            var tallyHeaders = Array.CreateInstance(headerType, 2);
+            tallyHeaders.SetValue(Activator.CreateInstance(headerType, new object[] { "Company Name", 2, 2, "Demo Tally Co 0", true })!, 0);
+            tallyHeaders.SetValue(Activator.CreateInstance(headerType, new object[] { "Books Begin", 2, 2, "01-Apr-2025", true })!, 1);
+            var tallyRecords = Array.CreateInstance(recordType, 2);
+            for (int i = 0; i < 2; i++)
+            {
+                string fPath = Path.Combine(tempRoot, $"Cmp_1000{i}.1800");
+                var fieldsDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Company Name"] = $"Demo Tally Co {i}",
+                    ["Books Begin"] = "01-Apr-2025"
+                };
+                var ordered = new List<KeyValuePair<string, string>>
+                {
+                    new("Company Name", $"Demo Tally Co {i}"),
+                    new("Books Begin", "01-Apr-2025")
+                };
+                tallyRecords.SetValue(Activator.CreateInstance(recordType, new object[]
+                {
+                    $"Demo Tally Co {i}", fPath, ".1800", DateTime.UtcNow.AddMinutes(-i), fieldsDict, ordered
+                })!, i);
+            }
+            var tallyResult = Activator.CreateInstance(resultType, new object[]
+            {
+                tallyElig, 2, 2, true, "OK", tallyHeaders, tallyRecords, new[] { "Company Name", "Books Begin" }
+            })!;
+            cacheApp.Invoke(null, new object[] { tallyLnk, tallyResult });
+
+            var infoType = asm.GetType("DeskSpace.DeskSpaceInformationV36", true)!;
+            info = Activator.CreateInstance(
+                infoType,
+                AnyInstance,
+                null,
+                new object[] { owner, new Action(() => { }), new Action(() => { }) },
+                null)!;
+
+            var arcAppsField = infoType.GetField("arcApps", AnyInstance)!;
+            var activeAppField = infoType.GetField("activeArcAppPath", AnyInstance)!;
+            var startIndexField = infoType.GetField("startIndex", AnyInstance)!;
+            var filePageField = infoType.GetField("filePage", AnyInstance)!;
+            var renderArc = infoType.GetMethod("RenderArc", AnyInstance)!;
+            var selectArcApp = infoType.GetMethod("SelectArcApp", AnyInstance)!;
+            var arcHitZonesField = infoType.GetField("arcHitZones", AnyInstance)!;
+            var arcCanvas = (Canvas)infoType.GetField("arcCanvas", AnyInstance)!.GetValue(info)!;
+
+            static List<(int Depth, string Kind, string AppPath, string FilePath)> ReadArcHits(IList raw)
+            {
+                var list = new List<(int Depth, string Kind, string AppPath, string FilePath)>();
+                foreach (object z in raw)
+                {
+                    var t = z.GetType();
+                    int d = (int)t.GetField("Item2")!.GetValue(z)!;
+                    string k = (string)t.GetField("Item3")!.GetValue(z)!;
+                    string ap = (string)t.GetField("Item5")!.GetValue(z)!;
+                    string fp = (string)t.GetField("Item6")!.GetValue(z)!;
+                    list.Add((d, k, ap, fp));
+                }
+                return list;
+            }
+
+            // Multi-App (2 apps): Depth-0 renders infoapp + manageapps, no Depth-1 until selected
+            arcAppsField.SetValue(info, new List<(string Label, string Path)> { ("Winman GST", wgstLnk), ("TallyPrime", tallyLnk) });
+            activeAppField.SetValue(info, "");
+            startIndexField.SetValue(info, 0);
+            filePageField.SetValue(info, 0);
+            renderArc.Invoke(info, null);
+
+            var multiD0 = ReadArcHits((IList)arcHitZonesField.GetValue(info)!);
+            Check(multiD0.Count(x => x.Depth == 0 && x.Kind == "infoapp") == 2 &&
+                  multiD0.Count(x => x.Depth == 0 && x.Kind == "manageapps") == 1 &&
+                  multiD0.Count(x => x.Depth == 1) == 0,
+                "Multi-app Information Depth-0 must render 2 infoapp wedges + manageapps and 0 Depth-1 wedges");
+
+            selectArcApp.Invoke(info, new object[] { wgstLnk, -90.0 });
+            var multiD1 = ReadArcHits((IList)arcHitZonesField.GetValue(info)!);
+            Check(multiD1.Count(x => x.Depth == 1 && x.Kind == "infofile") > 0 &&
+                  multiD1.Count(x => x.Depth == 1 && x.Kind == "choosefields") == 1,
+                "Selecting an app in Multi-app mode must render Depth-1 infofile wedges + choosefields wedge");
+            int multiHiddenBadges = arcCanvas.Children.OfType<FrameworkElement>()
+                .Count(b => (b.Tag as string) == "DeskSpaceHiddenCountInline");
+            Check(multiHiddenBadges == 1,
+                $"Expected 1 DeskSpaceHiddenCountInline counter on Multi-app Depth-1 overflow, got {multiHiddenBadges}");
+
+            // Single-App (1 app): Depth-0 directly renders infofile wedges + manageapps + overflow counter, 0 Depth-1 wedges
+            arcAppsField.SetValue(info, new List<(string Label, string Path)> { ("Winman GST", wgstLnk) });
+            activeAppField.SetValue(info, "");
+            startIndexField.SetValue(info, 0);
+            filePageField.SetValue(info, 0);
+            renderArc.Invoke(info, null);
+
+            var singleHits = ReadArcHits((IList)arcHitZonesField.GetValue(info)!);
+            Check(singleHits.Count(x => x.Depth == 0 && x.Kind == "infofile") > 0 &&
+                  singleHits.Count(x => x.Depth == 0 && x.Kind == "manageapps") == 1 &&
+                  singleHits.Count(x => x.Kind == "infoapp") == 0 &&
+                  singleHits.Count(x => x.Depth == 1) == 0,
+                "Single-app Information mode must directly render Depth-0 infofile wedges + manageapps with 0 Depth-1 wedges");
+            int singleHiddenBadges = arcCanvas.Children.OfType<FrameworkElement>()
+                .Count(b => (b.Tag as string) == "DeskSpaceHiddenCountInline");
+            Check(singleHiddenBadges == 1,
+                $"Expected 1 DeskSpaceHiddenCountInline counter on Single-app Depth-0 overflow, got {singleHiddenBadges}");
+
+            // Clean Below-Circle Shelf for selected file
+            infoType.GetMethod("OpenSelectedAppFileBelowCircle", AnyInstance)!
+                .Invoke(info, new object[] { wgstLnk, firstWgstFile });
+            var shelf = (System.Windows.Controls.Primitives.Popup)infoType.GetField("shelf", AnyInstance)!.GetValue(info)!;
+            var shelfBody = (StackPanel)infoType.GetField("shelfBody", AnyInstance)!.GetValue(info)!;
+            Check(shelf.IsOpen, "OpenSelectedAppFileBelowCircle must open shelf below circle");
+
+            static void CollectControls(DependencyObject? node, List<System.Windows.Controls.CheckBox> checkBoxes, List<string> texts, HashSet<object> visited)
+            {
+                if (node == null || !visited.Add(node)) return;
+                if (node is System.Windows.Controls.CheckBox cb) checkBoxes.Add(cb);
+                if (node is TextBlock tb && !string.IsNullOrWhiteSpace(tb.Text)) texts.Add(tb.Text);
+                foreach (object child in LogicalTreeHelper.GetChildren(node))
+                {
+                    if (child is DependencyObject dep)
+                        CollectControls(dep, checkBoxes, texts, visited);
+                }
+                if (node is Visual or System.Windows.Media.Media3D.Visual3D)
+                {
+                    int vc = VisualTreeHelper.GetChildrenCount(node);
+                    for (int i = 0; i < vc; i++)
+                        CollectControls(VisualTreeHelper.GetChild(node, i), checkBoxes, texts, visited);
+                }
+            }
+
+            var shelfCheckBoxes = new List<System.Windows.Controls.CheckBox>();
+            var shelfTexts = new List<string>();
+            CollectControls(shelfBody, shelfCheckBoxes, shelfTexts, new HashSet<object>(ReferenceEqualityComparer.Instance));
+            Check(shelfCheckBoxes.Count == 0,
+                $"File Info shelf must stay clean without inline field checkboxes, found {shelfCheckBoxes.Count}");
+            Check(shelfTexts.Any(t => t.Contains("GSTIN", StringComparison.OrdinalIgnoreCase)) &&
+                  shelfTexts.Any(t => t.Contains("29AABCT0000A1Z5", StringComparison.OrdinalIgnoreCase)) &&
+                  shelfTexts.Any(t => t.Contains("Trade Name", StringComparison.OrdinalIgnoreCase)) &&
+                  shelfTexts.Any(t => t.Contains("Synthetic Demo Co 0", StringComparison.OrdinalIgnoreCase)),
+                $"File Info shelf missing expected Header -> Value rows. Found: [{string.Join(" | ", shelfTexts)}]");
+        }
+        finally
+        {
+            if (info != null)
+            {
+                try
+                {
+                    var t = info.GetType();
+                    if (t.GetField("shelf", AnyInstance)?.GetValue(info) is System.Windows.Controls.Primitives.Popup sp) sp.IsOpen = false;
+                    if (t.GetField("arc", AnyInstance)?.GetValue(info) is System.Windows.Controls.Primitives.Popup ap) ap.IsOpen = false;
+                }
+                catch { }
+                try { (info as IDisposable)?.Dispose(); } catch { }
+            }
+            try { (apps as IDisposable)?.Dispose(); } catch { }
+            try { owner?.Close(); } catch { }
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -2144,6 +2471,7 @@ internal static class Program
             TestQuickArcNoStuckLoadingAndIsolationV380(asm);
             TestTallyErp9FixesAndUniversalDisambiguationV380(asm);
             TestApplicationFileHeaderValueInformationV380(asm);
+            TestAppRemovalAndRadialInformationModesV380(asm);
             TestInformationDonutGeometryAndSectorV380(asm);
             TestInformationTabSyncAndSchemaV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);

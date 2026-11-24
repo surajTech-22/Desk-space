@@ -371,11 +371,11 @@ jobs:
           if($latest.Major -ne 1 -or $latest.Minor -ne 5){
               throw 'Unexpected DeskSpace stable version family'
           }
-          $nextBuild=1159
+          $nextBuild=1160
           $version="1.5.$nextBuild"
           $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
           if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
-          foreach($tag in @('v1.5.1159','tester-v1.5.1159')){
+          foreach($tag in @('v1.5.1160','tester-v1.5.1160')){
             if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
               throw ('Refuse to overwrite existing release: '+$tag)
             }
@@ -609,7 +609,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1159: Direct application selection in Information (floating Donut Information arc/shelf and MainWindow Information tab) with full inside-file Header -> Value detail extraction across Winman GST (.wgst), Winman CA-ERP (.tax), Winman TDS, TallyPrime (.1800), Tally.ERP 9 (.900), and Excel/CSV — all matching headers and populated schedule/computation rows shown immediately with per-file selection and header visibility controls."
+              $notes="DeskSpace 1.5.1160: App removal fixed in Applications -> Pinned (right-click Unpin on the donut, Unpin buttons in the files browser, pinned-apps selector and tray menu) and in Information (managed app list with Add App / Remove; unsupported prose/media apps such as Word are hidden). Information donut now shows files directly for a single app, an app ring with a file sub-donut for multiple apps, and only the chosen Header -> Value details in a clean panel below the circle."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Modern Suite & Pinned App Files" --notes $notes
               }else{
@@ -631,14 +631,14 @@ jobs:
               }
           }
           Write-Host "R377 Excel Preview & Monitor-Aware Widgets release SUCCESS: same SHA256 installer published to Tester and Stable."
-      - name: Send fresh SHA256-verified v1.5.1159 notification hints to both installed channels
+      - name: Send fresh SHA256-verified v1.5.1160 notification hints to both installed channels
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
-          foreach($hint in @('stable|v1.5.1159','tester|tester-v1.5.1159')){
+          foreach($hint in @('stable|v1.5.1160','tester|tester-v1.5.1160')){
             try{
-              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1159 available' }
+              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1160 available' }
               if($response.event -ne 'message'){throw ('Relay rejected '+$hint)}
               Write-Host ('ACKNOWLEDGED official release hint: '+$hint)
             }catch{

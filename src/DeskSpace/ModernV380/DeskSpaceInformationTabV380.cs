@@ -113,7 +113,26 @@ internal static class DeskSpaceInformationTabV380
     internal static string DefaultAppInfoPreferencesPath =>
         System.IO.Path.Combine(WorkspaceStore.Root, "app-information-preferences-v381.json");
 
+    internal static string DefaultInformationAppsConfigPath =>
+        System.IO.Path.Combine(WorkspaceStore.Root, "information-apps-v382.json");
+
+    private sealed class InformationAppsConfigV380
+    {
+        public bool Initialized { get; set; }
+        public List<string> SelectedApps { get; set; } = new();
+        public List<string> RemovedAppKeys { get; set; } = new();
+    }
+
     private static readonly object PreferencesLock = new();
+    private static readonly object InformationAppsLock = new();
+    private static readonly object AppInfoCacheLock = new();
+    private static readonly Dictionary<string, (DateTime FetchedUtc, AppInfoDiscoveryResultV380 Result)> AppInfoCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object AppInfoInFlightLock = new();
+    private static readonly Dictionary<string, Task<AppInfoDiscoveryResultV380>> AppInfoInFlight =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    internal static long InformationAppsRevision { get; private set; }
 
     // Exact 95-character printable ASCII (0x20..0x7E) bijection used by Winman .wgst and .tax records.
     private static readonly (byte Cipher, char Plain)[] WinmanCipherPairs =
@@ -2046,14 +2065,12 @@ internal static class DeskSpaceInformationTabV380
                 IsDefaultVisible: true));
         }
 
-        var savedVisible = LoadVisibleHeadersPreference(appOrShortcutPath, preferencesPath);
+        bool hasSavedPref = TryLoadVisibleHeadersPreference(appOrShortcutPath, out var savedVisible, preferencesPath);
         List<string> activeVisible;
-        if (savedVisible.Count > 0)
+        if (hasSavedPref)
         {
             var validSet = new HashSet<string>(matchedHeaders.Select(m => m.Header), StringComparer.OrdinalIgnoreCase);
             activeVisible = savedVisible.Where(validSet.Contains).ToList();
-            if (activeVisible.Count == 0)
-                activeVisible = matchedHeaders.Select(m => m.Header).ToList();
         }
         else
         {
@@ -2110,10 +2127,12 @@ internal static class DeskSpaceInformationTabV380
         return (appOrShortcutPath ?? string.Empty).Trim().ToLowerInvariant();
     }
 
-    internal static List<string> LoadVisibleHeadersPreference(
+    internal static bool TryLoadVisibleHeadersPreference(
         string appOrShortcutPath,
+        out List<string> headers,
         string? preferencesPath = null)
     {
+        headers = new List<string>();
         string target = string.IsNullOrWhiteSpace(preferencesPath) ? DefaultAppInfoPreferencesPath : preferencesPath;
         string key = GetAppPreferenceKey(appOrShortcutPath);
         lock (PreferencesLock)
@@ -2121,22 +2140,37 @@ internal static class DeskSpaceInformationTabV380
             try
             {
                 if (!File.Exists(target))
-                    return new List<string>();
+                    return false;
                 var map = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(File.ReadAllText(target));
                 if (map != null)
                 {
                     foreach (var kv in map)
                     {
-                        if (string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase) && kv.Value != null)
-                            return kv.Value.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                        if (string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase))
+                        {
+                            headers = (kv.Value ?? new List<string>())
+                                .Where(x => !string.IsNullOrWhiteSpace(x))
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+                            return true;
+                        }
                     }
                 }
             }
             catch
             {
             }
-            return new List<string>();
+            return false;
         }
+    }
+
+    internal static List<string> LoadVisibleHeadersPreference(
+        string appOrShortcutPath,
+        string? preferencesPath = null)
+    {
+        return TryLoadVisibleHeadersPreference(appOrShortcutPath, out var list, preferencesPath)
+            ? list
+            : new List<string>();
     }
 
     internal static void SaveVisibleHeadersPreference(
@@ -2186,6 +2220,27 @@ internal static class DeskSpaceInformationTabV380
             finally
             {
                 try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(preferencesPath))
+        {
+            lock (AppInfoCacheLock)
+            {
+                foreach (string cKey in AppInfoCache.Keys.ToList())
+                {
+                    if (!string.Equals(GetAppPreferenceKey(cKey), key, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var entry = AppInfoCache[cKey];
+                    var validHeaders = new HashSet<string>(entry.Result.MatchedHeaders.Select(h => h.Header), StringComparer.OrdinalIgnoreCase);
+                    var updatedVis = cleanList.Where(validHeaders.Contains).ToList();
+                    var updatedRes = entry.Result with
+                    {
+                        VisibleHeaders = updatedVis,
+                        StatusMessage = $"{entry.Result.Eligibility.AppDisplayName} · {entry.Result.MatchedFiles.Count} files share {entry.Result.MatchedHeaders.Count} verified Header → Value fields ({updatedVis.Count} visible)."
+                    };
+                    AppInfoCache[cKey] = (entry.FetchedUtc, updatedRes);
+                }
             }
         }
     }
@@ -2342,46 +2397,26 @@ internal static class DeskSpaceInformationTabV380
         return results;
     }
 
-    internal static List<(string Label, string Path)> GetAvailableAppsForInformation()
+    private static string NormalizeAppCacheKey(string? appPath)
     {
-        var list = new List<(string Label, string Path)>();
-        var seenLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(appPath))
+            return string.Empty;
+        try { return System.IO.Path.GetFullPath(appPath.Trim()); }
+        catch { return appPath.Trim(); }
+    }
 
-        void TryAddApp(string? path, string? overrideLabel = null)
-        {
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-                return;
-            string full;
-            try { full = System.IO.Path.GetFullPath(path); }
-            catch { return; }
-            if (!seenPaths.Add(full))
-                return;
-
-            var elig = EvaluateAppEligibility(full);
-            string label = !string.IsNullOrWhiteSpace(overrideLabel)
-                ? overrideLabel
-                : (!string.IsNullOrWhiteSpace(elig.AppDisplayName)
-                    ? elig.AppDisplayName
-                    : DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(full));
-            if (string.IsNullOrWhiteSpace(label))
-                label = System.IO.Path.GetFileNameWithoutExtension(full);
-
-            if (seenLabels.Add(label))
-                list.Add((label, full));
-        }
-
+    private static List<string> EnumerateStructuredAppSeedPaths()
+    {
+        var list = new List<string>();
         try
         {
             var settings = WidgetSettingsV3.Load();
-            foreach (string pin in settings.PinnedApps)
-                TryAddApp(pin);
+            list.AddRange(settings.PinnedApps);
         }
         catch
         {
         }
 
-        // Auto-include installed Winman GST / Winman CA ERP / TallyPrime / Tally.ERP 9 / Excel / Word shortcuts
         string appDataStart = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
         string commonStart = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
         string[] candidateShortcuts =
@@ -2394,15 +2429,347 @@ internal static class DeskSpaceInformationTabV380
             System.IO.Path.Combine(commonStart, "TallyPrime.lnk"),
             System.IO.Path.Combine(commonStart, "Tally.ERP 9", "Tally.ERP 9.lnk"),
             System.IO.Path.Combine(commonStart, "Excel.lnk"),
-            System.IO.Path.Combine(commonStart, "Word.lnk"),
-            @"C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE",
-            @"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+            @"C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
         };
 
-        foreach (string sc in candidateShortcuts)
-            TryAddApp(sc);
-
+        list.AddRange(candidateShortcuts);
         return list;
+    }
+
+    private static InformationAppsConfigV380 LoadOrInitializeAppsConfig(string targetPath)
+    {
+        InformationAppsConfigV380? cfg = null;
+        try
+        {
+            if (File.Exists(targetPath))
+                cfg = JsonSerializer.Deserialize<InformationAppsConfigV380>(File.ReadAllText(targetPath));
+        }
+        catch
+        {
+        }
+
+        if (cfg != null && cfg.Initialized)
+        {
+            cfg.SelectedApps ??= new List<string>();
+            cfg.RemovedAppKeys ??= new List<string>();
+            return cfg;
+        }
+
+        cfg ??= new InformationAppsConfigV380();
+        cfg.SelectedApps ??= new List<string>();
+        cfg.RemovedAppKeys ??= new List<string>();
+        var removedSet = new HashSet<string>(cfg.RemovedAppKeys, StringComparer.OrdinalIgnoreCase);
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string rawPath in EnumerateStructuredAppSeedPaths())
+        {
+            if (string.IsNullOrWhiteSpace(rawPath) || !File.Exists(rawPath))
+                continue;
+            string full;
+            try { full = System.IO.Path.GetFullPath(rawPath); }
+            catch { continue; }
+            if (!seenPaths.Add(full))
+                continue;
+
+            var elig = EvaluateAppEligibility(full);
+            if (!elig.IsSupported)
+                continue;
+
+            string key = GetAppPreferenceKey(full);
+            if (removedSet.Contains(key) || !seenKeys.Add(key))
+                continue;
+
+            cfg.SelectedApps.Add(full);
+        }
+
+        cfg.Initialized = true;
+        SaveAppsConfig(targetPath, cfg);
+        return cfg;
+    }
+
+    private static void SaveAppsConfig(string targetPath, InformationAppsConfigV380 cfg)
+    {
+        string? dir = System.IO.Path.GetDirectoryName(targetPath);
+        if (!string.IsNullOrWhiteSpace(dir))
+            Directory.CreateDirectory(dir);
+
+        string temp = targetPath + ".pending";
+        try
+        {
+            File.WriteAllText(temp, JsonSerializer.Serialize(cfg, new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
+            File.Move(temp, targetPath, overwrite: true);
+        }
+        finally
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+        }
+        InformationAppsRevision++;
+    }
+
+    internal static List<(string Label, string Path)> GetSelectedAppsForInformation(string? configPath = null)
+    {
+        string target = string.IsNullOrWhiteSpace(configPath) ? DefaultInformationAppsConfigPath : configPath;
+        lock (InformationAppsLock)
+        {
+            var cfg = LoadOrInitializeAppsConfig(target);
+            var removedSet = new HashSet<string>(cfg.RemovedAppKeys, StringComparer.OrdinalIgnoreCase);
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var list = new List<(string Label, string Path)>();
+            bool changed = false;
+
+            var cleanedPaths = new List<string>();
+            foreach (string raw in cfg.SelectedApps)
+            {
+                if (string.IsNullOrWhiteSpace(raw) || !File.Exists(raw))
+                {
+                    changed = true;
+                    continue;
+                }
+
+                string full = NormalizeAppCacheKey(raw);
+                var elig = EvaluateAppEligibility(full);
+                if (!elig.IsSupported)
+                {
+                    changed = true;
+                    continue;
+                }
+
+                string key = GetAppPreferenceKey(full);
+                if (removedSet.Contains(key) || !seenKeys.Add(key))
+                {
+                    changed = true;
+                    continue;
+                }
+
+                cleanedPaths.Add(full);
+                string label = !string.IsNullOrWhiteSpace(elig.AppDisplayName)
+                    ? elig.AppDisplayName
+                    : DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(full);
+                if (string.IsNullOrWhiteSpace(label))
+                    label = System.IO.Path.GetFileNameWithoutExtension(full);
+                list.Add((label, full));
+            }
+
+            if (changed)
+            {
+                cfg.SelectedApps = cleanedPaths;
+                SaveAppsConfig(target, cfg);
+            }
+
+            return list;
+        }
+    }
+
+    internal static List<(string Label, string Path)> GetAvailableAppsForInformation() =>
+        GetSelectedAppsForInformation();
+
+    internal static List<(string Label, string Path)> GetCandidateEligibleAppsToAdd(string? configPath = null)
+    {
+        var current = GetSelectedAppsForInformation(configPath);
+        var currentKeys = new HashSet<string>(current.Select(x => GetAppPreferenceKey(x.Path)), StringComparer.OrdinalIgnoreCase);
+        var result = new List<(string Label, string Path)>();
+        var seenKeys = new HashSet<string>(currentKeys, StringComparer.OrdinalIgnoreCase);
+        var candidates = new List<string>(EnumerateStructuredAppSeedPaths());
+
+        foreach (string folder in new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms)
+        })
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+                continue;
+            try
+            {
+                foreach (string topLnk in Directory.EnumerateFiles(folder, "*.lnk", SearchOption.TopDirectoryOnly).Take(60))
+                    candidates.Add(topLnk);
+                foreach (string sub in Directory.EnumerateDirectories(folder).Take(40))
+                {
+                    try
+                    {
+                        foreach (string subLnk in Directory.EnumerateFiles(sub, "*.lnk", SearchOption.TopDirectoryOnly).Take(12))
+                            candidates.Add(subLnk);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        foreach (string raw in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(raw) || !File.Exists(raw))
+                continue;
+            string full = NormalizeAppCacheKey(raw);
+            if (full.Contains("Uninstall", StringComparison.OrdinalIgnoreCase) ||
+                full.Contains("DeskSpace", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            var elig = EvaluateAppEligibility(full);
+            if (!elig.IsSupported)
+                continue;
+            string key = GetAppPreferenceKey(full);
+            if (!seenKeys.Add(key))
+                continue;
+            string label = !string.IsNullOrWhiteSpace(elig.AppDisplayName)
+                ? elig.AppDisplayName
+                : System.IO.Path.GetFileNameWithoutExtension(full);
+            result.Add((label, full));
+        }
+
+        return result.OrderBy(x => x.Label, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    internal static bool TryAddAppToInformation(
+        string appOrShortcutPath,
+        out AppInfoEligibilityV380 eligibility,
+        string? configPath = null)
+    {
+        eligibility = EvaluateAppEligibility(appOrShortcutPath);
+        if (string.IsNullOrWhiteSpace(appOrShortcutPath) || !File.Exists(appOrShortcutPath) || !eligibility.IsSupported)
+            return false;
+
+        string target = string.IsNullOrWhiteSpace(configPath) ? DefaultInformationAppsConfigPath : configPath;
+        string full = NormalizeAppCacheKey(appOrShortcutPath);
+        string key = GetAppPreferenceKey(full);
+
+        lock (InformationAppsLock)
+        {
+            var cfg = LoadOrInitializeAppsConfig(target);
+            cfg.RemovedAppKeys.RemoveAll(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+
+            int existingIdx = cfg.SelectedApps.FindIndex(p =>
+                string.Equals(NormalizeAppCacheKey(p), full, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(GetAppPreferenceKey(p), key, StringComparison.OrdinalIgnoreCase));
+            if (existingIdx >= 0)
+                cfg.SelectedApps[existingIdx] = full;
+            else
+                cfg.SelectedApps.Add(full);
+
+            SaveAppsConfig(target, cfg);
+        }
+
+        PrewarmInformationApps(new[] { full });
+        return true;
+    }
+
+    internal static bool RemoveAppFromInformation(string? appOrShortcutPath, string? configPath = null)
+    {
+        if (string.IsNullOrWhiteSpace(appOrShortcutPath))
+            return false;
+
+        string target = string.IsNullOrWhiteSpace(configPath) ? DefaultInformationAppsConfigPath : configPath;
+        string full = NormalizeAppCacheKey(appOrShortcutPath);
+        string key = GetAppPreferenceKey(appOrShortcutPath);
+
+        lock (InformationAppsLock)
+        {
+            var cfg = LoadOrInitializeAppsConfig(target);
+            int removedCount = cfg.SelectedApps.RemoveAll(p =>
+                string.Equals(p, appOrShortcutPath, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(NormalizeAppCacheKey(p), full, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(GetAppPreferenceKey(p), key, StringComparison.OrdinalIgnoreCase));
+
+            if (!cfg.RemovedAppKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase)))
+                cfg.RemovedAppKeys.Add(key);
+
+            SaveAppsConfig(target, cfg);
+            return removedCount > 0 || cfg.RemovedAppKeys.Count > 0;
+        }
+    }
+
+    internal static bool TryGetCachedAppInformation(string appPath, out AppInfoDiscoveryResultV380 result)
+    {
+        result = null!;
+        string key = NormalizeAppCacheKey(appPath);
+        if (string.IsNullOrEmpty(key))
+            return false;
+
+        lock (AppInfoCacheLock)
+        {
+            if (AppInfoCache.TryGetValue(key, out var entry) &&
+                (DateTime.UtcNow - entry.FetchedUtc).TotalSeconds < 180)
+            {
+                result = entry.Result;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal static void CacheAppInformationForApp(string appPath, AppInfoDiscoveryResultV380 result)
+    {
+        string key = NormalizeAppCacheKey(appPath);
+        if (string.IsNullOrEmpty(key) || result == null)
+            return;
+
+        lock (AppInfoCacheLock)
+            AppInfoCache[key] = (DateTime.UtcNow, result);
+    }
+
+    internal static Task<AppInfoDiscoveryResultV380> GetAppInformationAsync(string appPath, bool forceRefresh = false)
+    {
+        string key = NormalizeAppCacheKey(appPath);
+        if (string.IsNullOrEmpty(key))
+            return Task.FromResult(DiscoverAppInformation(appPath));
+
+        if (!forceRefresh && TryGetCachedAppInformation(key, out var cached))
+            return Task.FromResult(cached);
+
+        lock (AppInfoInFlightLock)
+        {
+            if (!forceRefresh && AppInfoInFlight.TryGetValue(key, out var existing))
+                return existing;
+
+            var task = Task.Run(() =>
+            {
+                try
+                {
+                    var res = DiscoverAppInformation(key);
+                    CacheAppInformationForApp(key, res);
+                    return res;
+                }
+                finally
+                {
+                    lock (AppInfoInFlightLock)
+                        AppInfoInFlight.Remove(key);
+                }
+            });
+
+            AppInfoInFlight[key] = task;
+            return task;
+        }
+    }
+
+    internal static void PrewarmInformationApps(IEnumerable<string> appPaths)
+    {
+        if (appPaths == null)
+            return;
+        var list = appPaths
+            .Where(p => !string.IsNullOrWhiteSpace(p) && EvaluateAppEligibility(p).IsSupported)
+            .Select(NormalizeAppCacheKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(4)
+            .ToList();
+        if (list.Count == 0)
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            foreach (string app in list)
+            {
+                try
+                {
+                    if (!TryGetCachedAppInformation(app, out _))
+                        await GetAppInformationAsync(app).ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+            }
+        });
     }
 
     private static DateTime SafeGetFileWriteTimeUtc(string path)
@@ -2608,14 +2975,16 @@ internal static class DeskSpaceInformationTabV380
         // App File Information (Header -> Value) state
         bool showAppInfoView = true;
         string selectedAppPath = "";
+        string previewUnsupportedPath = "";
         string selectedFileFullPath = "";
+        bool showFieldChooser = false;
         bool showAllFileSpecificFields = true;
         string appFileFilter = "";
         bool isAppScanning = false;
         int appScanGen = 0;
+        long loadedAppsRevision = InformationAppsRevision;
         AppInfoDiscoveryResultV380? currentAppResult = null;
         HashSet<string> activeVisibleHeaders = new(StringComparer.OrdinalIgnoreCase);
-        var appResultCache = new Dictionary<string, AppInfoDiscoveryResultV380>(StringComparer.OrdinalIgnoreCase);
 
         void SafeLoadInitial()
         {
@@ -2638,35 +3007,41 @@ internal static class DeskSpaceInformationTabV380
 
         Action? renderUi = null;
 
-        void TriggerAppDiscovery(string appPath, bool forceRescan = false)
+        void TriggerAppDiscovery(string appPath, bool forceRescan = false, bool isUnsupportedPreview = false)
         {
             if (string.IsNullOrWhiteSpace(appPath))
                 return;
 
-            if (!string.Equals(selectedAppPath, appPath, StringComparison.OrdinalIgnoreCase))
+            string activeTarget = !string.IsNullOrEmpty(previewUnsupportedPath) ? previewUnsupportedPath : selectedAppPath;
+            if (!string.Equals(activeTarget, appPath, StringComparison.OrdinalIgnoreCase))
                 selectedFileFullPath = "";
-            selectedAppPath = appPath;
+
+            if (isUnsupportedPreview)
+                previewUnsupportedPath = appPath;
+            else
+            {
+                previewUnsupportedPath = "";
+                selectedAppPath = appPath;
+            }
             showAppInfoView = true;
 
-            if (!forceRescan && appResultCache.TryGetValue(appPath, out var cached))
+            var elig = EvaluateAppEligibility(appPath);
+            if (!elig.IsSupported)
             {
-                currentAppResult = cached;
-                var savedPref = LoadVisibleHeadersPreference(appPath);
-                activeVisibleHeaders = new HashSet<string>(
-                    savedPref.Count > 0 ? savedPref : cached.VisibleHeaders,
-                    StringComparer.OrdinalIgnoreCase);
+                currentAppResult = DiscoverAppInformation(appPath, Array.Empty<string>());
+                activeVisibleHeaders.Clear();
                 isAppScanning = false;
                 renderUi?.Invoke();
                 return;
             }
 
-            var elig = EvaluateAppEligibility(appPath);
-            if (!elig.IsSupported)
+            if (!forceRescan && TryGetCachedAppInformation(appPath, out var cached))
             {
-                var unsupportedRes = DiscoverAppInformation(appPath, Array.Empty<string>());
-                appResultCache[appPath] = unsupportedRes;
-                currentAppResult = unsupportedRes;
-                activeVisibleHeaders.Clear();
+                currentAppResult = cached;
+                bool hasPref = TryLoadVisibleHeadersPreference(appPath, out var savedPref);
+                activeVisibleHeaders = new HashSet<string>(
+                    hasPref ? savedPref : cached.VisibleHeaders,
+                    StringComparer.OrdinalIgnoreCase);
                 isAppScanning = false;
                 renderUi?.Invoke();
                 return;
@@ -2676,14 +3051,15 @@ internal static class DeskSpaceInformationTabV380
             int myGen = ++appScanGen;
             renderUi?.Invoke();
 
-            _ = Task.Run(() =>
+            _ = GetAppInformationAsync(appPath, forceRefresh: forceRescan).ContinueWith(t =>
             {
-                var discovered = DiscoverAppInformation(appPath);
+                var discovered = t.Status == TaskStatus.RanToCompletion
+                    ? t.Result
+                    : DiscoverAppInformation(appPath);
                 host.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     if (disposed || myGen != appScanGen)
                         return;
-                    appResultCache[appPath] = discovered;
                     currentAppResult = discovered;
                     activeVisibleHeaders = new HashSet<string>(discovered.VisibleHeaders, StringComparer.OrdinalIgnoreCase);
                     isAppScanning = false;
@@ -2985,13 +3361,61 @@ internal static class DeskSpaceInformationTabV380
                     p,
                     getOwner,
                     selectedAppPath,
+                    previewUnsupportedPath,
                     selectedFileFullPath,
+                    showFieldChooser,
                     showAllFileSpecificFields,
                     appFileFilter,
                     isAppScanning,
                     currentAppResult,
                     activeVisibleHeaders,
                     onSelectApp: path => TriggerAppDiscovery(path),
+                    onAddApp: path =>
+                    {
+                        if (TryAddAppToInformation(path, out var elig))
+                        {
+                            loadedAppsRevision = InformationAppsRevision;
+                            bannerMessage = $"Added '{elig.AppDisplayName}' to Information.";
+                            bannerIsError = false;
+                            TriggerAppDiscovery(path);
+                        }
+                        else
+                        {
+                            bannerMessage = elig.Reason;
+                            bannerIsError = true;
+                            TriggerAppDiscovery(path, isUnsupportedPreview: true);
+                        }
+                    },
+                    onRemoveApp: path =>
+                    {
+                        var elig = EvaluateAppEligibility(path);
+                        RemoveAppFromInformation(path);
+                        loadedAppsRevision = InformationAppsRevision;
+                        previewUnsupportedPath = "";
+                        bannerMessage = $"Removed '{elig.AppDisplayName}' from Information.";
+                        bannerIsError = false;
+                        var remaining = GetSelectedAppsForInformation();
+                        if (string.Equals(selectedAppPath, path, StringComparison.OrdinalIgnoreCase) ||
+                            remaining.All(a => !string.Equals(a.Path, selectedAppPath, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            selectedFileFullPath = "";
+                            if (remaining.Count > 0)
+                            {
+                                TriggerAppDiscovery(remaining[0].Path);
+                                return;
+                            }
+                            selectedAppPath = "";
+                            currentAppResult = null;
+                            activeVisibleHeaders.Clear();
+                            isAppScanning = false;
+                        }
+                        Render();
+                    },
+                    onToggleFieldChooser: () =>
+                    {
+                        showFieldChooser = !showFieldChooser;
+                        Render();
+                    },
                     onSelectFile: filePath =>
                     {
                         selectedFileFullPath = filePath;
@@ -3832,7 +4256,8 @@ internal static class DeskSpaceInformationTabV380
         {
             if (!disposed && showAppInfoView && string.IsNullOrEmpty(selectedAppPath) && !isAppScanning)
             {
-                var apps = GetAvailableAppsForInformation();
+                var apps = GetSelectedAppsForInformation();
+                PrewarmInformationApps(apps.Select(a => a.Path));
                 if (apps.Count > 0)
                 {
                     var preferred = apps.FirstOrDefault(a => a.Label.Contains("Winman", StringComparison.OrdinalIgnoreCase));
@@ -3852,6 +4277,27 @@ internal static class DeskSpaceInformationTabV380
         {
             if (disposed || isEditing)
                 return;
+
+            bool needRender = false;
+            if (InformationAppsRevision != loadedAppsRevision)
+            {
+                loadedAppsRevision = InformationAppsRevision;
+                var latestApps = GetSelectedAppsForInformation();
+                if (!string.IsNullOrEmpty(selectedAppPath) &&
+                    latestApps.All(a => !string.Equals(a.Path, selectedAppPath, StringComparison.OrdinalIgnoreCase)))
+                {
+                    selectedFileFullPath = "";
+                    selectedAppPath = latestApps.Count > 0 ? latestApps[0].Path : "";
+                    currentAppResult = null;
+                    if (!string.IsNullOrEmpty(selectedAppPath))
+                    {
+                        TriggerAppDiscovery(selectedAppPath);
+                        return;
+                    }
+                }
+                needRender = true;
+            }
+
             if (CurrentStamp() != loadedStamp)
             {
                 try
@@ -3862,12 +4308,15 @@ internal static class DeskSpaceInformationTabV380
                         selectedId = all.Count > 0 ? all[0].Id : null;
                     else if (!selectedId.HasValue && all.Count > 0)
                         selectedId = all[0].Id;
-                    Render();
+                    needRender = true;
                 }
                 catch
                 {
                 }
             }
+
+            if (needRender)
+                Render();
         };
 
         var lifetime = new ActionDisposable(() =>
@@ -3887,13 +4336,18 @@ internal static class DeskSpaceInformationTabV380
         DeskSpaceDesignV283.Palette p,
         Func<Window?> getOwner,
         string selectedAppPath,
+        string previewUnsupportedPath,
         string selectedFileFullPath,
+        bool showFieldChooser,
         bool showAllFileSpecificFields,
         string appFileFilter,
         bool isAppScanning,
         AppInfoDiscoveryResultV380? result,
         HashSet<string> activeVisibleHeaders,
         Action<string> onSelectApp,
+        Action<string> onAddApp,
+        Action<string> onRemoveApp,
+        Action onToggleFieldChooser,
         Action<string> onSelectFile,
         Action<bool> onToggleFileSpecificFields,
         Action<string> onFilterChanged,
@@ -3902,41 +4356,129 @@ internal static class DeskSpaceInformationTabV380
         Action<AppInfoFileRecordV380, IReadOnlyList<KeyValuePair<string, string>>> onSaveFileToCollections,
         Action<string, bool> onStatusToast)
     {
-        // 1. Application Selector Card
+        // 1. User-Managed Information Applications Bar (+ Add / ✕ Remove)
         var appBarStack = new StackPanel();
+        var availableApps = GetSelectedAppsForInformation();
+        string headerNote = availableApps.Count == 1
+            ? "1. Selected App (Single-app mode: Donut Information directly shows this app's files)"
+            : $"1. Selected Apps ({availableApps.Count} · Click app to inspect files or ✕ to remove)";
+
         appBarStack.Children.Add(new TextBlock
         {
-            Text = "1. Select Application (Checks if application files support structured Header → Value data)",
+            Text = headerNote,
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             Foreground = DeskSpaceDesignV283.Solid(p.Muted),
             Margin = new Thickness(0, 0, 0, 6)
         });
 
-        var appPillsWrap = new WrapPanel();
-        var availableApps = GetAvailableAppsForInformation();
-        if (!string.IsNullOrWhiteSpace(selectedAppPath) &&
-            availableApps.All(a => !string.Equals(a.Path, selectedAppPath, StringComparison.OrdinalIgnoreCase)))
-        {
-            var customElig = EvaluateAppEligibility(selectedAppPath);
-            availableApps.Insert(0, (customElig.AppDisplayName, selectedAppPath));
-        }
-
+        var appPillsWrap = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
         foreach (var (label, path) in availableApps)
         {
             string capturedPath = path;
-            bool isActive = string.Equals(capturedPath, selectedAppPath, StringComparison.OrdinalIgnoreCase);
-            var btn = DeskSpaceFluentBackdropV380.CreatePillButton(
-                label,
-                () => onSelectApp(capturedPath),
-                primary: isActive,
-                tooltip: capturedPath);
-            btn.Margin = new Thickness(0, 0, 8, 6);
-            appPillsWrap.Children.Add(btn);
+            bool isActive = string.IsNullOrEmpty(previewUnsupportedPath) &&
+                            string.Equals(capturedPath, selectedAppPath, StringComparison.OrdinalIgnoreCase);
+
+            var chipPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var selectBtn = new Button
+            {
+                Content = label,
+                Cursor = Cursors.Hand,
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Foreground = DeskSpaceDesignV283.Solid(isActive ? DeskSpaceDesignV283.OnAccent(p.Accent, p.HighContrast) : p.Text),
+                FontWeight = isActive ? FontWeights.SemiBold : FontWeights.Medium,
+                FontSize = 12,
+                Padding = new Thickness(10, 4, 6, 4),
+                ToolTip = $"{capturedPath}\nClick to view files · Click ✕ to remove from Information"
+            };
+            selectBtn.Click += (_, _) => onSelectApp(capturedPath);
+
+            var removeBtn = new Button
+            {
+                Content = "✕",
+                Cursor = Cursors.Hand,
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Foreground = DeskSpaceDesignV283.Solid(isActive ? DeskSpaceDesignV283.OnAccent(p.Accent, p.HighContrast) : p.Muted),
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                Padding = new Thickness(4, 4, 8, 4),
+                ToolTip = $"Remove {label} from Information"
+            };
+            removeBtn.Click += (_, e) =>
+            {
+                e.Handled = true;
+                onRemoveApp(capturedPath);
+            };
+            AutomationProperties.SetName(removeBtn, $"Remove {label} from Information");
+
+            chipPanel.Children.Add(selectBtn);
+            chipPanel.Children.Add(removeBtn);
+
+            var chipBorder = new Border
+            {
+                CornerRadius = new CornerRadius(14),
+                Background = DeskSpaceDesignV283.Solid(isActive ? p.Accent : DeskSpaceDesignV283.SecondaryButtonBg(p)),
+                BorderBrush = DeskSpaceDesignV283.Solid(isActive ? p.Accent : p.Border),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 8, 6),
+                Child = chipPanel
+            };
+            var ctx = new ContextMenu();
+            var rmMenu = new MenuItem { Header = $"✕ Remove {label} from Information" };
+            rmMenu.Click += (_, _) => onRemoveApp(capturedPath);
+            ctx.Items.Add(rmMenu);
+            chipBorder.ContextMenu = ctx;
+            appPillsWrap.Children.Add(chipBorder);
         }
 
+        Button? addInstalledBtn = null;
+        addInstalledBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+            "+ Add Installed App ▾",
+            () =>
+            {
+                if (addInstalledBtn == null) return;
+                var candidates = GetCandidateEligibleAppsToAdd();
+                var cm = new ContextMenu();
+                if (candidates.Count == 0)
+                {
+                    cm.Items.Add(new MenuItem
+                    {
+                        Header = "All detected structured apps are already added",
+                        IsEnabled = false
+                    });
+                }
+                else
+                {
+                    foreach (var cand in candidates)
+                    {
+                        string cPath = cand.Path;
+                        var elig = EvaluateAppEligibility(cPath);
+                        var mi = new MenuItem
+                        {
+                            Header = $"{cand.Label}  ({string.Join(", ", elig.SupportedExtensions.Take(3))})",
+                            ToolTip = cPath
+                        };
+                        mi.Click += (_, _) => onAddApp(cPath);
+                        cm.Items.Add(mi);
+                    }
+                }
+                cm.PlacementTarget = addInstalledBtn;
+                cm.IsOpen = true;
+            },
+            primary: availableApps.Count == 0,
+            tooltip: "Add a supported installed application (unsupported prose/media apps like Word are excluded)");
+        addInstalledBtn.Margin = new Thickness(0, 0, 8, 6);
+        appPillsWrap.Children.Add(addInstalledBtn);
+
         var browseBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-            "+ Browse Any App (.exe / .lnk)…",
+            "+ Browse App (.exe / .lnk)…",
             () =>
             {
                 var dlg = new Microsoft.Win32.OpenFileDialog
@@ -3945,10 +4487,10 @@ internal static class DeskSpaceInformationTabV380
                     Filter = "Applications & Shortcuts|*.exe;*.lnk|All Files|*.*"
                 };
                 if (dlg.ShowDialog(getOwner()) == true)
-                    onSelectApp(dlg.FileName);
+                    onAddApp(dlg.FileName);
             },
             primary: false,
-            tooltip: "Pick any installed application or shortcut (e.g. Winman GST, TallyPrime, Excel, Word)");
+            tooltip: "Browse any application or shortcut to add it (or test why prose/media apps are not supported)");
         browseBtn.Margin = new Thickness(0, 0, 8, 6);
         appPillsWrap.Children.Add(browseBtn);
         appBarStack.Children.Add(appPillsWrap);
@@ -3977,7 +4519,9 @@ internal static class DeskSpaceInformationTabV380
         {
             var promptCard = DeskSpaceFluentBackdropV380.CreateCard(new TextBlock
             {
-                Text = "Select an application above (such as Winman GST, Winman CA ERP, TallyPrime, Tally.ERP 9, or Microsoft Excel) to inspect its inside-file Header → Value fields.",
+                Text = availableApps.Count == 0
+                    ? "No applications are currently added to Information. Click + Add Installed App ▾ or + Browse App above to add structured apps such as Winman GST, Winman CA ERP, TallyPrime, Tally.ERP 9, or Microsoft Excel."
+                    : "Select an application above to inspect its inside-file Header → Value fields.",
                 FontSize = 13.5,
                 Foreground = DeskSpaceDesignV283.Solid(p.Muted),
                 TextWrapping = TextWrapping.Wrap
@@ -4015,178 +4559,166 @@ internal static class DeskSpaceInformationTabV380
             return;
         }
 
-        // 3. Header Visibility Selection Card (>= 2 Matching Files)
+        // 3. Compact Summary Bar + Collapsible Header Field Chooser
         var headersStack = new StackPanel();
-        var headersTopRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 6) };
-        var headerQuickBtns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var headersTopRow = new DockPanel { LastChildFill = true };
+        var headerRightControls = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
-        var selectAllBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-            $"Select All ({result.MatchedHeaders.Count})",
-            () => onSetVisibleBatch(result.MatchedHeaders.Select(h => h.Header)),
-            primary: false);
-        selectAllBtn.Padding = new Thickness(9, 3, 9, 3);
-        selectAllBtn.MinHeight = 25;
-        selectAllBtn.FontSize = 11;
-        selectAllBtn.Margin = new Thickness(0, 0, 6, 0);
-
-        var summaryFieldsBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-            "Key Summary",
-            () => onSetVisibleBatch(GetSummaryPriorityHeaders(result.MatchedHeaders)),
-            primary: false);
-        summaryFieldsBtn.Padding = new Thickness(9, 3, 9, 3);
-        summaryFieldsBtn.MinHeight = 25;
-        summaryFieldsBtn.FontSize = 11;
-        summaryFieldsBtn.Margin = new Thickness(0, 0, 6, 0);
-
-        var clearAllBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-            "Clear All",
-            () => onSetVisibleBatch(Array.Empty<string>()),
-            primary: false);
-        clearAllBtn.Padding = new Thickness(9, 3, 9, 3);
-        clearAllBtn.MinHeight = 25;
-        clearAllBtn.FontSize = 11;
-
-        headerQuickBtns.Children.Add(selectAllBtn);
-        headerQuickBtns.Children.Add(summaryFieldsBtn);
-        headerQuickBtns.Children.Add(clearAllBtn);
-        DockPanel.SetDock(headerQuickBtns, Dock.Right);
-        headersTopRow.Children.Add(headerQuickBtns);
+        var chooseFieldsBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+            showFieldChooser
+                ? $"⚙ Choose Fields ({activeVisibleHeaders.Count}/{result.MatchedHeaders.Count}) ▲"
+                : $"⚙ Choose Fields ({activeVisibleHeaders.Count}/{result.MatchedHeaders.Count}) ▾",
+            onToggleFieldChooser,
+            primary: showFieldChooser,
+            tooltip: "Show or hide individual Header checkboxes for this application");
+        chooseFieldsBtn.Padding = new Thickness(11, 4, 11, 4);
+        chooseFieldsBtn.MinHeight = 27;
+        chooseFieldsBtn.FontSize = 11.5;
+        headerRightControls.Children.Add(chooseFieldsBtn);
+        DockPanel.SetDock(headerRightControls, Dock.Right);
+        headersTopRow.Children.Add(headerRightControls);
 
         headersTopRow.Children.Add(new TextBlock
         {
-            Text = $"2. Choose Visible Headers for {result.Eligibility.AppDisplayName} ({result.MatchedHeaders.Count} headers verified across ≥ 2 files · {activeVisibleHeaders.Count} visible)",
-            FontSize = 12,
+            Text = $"2. {result.Eligibility.AppDisplayName} · {result.MatchedFiles.Count} files share {result.MatchedHeaders.Count} matched fields ({activeVisibleHeaders.Count} visible)",
+            FontSize = 12.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = DeskSpaceDesignV283.Solid(p.Muted),
+            Foreground = DeskSpaceDesignV283.Solid(p.Text),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         });
         headersStack.Children.Add(headersTopRow);
 
-        var fileSpecificToggle = new CheckBox
+        if (showFieldChooser)
         {
-            IsChecked = showAllFileSpecificFields,
-            Content = "Also show file-specific inside details (all populated schedule/computation rows per file)",
-            FontSize = 11.5,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = DeskSpaceDesignV283.Solid(p.Text),
-            Margin = new Thickness(0, 0, 0, 6),
-            Cursor = Cursors.Hand
-        };
-        fileSpecificToggle.Checked += (_, _) => onToggleFileSpecificFields(true);
-        fileSpecificToggle.Unchecked += (_, _) => onToggleFileSpecificFields(false);
-        headersStack.Children.Add(fileSpecificToggle);
+            var quickRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 8, 0, 6) };
+            var quickBtns = new StackPanel { Orientation = Orientation.Horizontal };
+            var selectAllBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+                $"Select All ({result.MatchedHeaders.Count})",
+                () => onSetVisibleBatch(result.MatchedHeaders.Select(h => h.Header)),
+                primary: false);
+            selectAllBtn.Padding = new Thickness(9, 3, 9, 3);
+            selectAllBtn.MinHeight = 25;
+            selectAllBtn.FontSize = 11;
+            selectAllBtn.Margin = new Thickness(0, 0, 6, 0);
 
-        var checkWrap = new WrapPanel();
-        foreach (var hdr in result.MatchedHeaders)
-        {
-            string capturedHeader = hdr.Header;
-            bool isChecked = activeVisibleHeaders.Contains(capturedHeader);
-            var cb = new CheckBox
-            {
-                IsChecked = isChecked,
-                Content = $"{capturedHeader} ({hdr.MatchingFileCount})",
-                Foreground = DeskSpaceDesignV283.Solid(isChecked ? DeskSpaceDesignV283.AccentText(p) : p.Text),
-                FontWeight = isChecked ? FontWeights.SemiBold : FontWeights.Normal,
-                FontSize = 12,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand,
-                ToolTip = $"Sample: {hdr.SampleValue} · Found in {hdr.MatchingFileCount}/{hdr.TotalFileCount} files"
-            };
-            cb.Checked += (_, _) => onToggleHeader(capturedHeader, true);
-            cb.Unchecked += (_, _) => onToggleHeader(capturedHeader, false);
+            var summaryFieldsBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+                "Key Summary",
+                () => onSetVisibleBatch(GetSummaryPriorityHeaders(result.MatchedHeaders)),
+                primary: false);
+            summaryFieldsBtn.Padding = new Thickness(9, 3, 9, 3);
+            summaryFieldsBtn.MinHeight = 25;
+            summaryFieldsBtn.FontSize = 11;
+            summaryFieldsBtn.Margin = new Thickness(0, 0, 6, 0);
 
-            var pillBorder = new Border
+            var clearAllBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+                "Clear All",
+                () => onSetVisibleBatch(Array.Empty<string>()),
+                primary: false);
+            clearAllBtn.Padding = new Thickness(9, 3, 9, 3);
+            clearAllBtn.MinHeight = 25;
+            clearAllBtn.FontSize = 11;
+
+            quickBtns.Children.Add(selectAllBtn);
+            quickBtns.Children.Add(summaryFieldsBtn);
+            quickBtns.Children.Add(clearAllBtn);
+            DockPanel.SetDock(quickBtns, Dock.Right);
+            quickRow.Children.Add(quickBtns);
+
+            var fileSpecificToggle = new CheckBox
             {
-                CornerRadius = new CornerRadius(8),
-                Background = DeskSpaceDesignV283.Solid(isChecked ? p.AccentSoft : p.Surface),
-                BorderBrush = DeskSpaceDesignV283.Solid(isChecked ? p.Accent : p.Border),
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(9, 4, 9, 4),
-                Margin = new Thickness(0, 0, 7, 6),
-                Child = cb
+                IsChecked = showAllFileSpecificFields,
+                Content = "Also include file-specific inside schedule rows",
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = DeskSpaceDesignV283.Solid(p.Text),
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.Hand
             };
-            checkWrap.Children.Add(pillBorder);
+            fileSpecificToggle.Checked += (_, _) => onToggleFileSpecificFields(true);
+            fileSpecificToggle.Unchecked += (_, _) => onToggleFileSpecificFields(false);
+            quickRow.Children.Add(fileSpecificToggle);
+            headersStack.Children.Add(quickRow);
+
+            var checkWrap = new WrapPanel();
+            foreach (var hdr in result.MatchedHeaders)
+            {
+                string capturedHeader = hdr.Header;
+                bool isChecked = activeVisibleHeaders.Contains(capturedHeader);
+                var cb = new CheckBox
+                {
+                    IsChecked = isChecked,
+                    Content = $"{capturedHeader} ({hdr.MatchingFileCount})",
+                    Foreground = DeskSpaceDesignV283.Solid(isChecked ? DeskSpaceDesignV283.AccentText(p) : p.Text),
+                    FontWeight = isChecked ? FontWeights.SemiBold : FontWeights.Normal,
+                    FontSize = 12,
+                    VerticalContentAlignment = VerticalAlignment.Center,
+                    Cursor = Cursors.Hand,
+                    ToolTip = $"Sample: {hdr.SampleValue} · Found in {hdr.MatchingFileCount}/{hdr.TotalFileCount} files"
+                };
+                cb.Checked += (_, _) => onToggleHeader(capturedHeader, true);
+                cb.Unchecked += (_, _) => onToggleHeader(capturedHeader, false);
+
+                var pillBorder = new Border
+                {
+                    CornerRadius = new CornerRadius(8),
+                    Background = DeskSpaceDesignV283.Solid(isChecked ? p.AccentSoft : p.Surface),
+                    BorderBrush = DeskSpaceDesignV283.Solid(isChecked ? p.Accent : p.Border),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(9, 4, 9, 4),
+                    Margin = new Thickness(0, 0, 7, 6),
+                    Child = cb
+                };
+                checkWrap.Children.Add(pillBorder);
+            }
+
+            var checkScroll = new ScrollViewer
+            {
+                MaxHeight = 140,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = checkWrap
+            };
+            headersStack.Children.Add(checkScroll);
         }
 
-        var checkScroll = new ScrollViewer
-        {
-            MaxHeight = 145,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = checkWrap
-        };
-        headersStack.Children.Add(checkScroll);
-
         var headersCard = DeskSpaceFluentBackdropV380.CreateCard(headersStack, p);
-        headersCard.Padding = new Thickness(14, 10, 14, 8);
+        headersCard.Padding = new Thickness(14, 9, 14, 9);
         headersCard.Margin = new Thickness(0, 0, 0, 10);
         DockPanel.SetDock(headersCard, Dock.Top);
         root.Children.Add(headersCard);
 
-        // 4. File Selector & Per-File Inside Information Cards
-        var filesOuterDock = new DockPanel { LastChildFill = true };
+        // 4. Clean Master-Detail Split View: Left = File Selector List, Right = Clean Header : Value Table
+        var splitGrid = new Grid();
+        splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(255) });
+        splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var fileSelectorLabel = new TextBlock
-        {
-            Text = "3. Select File (or View All Files) & Inside-File Details",
-            FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = DeskSpaceDesignV283.Solid(p.Muted),
-            Margin = new Thickness(0, 0, 0, 6)
-        };
-        DockPanel.SetDock(fileSelectorLabel, Dock.Top);
-        filesOuterDock.Children.Add(fileSelectorLabel);
-
-        var filePillsWrap = new WrapPanel();
-        var allFilesBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-            $"All Files ({result.MatchedFiles.Count})",
-            () => onSelectFile(""),
-            primary: string.IsNullOrEmpty(selectedFileFullPath),
-            tooltip: "Show inside-file details for all matching files");
-        allFilesBtn.Padding = new Thickness(10, 4, 10, 4);
-        allFilesBtn.MinHeight = 27;
-        allFilesBtn.FontSize = 11.5;
-        allFilesBtn.Margin = new Thickness(0, 0, 6, 6);
-        filePillsWrap.Children.Add(allFilesBtn);
-
-        foreach (var mf in result.MatchedFiles)
-        {
-            string capFilePath = mf.FullPath;
-            bool isSelFile = string.Equals(capFilePath, selectedFileFullPath, StringComparison.OrdinalIgnoreCase);
-            var fBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-                mf.DisplayName,
-                () => onSelectFile(capFilePath),
-                primary: isSelFile,
-                tooltip: $"{mf.FullPath} ({mf.OrderedFields.Count} extracted fields)");
-            fBtn.Padding = new Thickness(10, 4, 10, 4);
-            fBtn.MinHeight = 27;
-            fBtn.FontSize = 11.5;
-            fBtn.Margin = new Thickness(0, 0, 6, 6);
-            filePillsWrap.Children.Add(fBtn);
-        }
-
-        var filePillsScroll = new ScrollViewer
-        {
-            MaxHeight = 76,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Margin = new Thickness(0, 0, 0, 8),
-            Content = filePillsWrap
-        };
-        DockPanel.SetDock(filePillsScroll, Dock.Top);
-        filesOuterDock.Children.Add(filePillsScroll);
-
+        var leftDock = new DockPanel { LastChildFill = true };
         var filterBox = new TextBox
         {
             Text = appFileFilter,
-            Margin = new Thickness(0, 0, 0, 10),
-            ToolTip = "Search files by company/client name, GSTIN, PAN, year, or any visible field value"
+            Margin = new Thickness(0, 0, 0, 8),
+            ToolTip = "Filter files by name, GSTIN, PAN, year, or any extracted field"
         };
         DeskSpaceDesignV283.Input(filterBox, p);
         AutomationProperties.SetName(filterBox, "Filter application files by inside information");
         DockPanel.SetDock(filterBox, Dock.Top);
-        filesOuterDock.Children.Add(filterBox);
+        leftDock.Children.Add(filterBox);
+
+        var fileListBox = new ListBox
+        {
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(3)
+        };
+        DeskSpaceDesignV283.Selection(fileListBox, p);
+        AutomationProperties.SetName(fileListBox, "Application files");
+        leftDock.Children.Add(fileListBox);
+
+        var leftCard = DeskSpaceFluentBackdropV380.CreateCard(leftDock, p);
+        leftCard.Padding = new Thickness(11);
+        Grid.SetColumn(leftCard, 0);
+        splitGrid.Children.Add(leftCard);
 
         var filesScroller = new ScrollViewer
         {
@@ -4195,7 +4727,13 @@ internal static class DeskSpaceInformationTabV380
         };
         var filesStack = new StackPanel();
         filesScroller.Content = filesStack;
-        filesOuterDock.Children.Add(filesScroller);
+
+        var rightCard = DeskSpaceFluentBackdropV380.CreateCard(filesScroller, p);
+        rightCard.Padding = new Thickness(14);
+        Grid.SetColumn(rightCard, 2);
+        splitGrid.Children.Add(rightCard);
+
+        root.Children.Add(splitGrid);
 
         var orderedVisibleList = result.MatchedHeaders
             .Select(h => h.Header)
@@ -4205,33 +4743,34 @@ internal static class DeskSpaceInformationTabV380
             result.MatchedHeaders.Select(h => h.Header),
             StringComparer.OrdinalIgnoreCase);
 
-        void PopulateFilesStack(string queryText)
+        bool suppressSelectionEvent = false;
+        string activeSelectedFile = selectedFileFullPath;
+
+        void PopulateRightDetails(List<AppInfoFileRecordV380> queryMatches)
         {
             filesStack.Children.Clear();
-            string q = queryText.Trim();
-
-            var filteredFiles = result.MatchedFiles.Where(f =>
-            {
-                if (!string.IsNullOrEmpty(selectedFileFullPath) &&
-                    !string.Equals(f.FullPath, selectedFileFullPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-                if (string.IsNullOrEmpty(q))
-                    return true;
-                if (f.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                    f.FullPath.Contains(q, StringComparison.OrdinalIgnoreCase))
-                    return true;
-                return f.OrderedFields.Any(kv =>
-                    kv.Key.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                    kv.Value.Contains(q, StringComparison.OrdinalIgnoreCase));
-            }).ToList();
+            var targetFiles = string.IsNullOrEmpty(activeSelectedFile)
+                ? queryMatches
+                : queryMatches.Where(f => string.Equals(f.FullPath, activeSelectedFile, StringComparison.OrdinalIgnoreCase)).ToList();
 
             if (orderedVisibleList.Count == 0)
             {
                 filesStack.Children.Add(new TextBlock
                 {
-                    Text = "Check one or more Header checkboxes above (or click Select All) to display inside-file Header : Value information.",
+                    Text = "No headers selected. Click ⚙ Choose Fields above to choose which Header → Value fields to display.",
+                    FontSize = 13,
+                    Foreground = DeskSpaceDesignV283.Solid(p.Muted),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(4, 8, 4, 8)
+                });
+                return;
+            }
+
+            if (targetFiles.Count == 0)
+            {
+                filesStack.Children.Add(new TextBlock
+                {
+                    Text = "No files match your filter.",
                     FontSize = 13,
                     Foreground = DeskSpaceDesignV283.Solid(p.Muted),
                     Margin = new Thickness(4, 8, 4, 8)
@@ -4239,7 +4778,7 @@ internal static class DeskSpaceInformationTabV380
                 return;
             }
 
-            foreach (var fileRec in filteredFiles)
+            foreach (var fileRec in targetFiles)
             {
                 var displayPairs = new List<KeyValuePair<string, string>>(GetVisibleFieldsForFile(fileRec, orderedVisibleList));
                 var seenKeys = new HashSet<string>(displayPairs.Select(kv => kv.Key), StringComparer.OrdinalIgnoreCase);
@@ -4279,10 +4818,10 @@ internal static class DeskSpaceInformationTabV380
                 copyCardBtn.Margin = new Thickness(0, 0, 6, 0);
 
                 var saveToDonutBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-                    "+ Save to Donut Info",
+                    "+ Save to Manual Info",
                     () => onSaveFileToCollections(capturedFile, capturedPairs),
                     primary: true,
-                    tooltip: "Save these selected Header → Value rows into Donut Information Collections");
+                    tooltip: "Save a snapshot of these Header → Value rows into Manual Information Collections");
                 saveToDonutBtn.Padding = new Thickness(10, 3, 10, 3);
                 saveToDonutBtn.MinHeight = 26;
                 saveToDonutBtn.FontSize = 11;
@@ -4337,12 +4876,45 @@ internal static class DeskSpaceInformationTabV380
                 cardHeader.Children.Add(titleWrap);
                 cardStack.Children.Add(cardHeader);
 
-                var fieldsGrid = new WrapPanel();
-                foreach (var kv in displayPairs)
+                var tableHost = new StackPanel();
+                for (int r = 0; r < displayPairs.Count; r++)
                 {
+                    var kv = displayPairs[r];
                     string hKey = kv.Key;
                     string hVal = kv.Value;
-                    var itemDock = new DockPanel { LastChildFill = true };
+
+                    var rowGrid = new Grid();
+                    rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });
+                    rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                    var keyBlock = new TextBlock
+                    {
+                        Text = hKey,
+                        FontSize = 12,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = DeskSpaceDesignV283.Solid(p.Muted),
+                        TextWrapping = TextWrapping.Wrap,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 10, 0)
+                    };
+                    Grid.SetColumn(keyBlock, 0);
+                    rowGrid.Children.Add(keyBlock);
+
+                    var valBlock = new TextBlock
+                    {
+                        Text = hVal,
+                        FontSize = 12.5,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = DeskSpaceDesignV283.Solid(p.Text),
+                        TextWrapping = TextWrapping.Wrap,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 8, 0),
+                        ToolTip = hVal
+                    };
+                    Grid.SetColumn(valBlock, 1);
+                    rowGrid.Children.Add(valBlock);
+
                     var copyFieldBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
                         "⧉",
                         () =>
@@ -4352,48 +4924,30 @@ internal static class DeskSpaceInformationTabV380
                         },
                         primary: false,
                         tooltip: $"Copy {hKey}");
-                    copyFieldBtn.Padding = new Thickness(6, 2, 6, 2);
-                    copyFieldBtn.MinHeight = 22;
-                    copyFieldBtn.FontSize = 10.5;
-                    copyFieldBtn.Margin = new Thickness(6, 0, 0, 0);
-                    copyFieldBtn.VerticalAlignment = VerticalAlignment.Top;
-                    DockPanel.SetDock(copyFieldBtn, Dock.Right);
-                    itemDock.Children.Add(copyFieldBtn);
+                    copyFieldBtn.Padding = new Thickness(7, 2, 7, 2);
+                    copyFieldBtn.MinHeight = 23;
+                    copyFieldBtn.FontSize = 11;
+                    copyFieldBtn.VerticalAlignment = VerticalAlignment.Center;
+                    Grid.SetColumn(copyFieldBtn, 2);
+                    rowGrid.Children.Add(copyFieldBtn);
 
-                    var kvStack = new StackPanel();
-                    kvStack.Children.Add(new TextBlock
+                    tableHost.Children.Add(new Border
                     {
-                        Text = hKey,
-                        FontSize = 10.5,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = DeskSpaceDesignV283.Solid(p.Muted),
-                        TextWrapping = TextWrapping.Wrap
-                    });
-                    kvStack.Children.Add(new TextBlock
-                    {
-                        Text = hVal,
-                        FontSize = 12.5,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = DeskSpaceDesignV283.Solid(p.Text),
-                        TextWrapping = TextWrapping.Wrap,
-                        ToolTip = hVal
-                    });
-                    itemDock.Children.Add(kvStack);
-
-                    var fieldTile = new Border
-                    {
-                        Width = 272,
-                        CornerRadius = new CornerRadius(8),
-                        Background = DeskSpaceDesignV283.Solid(p.Raised),
+                        Background = DeskSpaceDesignV283.Solid(r % 2 == 0 ? p.Raised : p.Surface),
                         BorderBrush = DeskSpaceDesignV283.Solid(p.Border),
-                        BorderThickness = new Thickness(1),
-                        Padding = new Thickness(9, 6, 9, 6),
-                        Margin = new Thickness(0, 0, 8, 6),
-                        Child = itemDock
-                    };
-                    fieldsGrid.Children.Add(fieldTile);
+                        BorderThickness = new Thickness(0, r == 0 ? 1 : 0, 0, 1),
+                        Padding = new Thickness(10, 6, 8, 6),
+                        Child = rowGrid
+                    });
                 }
-                cardStack.Children.Add(fieldsGrid);
+
+                cardStack.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(8),
+                    BorderBrush = DeskSpaceDesignV283.Solid(p.Border),
+                    BorderThickness = new Thickness(1, 0, 1, 0),
+                    Child = tableHost
+                });
 
                 var fileCard = new Border
                 {
@@ -4401,23 +4955,115 @@ internal static class DeskSpaceInformationTabV380
                     Background = DeskSpaceDesignV283.Solid(p.Surface),
                     BorderBrush = DeskSpaceDesignV283.Solid(p.Border),
                     BorderThickness = new Thickness(1),
-                    Padding = new Thickness(13, 10, 13, 8),
-                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(13, 10, 13, 12),
+                    Margin = new Thickness(0, 0, 0, 12),
                     Child = cardStack
                 };
                 filesStack.Children.Add(fileCard);
             }
         }
 
-        PopulateFilesStack(appFileFilter);
+        List<AppInfoFileRecordV380> GetQueryMatches(string queryText)
+        {
+            string q = (queryText ?? string.Empty).Trim();
+            return result.MatchedFiles.Where(f =>
+            {
+                if (string.IsNullOrEmpty(q))
+                    return true;
+                if (f.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    f.FullPath.Contains(q, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                return f.OrderedFields.Any(kv =>
+                    kv.Key.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    kv.Value.Contains(q, StringComparison.OrdinalIgnoreCase));
+            }).ToList();
+        }
+
+        void PopulateFilesListAndDetails(string queryText)
+        {
+            var matches = GetQueryMatches(queryText);
+            suppressSelectionEvent = true;
+            try
+            {
+                fileListBox.Items.Clear();
+
+                var allStack = new StackPanel { Margin = new Thickness(6, 5, 6, 5) };
+                allStack.Children.Add(new TextBlock
+                {
+                    Text = $"All Files ({matches.Count})",
+                    FontSize = 13,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = DeskSpaceDesignV283.Solid(p.Text)
+                });
+                allStack.Children.Add(new TextBlock
+                {
+                    Text = "Compare all matching files side by side",
+                    FontSize = 10.5,
+                    Foreground = DeskSpaceDesignV283.Solid(p.Muted)
+                });
+                var allItem = new ListBoxItem { Tag = "", Content = allStack, Padding = new Thickness(4) };
+                fileListBox.Items.Add(allItem);
+
+                ListBoxItem? matchedSel = string.IsNullOrEmpty(activeSelectedFile) ? allItem : null;
+                foreach (var mf in matches)
+                {
+                    var itemStack = new StackPanel { Margin = new Thickness(6, 5, 6, 5) };
+                    itemStack.Children.Add(new TextBlock
+                    {
+                        Text = mf.DisplayName,
+                        FontSize = 13,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = DeskSpaceDesignV283.Solid(p.Text),
+                        TextTrimming = TextTrimming.CharacterEllipsis
+                    });
+                    itemStack.Children.Add(new TextBlock
+                    {
+                        Text = $"{mf.KindBadge} · {mf.OrderedFields.Count} fields",
+                        FontSize = 10.5,
+                        Foreground = DeskSpaceDesignV283.Solid(p.Muted),
+                        TextTrimming = TextTrimming.CharacterEllipsis
+                    });
+                    var lbi = new ListBoxItem
+                    {
+                        Tag = mf.FullPath,
+                        Content = itemStack,
+                        Padding = new Thickness(4),
+                        ToolTip = mf.FullPath
+                    };
+                    fileListBox.Items.Add(lbi);
+                    if (!string.IsNullOrEmpty(activeSelectedFile) &&
+                        string.Equals(mf.FullPath, activeSelectedFile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedSel = lbi;
+                    }
+                }
+
+                fileListBox.SelectedItem = matchedSel ?? allItem;
+            }
+            finally
+            {
+                suppressSelectionEvent = false;
+            }
+
+            PopulateRightDetails(matches);
+        }
+
+        fileListBox.SelectionChanged += (_, _) =>
+        {
+            if (suppressSelectionEvent) return;
+            if (fileListBox.SelectedItem is ListBoxItem lbi && lbi.Tag is string pathTag)
+            {
+                activeSelectedFile = pathTag;
+                onSelectFile(pathTag);
+                PopulateRightDetails(GetQueryMatches(filterBox.Text));
+            }
+        };
+
+        PopulateFilesListAndDetails(appFileFilter);
         filterBox.TextChanged += (_, _) =>
         {
             onFilterChanged(filterBox.Text);
-            PopulateFilesStack(filterBox.Text);
+            PopulateFilesListAndDetails(filterBox.Text);
         };
-
-        var filesContainerCard = DeskSpaceFluentBackdropV380.CreateCard(filesOuterDock, p);
-        filesContainerCard.Padding = new Thickness(14);
-        root.Children.Add(filesContainerCard);
     }
 }

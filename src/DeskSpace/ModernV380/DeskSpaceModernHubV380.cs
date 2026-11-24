@@ -205,6 +205,9 @@ internal static class DeskSpaceModernHubV380
                     (_, _) => owner.Dispatcher.Invoke(() => DeskSpacePinnedAppFilesV380.TryLaunchPinnedAppDirect(captured, owner)));
                 appSub.DropDownItems.Add("Browse Compatible Files…", null,
                     (_, _) => owner.Dispatcher.Invoke(() => DeskSpacePinnedAppFilesV380.Show(owner, captured)));
+                appSub.DropDownItems.Add(new Forms.ToolStripSeparator());
+                appSub.DropDownItems.Add($"✕ Unpin {label}", null,
+                    (_, _) => owner.Dispatcher.Invoke(() => DeskSpacePinnedAppFilesV380.UnpinApplication(captured)));
                 pinnedFilesMenu.DropDownItems.Add(appSub);
             }
             pinnedFilesMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
@@ -335,8 +338,6 @@ internal static class DeskSpaceModernHubV380
 
     internal static void ShowPinnedAppsSelector(Window? owner)
     {
-        var pins = LoadUniquePinnedApps();
-
         var win = DeskSpaceFluentBackdropV380.CreateModernWindow(
             "DeskSpace · Pinned Apps & Compatible Files", 660, 490, owner);
         var p = DeskSpaceDesignV283.Current;
@@ -386,19 +387,23 @@ internal static class DeskSpaceModernHubV380
         scroller.Content = stack;
         root.Children.Add(scroller);
 
-        if (pins.Count == 0)
+        void RebuildPinnedCards()
         {
-            stack.Children.Add(DeskSpaceFluentBackdropV380.CreateCard(new TextBlock
+            stack.Children.Clear();
+            var currentPins = LoadUniquePinnedApps();
+            if (currentPins.Count == 0)
             {
-                Text = "No pinned applications yet. Pin apps like Tally, Excel, Word, or VS Code in the Donut's Applications -> + Pin ring, or click Browse Another App below.",
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = DeskSpaceDesignV283.Solid(p.Muted),
-                FontSize = 13
-            }, p));
-        }
-        else
-        {
-            foreach (string appPath in pins)
+                stack.Children.Add(DeskSpaceFluentBackdropV380.CreateCard(new TextBlock
+                {
+                    Text = "No pinned applications yet. Pin apps like Tally, Excel, Word, or VS Code in the Donut's Applications -> + Pin ring, or click Browse Another App below.",
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = DeskSpaceDesignV283.Solid(p.Muted),
+                    FontSize = 13
+                }, p));
+                return;
+            }
+
+            foreach (string appPath in currentPins)
             {
                 string captured = appPath;
                 var cap = DeskSpacePinnedAppFilesV380.ResolveCapability(captured);
@@ -460,8 +465,15 @@ internal static class DeskSpaceModernHubV380
                     win.Close();
                     DeskSpacePinnedAppFilesV380.Show(owner, captured);
                 }, primary: false);
+                openBtn.Margin = new Thickness(0, 0, 8, 0);
+                var unpinBtn = DeskSpaceFluentBackdropV380.CreatePillButton("✕ Unpin", () =>
+                {
+                    if (DeskSpacePinnedAppFilesV380.UnpinApplication(captured))
+                        RebuildPinnedCards();
+                }, primary: false, tooltip: $"Remove {cap.DisplayName} from Pinned Applications");
                 btnRow.Children.Add(launchBtn);
                 btnRow.Children.Add(openBtn);
+                btnRow.Children.Add(unpinBtn);
                 Grid.SetColumn(btnRow, 2);
                 rowGrid.Children.Add(btnRow);
 
@@ -470,6 +482,8 @@ internal static class DeskSpaceModernHubV380
                 stack.Children.Add(card);
             }
         }
+
+        RebuildPinnedCards();
 
         win.Show();
         win.Activate();

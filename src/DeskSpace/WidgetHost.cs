@@ -714,7 +714,8 @@ public sealed class WidgetShellWindow : Window
         if (IsMouseCaptured) ReleaseMouseCapture();
         if (selection >= 0)
             Dispatcher.BeginInvoke(new Action(() => ClickSegment(Segments[selection])));
-        CollapseRing();
+        if (selection is not (6 or 10 or 11))
+            CollapseRing();
         e.Handled = true;
     }
 
@@ -1805,11 +1806,29 @@ public sealed class WidgetShellWindow : Window
             informationOverlay.HideArc();
     }
 
+    internal void SyncPinnedAppsFromDiskV380()
+    {
+        try
+        {
+            var latest=WidgetSettingsV3.Load().PinnedApps;
+            prefs.PinnedApps.Clear();
+            prefs.PinnedApps.AddRange(latest);
+            if(appsWheel?.IsArcOpen==true)
+            {
+                appsWheel.RefreshPinsV380();
+                if(activeModule==null && ringExpanded)
+                    content.Text="Applications"+Environment.NewLine+appsWheel.PinnedCount+" pinned";
+            }
+        }
+        catch{}
+    }
+
     private void OpenApplicationsArc()
     {
         if(activeModule!=null)return;
         if(!ringExpanded)ToggleRing();
         if(!ringExpanded)return;
+        SyncPinnedAppsFromDiskV380();
         appsWheel??=new DeskSpaceApplicationsV55(this,
             ()=>prefs.PinnedApps.ToArray(),
             p=>{
@@ -1821,6 +1840,8 @@ public sealed class WidgetShellWindow : Window
                 var old=prefs.PinnedApps.FirstOrDefault(x=>string.Equals(x,p,
                     StringComparison.OrdinalIgnoreCase));
                 if(old!=null){prefs.PinnedApps.Remove(old);prefs.Save();}
+                if(appsWheel?.IsArcOpen==true && activeModule==null && ringExpanded)
+                    content.Text="Applications"+Environment.NewLine+appsWheel.PinnedCount+" pinned";
             },
             ()=>OpenInWidget("Search"));
         if(!appsWheel.IsArcOpen)appsWheel.Show();
@@ -1914,9 +1935,6 @@ public sealed class WidgetShellWindow : Window
         if(name=="Information")
         {
             OpenInformationArc();
-            informationOverlay?.OpenAppFileInfoShelf();
-            if(ringExpanded)ToggleRing();
-            informationOverlay?.HideArc();
             return;
         }
         if(informationOverlay?.IsEditing==true &&

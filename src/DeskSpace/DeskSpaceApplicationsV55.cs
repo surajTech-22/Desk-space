@@ -213,10 +213,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         canvas=new Canvas{Width=1,Height=1,Background=null,Focusable=true};
         canvas.MouseMove+=Move;
         canvas.PreviewMouseLeftButtonDown+=Down;
-        // Left click retains the original open-latest pinned action. A
-        // RIGHT click on that same pinned arc explicitly opens the recent
-        // document choice list; no background discovery is scheduled.
-        canvas.PreviewMouseRightButtonDown+=RecentRightClickV262;
+        // Left click opens directly; Right click opens Compatible Files or Unpin menu.
+        canvas.PreviewMouseRightButtonDown+=OpenFilesRightClickV380;
         canvas.MouseWheel+=Wheel;
         arc=new Popup{PlacementTarget=owner,Placement=PlacementMode.Relative,
             AllowsTransparency=true,StaysOpen=true,Child=canvas};
@@ -341,7 +339,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             bool isSelectedApp=item.Kind=="launch" && !string.IsNullOrEmpty(activeAppPath) &&
                 string.Equals(item.Path,activeAppPath,StringComparison.OrdinalIgnoreCase);
             ToolTip tip=item.Kind=="launch"
-                ? CreateCompactTooltipV380(item.Label,"Click to open · Right-click for all files")
+                ? CreateCompactTooltipV380(item.Label,"Click to open · Right-click for files or Unpin")
                 : item.Kind=="launchfile"
                     ? (fileLookup.TryGetValue(item.Path,out var fi)
                         ? CreateCompactTooltipV380(fi.DisplayName,
@@ -666,19 +664,66 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     {
         if(!disposed&&arc.IsOpen)Hover(e.GetPosition(canvas));
     }
-    private void RecentRightClickV262(object sender,MouseButtonEventArgs e)
+    internal bool UnpinAppV380(string path)
+    {
+        if(string.IsNullOrWhiteSpace(path))return false;
+        removePin(path);
+        if(string.Equals(activeAppPath,path,StringComparison.OrdinalIgnoreCase))
+            ClearActiveAppFilesV380();
+        int maxStart=Math.Max(0,Children().Count-(DeskSpaceSubDonutStandardV62.Visible-1));
+        childPage=Math.Clamp(childPage,0,maxStart);
+        Render();
+        return true;
+    }
+    internal void RefreshPinsV380()
+    {
+        if(disposed)return;
+        if(!string.IsNullOrEmpty(activeAppPath) &&
+           !pinned().Any(p=>string.Equals(p,activeAppPath,StringComparison.OrdinalIgnoreCase)))
+        {
+            ClearActiveAppFilesV380();
+        }
+        int maxStart=Math.Max(0,Children().Count-(DeskSpaceSubDonutStandardV62.Visible-1));
+        childPage=Math.Clamp(childPage,0,maxStart);
+        if(arc.IsOpen)Render();
+    }
+    private void OpenFilesRightClickV380(object sender,MouseButtonEventArgs e)
     {
         if(disposed || !arc.IsOpen)return;
         int index=Slot(e.GetPosition(canvas));
         if(index<0 || hitZones[index].Kind!="launch")return;
         string pinnedPath=hitZones[index].Path;
         if(!IsLaunchable(pinnedPath))return;
-        HideArc();
-        owner.Dispatcher.BeginInvoke(new Action(()=>
-        {
-            try{DeskSpacePinnedAppFilesV380.Show(owner,pinnedPath);}
-            catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
-        }));
+        string displayLabel=DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(pinnedPath);
+        if(string.IsNullOrWhiteSpace(displayLabel))
+            displayLabel=System.IO.Path.GetFileNameWithoutExtension(pinnedPath);
+        var cm=new ContextMenu();
+        var openItem=new MenuItem{Header=$"Open {displayLabel}"};
+        openItem.Click+=(_,_)=>{
+            HideArc();
+            owner.Dispatcher.BeginInvoke(new Action(()=>
+            {
+                try{DeskSpacePinnedAppFilesV380.TryLaunchPinnedAppDirect(pinnedPath,owner);}
+                catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
+            }));
+        };
+        var filesItem=new MenuItem{Header="Browse All Compatible Files…"};
+        filesItem.Click+=(_,_)=>{
+            HideArc();
+            owner.Dispatcher.BeginInvoke(new Action(()=>
+            {
+                try{DeskSpacePinnedAppFilesV380.Show(owner,pinnedPath);}
+                catch(Exception ex){MessageBox.Show(ex.Message,"DeskSpace Applications");}
+            }));
+        };
+        var unpinItem=new MenuItem{Header=$"✕ Unpin {displayLabel}"};
+        unpinItem.Click+=(_,_)=>UnpinAppV380(pinnedPath);
+        cm.Items.Add(openItem);
+        cm.Items.Add(filesItem);
+        cm.Items.Add(new Separator());
+        cm.Items.Add(unpinItem);
+        cm.PlacementTarget=canvas;
+        cm.IsOpen=true;
         e.Handled=true;
     }
     private void Down(object sender,MouseButtonEventArgs e)

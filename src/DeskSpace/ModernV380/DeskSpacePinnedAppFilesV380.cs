@@ -1837,6 +1837,92 @@ internal static class DeskSpacePinnedAppFilesV380
         }
     }
 
+    internal static bool IsApplicationPinned(string? appPath, string? settingsPath = null)
+    {
+        if (string.IsNullOrWhiteSpace(appPath))
+            return false;
+
+        try
+        {
+            WidgetSettingsV3 settings;
+            if (string.IsNullOrWhiteSpace(settingsPath))
+            {
+                settings = WidgetSettingsV3.Load();
+            }
+            else
+            {
+                if (!File.Exists(settingsPath))
+                    return false;
+                settings = JsonSerializer.Deserialize<WidgetSettingsV3>(File.ReadAllText(settingsPath)) ?? new();
+            }
+
+            string targetNorm = NormalizeFullPathSafe(appPath);
+            return settings.PinnedApps.Any(p =>
+                string.Equals(p, appPath, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(targetNorm) &&
+                 string.Equals(NormalizeFullPathSafe(p), targetNorm, StringComparison.OrdinalIgnoreCase)));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    internal static bool UnpinApplication(string? appPath, string? settingsPath = null)
+    {
+        if (string.IsNullOrWhiteSpace(appPath))
+            return false;
+
+        try
+        {
+            WidgetSettingsV3 settings;
+            if (string.IsNullOrWhiteSpace(settingsPath))
+            {
+                settings = WidgetSettingsV3.Load();
+            }
+            else
+            {
+                settings = File.Exists(settingsPath)
+                    ? (JsonSerializer.Deserialize<WidgetSettingsV3>(File.ReadAllText(settingsPath)) ?? new())
+                    : new();
+            }
+
+            string targetNorm = NormalizeFullPathSafe(appPath);
+            int removed = settings.PinnedApps.RemoveAll(p =>
+                string.Equals(p, appPath, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(targetNorm) &&
+                 string.Equals(NormalizeFullPathSafe(p), targetNorm, StringComparison.OrdinalIgnoreCase)));
+
+            if (removed <= 0)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(settingsPath))
+            {
+                settings.Save();
+                if (Application.Current != null)
+                {
+                    foreach (var widget in Application.Current.Windows.OfType<WidgetShellWindow>())
+                        widget.SyncPinnedAppsFromDiskV380();
+                }
+            }
+            else
+            {
+                string? dir = System.IO.Path.GetDirectoryName(settingsPath);
+                if (!string.IsNullOrWhiteSpace(dir))
+                    Directory.CreateDirectory(dir);
+                string tmp = settingsPath + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(settings));
+                File.Move(tmp, settingsPath, overwrite: true);
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     internal static void Show(Window? owner, string pinnedPath)
     {
         if (string.IsNullOrWhiteSpace(pinnedPath))
@@ -1905,7 +1991,18 @@ internal static class DeskSpacePinnedAppFilesV380
         Action? triggerRefresh = null;
         refreshBtn = DeskSpaceFluentBackdropV380.CreatePillButton("Refresh", () => triggerRefresh?.Invoke(),
             primary: false, tooltip: "Re-scan recent and system locations (F5)");
+        refreshBtn.Margin = new Thickness(0, 0, IsApplicationPinned(pinnedPath) ? 8 : 0, 0);
         headerActions.Children.Add(refreshBtn);
+
+        if (IsApplicationPinned(pinnedPath))
+        {
+            var unpinBtn = DeskSpaceFluentBackdropV380.CreatePillButton("✕ Unpin", () =>
+            {
+                if (UnpinApplication(pinnedPath))
+                    win.Close();
+            }, primary: false, tooltip: $"Unpin {cap.DisplayName} from DeskSpace Applications");
+            headerActions.Children.Add(unpinBtn);
+        }
 
         DockPanel.SetDock(headerActions, Dock.Right);
         headerInner.Children.Add(headerActions);
