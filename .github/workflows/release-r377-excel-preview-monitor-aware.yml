@@ -371,11 +371,11 @@ jobs:
           if($latest.Major -ne 1 -or $latest.Minor -ne 5){
               throw 'Unexpected DeskSpace stable version family'
           }
-          $nextBuild=1161
+          $nextBuild=1162
           $version="1.5.$nextBuild"
           $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
           if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
-          foreach($tag in @('v1.5.1161','tester-v1.5.1161')){
+          foreach($tag in @('v1.5.1162','tester-v1.5.1162')){
             if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
               throw ('Refuse to overwrite existing release: '+$tag)
             }
@@ -609,7 +609,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1161: Fixed floating donut auto-collapse, Information center summary, 1-app Fields shortcut, Multi-App Depth-1 fit, clean shelf layout, and cross-process PinnedApps & field-preference sync. Filtered out Sample/Backup/Old/Test/lock files, isolated Winman GST/TDS/CA ERP extensions, excluded IDEs from Information, removed fake GSTIN/PAN/date-range/colon Excel headers, and added searchable field selection & smooth MainWindow scrolling."
+              $notes="DeskSpace 1.5.1162: Added Full-Name floating callout pills for truncated sub-donut labels (Applications, Information, Excel) preserved across async expansions, 6 selectable Donut Visual Styles (Liquid Glass default, Floating Petals, Neon Cyber, Aurora Gradient, Minimal Wireframe, Classic Synced), mixable visual & motion layers to combine 2-3+ effects at once, 7 Open/Sub-Arc Transitions (Spring Bloom default), live Settings Studio dual-ring & sub-donut preview, and tray quick switcher."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Modern Suite & Pinned App Files" --notes $notes
               }else{
@@ -631,14 +631,14 @@ jobs:
               }
           }
           Write-Host "R377 Excel Preview & Monitor-Aware Widgets release SUCCESS: same SHA256 installer published to Tester and Stable."
-      - name: Send fresh SHA256-verified v1.5.1161 notification hints to both installed channels
+      - name: Send fresh SHA256-verified v1.5.1162 notification hints to both installed channels
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
-          foreach($hint in @('stable|v1.5.1161','tester|tester-v1.5.1161')){
+          foreach($hint in @('stable|v1.5.1162','tester|tester-v1.5.1162')){
             try{
-              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1161 available' }
+              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1162 available' }
               if($response.event -ne 'message'){throw ('Relay rejected '+$hint)}
               Write-Host ('ACKNOWLEDGED official release hint: '+$hint)
             }catch{

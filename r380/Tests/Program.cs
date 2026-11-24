@@ -2642,6 +2642,318 @@ internal static class Program
         }
     }
 
+    private static void TestDonutThemeMixesTransitionsAndCalloutV380(Assembly asm)
+    {
+        var appType = asm.GetType("DeskSpace.DeskSpaceAppearanceV148", true)!;
+        var themeType = asm.GetType("DeskSpace.DeskSpaceDonutThemeV380", true)!;
+        var pillType = asm.GetType("DeskSpace.DeskSpaceDonutThemeV380+SubDonutCalloutPillV380", true)!;
+        var appsType = asm.GetType("DeskSpace.DeskSpaceApplicationsV55", true)!;
+        var infoType = asm.GetType("DeskSpace.DeskSpaceInformationV36", true)!;
+        var excelType = asm.GetType("DeskSpace.DeskSpaceExcelWheelV42", true)!;
+
+        string appFile = (string)appType.GetProperty("PathName", AnyStatic)!.GetValue(null)!;
+        bool hadAppFile = File.Exists(appFile);
+        byte[]? origAppBytes = hadAppFile ? File.ReadAllBytes(appFile) : null;
+        DateTime origAppWrite = hadAppFile ? File.GetLastWriteTimeUtc(appFile) : DateTime.MinValue;
+        string tempDir = Path.Combine(Path.GetTempPath(), "ds_r380_theme_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(tempDir);
+
+        Window? offscreenOwner = null;
+        IDisposable? appsWheel = null;
+        IDisposable? infoWheel = null;
+        IDisposable? excelWheel = null;
+        IDisposable? standalonePill = null;
+
+        try
+        {
+            var validStyles = (string[])appType.GetField("ValidDonutStyles", AnyStatic)!.GetValue(null)!;
+            var validTransitions = (string[])appType.GetField("ValidTransitions", AnyStatic)!.GetValue(null)!;
+            Check(validStyles.Length == 6, "Expected 6 selectable Donut styles.");
+            Check(validTransitions.Length == 7, "Expected 7 open transitions.");
+            foreach (string s in new[] { "LiquidGlass", "FloatingPetals", "NeonCyber", "AuroraGradient", "MinimalWireframe", "ClassicSynced" })
+                Check(validStyles.Contains(s, StringComparer.Ordinal), "Missing DonutStyle: " + s);
+            foreach (string tr in new[] { "SpringBloom", "IrisUnfold", "SmoothGlide", "RadialPop", "SpiralSpin", "FadeSlide", "Instant" })
+                Check(validTransitions.Contains(tr, StringComparer.Ordinal), "Missing OpenTransition: " + tr);
+
+            // Default instance checks
+            object defApp = Activator.CreateInstance(appType, true)!;
+            Check(GetProp<string>(defApp, "DonutStyle") == "LiquidGlass", "Default DonutStyle must be LiquidGlass.");
+            Check(GetProp<string>(defApp, "OpenTransition") == "SpringBloom", "Default OpenTransition must be SpringBloom.");
+            Check(GetProp<bool>(defApp, "MixGlassFrost"), "Default MixGlassFrost should be enabled.");
+            Check(GetProp<bool>(defApp, "MotionHoverLift"), "Default MotionHoverLift should be enabled.");
+            Check(GetProp<bool>(defApp, "MotionHoverGlow"), "Default MotionHoverGlow should be enabled.");
+            Check(GetProp<bool>(defApp, "MotionScrollGlide"), "Default MotionScrollGlide should be enabled.");
+
+            // Sanitize & preset defaults
+            SetProp(defApp, "DonutStyle", "UnknownStyle");
+            SetProp(defApp, "OpenTransition", "UnknownTransition");
+            object sanitized = InvokeStatic(appType, "Sanitize", defApp)!;
+            Check(GetProp<string>(sanitized, "DonutStyle") == "LiquidGlass", "Sanitize should normalize invalid DonutStyle to LiquidGlass.");
+            Check(GetProp<string>(sanitized, "OpenTransition") == "SpringBloom", "Sanitize should normalize invalid OpenTransition to SpringBloom.");
+
+            object petalApp = Activator.CreateInstance(appType, true)!;
+            InvokeStatic(appType, "ApplyDonutPresetDefaults", petalApp, "FloatingPetals");
+            Check(GetProp<string>(petalApp, "DonutStyle") == "FloatingPetals" && GetProp<bool>(petalApp, "MixFloatingGaps"),
+                "FloatingPetals preset should enable MixFloatingGaps.");
+
+            // Custom 4-way Mix save + disk mtime ReloadIfChanged round-trip + Clone
+            object mixApp = Activator.CreateInstance(appType, true)!;
+            SetProp(mixApp, "Mode", "Dark");
+            SetProp(mixApp, "Accent", "Cyan");
+            SetProp(mixApp, "DonutStyle", "LiquidGlass");
+            SetProp(mixApp, "OpenTransition", "SpiralSpin");
+            SetProp(mixApp, "MixGlassFrost", true);
+            SetProp(mixApp, "MixNeonEdge", true);
+            SetProp(mixApp, "MixFloatingGaps", true);
+            SetProp(mixApp, "MixAuroraGradient", true);
+            SetProp(mixApp, "MotionStaggerRipple", true);
+
+            object clonedMix = InvokeStatic(appType, "Clone", mixApp)!;
+            Check(GetProp<bool>(clonedMix, "MixNeonEdge") && GetProp<bool>(clonedMix, "MixFloatingGaps") &&
+                  GetProp<bool>(clonedMix, "MixAuroraGradient") && GetProp<string>(clonedMix, "OpenTransition") == "SpiralSpin",
+                "Clone must preserve all DonutStyle, transition, mix, and motion properties.");
+
+            InvokeStatic(appType, "Save", mixApp);
+            InvokeStatic(appType, "ReloadIfChanged", true);
+            object reloaded = appType.GetProperty("Current", AnyStatic)!.GetValue(null)!;
+            Check(GetProp<string>(reloaded, "OpenTransition") == "SpiralSpin", "ReloadIfChanged should read saved OpenTransition.");
+            Check(GetProp<bool>(reloaded, "MixNeonEdge") && GetProp<bool>(reloaded, "MixFloatingGaps") &&
+                  GetProp<bool>(reloaded, "MixAuroraGradient") && GetProp<bool>(reloaded, "MotionStaggerRipple"),
+                "ReloadIfChanged should preserve multi-mix and motion flags.");
+
+            // Theme engine across all 6 styles x Dark/Light x HighContrast
+            var resolveWedge = themeType.GetMethod("ResolveWedge", AnyStatic)!;
+            var resolveHub = themeType.GetMethod("ResolveHub", AnyStatic)!;
+            var resolveCallout = themeType.GetMethod("ResolveCalloutColors", AnyStatic)!;
+            var getMainGap = themeType.GetMethod("GetMainGapDegrees", AnyStatic)!;
+            var getSubInset = themeType.GetMethod("GetSubArcGapInset", AnyStatic)!;
+            var animateOpen = themeType.GetMethod("AnimateOpen", AnyStatic)!;
+            var applyHoverLift = themeType.GetMethod("ApplyHoverLift", AnyStatic)!;
+
+            foreach (string style in validStyles)
+            {
+                foreach (string mode in new[] { "Dark", "Light" })
+                {
+                    foreach (bool hc in new[] { false, true })
+                    {
+                        object testApp = Activator.CreateInstance(appType, true)!;
+                        SetProp(testApp, "Mode", mode);
+                        InvokeStatic(appType, "ApplyDonutPresetDefaults", testApp, style);
+                        object wv = resolveWedge.Invoke(null, new object?[] { testApp, hc, 2, 0, false, false, true })!;
+                        Check(GetProp<System.Windows.Media.Brush>(wv, "Fill") != null && GetProp<System.Windows.Media.Brush>(wv, "Stroke") != null &&
+                              GetProp<System.Windows.Media.Brush>(wv, "TextBrush") != null && GetProp<double>(wv, "StrokeThickness") > 0,
+                            $"ResolveWedge invalid brushes for {style}/{mode}/HC={hc}");
+                        object hv = resolveHub.Invoke(null, new object?[] { testApp, hc })!;
+                        Check(GetProp<System.Windows.Media.Brush>(hv, "Fill") != null && GetProp<System.Windows.Media.Brush>(hv, "Stroke") != null &&
+                              GetProp<System.Windows.Media.Brush>(hv, "TextBrush") != null,
+                            $"ResolveHub invalid brushes for {style}/{mode}/HC={hc}");
+                        object cv = resolveCallout.Invoke(null, new object?[] { testApp, hc })!;
+                        Check(cv != null, $"ResolveCalloutColors returned null for {style}/{mode}/HC={hc}");
+                    }
+                }
+            }
+
+            // Gap differences & combined 4-layer mix verification
+            object classicApp = Activator.CreateInstance(appType, true)!;
+            InvokeStatic(appType, "ApplyDonutPresetDefaults", classicApp, "ClassicSynced");
+            double classicGap = (double)getMainGap.Invoke(null, new object?[] { classicApp })!;
+            double mixGap = (double)getMainGap.Invoke(null, new object?[] { mixApp })!;
+            double classicInset = (double)getSubInset.Invoke(null, new object?[] { classicApp })!;
+            double mixInset = (double)getSubInset.Invoke(null, new object?[] { mixApp })!;
+            Check(mixGap > classicGap && mixInset > classicInset && mixInset > 0,
+                $"Floating gaps mix should widen gaps (classic={classicGap}/{classicInset}, mix={mixGap}/{mixInset}).");
+
+            object mixedVisual = resolveWedge.Invoke(null, new object?[] { mixApp, false, 2, 1, false, false, true })!;
+            Check(GetProp<System.Windows.Media.Brush>(mixedVisual, "Fill") is LinearGradientBrush,
+                "Combined Aurora+Glass+Neon mix must yield a LinearGradientBrush fill.");
+            Check(GetProp<System.Windows.Media.Effects.Effect?>(mixedVisual, "Effect") != null,
+                "Combined Neon mix must attach a DropShadowEffect.");
+
+            // Exercise all 7 open transitions + stagger ripple + hover lift on WPF elements
+            var animCanvas = new Canvas { Width = 240, Height = 240 };
+            var wedgeEls = new List<FrameworkElement>
+            {
+                new System.Windows.Shapes.Path { Width = 40, Height = 40 },
+                new System.Windows.Shapes.Path { Width = 40, Height = 40 },
+                new System.Windows.Shapes.Path { Width = 40, Height = 40 }
+            };
+            foreach (FrameworkElement el in wedgeEls) animCanvas.Children.Add(el);
+            foreach (string tr in validTransitions)
+            {
+                SetProp(mixApp, "OpenTransition", tr);
+                SetProp(mixApp, "MotionStaggerRipple", tr != "Instant");
+                animateOpen.Invoke(null, new object?[] { animCanvas, wedgeEls, 120.0, 120.0, -90.0, true, mixApp });
+                applyHoverLift.Invoke(null, new object?[] { wedgeEls.Cast<UIElement>(), true, -90.0, mixApp });
+                applyHoverLift.Invoke(null, new object?[] { wedgeEls.Cast<UIElement>(), false, -90.0, mixApp });
+            }
+
+            // Callout Pill truncation classifier & offscreen Window popup lifecycle
+            var isTruncMethod = pillType.GetMethod("IsLabelTruncated", AnyStatic)!;
+            bool longTrunc = (bool)isTruncMethod.Invoke(null, new object?[]
+            {
+                "Very Long Enterprise Financial Statement Workbook 2026 Q4 Final",
+                64.0, 24.0, 10.5, FontWeights.SemiBold, true
+            })!;
+            bool shortTrunc = (bool)isTruncMethod.Invoke(null, new object?[]
+            {
+                "Notes", 96.0, 30.0, 10.5, FontWeights.SemiBold, true
+            })!;
+            Check(longTrunc, "Long overflowing sub-donut label must be classified as truncated.");
+            Check(!shortTrunc, "Short fitting sub-donut label must not be classified as truncated.");
+
+            offscreenOwner = new Window
+            {
+                Left = -32000,
+                Top = -32000,
+                Width = 140,
+                Height = 140,
+                ShowInTaskbar = false,
+                AllowsTransparency = true,
+                WindowStyle = WindowStyle.None,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Opacity = 0.01
+            };
+            var hostCanvas = new Canvas { Width = 140, Height = 140 };
+            offscreenOwner.Content = hostCanvas;
+            offscreenOwner.Show();
+
+            standalonePill = (IDisposable)pillType.GetConstructor(AnyInstance, null, new[] { typeof(Window) }, null)!
+                .Invoke(new object?[] { offscreenOwner });
+            Check(!GetProp<bool>(standalonePill, "IsVisible"), "Callout pill should start hidden.");
+            pillType.GetMethod("Show", AnyInstance)!.Invoke(standalonePill,
+                new object?[] { hostCanvas, new System.Windows.Point(100, 36), -90.0, "Full Cut Off Item Name", "XLSX" });
+            Check(GetProp<string>(standalonePill, "ActiveFullText") == "Full Cut Off Item Name",
+                "Callout pill ActiveFullText should reflect full label.");
+            Check(GetProp<bool>(standalonePill, "IsVisible"), "Callout pill should open when owner window is shown.");
+            pillType.GetMethod("Hide", AnyInstance)!.Invoke(standalonePill, null);
+            Check(!GetProp<bool>(standalonePill, "IsVisible"),
+                "Callout pill Hide() must close popup.");
+            pillType.GetMethod("Show", AnyInstance)!.Invoke(standalonePill,
+                new object?[] { hostCanvas, new System.Windows.Point(100, 36), -90.0, "Full Cut Off Item Name", "XLSX" });
+            Check(GetProp<bool>(standalonePill, "IsVisible"),
+                "Callout pill must re-open cleanly when the same item is hovered again after Hide().");
+            pillType.GetMethod("Hide", AnyInstance)!.Invoke(standalonePill, null);
+
+            // Sub-donut live theme + floating petal + truncated vs short hover pill verification
+            string shortAppExe = Path.Combine(tempDir, "Go.exe");
+            string longAppExe = Path.Combine(tempDir, "SuperLongEnterpriseFinancialReportingSuiteApplication2026.exe");
+            File.WriteAllBytes(shortAppExe, Array.Empty<byte>());
+            File.WriteAllBytes(longAppExe, Array.Empty<byte>());
+
+            appsWheel = (IDisposable)Activator.CreateInstance(appsType, AnyInstance, null,
+                new object?[]
+                {
+                    offscreenOwner,
+                    (Func<IReadOnlyList<string>>)(() => new[] { shortAppExe, longAppExe }),
+                    (Action<string>)(_ => { }),
+                    (Action<string>)(_ => { }),
+                    (Action)(() => { })
+                }, null)!;
+            infoWheel = (IDisposable)Activator.CreateInstance(infoType, AnyInstance, null,
+                new object?[] { offscreenOwner, (Action)(() => { }), (Action)(() => { }) }, null)!;
+            excelWheel = (IDisposable)Activator.CreateInstance(excelType, AnyInstance, null,
+                new object?[] { offscreenOwner, (Action)(() => { }) }, null)!;
+
+            foreach (string style in new[] { "LiquidGlass", "FloatingPetals", "NeonCyber" })
+            {
+                InvokeStatic(appType, "ApplyDonutPresetDefaults", mixApp, style);
+                InvokeStatic(appType, "Save", mixApp);
+                InvokeStatic(appType, "ReloadIfChanged", true);
+                appsType.GetMethod("RefreshThemeV380", AnyInstance)!.Invoke(appsWheel, null);
+                infoType.GetMethod("RefreshThemeV380", AnyInstance)!.Invoke(infoWheel, null);
+                excelType.GetMethod("RefreshThemeV380", AnyInstance)!.Invoke(excelWheel, null);
+            }
+
+            bool nearExcelClosed = (bool)excelType.GetMethod("IsPointerNearArc", AnyInstance)!.Invoke(excelWheel, null)!;
+            Check(!nearExcelClosed, "Closed Excel sub-donut should report IsPointerNearArc == false.");
+
+            // Expand pinned layer on DeskSpaceApplicationsV55 and hover truncated vs short wedges
+            appsType.GetMethod("Show", AnyInstance)!.Invoke(appsWheel, null);
+            appsType.GetField("group", AnyInstance)!.SetValue(appsWheel, "pinned");
+            appsType.GetMethod("Render", AnyInstance)!.Invoke(appsWheel, null);
+
+            var hitZonesList = (IList)appsType.GetField("hitZones", AnyInstance)!.GetValue(appsWheel)!;
+            var wvList = (IList)appsType.GetField("wedgeVisualsV380", AnyInstance)!.GetValue(appsWheel)!;
+            var appsPill = appsType.GetField("calloutPill", AnyInstance)!.GetValue(appsWheel)!;
+            var hoverMethod = appsType.GetMethod("Hover", AnyInstance)!;
+
+            int shortIdx = -1, longIdx = -1;
+            for (int k = 0; k < Math.Min(hitZonesList.Count, wvList.Count); k++)
+            {
+                object hz = hitZonesList[k]!;
+                string kind = (string)hz.GetType().GetField("Item2")!.GetValue(hz)!;
+                if (kind != "launch") continue;
+                object wv = wvList[k]!;
+                bool isTrunc = (bool)wv.GetType().GetField("Item3")!.GetValue(wv)!;
+                string fullName = (string)wv.GetType().GetField("Item4")!.GetValue(wv)!;
+                if (fullName == "Go")
+                {
+                    Check(!isTrunc, "Short pinned app 'Go' must not be flagged truncated.");
+                    shortIdx = k;
+                }
+                else if (fullName.StartsWith("SuperLongEnterpriseFinancial", StringComparison.Ordinal))
+                {
+                    Check(isTrunc, "Overlong pinned app must be flagged truncated.");
+                    longIdx = k;
+                }
+            }
+            Check(shortIdx >= 0 && longIdx >= 0, "Expected both short and long pinned launch wedges in DeskSpaceApplicationsV55.");
+
+            static System.Windows.Point FindPointInsideGeometry(Geometry g)
+            {
+                Rect b = g.Bounds;
+                for (int ix = 1; ix <= 15; ix++)
+                {
+                    for (int iy = 1; iy <= 15; iy++)
+                    {
+                        var pt = new System.Windows.Point(b.Left + b.Width * ix / 16.0, b.Top + b.Height * iy / 16.0);
+                        if (g.FillContains(pt)) return pt;
+                    }
+                }
+                return new System.Windows.Point(b.Left + b.Width * 0.5, b.Top + b.Height * 0.5);
+            }
+
+            object longHz = hitZonesList[longIdx]!;
+            System.Windows.Point longPt = FindPointInsideGeometry((Geometry)longHz.GetType().GetField("Item1")!.GetValue(longHz)!);
+            hoverMethod.Invoke(appsWheel, new object?[] { longPt });
+            Check(GetProp<bool>(appsPill, "IsVisible") &&
+                  GetProp<string>(appsPill, "ActiveFullText").StartsWith("SuperLongEnterpriseFinancial", StringComparison.Ordinal),
+                "Hovering truncated pinned wedge must display the full-name callout pill.");
+
+            object shortHz = hitZonesList[shortIdx]!;
+            System.Windows.Point shortPt = FindPointInsideGeometry((Geometry)shortHz.GetType().GetField("Item1")!.GetValue(shortHz)!);
+            hoverMethod.Invoke(appsWheel, new object?[] { shortPt });
+            Check(!GetProp<bool>(appsPill, "IsVisible"),
+                "Hovering short non-truncated pinned wedge must hide the callout pill.");
+
+            appsType.GetMethod("HideArc", AnyInstance)!.Invoke(appsWheel, null);
+            Check(!GetProp<bool>(appsPill, "IsVisible"), "HideArc() must hide the callout pill.");
+        }
+        finally
+        {
+            try { standalonePill?.Dispose(); } catch { }
+            try { appsWheel?.Dispose(); } catch { }
+            try { infoWheel?.Dispose(); } catch { }
+            try { excelWheel?.Dispose(); } catch { }
+            try { offscreenOwner?.Close(); } catch { }
+            try
+            {
+                if (hadAppFile && origAppBytes != null)
+                {
+                    File.WriteAllBytes(appFile, origAppBytes);
+                    File.SetLastWriteTimeUtc(appFile, origAppWrite);
+                }
+                else if (!hadAppFile && File.Exists(appFile))
+                {
+                    File.Delete(appFile);
+                }
+                InvokeStatic(appType, "ReloadIfChanged", true);
+            }
+            catch { }
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -2663,6 +2975,7 @@ internal static class Program
             TestInformationDonutGeometryAndSectorV380(asm);
             TestInformationTabSyncAndSchemaV380(asm);
             TestNoiseFilteringIsolationAndSyncV380(asm);
+            TestDonutThemeMixesTransitionsAndCalloutV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);
             TestColorPaletteContrastAndHeroV380(asm);
             TestVaultProV380(asm);

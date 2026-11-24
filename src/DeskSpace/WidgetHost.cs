@@ -158,6 +158,7 @@ public sealed class WidgetShellWindow : Window
     private bool shortcutMoveInProgress;
     private int highlightedSector = -1;
     private readonly List<System.Windows.Shapes.Path> ringPaths = new();
+    private readonly List<(System.Windows.Shapes.Path Wedge, List<UIElement> LinkedVisuals, TextBlock Label, bool IsOuter, double MidAngle)> ringVisuals = new();
     private bool dockedManually;
     private Ellipse? clockFace;
     private readonly TextBlock content = new() { TextAlignment = TextAlignment.Center, Foreground = Brushes.White, FontSize = 18, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
@@ -394,6 +395,7 @@ public sealed class WidgetShellWindow : Window
                 ()=>new WidgetOptionsWindow(prefs,()=>{
                     prefs.SavePreservingPinnedApps();prefs.ApplyWindowsStartup();
                 }).Show())));
+        AddDonutStyleTrayMenuV380(menu);
         var deckMenu=new Forms.ToolStripMenuItem("Deck Visibility");
         deckMenu.DropDownOpening+=(_,_)=>{
             deckMenu.DropDownItems.Clear();
@@ -1230,10 +1232,20 @@ public sealed class WidgetShellWindow : Window
             appsWheel.HideArc();
         if(selected==highlightedSector)return;
         highlightedSector=selected;
-        for(int i=0;i<ringPaths.Count;i++)
-            ringPaths[i].Fill=DeskSpaceHighContrastV208.Wedge(
-                SystemParameters.HighContrast,i,i==selected,
-                light,DeskSpaceAppearanceV148.SecondaryBrush,accent);
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        for(int i=0;i<ringVisuals.Count;i++)
+        {
+            var rv=ringVisuals[i];
+            bool hov=i==selected;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,rv.IsOuter?1:0,i,false,false,hov);
+            rv.Wedge.Fill=vis.Fill;
+            rv.Wedge.Stroke=vis.Stroke;
+            rv.Wedge.StrokeThickness=vis.StrokeThickness;
+            rv.Wedge.Effect=vis.Effect;
+            rv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+            DeskSpaceDonutThemeV380.ApplyHoverLift(rv.LinkedVisuals,hov,rv.MidAngle,themeApp);
+        }
     }
     private void ApplyWeatherContrast()
     {
@@ -1282,7 +1294,10 @@ public sealed class WidgetShellWindow : Window
         SuspendWeatherMotion();
         canvas.Children.Clear();
         ringPaths.Clear();
+        ringVisuals.Clear();
         highlightedSector = -1;
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var compactHubVis = DeskSpaceDonutThemeV380.ResolveHub(DeskSpaceAppearanceV148.Current, SystemParameters.HighContrast);
         canvas.Width = canvas.Height = 292;
         var shadow = new Ellipse { Width = 282, Height = 282,
             Fill = new SolidColorBrush(Color.FromArgb(85, 9, 16, 35)),
@@ -1290,8 +1305,9 @@ public sealed class WidgetShellWindow : Window
         Canvas.SetLeft(shadow, 5); Canvas.SetTop(shadow, 7);
         canvas.Children.Add(shadow);
         var circle = new Ellipse { Width = 272, Height = 272, Fill = ClockFace(),
-            Stroke = DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
+            Stroke = compactHubVis.Stroke,
             StrokeThickness = 7,
+            Effect = compactHubVis.Effect,
             Cursor = Cursors.Hand,
             ToolTip = prefs.CenterMode=="Stopwatch"
                 ? "Double-click to open stopwatch" : null };
@@ -1408,7 +1424,7 @@ public sealed class WidgetShellWindow : Window
                 (p-new Point(Width/2,Height/2)).Length<=Width*198.0/420.0+14;
             bool overSubArc=(informationOverlay?.IsPointerNearArc()==true) ||
                 (appsWheel?.IsPointerNearArc()==true) ||
-                (excelWheel?.IsArcOpen==true);
+                (excelWheel?.IsPointerNearArc()==true);
             if(!overMainDonut && !overSubArc &&
                DateTime.UtcNow>rightClickOpenedUntil && !keyboardDonutModeV207)
             {
@@ -1496,12 +1512,19 @@ public sealed class WidgetShellWindow : Window
         if(appsWheel?.IsArcOpen==true)appsWheel.HideArc();
         if(excelWheel?.IsArcOpen==true)excelWheel.HideArc();
         highlightedSector=keyboardDonutSectorV207;
-        for(int i=0;i<ringPaths.Count;i++)
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        for(int i=0;i<ringVisuals.Count;i++)
         {
-            ringPaths[i].Fill=DeskSpaceHighContrastV208.Wedge(
-                SystemParameters.HighContrast,i,i==highlightedSector,
-                light,DeskSpaceAppearanceV148.SecondaryBrush,accent);
-            ringPaths[i].StrokeThickness=i==highlightedSector?4:2;
+            var rv=ringVisuals[i];
+            bool hov=i==highlightedSector;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,rv.IsOuter?1:0,i,false,false,hov);
+            rv.Wedge.Fill=vis.Fill;
+            rv.Wedge.Stroke=vis.Stroke;
+            rv.Wedge.StrokeThickness=hov?Math.Max(3.2,vis.StrokeThickness):vis.StrokeThickness;
+            rv.Wedge.Effect=vis.Effect;
+            rv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+            DeskSpaceDonutThemeV380.ApplyHoverLift(rv.LinkedVisuals,hov,rv.MidAngle,themeApp);
         }
         var name=Segments[keyboardDonutSectorV207];
         content.Text=SegmentIcons[keyboardDonutSectorV207]+" "+name+
@@ -1574,6 +1597,10 @@ public sealed class WidgetShellWindow : Window
         if (ringExpanded)
         {
             BuildDonut();
+            DeskSpaceDonutThemeV380.AnimateOpen(
+                canvas,
+                ringVisuals.Select(v=>(FrameworkElement)v.Wedge).ToArray(),
+                210,210,-90,isSubArc:false);
             StartWheelHover();
         }
         else
@@ -1661,24 +1688,34 @@ public sealed class WidgetShellWindow : Window
         SuspendWeatherMotion();
         canvas.Children.Clear();
         ringPaths.Clear();
+        ringVisuals.Clear();
         highlightedSector=-1;
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapDeg=DeskSpaceDonutThemeV380.GetMainGapDegrees(themeApp);
+        double halfGapAdjust=(gapDeg-1.5)*0.5;
         canvas.Width=canvas.Height=420;
         var shadow=new Ellipse{Width=408,Height=408,
-            Fill=new SolidColorBrush(Color.FromArgb(65,10,17,40)),
+            Fill=new SolidColorBrush(Color.FromArgb(themeApp.MixWireframe?(byte)22:(byte)65,10,17,40)),
             IsHitTestVisible=false};
         Canvas.SetLeft(shadow,6);Canvas.SetTop(shadow,7);canvas.Children.Add(shadow);
         for(int i=0;i<Segments.Length;i++)
         {
             bool outer=i>=6;int slot=outer?i-6:i;
             bool hasQuickAdd=HasModuleQuickAdd(Segments[i]);
-            double step=360.0/(outer?6:6);double first=-90-step/2+slot*step,last=first+step-1.5;
+            double step=360.0/(outer?6:6);
+            double first=-90-step/2+slot*step+halfGapAdjust;
+            double last=first+step-gapDeg;
+            double midAngleDeg=(first+last)/2.0;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,outer?1:0,i,false,false,false);
             var wedge=new System.Windows.Shapes.Path{
                 Data=Sector(210,210,outer?132:70,outer?195:124,first,last),
-                Fill=DeskSpaceHighContrastV208.Wedge(
-                    SystemParameters.HighContrast,i,false,
-                    light,DeskSpaceAppearanceV148.SecondaryBrush,accent),
-                Stroke=DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
-                StrokeThickness=2,IsHitTestVisible=false
+                Fill=vis.Fill,
+                Stroke=vis.Stroke,
+                StrokeThickness=vis.StrokeThickness,
+                Effect=vis.Effect,
+                IsHitTestVisible=false
             };
             canvas.Children.Add(wedge);ringPaths.Add(wedge);
             var angle=(-90+slot*(360.0/(outer?6:6)))*Math.PI/180;
@@ -1687,8 +1724,7 @@ public sealed class WidgetShellWindow : Window
                     (Segments[i]=="Clock & Weather"?"Clock\nWeather":Segments[i]),
                 FontSize=outer?12:11,
                 TextAlignment=TextAlignment.Center,FontWeight=FontWeights.SemiBold,
-                Foreground=DeskSpaceHighContrastV208.Label(
-                    SystemParameters.HighContrast,DeskSpaceAppearanceV148.InkBrush),
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
                 IsHitTestVisible=false
             };
             label.Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
@@ -1696,6 +1732,7 @@ public sealed class WidgetShellWindow : Window
             Canvas.SetLeft(label,210+radius*Math.Cos(angle)-label.DesiredSize.Width/2);
             Canvas.SetTop(label,210+radius*Math.Sin(angle)-label.DesiredSize.Height/2);
             canvas.Children.Add(label);
+            var linked=new List<UIElement>{wedge,label};
             if(hasQuickAdd)
             {
                 // True in-donut hit region, no separate popup HWND or
@@ -1708,7 +1745,7 @@ public sealed class WidgetShellWindow : Window
                     Width=20,Height=20,
                     Fill=DeskSpaceHighContrastV208.QuickAction(
                         SystemParameters.HighContrast,accent),
-                    Stroke=DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
+                    Stroke=vis.Stroke,
                     StrokeThickness=1.4,
                     IsHitTestVisible=false};
                 Canvas.SetLeft(mark,px-10);Canvas.SetTop(mark,py-10);
@@ -1721,11 +1758,15 @@ public sealed class WidgetShellWindow : Window
                     Width=20,Height=20,IsHitTestVisible=false};
                 Canvas.SetLeft(plus,px-10);Canvas.SetTop(plus,py-2-10);
                 canvas.Children.Add(plus);
+                linked.Add(mark);
+                linked.Add(plus);
             }
+            ringVisuals.Add((wedge,linked,label,outer,midAngleDeg));
         }
+        var hubVis=DeskSpaceDonutThemeV380.ResolveHub(themeApp,hc);
         var centre=new Ellipse{Width=130,Height=130,Fill=ClockFace(),
-            Stroke=DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
-            StrokeThickness=3,IsHitTestVisible=false};
+            Stroke=hubVis.Stroke,
+            StrokeThickness=hubVis.StrokeThickness,Effect=hubVis.Effect,IsHitTestVisible=false};
         Canvas.SetLeft(centre,145);Canvas.SetTop(centre,145);canvas.Children.Add(centre);
         clockFace=centre;
         AddWeatherScene(145,145,130);
@@ -1760,8 +1801,9 @@ public sealed class WidgetShellWindow : Window
     private Brush ClockFace()
     {
         if(SystemParameters.HighContrast)return SystemColors.WindowBrush;
-        if(DeskSpaceAppearanceV148.Current.Style=="Modern")
-            return DeskSpaceDesignV283.WidgetFace();
+        var cur=DeskSpaceAppearanceV148.Current;
+        if(cur.Style=="Modern" || cur.MixGlassFrost || cur.MixNeonEdge || cur.MixAuroraGradient || cur.MixWireframe)
+            return DeskSpaceDonutThemeV380.ResolveHub(cur,false).Fill;
         if (prefs.CenterMode != "Clock" || !prefs.ShowWeather) return accent;
         var value=DeskSpaceWeather.Latest;
         if (value == null || !value.City.Equals(prefs.WeatherCity,StringComparison.OrdinalIgnoreCase))
@@ -1772,6 +1814,81 @@ public sealed class WidgetShellWindow : Window
         else if (value.Code <= 1) {top=Color.FromRgb(234,135,42);bottom=Color.FromRgb(124,77,189);}
         else {top=Color.FromRgb(49,136,209);bottom=Color.FromRgb(81,86,148);}
         return new LinearGradientBrush(top,bottom,90);
+    }
+    private void AddDonutStyleTrayMenuV380(Forms.ContextMenuStrip menu)
+    {
+        var styleRoot=new Forms.ToolStripMenuItem("Donut Style & Transitions");
+        styleRoot.DropDownOpening+=(_,_)=>{
+            styleRoot.DropDownItems.Clear();
+            DeskSpaceAppearanceV148.ReloadIfChanged();
+            var cur=DeskSpaceAppearanceV148.Current;
+
+            void SaveAndRefresh(Action<DeskSpaceAppearanceV148> mutate,bool replayOpen=false)
+            {
+                var next=DeskSpaceAppearanceV148.Clone(DeskSpaceAppearanceV148.Current);
+                mutate(next);
+                DeskSpaceAppearanceV148.Save(next);
+                Dispatcher.Invoke(()=>{
+                    RefreshAppearanceV148();
+                    if(replayOpen && ringExpanded && activeModule==null)
+                    {
+                        DeskSpaceDonutThemeV380.AnimateOpen(
+                            canvas,
+                            ringVisuals.Select(v=>(FrameworkElement)v.Wedge).ToArray(),
+                            210,210,-90,isSubArc:false);
+                    }
+                });
+            }
+
+            foreach(string id in DeskSpaceAppearanceV148.ValidDonutStyles)
+            {
+                string cap=id;
+                var mi=new Forms.ToolStripMenuItem(DeskSpaceDonutThemeV380.FriendlyStyleName(cap)){
+                    Checked=string.Equals(cur.DonutStyle,cap,StringComparison.OrdinalIgnoreCase)
+                };
+                mi.Click+=(_,_)=>SaveAndRefresh(a=>DeskSpaceAppearanceV148.ApplyDonutPresetDefaults(a,cap));
+                styleRoot.DropDownItems.Add(mi);
+            }
+
+            styleRoot.DropDownItems.Add(new Forms.ToolStripSeparator());
+            var mixMenu=new Forms.ToolStripMenuItem("Mix Style Layers (combine any)");
+            void AddMixToggle(string label,Func<DeskSpaceAppearanceV148,bool> get,Action<DeskSpaceAppearanceV148,bool> set)
+            {
+                var item=new Forms.ToolStripMenuItem(label){Checked=get(cur)};
+                item.Click+=(_,_)=>SaveAndRefresh(a=>set(a,!get(a)));
+                mixMenu.DropDownItems.Add(item);
+            }
+            AddMixToggle("Glass Frost",a=>a.MixGlassFrost,(a,v)=>a.MixGlassFrost=v);
+            AddMixToggle("Neon Edge Glow",a=>a.MixNeonEdge,(a,v)=>a.MixNeonEdge=v);
+            AddMixToggle("Floating Petals Gaps",a=>a.MixFloatingGaps,(a,v)=>a.MixFloatingGaps=v);
+            AddMixToggle("Aurora Depth Gradient",a=>a.MixAuroraGradient,(a,v)=>a.MixAuroraGradient=v);
+            AddMixToggle("Minimal Wireframe",a=>a.MixWireframe,(a,v)=>a.MixWireframe=v);
+            styleRoot.DropDownItems.Add(mixMenu);
+
+            var transMenu=new Forms.ToolStripMenuItem("Open Transitions & Motion");
+            foreach(string tr in DeskSpaceAppearanceV148.ValidTransitions)
+            {
+                string capTr=tr;
+                var ti=new Forms.ToolStripMenuItem(DeskSpaceDonutThemeV380.FriendlyTransitionName(capTr)){
+                    Checked=string.Equals(cur.OpenTransition,capTr,StringComparison.OrdinalIgnoreCase)
+                };
+                ti.Click+=(_,_)=>SaveAndRefresh(a=>a.OpenTransition=capTr,replayOpen:true);
+                transMenu.DropDownItems.Add(ti);
+            }
+            transMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+            void AddMotionToggle(string label,Func<DeskSpaceAppearanceV148,bool> get,Action<DeskSpaceAppearanceV148,bool> set)
+            {
+                var item=new Forms.ToolStripMenuItem(label){Checked=get(cur)};
+                item.Click+=(_,_)=>SaveAndRefresh(a=>set(a,!get(a)));
+                transMenu.DropDownItems.Add(item);
+            }
+            AddMotionToggle("Motion: Radial Hover Lift",a=>a.MotionHoverLift,(a,v)=>a.MotionHoverLift=v);
+            AddMotionToggle("Motion: Hover Accent Glow",a=>a.MotionHoverGlow,(a,v)=>a.MotionHoverGlow=v);
+            AddMotionToggle("Motion: Staggered Ripple",a=>a.MotionStaggerRipple,(a,v)=>a.MotionStaggerRipple=v);
+            AddMotionToggle("Motion: Fluid Scroll Glide",a=>a.MotionScrollGlide,(a,v)=>a.MotionScrollGlide=v);
+            styleRoot.DropDownItems.Add(transMenu);
+        };
+        menu.Items.Add(styleRoot);
     }
     private void OnUpdateProgress()
     {
@@ -1795,6 +1912,7 @@ public sealed class WidgetShellWindow : Window
     }
     private void RefreshAppearanceV148()
     {
+        DeskSpaceAppearanceV148.ReloadIfChanged(force:true);
         DeskSpaceAppearanceV148.Apply(this);
         if(activeModule==null)
         {
@@ -1802,6 +1920,9 @@ public sealed class WidgetShellWindow : Window
             else BuildCompact();
         }
         else UpdateCenter();
+        informationOverlay?.RefreshThemeV380();
+        appsWheel?.RefreshThemeV380();
+        excelWheel?.RefreshThemeV380();
     }
     private void ShowAbout()
     {

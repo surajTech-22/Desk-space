@@ -93,6 +93,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     private long warmedAppsRev=-1;
     private DateTime warmedConfigStampUtc=DateTime.MinValue;
     private bool contextMenuOpen;
+    private readonly DeskSpaceDonutThemeV380.SubDonutCalloutPillV380 calloutPill;
+    private readonly List<(List<UIElement> LinkedVisuals,TextBlock Label,bool IsTruncated,string FullName,string? Badge,double MidAngle,Point OuterAnchor,int Depth,bool IsAction)> wedgeVisualsV380=new();
     private int ActiveArcTotalCount()=>arcApps.Count>0?arcApps.Count:all.Count;
     private bool warmed,warming;
     private DateTime warmStamp=DateTime.MinValue;
@@ -199,6 +201,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     {
         owner=window;changed=onChanged;
         onCommitted=onSelected??(()=>{});
+        calloutPill=new DeskSpaceDonutThemeV380.SubDonutCalloutPillV380(owner);
         arcCanvas=new Canvas{Width=1,Height=1,Focusable=true};
         arcCanvas.PreviewKeyDown+=OnSubmenuKeyDown;
         // The popup has its own HWND. Dispatch gestures from the CANVAS,
@@ -371,6 +374,11 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         }
         finally{if(File.Exists(temp))File.Delete(temp);}
     }
+    internal void RefreshThemeV380()
+    {
+        if(!disposed && arc.IsOpen)
+            RenderArc();
+    }
     public void Show()
     {
         if(disposed)return;
@@ -398,6 +406,15 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             RenderArc();
             PositionArc();
             arc.IsOpen=true;
+            if(!arcBounds.IsEmpty)
+            {
+                DeskSpaceDonutThemeV380.AnimateOpen(
+                    arcCanvas,
+                    childWedges.Cast<FrameworkElement>().ToArray(),
+                    DeskSpaceSubArcGeometryV48.CX-arcBounds.Left+ArcMargin,
+                    DeskSpaceSubArcGeometryV48.CY-arcBounds.Top+ArcMargin,
+                    -90,isSubArc:true);
+            }
             pointerTimer.Start();
             changed();
         }
@@ -406,6 +423,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     }
     public void HideArc()
     {
+        calloutPill.Hide();
         contextMenuOpen=false;
         newHoverTimer.Stop();
         middleScroll.Stop();
@@ -683,12 +701,24 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     // to exact sector bounds so WPF/monitor fencing keeps them concentric.
     private void RenderArc()
     {
+        string? keepHoverKind=(hoveredChild>=0 && hoveredChild<arcHitZones.Count)?arcHitZones[hoveredChild].kind:null;
+        string keepHoverKey=(hoveredChild>=0 && hoveredChild<arcHitZones.Count)
+            ? (keepHoverKind=="infofile"?arcHitZones[hoveredChild].filePath:arcHitZones[hoveredChild].appPath)
+            : "";
+        double keepMidAngle=(hoveredChild>=0 && hoveredChild<wedgeVisualsV380.Count)?wedgeVisualsV380[hoveredChild].MidAngle:double.NaN;
+        bool keepPill=calloutPill.IsVisible && keepHoverKind is "infoapp" or "infofile";
+        calloutPill.Hide();
         newHoverTimer.Stop();
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(themeApp);
         arcCanvas.Children.Clear();
-        childWedges.Clear();childLabels.Clear();arcHitZones.Clear();
+        childWedges.Clear();childLabels.Clear();arcHitZones.Clear();wedgeVisualsV380.Clear();
         hoveredChild=-1;
 
         var drawItems=new List<(string Label,string Kind,Guid? Id,string AppPath,string FilePath,double A,double B,int Depth,string Tip,bool IsAction)>();
+        var fileMetaLookup=new Dictionary<string,AppInfoFileRecordV380>(StringComparer.OrdinalIgnoreCase);
 
         bool isSingleAppMode=arcApps.Count==1;
         bool isMultiAppMode=arcApps.Count>=2;
@@ -716,6 +746,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
                 for(int i=0;i<slice.Length;i++)
                 {
                     var mf=slice[i];
+                    if(!string.IsNullOrEmpty(mf.FullPath))
+                        fileMetaLookup[mf.FullPath]=mf;
                     drawItems.Add((FormatArcLabel(mf.DisplayName),"infofile",null,app.Path,mf.FullPath,
                         layout.From(i),layout.To(i),0,
                         $"{mf.DisplayName}\n{mf.KindBadge} · Click to show selected info · Right-click to manage app",
@@ -779,6 +811,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
                     d1VisibleItems=slice.Length;
                     foreach(var mf in slice)
                     {
+                        if(!string.IsNullOrEmpty(mf.FullPath))
+                            fileMetaLookup[mf.FullPath]=mf;
                         d1Entries.Add((FormatArcLabel(mf.DisplayName),"infofile",activeArcAppPath,mf.FullPath,
                             $"{mf.DisplayName}\n{mf.KindBadge} · Click to show selected info below",false));
                     }
@@ -824,7 +858,10 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             }
         }
 
-        var rawShapes=drawItems.Select(x=>InfoSector(x.Depth,x.A,x.B)).ToArray();
+        var rawShapes=drawItems.Select(x=>{
+            double g=(x.B-x.A)>gapInset*2.5?gapInset:0;
+            return InfoSector(x.Depth,x.A+g,x.B-g);
+        }).ToArray();
         arcBounds=DeskSpaceSubArcGeometryV48.Bounds(rawShapes);
         arcCanvas.Width=arcBounds.Width+ArcMargin*2;
         arcCanvas.Height=arcBounds.Height+ArcMargin*2;
@@ -832,6 +869,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         var clippedGeoms=new Geometry[drawItems.Count];
         var d0ScrollWedges=new List<System.Windows.Shapes.Path>();
         var d1ScrollWedges=new List<System.Windows.Shapes.Path>();
+        var sectorVisuals=new DonutWedgeVisualV380[drawItems.Count];
 
         // Pass 1: Wedge paths at Z=1
         for(int i=0;i<drawItems.Count;i++)
@@ -841,11 +879,12 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             clippedGeoms[i]=hit;
             bool isSelectedParent=item.Kind=="infoapp" && !string.IsNullOrEmpty(activeArcAppPath) &&
                 string.Equals(item.AppPath,activeArcAppPath,StringComparison.OrdinalIgnoreCase);
-            Brush fill=item.IsAction?Accent:(isSelectedParent?ChildHover:ChildIdle);
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,item.Depth+2,i,item.IsAction,isSelectedParent,false);
+            sectorVisuals[i]=vis;
             var sector=new System.Windows.Shapes.Path{
                 Data=hit,
-                Stroke=Brushes.White,StrokeThickness=item.Depth==0?2:1.5,
-                Fill=fill,
+                Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,
+                Fill=vis.Fill,Effect=vis.Effect,
                 Tag=i,Cursor=Cursors.Hand,
                 ToolTip=item.Depth==0 && item.Kind=="collection"?(object)item.Tip:CreateCompactTooltip(item.Label,item.Tip)};
             ToolTipService.SetInitialShowDelay(sector,item.Depth>=1?600:800);
@@ -865,31 +904,41 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         for(int i=0;i<drawItems.Count;i++)
         {
             var item=drawItems[i];
+            var vis=sectorVisuals[i];
+            double midA=(item.A+item.B)/2;
+            var outerPt=DeskSpaceSubArcGeometryV48.Polar(InfoOuter(item.Depth),midA);
+            Point outerAnchor=new(DeskSpaceSubArcGeometryV48.CX+outerPt.X-arcBounds.Left+ArcMargin,
+                                  DeskSpaceSubArcGeometryV48.CY+outerPt.Y-arcBounds.Top+ArcMargin);
+
             if(item.Depth==0 && item.Kind is "collection" or "newcollection")
             {
                 double rMidClassic=(InfoInner(0)+InfoOuter(0))/2;
-                var p=DeskSpaceSubArcGeometryV48.Polar(rMidClassic,(item.A+item.B)/2);
+                var p=DeskSpaceSubArcGeometryV48.Polar(rMidClassic,midA);
                 double x=DeskSpaceSubArcGeometryV48.CX+p.X-arcBounds.Left+ArcMargin;
                 double y=DeskSpaceSubArcGeometryV48.CY+p.Y-arcBounds.Top+ArcMargin;
+                FontWeight fw=item.IsAction?FontWeights.SemiBold:FontWeights.Normal;
                 var label=new TextBlock{
                     Text=item.Label,
                     Width=62,
                     TextAlignment=TextAlignment.Center,
                     TextTrimming=TextTrimming.CharacterEllipsis,
                     FontSize=11,
-                    FontWeight=item.IsAction?FontWeights.SemiBold:FontWeights.Normal,
-                    Foreground=item.IsAction?Brushes.White:Ink,
+                    FontWeight=fw,
+                    Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
                     ToolTip=item.Tip,
                     IsHitTestVisible=false};
                 Panel.SetZIndex(label,10);
                 Canvas.SetLeft(label,x-31);
                 Canvas.SetTop(label,y-9);
                 arcCanvas.Children.Add(label);
+                bool isColTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                    item.Label,62,20,11,fw,wraps:false);
+                wedgeVisualsV380.Add((new List<UIElement>{childWedges[i],label},label,isColTrunc,item.Label,
+                    item.Kind=="collection"?"SAVED":null,midA,outerAnchor,item.Depth+2,item.IsAction));
                 continue;
             }
 
             double rMid=(InfoInner(item.Depth)+InfoOuter(item.Depth))/2;
-            double midA=(item.A+item.B)/2;
             var pt=DeskSpaceSubArcGeometryV48.Polar(rMid,midA);
             double midX=DeskSpaceSubArcGeometryV48.CX+pt.X-arcBounds.Left+ArcMargin;
             double midY=DeskSpaceSubArcGeometryV48.CY+pt.Y-arcBounds.Top+ArcMargin;
@@ -902,20 +951,23 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             var (boxLeft,boxWidth)=InscribedHorizontalSpan(
                 clippedGeoms[i],midX,midY,probeHalfH,pad,item.Depth>=1?44:34,maxW,arcCanvas.Width);
             double unitCenterX=boxLeft+boxWidth*.5;
+            double lblFontSize=item.Depth==0?(hasIcon?9.5:10):10;
+            FontWeight lblWeight=item.IsAction?FontWeights.SemiBold:FontWeights.Normal;
 
             var lbl=new TextBlock{
                 Text=item.Label,
                 Width=boxWidth,
                 MaxHeight=maxLabelH,
-                FontSize=item.Depth==0?(hasIcon?9.5:10):10,
-                FontWeight=item.IsAction?FontWeights.SemiBold:FontWeights.Normal,
+                FontSize=lblFontSize,
+                FontWeight=lblWeight,
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 TextWrapping=TextWrapping.Wrap,
                 TextAlignment=TextAlignment.Center,
-                Foreground=item.IsAction?Brushes.White:Ink,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
                 IsHitTestVisible=false};
             lbl.Measure(new Size(boxWidth,maxLabelH));
             double actualH=Math.Min(maxLabelH,Math.Max(12,lbl.DesiredSize.Height));
+            var linked=new List<UIElement>{childWedges[i],lbl};
             if(hasIcon)
             {
                 const double iconSize=17,gap=2;
@@ -929,6 +981,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
                 arcCanvas.Children.Add(appIcon);
                 Canvas.SetLeft(lbl,boxLeft);
                 Canvas.SetTop(lbl,topY+iconSize+gap);
+                linked.Add(appIcon);
             }
             else
             {
@@ -937,6 +990,15 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             }
             Panel.SetZIndex(lbl,10);
             arcCanvas.Children.Add(lbl);
+
+            AppInfoFileRecordV380? meta=null;
+            if(item.Kind=="infofile" && !string.IsNullOrEmpty(item.FilePath))
+                fileMetaLookup.TryGetValue(item.FilePath,out meta);
+            string fullName=meta!=null?meta.DisplayName:item.Label.Replace("\u200B",string.Empty);
+            string? badge=meta!=null?meta.KindBadge:(item.Kind=="infoapp"?"APP":null);
+            bool isTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                fullName,boxWidth,maxLabelH,lblFontSize,lblWeight,wraps:true);
+            wedgeVisualsV380.Add((linked,lbl,isTrunc,fullName,badge,midA,outerAnchor,item.Depth+2,item.IsAction));
         }
 
         // Pass 3: Hidden counters for Depth-0 and Depth-1
@@ -960,6 +1022,19 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         arcCanvas.MouseWheel-=ScrollArc;
         arcCanvas.MouseWheel+=ScrollArc;
         PositionArc();
+        if(keepPill && !string.IsNullOrEmpty(keepHoverKey))
+        {
+            int keepIdx=arcHitZones.FindIndex(z=>z.kind==keepHoverKind &&
+                string.Equals(keepHoverKind=="infofile"?z.filePath:z.appPath,keepHoverKey,StringComparison.OrdinalIgnoreCase));
+            if(keepIdx>=0 && keepIdx<wedgeVisualsV380.Count &&
+               wedgeVisualsV380[keepIdx].IsTruncated &&
+               Math.Abs(wedgeVisualsV380[keepIdx].MidAngle-keepMidAngle)<1.0)
+            {
+                hoveredChild=keepIdx;
+                var kwv=wedgeVisualsV380[keepIdx];
+                calloutPill.Show(arcCanvas,kwv.OuterAnchor,kwv.MidAngle,kwv.FullName,kwv.Badge);
+            }
+        }
     }
     private int SlotAtPoint(Point point)
     {
@@ -1051,17 +1126,30 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     }
     private void EndArcHover()
     {
+        calloutPill.Hide();
         newHoverTimer.Stop();
         CloseTransientPreview();
         if(hoveredChild>=0 && hoveredChild<childWedges.Count)
         {
+            var themeApp=DeskSpaceAppearanceV148.Current;
+            bool hc=SystemParameters.HighContrast;
             for(int i=0;i<childWedges.Count;i++)
             {
                 var z=arcHitZones[i];
                 bool isSelApp=z.kind=="infoapp" && !string.IsNullOrEmpty(activeArcAppPath) &&
                     string.Equals(z.appPath,activeArcAppPath,StringComparison.OrdinalIgnoreCase);
                 bool isAction=z.kind is "manageapps" or "newcollection" or "choosefields";
-                childWedges[i].Fill=isAction?Accent:(isSelApp?ChildHover:ChildIdle);
+                var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,z.depth+2,i,isAction,isSelApp,false);
+                childWedges[i].Fill=vis.Fill;
+                childWedges[i].Stroke=vis.Stroke;
+                childWedges[i].StrokeThickness=vis.StrokeThickness;
+                childWedges[i].Effect=vis.Effect;
+                if(i<wedgeVisualsV380.Count)
+                {
+                    var wv=wedgeVisualsV380[i];
+                    wv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                    DeskSpaceDonutThemeV380.ApplyHoverLift(wv.LinkedVisuals,false,wv.MidAngle,themeApp);
+                }
             }
         }
         hoveredChild=-1;
@@ -1146,6 +1234,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         cm.Items.Add(removeItem);
 
         cm.PlacementTarget=arcCanvas;
+        calloutPill.Hide();
         contextMenuOpen=true;
         cm.Closed+=(_,_)=>contextMenuOpen=false;
         cm.IsOpen=true;
@@ -1206,17 +1295,32 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         keyboardIndex=arcApps.Count==0
             ?(sector==arcHitZones.Count-1?all.Count:startIndex+sector)
             :sector;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
         for(int i=0;i<childWedges.Count;i++)
         {
             var w=childWedges[i];
             var z=arcHitZones[i];
-            bool selected=i==sector || (z.kind=="infoapp" && !string.IsNullOrEmpty(activeArcAppPath) &&
-                string.Equals(z.appPath,activeArcAppPath,StringComparison.OrdinalIgnoreCase));
+            bool hov=i==sector;
+            bool isSelApp=z.kind=="infoapp" && !string.IsNullOrEmpty(activeArcAppPath) &&
+                string.Equals(z.appPath,activeArcAppPath,StringComparison.OrdinalIgnoreCase);
             bool isAction=z.kind is "manageapps" or "newcollection" or "choosefields";
-            w.Fill=selected?(isAction?
-                new SolidColorBrush(Color.FromRgb(73,58,153)):ChildHover):
-                (isAction?Accent:ChildIdle);
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,z.depth+2,i,isAction,isSelApp,hov);
+            w.Fill=vis.Fill;
+            w.Stroke=vis.Stroke;
+            w.StrokeThickness=vis.StrokeThickness;
+            w.Effect=vis.Effect;
+            if(i<wedgeVisualsV380.Count)
+            {
+                var wv=wedgeVisualsV380[i];
+                wv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                DeskSpaceDonutThemeV380.ApplyHoverLift(wv.LinkedVisuals,hov,wv.MidAngle,themeApp);
+            }
         }
+        if(sector>=0 && sector<wedgeVisualsV380.Count && wedgeVisualsV380[sector].IsTruncated)
+            calloutPill.Show(arcCanvas,wedgeVisualsV380[sector].OuterAnchor,wedgeVisualsV380[sector].MidAngle,wedgeVisualsV380[sector].FullName,wedgeVisualsV380[sector].Badge);
+        else
+            calloutPill.Hide();
         if(editorActive)return;
         if(zone.kind=="infoapp")
         {
@@ -2208,6 +2312,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         MaskRevealed();
         arcCanvas.MouseWheel-=ScrollArc;
         newHoverTimer.Stop();edgeTimer.Stop();pointerTimer.Stop();lockTimer.Stop();
+        calloutPill.Dispose();
         middleScroll.Dispose();
         vault.Dispose();
     }

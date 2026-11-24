@@ -25,6 +25,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     private readonly List<(Geometry Hit,string Kind,string Path)> hitZones=new();
     private readonly List<System.Windows.Shapes.Path> fills=new();
     private readonly List<(string Label,string Kind,string Path,double A,double B,int Depth)> items=new();
+    private readonly List<(List<UIElement> LinkedVisuals,TextBlock Label,bool IsTruncated,string FullName,string? Badge,double MidAngle,Point OuterAnchor,int Depth,bool IsAction)> wedgeVisualsV380=new();
+    private readonly DeskSpaceDonutThemeV380.SubDonutCalloutPillV380 calloutPill;
     private readonly Brush normal=new SolidColorBrush(Color.FromRgb(217,229,248));
     private readonly Brush selected=new SolidColorBrush(Color.FromRgb(143,172,235));
     private readonly Brush accent=new SolidColorBrush(Color.FromRgb(78,98,180));
@@ -223,6 +225,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     {
         this.owner=owner;this.pinned=pinned;this.addPin=addPin;
         this.removePin=removePin;this.openSearch=openSearch;
+        calloutPill=new DeskSpaceDonutThemeV380.SubDonutCalloutPillV380(owner);
         canvas=new Canvas{Width=1,Height=1,Background=null,Focusable=true};
         canvas.MouseMove+=Move;
         canvas.PreviewMouseLeftButtonDown+=Down;
@@ -274,7 +277,16 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         =>items.Add((label,kind,path,a,b,depth));
     private void Render()
     {
-        items.Clear();hitZones.Clear();fills.Clear();canvas.Children.Clear();hovered=-1;
+        string? keepHoverKind=(hovered>=0 && hovered<hitZones.Count)?hitZones[hovered].Kind:null;
+        string? keepHoverPath=(hovered>=0 && hovered<hitZones.Count)?hitZones[hovered].Path:null;
+        double keepMidAngle=(hovered>=0 && hovered<wedgeVisualsV380.Count)?wedgeVisualsV380[hovered].MidAngle:double.NaN;
+        bool keepPill=calloutPill.IsVisible && keepHoverKind is "launch" or "launchfile";
+        calloutPill.Hide();
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(themeApp);
+        items.Clear();hitZones.Clear();fills.Clear();wedgeVisualsV380.Clear();canvas.Children.Clear();hovered=-1;
         double centre=ApplicationsParentCenter;
         var roots=new[]{
             ("Pinned","pinned"),("+ Pin","add"),("Search","search")};
@@ -334,7 +346,10 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 }
             }
         }
-        var shapes=items.Select(x=>AppSector(x.Depth,x.A,x.B)).ToArray();
+        var shapes=items.Select(x=>{
+            double g=(x.B-x.A)>gapInset*2.5?gapInset:0;
+            return AppSector(x.Depth,x.A+g,x.B-g);
+        }).ToArray();
         bounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
         const double margin=10;
         canvas.Width=bounds.Width+margin*2;
@@ -342,6 +357,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         var clippedGeoms=new Geometry[items.Count];
         var depth1Wedges=new List<System.Windows.Shapes.Path>();
         var depth2FileWedges=new List<System.Windows.Shapes.Path>();
+        var sectorVisuals=new DonutWedgeVisualV380[items.Count];
         // Pass 1: all wedge geometries at Z=1
         for(int i=0;i<items.Count;i++)
         {
@@ -351,6 +367,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             bool isAction=item.Kind is "add" or "allfiles";
             bool isSelectedApp=item.Kind=="launch" && !string.IsNullOrEmpty(activeAppPath) &&
                 string.Equals(item.Path,activeAppPath,StringComparison.OrdinalIgnoreCase);
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,item.Depth+2,i,isAction,isSelectedApp,false);
+            sectorVisuals[i]=vis;
             ToolTip tip=item.Kind=="launch"
                 ? CreateCompactTooltipV380(item.Label,"Click to open · Right-click for files or Unpin")
                 : item.Kind=="launchfile"
@@ -369,8 +387,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                             DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(item.Path))
                         : CreateCompactTooltipV380(item.Label);
             var wedge=new System.Windows.Shapes.Path{
-                Data=geometry,Stroke=Brushes.White,StrokeThickness=1.5,
-                Fill=isAction?accent:(isSelectedApp?selected:normal),
+                Data=geometry,Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,
+                Fill=vis.Fill,Effect=vis.Effect,
                 Cursor=Cursors.Hand,ToolTip=tip,Tag=i};
             ToolTipService.SetInitialShowDelay(wedge,item.Kind=="launchfile"?650:850);
             ToolTipService.SetBetweenShowDelay(wedge,200);
@@ -388,6 +406,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         {
             var item=items[i];
             bool isAction=item.Kind is "add" or "allfiles";
+            var vis=sectorVisuals[i];
             double midR=(AppInner(item.Depth)+AppOuter(item.Depth))/2;
             double midA=(item.A+item.B)/2;
             var p=DeskSpaceSubArcGeometryV48.Polar(midR,midA);
@@ -401,20 +420,22 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             var (boxLeft,boxWidth)=InscribedHorizontalSpanV380(
                 clippedGeoms[i],midX,midY,probeHalfH,pad,item.Depth>=2?46:34,maxW,canvas.Width);
             double unitCenterX=boxLeft+boxWidth*.5;
+            double labelFontSize=item.Depth==1?9.5:10;
+            FontWeight labelWeight=isAction?FontWeights.SemiBold:FontWeights.Normal;
             var label=new TextBlock{
                 Text=item.Label,
                 Width=boxWidth,
                 MaxHeight=maxLabelH,
-                FontSize=item.Depth==1?9.5:10,
-                FontWeight=isAction?FontWeights.SemiBold:FontWeights.Normal,
+                FontSize=labelFontSize,
+                FontWeight=labelWeight,
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 TextWrapping=TextWrapping.Wrap,
                 TextAlignment=TextAlignment.Center,
                 IsHitTestVisible=false,
-                Foreground=isAction?Brushes.White:
-                    new SolidColorBrush(Color.FromRgb(37,51,79))};
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush};
             label.Measure(new Size(boxWidth,maxLabelH));
             double actualH=Math.Min(maxLabelH,Math.Max(12,label.DesiredSize.Height));
+            var linked=new List<UIElement>{fills[i],label};
             if(isAppIcon)
             {
                 var iconSource=DeskSpaceApplicationIconsV65.Get(item.Path)!;
@@ -429,6 +450,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
                 canvas.Children.Add(appIcon);
                 Canvas.SetLeft(label,boxLeft);
                 Canvas.SetTop(label,topY+iconSize+gap);
+                linked.Add(appIcon);
             }
             else
             {
@@ -437,6 +459,17 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             }
             Panel.SetZIndex(label,10);
             canvas.Children.Add(label);
+
+            PinnedAppFileItemV380? meta=null;
+            if(item.Kind=="launchfile")fileLookup.TryGetValue(item.Path,out meta);
+            string fullName=meta!=null?meta.DisplayName:item.Label.Replace("\u200B",string.Empty);
+            string? badge=meta!=null?meta.KindBadge:(item.Kind=="launch"?"PINNED":null);
+            bool isTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                fullName,boxWidth,maxLabelH,labelFontSize,labelWeight,wraps:true);
+            var outerPt=DeskSpaceSubArcGeometryV48.Polar(AppOuter(item.Depth),midA);
+            Point outerAnchor=new(DeskSpaceSubArcGeometryV48.CX+outerPt.X-bounds.Left+margin,
+                                  DeskSpaceSubArcGeometryV48.CY+outerPt.Y-bounds.Top+margin);
+            wedgeVisualsV380.Add((linked,label,isTrunc,fullName,badge,midA,outerAnchor,item.Depth+2,isAction));
         }
         if(group=="pinned")
         {
@@ -469,6 +502,19 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
             }
         }
         Position();
+        if(keepPill && !string.IsNullOrEmpty(keepHoverPath))
+        {
+            int keepIdx=hitZones.FindIndex(h=>h.Kind==keepHoverKind &&
+                string.Equals(h.Path,keepHoverPath,StringComparison.OrdinalIgnoreCase));
+            if(keepIdx>=0 && keepIdx<wedgeVisualsV380.Count &&
+               wedgeVisualsV380[keepIdx].IsTruncated &&
+               Math.Abs(wedgeVisualsV380[keepIdx].MidAngle-keepMidAngle)<1.0)
+            {
+                hovered=keepIdx;
+                var kwv=wedgeVisualsV380[keepIdx];
+                calloutPill.Show(canvas,kwv.OuterAnchor,kwv.MidAngle,kwv.FullName,kwv.Badge);
+            }
+        }
     }
     private static bool AreFileListsEquivalentV380(
         IReadOnlyList<PinnedAppFileItemV380> a,IReadOnlyList<PinnedAppFileItemV380> b)
@@ -626,13 +672,27 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         arc.HorizontalOffset=offset.X+(++placementTick%2)*.001;
         arc.VerticalOffset=offset.Y;
     }
+    internal void RefreshThemeV380()
+    {
+        if(!disposed && arc.IsOpen)
+            Render();
+    }
     public void Show()
     {
         if(disposed)return;
         group="";childPage=0;ClearActiveAppFilesV380();
         Render();arc.IsOpen=owner.IsVisible;
+        if(arc.IsOpen && !bounds.IsEmpty)
+        {
+            DeskSpaceDonutThemeV380.AnimateOpen(
+                canvas,
+                fills.Cast<FrameworkElement>().ToArray(),
+                DeskSpaceSubArcGeometryV48.CX-bounds.Left+10,
+                DeskSpaceSubArcGeometryV48.CY-bounds.Top+10,
+                ApplicationsParentCenter,isSubArc:true);
+        }
     }
-    public void HideArc(){contextMenuOpen=false;middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
+    public void HideArc(){calloutPill.Hide();contextMenuOpen=false;middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
     private int Slot(Point point)
     {
         for(int i=hitZones.Count-1;i>=0;i--)
@@ -645,14 +705,29 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         int i=Slot(point);
         if(i==hovered)return;
         hovered=i;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
         for(int j=0;j<fills.Count;j++)
         {
             bool activeParent=hitZones[j].Kind=="launch" && !string.IsNullOrEmpty(activeAppPath) &&
                 string.Equals(hitZones[j].Path,activeAppPath,StringComparison.OrdinalIgnoreCase);
-            fills[j].Fill=(j==i || activeParent)
-                ?selected
-                :(hitZones[j].Kind is "add" or "allfiles"?accent:normal);
+            bool hov=j==i;
+            var wv=j<wedgeVisualsV380.Count?wedgeVisualsV380[j]:default;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,wv.LinkedVisuals!=null?wv.Depth:2,j,wv.IsAction,activeParent,hov);
+            fills[j].Fill=vis.Fill;
+            fills[j].Stroke=vis.Stroke;
+            fills[j].StrokeThickness=vis.StrokeThickness;
+            fills[j].Effect=vis.Effect;
+            if(wv.Label!=null)
+            {
+                wv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                DeskSpaceDonutThemeV380.ApplyHoverLift(wv.LinkedVisuals,hov,wv.MidAngle,themeApp);
+            }
         }
+        if(i>=0 && i<wedgeVisualsV380.Count && wedgeVisualsV380[i].IsTruncated)
+            calloutPill.Show(canvas,wedgeVisualsV380[i].OuterAnchor,wedgeVisualsV380[i].MidAngle,wedgeVisualsV380[i].FullName,wedgeVisualsV380[i].Badge);
+        else
+            calloutPill.Hide();
         if(i<0)return;
         var kind=hitZones[i].Kind;
         if(kind=="pinned"&&group!=kind)
@@ -737,6 +812,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         cm.Items.Add(new Separator());
         cm.Items.Add(unpinItem);
         cm.PlacementTarget=canvas;
+        calloutPill.Hide();
         contextMenuOpen=true;
         cm.Closed+=(_,_)=>contextMenuOpen=false;
         cm.IsOpen=true;
@@ -855,7 +931,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     public void Dispose()
     {
         if(disposed)return;
-        disposed=true;HideArc();middleScroll.Dispose();
+        disposed=true;HideArc();calloutPill.Dispose();middleScroll.Dispose();
         owner.LocationChanged-=Moved;owner.SizeChanged-=Resized;
     }
 }

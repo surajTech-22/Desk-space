@@ -144,6 +144,12 @@ Swap-R380 @'
     }
 '@ 'WidgetHost SavePreservingPinnedApps'
 Swap-R380 @'
+    private readonly List<System.Windows.Shapes.Path> ringPaths = new();
+'@ @'
+    private readonly List<System.Windows.Shapes.Path> ringPaths = new();
+    private readonly List<(System.Windows.Shapes.Path Wedge, List<UIElement> LinkedVisuals, TextBlock Label, bool IsOuter, double MidAngle)> ringVisuals = new();
+'@ 'WidgetHost ringVisuals field'
+Swap-R380 @'
     private DateTime rightClickOpenedUntil = DateTime.MinValue;
 '@ @'
     private DateTime rightClickOpenedUntil = DateTime.MinValue;
@@ -184,6 +190,22 @@ Swap-R380 @'
         DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);
         DeskSpaceModernHubV380.AttachWidgetHost(this, menu);
 '@ 'WidgetHost tray modern submenu and global hotkeys'
+Swap-R380 @'
+        menu.Items.Add("Donut toolbar, themes & presets",null,(_,_)=>Dispatcher.Invoke(
+            ()=>DeskSpaceSettingsStudioV148.Show(this,prefs,
+                RefreshAppearanceV148,
+                ()=>new WidgetOptionsWindow(prefs,()=>{
+                    prefs.SavePreservingPinnedApps();prefs.ApplyWindowsStartup();
+                }).Show())));
+'@ @'
+        menu.Items.Add("Donut toolbar, themes & presets",null,(_,_)=>Dispatcher.Invoke(
+            ()=>DeskSpaceSettingsStudioV148.Show(this,prefs,
+                RefreshAppearanceV148,
+                ()=>new WidgetOptionsWindow(prefs,()=>{
+                    prefs.SavePreservingPinnedApps();prefs.ApplyWindowsStartup();
+                }).Show())));
+        AddDonutStyleTrayMenuV380(menu);
+'@ 'WidgetHost tray Donut Style and Transitions submenu'
 Swap-R380 @'
             excelWheel??=new DeskSpaceExcelWheelV42(this,()=>{
                 if(ringExpanded)CollapseRing();
@@ -387,7 +409,7 @@ Swap-R380 @'
                 (p-new Point(Width/2,Height/2)).Length<=Width*198.0/420.0+14;
             bool overSubArc=(informationOverlay?.IsPointerNearArc()==true) ||
                 (appsWheel?.IsPointerNearArc()==true) ||
-                (excelWheel?.IsArcOpen==true);
+                (excelWheel?.IsPointerNearArc()==true);
             if(!overMainDonut && !overSubArc &&
                DateTime.UtcNow>rightClickOpenedUntil && !keyboardDonutModeV207)
             {
@@ -584,6 +606,400 @@ Swap-R380 @'
             return;
         }
 '@ 'WidgetHost UpdateCenter active Information arc summary'
+Swap-R380 @'
+        if(selected==highlightedSector)return;
+        highlightedSector=selected;
+        for(int i=0;i<ringPaths.Count;i++)
+            ringPaths[i].Fill=DeskSpaceHighContrastV208.Wedge(
+                SystemParameters.HighContrast,i,i==selected,
+                light,DeskSpaceAppearanceV148.SecondaryBrush,accent);
+    }
+'@ @'
+        if(selected==highlightedSector)return;
+        highlightedSector=selected;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        for(int i=0;i<ringVisuals.Count;i++)
+        {
+            var rv=ringVisuals[i];
+            bool hov=i==selected;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,rv.IsOuter?1:0,i,false,false,hov);
+            rv.Wedge.Fill=vis.Fill;
+            rv.Wedge.Stroke=vis.Stroke;
+            rv.Wedge.StrokeThickness=vis.StrokeThickness;
+            rv.Wedge.Effect=vis.Effect;
+            rv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+            DeskSpaceDonutThemeV380.ApplyHoverLift(rv.LinkedVisuals,hov,rv.MidAngle,themeApp);
+        }
+    }
+'@ 'WidgetHost UpdateHighlightedSector themed lift and glow'
+Swap-R380 @'
+        highlightedSector=keyboardDonutSectorV207;
+        for(int i=0;i<ringPaths.Count;i++)
+        {
+            ringPaths[i].Fill=DeskSpaceHighContrastV208.Wedge(
+                SystemParameters.HighContrast,i,i==highlightedSector,
+                light,DeskSpaceAppearanceV148.SecondaryBrush,accent);
+            ringPaths[i].StrokeThickness=i==highlightedSector?4:2;
+        }
+'@ @'
+        highlightedSector=keyboardDonutSectorV207;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        for(int i=0;i<ringVisuals.Count;i++)
+        {
+            var rv=ringVisuals[i];
+            bool hov=i==highlightedSector;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,rv.IsOuter?1:0,i,false,false,hov);
+            rv.Wedge.Fill=vis.Fill;
+            rv.Wedge.Stroke=vis.Stroke;
+            rv.Wedge.StrokeThickness=hov?Math.Max(3.2,vis.StrokeThickness):vis.StrokeThickness;
+            rv.Wedge.Effect=vis.Effect;
+            rv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+            DeskSpaceDonutThemeV380.ApplyHoverLift(rv.LinkedVisuals,hov,rv.MidAngle,themeApp);
+        }
+'@ 'WidgetHost keyboard donut highlight themed'
+Swap-R380 @'
+        if (ringExpanded)
+        {
+            BuildDonut();
+            StartWheelHover();
+        }
+'@ @'
+        if (ringExpanded)
+        {
+            BuildDonut();
+            DeskSpaceDonutThemeV380.AnimateOpen(
+                canvas,
+                ringVisuals.Select(v=>(FrameworkElement)v.Wedge).ToArray(),
+                210,210,-90,isSubArc:false);
+            StartWheelHover();
+        }
+'@ 'WidgetHost ToggleRing open transition'
+Swap-R380 @'
+        canvas.Children.Clear();
+        ringPaths.Clear();
+        highlightedSector = -1;
+        canvas.Width = canvas.Height = 292;
+        var shadow = new Ellipse { Width = 282, Height = 282,
+            Fill = new SolidColorBrush(Color.FromArgb(85, 9, 16, 35)),
+            IsHitTestVisible=false };
+        Canvas.SetLeft(shadow, 5); Canvas.SetTop(shadow, 7);
+        canvas.Children.Add(shadow);
+        var circle = new Ellipse { Width = 272, Height = 272, Fill = ClockFace(),
+            Stroke = DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
+            StrokeThickness = 7,
+'@ @'
+        canvas.Children.Clear();
+        ringPaths.Clear();
+        ringVisuals.Clear();
+        highlightedSector = -1;
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var compactHubVis = DeskSpaceDonutThemeV380.ResolveHub(DeskSpaceAppearanceV148.Current, SystemParameters.HighContrast);
+        canvas.Width = canvas.Height = 292;
+        var shadow = new Ellipse { Width = 282, Height = 282,
+            Fill = new SolidColorBrush(Color.FromArgb(85, 9, 16, 35)),
+            IsHitTestVisible=false };
+        Canvas.SetLeft(shadow, 5); Canvas.SetTop(shadow, 7);
+        canvas.Children.Add(shadow);
+        var circle = new Ellipse { Width = 272, Height = 272, Fill = ClockFace(),
+            Stroke = compactHubVis.Stroke,
+            StrokeThickness = 7,
+            Effect = compactHubVis.Effect,
+'@ 'WidgetHost BuildCompact hub style'
+Swap-R380 @'
+        canvas.Children.Clear();
+        ringPaths.Clear();
+        highlightedSector=-1;
+        canvas.Width=canvas.Height=420;
+        var shadow=new Ellipse{Width=408,Height=408,
+            Fill=new SolidColorBrush(Color.FromArgb(65,10,17,40)),
+            IsHitTestVisible=false};
+        Canvas.SetLeft(shadow,6);Canvas.SetTop(shadow,7);canvas.Children.Add(shadow);
+        for(int i=0;i<Segments.Length;i++)
+        {
+            bool outer=i>=6;int slot=outer?i-6:i;
+            bool hasQuickAdd=HasModuleQuickAdd(Segments[i]);
+            double step=360.0/(outer?6:6);double first=-90-step/2+slot*step,last=first+step-1.5;
+            var wedge=new System.Windows.Shapes.Path{
+                Data=Sector(210,210,outer?132:70,outer?195:124,first,last),
+                Fill=DeskSpaceHighContrastV208.Wedge(
+                    SystemParameters.HighContrast,i,false,
+                    light,DeskSpaceAppearanceV148.SecondaryBrush,accent),
+                Stroke=DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
+                StrokeThickness=2,IsHitTestVisible=false
+            };
+            canvas.Children.Add(wedge);ringPaths.Add(wedge);
+            var angle=(-90+slot*(360.0/(outer?6:6)))*Math.PI/180;
+            var label=new TextBlock{
+                Text=SegmentIcons[i]+"\n"+
+                    (Segments[i]=="Clock & Weather"?"Clock\nWeather":Segments[i]),
+                FontSize=outer?12:11,
+                TextAlignment=TextAlignment.Center,FontWeight=FontWeights.SemiBold,
+                Foreground=DeskSpaceHighContrastV208.Label(
+                    SystemParameters.HighContrast,DeskSpaceAppearanceV148.InkBrush),
+                IsHitTestVisible=false
+            };
+            label.Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
+            double radius=outer?(hasQuickAdd?151:162):(hasQuickAdd?94:100);
+            Canvas.SetLeft(label,210+radius*Math.Cos(angle)-label.DesiredSize.Width/2);
+            Canvas.SetTop(label,210+radius*Math.Sin(angle)-label.DesiredSize.Height/2);
+            canvas.Children.Add(label);
+            if(hasQuickAdd)
+            {
+                // True in-donut hit region, no separate popup HWND or
+                // overlapping modal panel. Click and drag release both
+                // route through QuickAddHitAt on the parent gesture.
+                double markRadius=outer?182:113;
+                double px=210+markRadius*Math.Cos(angle);
+                double py=210+markRadius*Math.Sin(angle);
+                var mark=new Ellipse{
+                    Width=20,Height=20,
+                    Fill=DeskSpaceHighContrastV208.QuickAction(
+                        SystemParameters.HighContrast,accent),
+                    Stroke=DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
+                    StrokeThickness=1.4,
+                    IsHitTestVisible=false};
+                Canvas.SetLeft(mark,px-10);Canvas.SetTop(mark,py-10);
+                canvas.Children.Add(mark);
+                var plus=new TextBlock{
+                    Text="+",FontSize=17,FontWeight=FontWeights.Bold,
+                    Foreground=DeskSpaceHighContrastV208.QuickActionLabel(
+                        SystemParameters.HighContrast),
+                    TextAlignment=TextAlignment.Center,
+                    Width=20,Height=20,IsHitTestVisible=false};
+                Canvas.SetLeft(plus,px-10);Canvas.SetTop(plus,py-2-10);
+                canvas.Children.Add(plus);
+            }
+        }
+        var centre=new Ellipse{Width=130,Height=130,Fill=ClockFace(),
+            Stroke=DeskSpaceHighContrastV208.Outline(SystemParameters.HighContrast),
+            StrokeThickness=3,IsHitTestVisible=false};
+        Canvas.SetLeft(centre,145);Canvas.SetTop(centre,145);canvas.Children.Add(centre);
+        clockFace=centre;
+'@ @'
+        canvas.Children.Clear();
+        ringPaths.Clear();
+        ringVisuals.Clear();
+        highlightedSector=-1;
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapDeg=DeskSpaceDonutThemeV380.GetMainGapDegrees(themeApp);
+        double halfGapAdjust=(gapDeg-1.5)*0.5;
+        canvas.Width=canvas.Height=420;
+        var shadow=new Ellipse{Width=408,Height=408,
+            Fill=new SolidColorBrush(Color.FromArgb(themeApp.MixWireframe?(byte)22:(byte)65,10,17,40)),
+            IsHitTestVisible=false};
+        Canvas.SetLeft(shadow,6);Canvas.SetTop(shadow,7);canvas.Children.Add(shadow);
+        for(int i=0;i<Segments.Length;i++)
+        {
+            bool outer=i>=6;int slot=outer?i-6:i;
+            bool hasQuickAdd=HasModuleQuickAdd(Segments[i]);
+            double step=360.0/(outer?6:6);
+            double first=-90-step/2+slot*step+halfGapAdjust;
+            double last=first+step-gapDeg;
+            double midAngleDeg=(first+last)/2.0;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,outer?1:0,i,false,false,false);
+            var wedge=new System.Windows.Shapes.Path{
+                Data=Sector(210,210,outer?132:70,outer?195:124,first,last),
+                Fill=vis.Fill,
+                Stroke=vis.Stroke,
+                StrokeThickness=vis.StrokeThickness,
+                Effect=vis.Effect,
+                IsHitTestVisible=false
+            };
+            canvas.Children.Add(wedge);ringPaths.Add(wedge);
+            var angle=(-90+slot*(360.0/(outer?6:6)))*Math.PI/180;
+            var label=new TextBlock{
+                Text=SegmentIcons[i]+"\n"+
+                    (Segments[i]=="Clock & Weather"?"Clock\nWeather":Segments[i]),
+                FontSize=outer?12:11,
+                TextAlignment=TextAlignment.Center,FontWeight=FontWeights.SemiBold,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
+                IsHitTestVisible=false
+            };
+            label.Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
+            double radius=outer?(hasQuickAdd?151:162):(hasQuickAdd?94:100);
+            Canvas.SetLeft(label,210+radius*Math.Cos(angle)-label.DesiredSize.Width/2);
+            Canvas.SetTop(label,210+radius*Math.Sin(angle)-label.DesiredSize.Height/2);
+            canvas.Children.Add(label);
+            var linked=new List<UIElement>{wedge,label};
+            if(hasQuickAdd)
+            {
+                // True in-donut hit region, no separate popup HWND or
+                // overlapping modal panel. Click and drag release both
+                // route through QuickAddHitAt on the parent gesture.
+                double markRadius=outer?182:113;
+                double px=210+markRadius*Math.Cos(angle);
+                double py=210+markRadius*Math.Sin(angle);
+                var mark=new Ellipse{
+                    Width=20,Height=20,
+                    Fill=DeskSpaceHighContrastV208.QuickAction(
+                        SystemParameters.HighContrast,accent),
+                    Stroke=vis.Stroke,
+                    StrokeThickness=1.4,
+                    IsHitTestVisible=false};
+                Canvas.SetLeft(mark,px-10);Canvas.SetTop(mark,py-10);
+                canvas.Children.Add(mark);
+                var plus=new TextBlock{
+                    Text="+",FontSize=17,FontWeight=FontWeights.Bold,
+                    Foreground=DeskSpaceHighContrastV208.QuickActionLabel(
+                        SystemParameters.HighContrast),
+                    TextAlignment=TextAlignment.Center,
+                    Width=20,Height=20,IsHitTestVisible=false};
+                Canvas.SetLeft(plus,px-10);Canvas.SetTop(plus,py-2-10);
+                canvas.Children.Add(plus);
+                linked.Add(mark);
+                linked.Add(plus);
+            }
+            ringVisuals.Add((wedge,linked,label,outer,midAngleDeg));
+        }
+        var hubVis=DeskSpaceDonutThemeV380.ResolveHub(themeApp,hc);
+        var centre=new Ellipse{Width=130,Height=130,Fill=ClockFace(),
+            Stroke=hubVis.Stroke,
+            StrokeThickness=hubVis.StrokeThickness,Effect=hubVis.Effect,IsHitTestVisible=false};
+        Canvas.SetLeft(centre,145);Canvas.SetTop(centre,145);canvas.Children.Add(centre);
+        clockFace=centre;
+'@ 'WidgetHost BuildDonut themed ring rendering'
+Swap-R380 @'
+    private Brush ClockFace()
+    {
+        if(SystemParameters.HighContrast)return SystemColors.WindowBrush;
+        if(DeskSpaceAppearanceV148.Current.Style=="Modern")
+            return DeskSpaceDesignV283.WidgetFace();
+        if (prefs.CenterMode != "Clock" || !prefs.ShowWeather) return accent;
+        var value=DeskSpaceWeather.Latest;
+        if (value == null || !value.City.Equals(prefs.WeatherCity,StringComparison.OrdinalIgnoreCase))
+            return accent;
+        Color top, bottom;
+        if (!value.IsDay) {top=Color.FromRgb(25,42,90);bottom=Color.FromRgb(73,61,137);}
+        else if (value.Code >= 51) {top=Color.FromRgb(33,88,156);bottom=Color.FromRgb(46,61,99);}
+        else if (value.Code <= 1) {top=Color.FromRgb(234,135,42);bottom=Color.FromRgb(124,77,189);}
+        else {top=Color.FromRgb(49,136,209);bottom=Color.FromRgb(81,86,148);}
+        return new LinearGradientBrush(top,bottom,90);
+    }
+'@ @'
+    private Brush ClockFace()
+    {
+        if(SystemParameters.HighContrast)return SystemColors.WindowBrush;
+        var cur=DeskSpaceAppearanceV148.Current;
+        if(cur.Style=="Modern" || cur.MixGlassFrost || cur.MixNeonEdge || cur.MixAuroraGradient || cur.MixWireframe)
+            return DeskSpaceDonutThemeV380.ResolveHub(cur,false).Fill;
+        if (prefs.CenterMode != "Clock" || !prefs.ShowWeather) return accent;
+        var value=DeskSpaceWeather.Latest;
+        if (value == null || !value.City.Equals(prefs.WeatherCity,StringComparison.OrdinalIgnoreCase))
+            return accent;
+        Color top, bottom;
+        if (!value.IsDay) {top=Color.FromRgb(25,42,90);bottom=Color.FromRgb(73,61,137);}
+        else if (value.Code >= 51) {top=Color.FromRgb(33,88,156);bottom=Color.FromRgb(46,61,99);}
+        else if (value.Code <= 1) {top=Color.FromRgb(234,135,42);bottom=Color.FromRgb(124,77,189);}
+        else {top=Color.FromRgb(49,136,209);bottom=Color.FromRgb(81,86,148);}
+        return new LinearGradientBrush(top,bottom,90);
+    }
+    private void AddDonutStyleTrayMenuV380(Forms.ContextMenuStrip menu)
+    {
+        var styleRoot=new Forms.ToolStripMenuItem("Donut Style & Transitions");
+        styleRoot.DropDownOpening+=(_,_)=>{
+            styleRoot.DropDownItems.Clear();
+            DeskSpaceAppearanceV148.ReloadIfChanged();
+            var cur=DeskSpaceAppearanceV148.Current;
+
+            void SaveAndRefresh(Action<DeskSpaceAppearanceV148> mutate,bool replayOpen=false)
+            {
+                var next=DeskSpaceAppearanceV148.Clone(DeskSpaceAppearanceV148.Current);
+                mutate(next);
+                DeskSpaceAppearanceV148.Save(next);
+                Dispatcher.Invoke(()=>{
+                    RefreshAppearanceV148();
+                    if(replayOpen && ringExpanded && activeModule==null)
+                    {
+                        DeskSpaceDonutThemeV380.AnimateOpen(
+                            canvas,
+                            ringVisuals.Select(v=>(FrameworkElement)v.Wedge).ToArray(),
+                            210,210,-90,isSubArc:false);
+                    }
+                });
+            }
+
+            foreach(string id in DeskSpaceAppearanceV148.ValidDonutStyles)
+            {
+                string cap=id;
+                var mi=new Forms.ToolStripMenuItem(DeskSpaceDonutThemeV380.FriendlyStyleName(cap)){
+                    Checked=string.Equals(cur.DonutStyle,cap,StringComparison.OrdinalIgnoreCase)
+                };
+                mi.Click+=(_,_)=>SaveAndRefresh(a=>DeskSpaceAppearanceV148.ApplyDonutPresetDefaults(a,cap));
+                styleRoot.DropDownItems.Add(mi);
+            }
+
+            styleRoot.DropDownItems.Add(new Forms.ToolStripSeparator());
+            var mixMenu=new Forms.ToolStripMenuItem("Mix Style Layers (combine any)");
+            void AddMixToggle(string label,Func<DeskSpaceAppearanceV148,bool> get,Action<DeskSpaceAppearanceV148,bool> set)
+            {
+                var item=new Forms.ToolStripMenuItem(label){Checked=get(cur)};
+                item.Click+=(_,_)=>SaveAndRefresh(a=>set(a,!get(a)));
+                mixMenu.DropDownItems.Add(item);
+            }
+            AddMixToggle("Glass Frost",a=>a.MixGlassFrost,(a,v)=>a.MixGlassFrost=v);
+            AddMixToggle("Neon Edge Glow",a=>a.MixNeonEdge,(a,v)=>a.MixNeonEdge=v);
+            AddMixToggle("Floating Petals Gaps",a=>a.MixFloatingGaps,(a,v)=>a.MixFloatingGaps=v);
+            AddMixToggle("Aurora Depth Gradient",a=>a.MixAuroraGradient,(a,v)=>a.MixAuroraGradient=v);
+            AddMixToggle("Minimal Wireframe",a=>a.MixWireframe,(a,v)=>a.MixWireframe=v);
+            styleRoot.DropDownItems.Add(mixMenu);
+
+            var transMenu=new Forms.ToolStripMenuItem("Open Transitions & Motion");
+            foreach(string tr in DeskSpaceAppearanceV148.ValidTransitions)
+            {
+                string capTr=tr;
+                var ti=new Forms.ToolStripMenuItem(DeskSpaceDonutThemeV380.FriendlyTransitionName(capTr)){
+                    Checked=string.Equals(cur.OpenTransition,capTr,StringComparison.OrdinalIgnoreCase)
+                };
+                ti.Click+=(_,_)=>SaveAndRefresh(a=>a.OpenTransition=capTr,replayOpen:true);
+                transMenu.DropDownItems.Add(ti);
+            }
+            transMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+            void AddMotionToggle(string label,Func<DeskSpaceAppearanceV148,bool> get,Action<DeskSpaceAppearanceV148,bool> set)
+            {
+                var item=new Forms.ToolStripMenuItem(label){Checked=get(cur)};
+                item.Click+=(_,_)=>SaveAndRefresh(a=>set(a,!get(a)));
+                transMenu.DropDownItems.Add(item);
+            }
+            AddMotionToggle("Motion: Radial Hover Lift",a=>a.MotionHoverLift,(a,v)=>a.MotionHoverLift=v);
+            AddMotionToggle("Motion: Hover Accent Glow",a=>a.MotionHoverGlow,(a,v)=>a.MotionHoverGlow=v);
+            AddMotionToggle("Motion: Staggered Ripple",a=>a.MotionStaggerRipple,(a,v)=>a.MotionStaggerRipple=v);
+            AddMotionToggle("Motion: Fluid Scroll Glide",a=>a.MotionScrollGlide,(a,v)=>a.MotionScrollGlide=v);
+            styleRoot.DropDownItems.Add(transMenu);
+        };
+        menu.Items.Add(styleRoot);
+    }
+'@ 'WidgetHost ClockFace and AddDonutStyleTrayMenuV380'
+Swap-R380 @'
+    private void RefreshAppearanceV148()
+    {
+        DeskSpaceAppearanceV148.Apply(this);
+        if(activeModule==null)
+        {
+            if(ringExpanded)BuildDonut();
+            else BuildCompact();
+        }
+        else UpdateCenter();
+    }
+'@ @'
+    private void RefreshAppearanceV148()
+    {
+        DeskSpaceAppearanceV148.ReloadIfChanged(force:true);
+        DeskSpaceAppearanceV148.Apply(this);
+        if(activeModule==null)
+        {
+            if(ringExpanded)BuildDonut();
+            else BuildCompact();
+        }
+        else UpdateCenter();
+        informationOverlay?.RefreshThemeV380();
+        appsWheel?.RefreshThemeV380();
+        excelWheel?.RefreshThemeV380();
+    }
+'@ 'WidgetHost RefreshAppearanceV148 sync sub-donuts'
 Finish-Patch $hostPath
 
 # 4b. Surgical hook: DeskSpaceInformationV36.cs (tight concentric clipped bounds & monitor-aware shelf)
@@ -636,6 +1052,8 @@ Swap-R380 @'
     private long warmedAppsRev=-1;
     private DateTime warmedConfigStampUtc=DateTime.MinValue;
     private bool contextMenuOpen;
+    private readonly DeskSpaceDonutThemeV380.SubDonutCalloutPillV380 calloutPill;
+    private readonly List<(List<UIElement> LinkedVisuals,TextBlock Label,bool IsTruncated,string FullName,string? Badge,double MidAngle,Point OuterAnchor,int Depth,bool IsAction)> wedgeVisualsV380=new();
     private int ActiveArcTotalCount()=>arcApps.Count>0?arcApps.Count:all.Count;
     private bool warmed,warming;
     private DateTime warmStamp=DateTime.MinValue;
@@ -701,7 +1119,10 @@ Swap-R380 '    public int SavedCount => all.Count;' @'
         }
     }
 '@ 'DeskSpaceInformationV36 SavedCount'
-Swap-R380 '        arcCanvas=new Canvas{Width=488,Height=222,Focusable=true};' '        arcCanvas=new Canvas{Width=1,Height=1,Focusable=true};' 'DeskSpaceInformationV36 tight initial canvas'
+Swap-R380 '        arcCanvas=new Canvas{Width=488,Height=222,Focusable=true};' @'
+        calloutPill=new DeskSpaceDonutThemeV380.SubDonutCalloutPillV380(owner);
+        arcCanvas=new Canvas{Width=1,Height=1,Focusable=true};
+'@ 'DeskSpaceInformationV36 tight initial canvas'
 Swap-R380 @'
         middleScroll=new DeskSpaceMiddleScrollV63.Controller(arcCanvas,
             ()=>all.Count>PageSize,
@@ -756,6 +1177,11 @@ Swap-R380 @'
         changed();
     }
 '@ @'
+    internal void RefreshThemeV380()
+    {
+        if(!disposed && arc.IsOpen)
+            RenderArc();
+    }
     public void Show()
     {
         if(disposed)return;
@@ -783,6 +1209,15 @@ Swap-R380 @'
             RenderArc();
             PositionArc();
             arc.IsOpen=true;
+            if(!arcBounds.IsEmpty)
+            {
+                DeskSpaceDonutThemeV380.AnimateOpen(
+                    arcCanvas,
+                    childWedges.Cast<FrameworkElement>().ToArray(),
+                    DeskSpaceSubArcGeometryV48.CX-arcBounds.Left+ArcMargin,
+                    DeskSpaceSubArcGeometryV48.CY-arcBounds.Top+ArcMargin,
+                    -90,isSubArc:true);
+            }
             pointerTimer.Start();
             changed();
         }
@@ -791,6 +1226,7 @@ Swap-R380 @'
     }
     public void HideArc()
     {
+        calloutPill.Hide();
         contextMenuOpen=false;
         newHoverTimer.Stop();
         middleScroll.Stop();
@@ -1313,12 +1749,24 @@ Swap-R380 @'
     // to exact sector bounds so WPF/monitor fencing keeps them concentric.
     private void RenderArc()
     {
+        string? keepHoverKind=(hoveredChild>=0 && hoveredChild<arcHitZones.Count)?arcHitZones[hoveredChild].kind:null;
+        string keepHoverKey=(hoveredChild>=0 && hoveredChild<arcHitZones.Count)
+            ? (keepHoverKind=="infofile"?arcHitZones[hoveredChild].filePath:arcHitZones[hoveredChild].appPath)
+            : "";
+        double keepMidAngle=(hoveredChild>=0 && hoveredChild<wedgeVisualsV380.Count)?wedgeVisualsV380[hoveredChild].MidAngle:double.NaN;
+        bool keepPill=calloutPill.IsVisible && keepHoverKind is "infoapp" or "infofile";
+        calloutPill.Hide();
         newHoverTimer.Stop();
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(themeApp);
         arcCanvas.Children.Clear();
-        childWedges.Clear();childLabels.Clear();arcHitZones.Clear();
+        childWedges.Clear();childLabels.Clear();arcHitZones.Clear();wedgeVisualsV380.Clear();
         hoveredChild=-1;
 
         var drawItems=new List<(string Label,string Kind,Guid? Id,string AppPath,string FilePath,double A,double B,int Depth,string Tip,bool IsAction)>();
+        var fileMetaLookup=new Dictionary<string,AppInfoFileRecordV380>(StringComparer.OrdinalIgnoreCase);
 
         bool isSingleAppMode=arcApps.Count==1;
         bool isMultiAppMode=arcApps.Count>=2;
@@ -1346,6 +1794,8 @@ Swap-R380 @'
                 for(int i=0;i<slice.Length;i++)
                 {
                     var mf=slice[i];
+                    if(!string.IsNullOrEmpty(mf.FullPath))
+                        fileMetaLookup[mf.FullPath]=mf;
                     drawItems.Add((FormatArcLabel(mf.DisplayName),"infofile",null,app.Path,mf.FullPath,
                         layout.From(i),layout.To(i),0,
                         $"{mf.DisplayName}\n{mf.KindBadge} · Click to show selected info · Right-click to manage app",
@@ -1409,6 +1859,8 @@ Swap-R380 @'
                     d1VisibleItems=slice.Length;
                     foreach(var mf in slice)
                     {
+                        if(!string.IsNullOrEmpty(mf.FullPath))
+                            fileMetaLookup[mf.FullPath]=mf;
                         d1Entries.Add((FormatArcLabel(mf.DisplayName),"infofile",activeArcAppPath,mf.FullPath,
                             $"{mf.DisplayName}\n{mf.KindBadge} · Click to show selected info below",false));
                     }
@@ -1454,7 +1906,10 @@ Swap-R380 @'
             }
         }
 
-        var rawShapes=drawItems.Select(x=>InfoSector(x.Depth,x.A,x.B)).ToArray();
+        var rawShapes=drawItems.Select(x=>{
+            double g=(x.B-x.A)>gapInset*2.5?gapInset:0;
+            return InfoSector(x.Depth,x.A+g,x.B-g);
+        }).ToArray();
         arcBounds=DeskSpaceSubArcGeometryV48.Bounds(rawShapes);
         arcCanvas.Width=arcBounds.Width+ArcMargin*2;
         arcCanvas.Height=arcBounds.Height+ArcMargin*2;
@@ -1462,6 +1917,7 @@ Swap-R380 @'
         var clippedGeoms=new Geometry[drawItems.Count];
         var d0ScrollWedges=new List<System.Windows.Shapes.Path>();
         var d1ScrollWedges=new List<System.Windows.Shapes.Path>();
+        var sectorVisuals=new DonutWedgeVisualV380[drawItems.Count];
 
         // Pass 1: Wedge paths at Z=1
         for(int i=0;i<drawItems.Count;i++)
@@ -1471,11 +1927,12 @@ Swap-R380 @'
             clippedGeoms[i]=hit;
             bool isSelectedParent=item.Kind=="infoapp" && !string.IsNullOrEmpty(activeArcAppPath) &&
                 string.Equals(item.AppPath,activeArcAppPath,StringComparison.OrdinalIgnoreCase);
-            Brush fill=item.IsAction?Accent:(isSelectedParent?ChildHover:ChildIdle);
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,item.Depth+2,i,item.IsAction,isSelectedParent,false);
+            sectorVisuals[i]=vis;
             var sector=new System.Windows.Shapes.Path{
                 Data=hit,
-                Stroke=Brushes.White,StrokeThickness=item.Depth==0?2:1.5,
-                Fill=fill,
+                Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,
+                Fill=vis.Fill,Effect=vis.Effect,
                 Tag=i,Cursor=Cursors.Hand,
                 ToolTip=item.Depth==0 && item.Kind=="collection"?(object)item.Tip:CreateCompactTooltip(item.Label,item.Tip)};
             ToolTipService.SetInitialShowDelay(sector,item.Depth>=1?600:800);
@@ -1495,31 +1952,41 @@ Swap-R380 @'
         for(int i=0;i<drawItems.Count;i++)
         {
             var item=drawItems[i];
+            var vis=sectorVisuals[i];
+            double midA=(item.A+item.B)/2;
+            var outerPt=DeskSpaceSubArcGeometryV48.Polar(InfoOuter(item.Depth),midA);
+            Point outerAnchor=new(DeskSpaceSubArcGeometryV48.CX+outerPt.X-arcBounds.Left+ArcMargin,
+                                  DeskSpaceSubArcGeometryV48.CY+outerPt.Y-arcBounds.Top+ArcMargin);
+
             if(item.Depth==0 && item.Kind is "collection" or "newcollection")
             {
                 double rMidClassic=(InfoInner(0)+InfoOuter(0))/2;
-                var p=DeskSpaceSubArcGeometryV48.Polar(rMidClassic,(item.A+item.B)/2);
+                var p=DeskSpaceSubArcGeometryV48.Polar(rMidClassic,midA);
                 double x=DeskSpaceSubArcGeometryV48.CX+p.X-arcBounds.Left+ArcMargin;
                 double y=DeskSpaceSubArcGeometryV48.CY+p.Y-arcBounds.Top+ArcMargin;
+                FontWeight fw=item.IsAction?FontWeights.SemiBold:FontWeights.Normal;
                 var label=new TextBlock{
                     Text=item.Label,
                     Width=62,
                     TextAlignment=TextAlignment.Center,
                     TextTrimming=TextTrimming.CharacterEllipsis,
                     FontSize=11,
-                    FontWeight=item.IsAction?FontWeights.SemiBold:FontWeights.Normal,
-                    Foreground=item.IsAction?Brushes.White:Ink,
+                    FontWeight=fw,
+                    Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
                     ToolTip=item.Tip,
                     IsHitTestVisible=false};
                 Panel.SetZIndex(label,10);
                 Canvas.SetLeft(label,x-31);
                 Canvas.SetTop(label,y-9);
                 arcCanvas.Children.Add(label);
+                bool isColTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                    item.Label,62,20,11,fw,wraps:false);
+                wedgeVisualsV380.Add((new List<UIElement>{childWedges[i],label},label,isColTrunc,item.Label,
+                    item.Kind=="collection"?"SAVED":null,midA,outerAnchor,item.Depth+2,item.IsAction));
                 continue;
             }
 
             double rMid=(InfoInner(item.Depth)+InfoOuter(item.Depth))/2;
-            double midA=(item.A+item.B)/2;
             var pt=DeskSpaceSubArcGeometryV48.Polar(rMid,midA);
             double midX=DeskSpaceSubArcGeometryV48.CX+pt.X-arcBounds.Left+ArcMargin;
             double midY=DeskSpaceSubArcGeometryV48.CY+pt.Y-arcBounds.Top+ArcMargin;
@@ -1532,20 +1999,23 @@ Swap-R380 @'
             var (boxLeft,boxWidth)=InscribedHorizontalSpan(
                 clippedGeoms[i],midX,midY,probeHalfH,pad,item.Depth>=1?44:34,maxW,arcCanvas.Width);
             double unitCenterX=boxLeft+boxWidth*.5;
+            double lblFontSize=item.Depth==0?(hasIcon?9.5:10):10;
+            FontWeight lblWeight=item.IsAction?FontWeights.SemiBold:FontWeights.Normal;
 
             var lbl=new TextBlock{
                 Text=item.Label,
                 Width=boxWidth,
                 MaxHeight=maxLabelH,
-                FontSize=item.Depth==0?(hasIcon?9.5:10):10,
-                FontWeight=item.IsAction?FontWeights.SemiBold:FontWeights.Normal,
+                FontSize=lblFontSize,
+                FontWeight=lblWeight,
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 TextWrapping=TextWrapping.Wrap,
                 TextAlignment=TextAlignment.Center,
-                Foreground=item.IsAction?Brushes.White:Ink,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
                 IsHitTestVisible=false};
             lbl.Measure(new Size(boxWidth,maxLabelH));
             double actualH=Math.Min(maxLabelH,Math.Max(12,lbl.DesiredSize.Height));
+            var linked=new List<UIElement>{childWedges[i],lbl};
             if(hasIcon)
             {
                 const double iconSize=17,gap=2;
@@ -1559,6 +2029,7 @@ Swap-R380 @'
                 arcCanvas.Children.Add(appIcon);
                 Canvas.SetLeft(lbl,boxLeft);
                 Canvas.SetTop(lbl,topY+iconSize+gap);
+                linked.Add(appIcon);
             }
             else
             {
@@ -1567,6 +2038,15 @@ Swap-R380 @'
             }
             Panel.SetZIndex(lbl,10);
             arcCanvas.Children.Add(lbl);
+
+            AppInfoFileRecordV380? meta=null;
+            if(item.Kind=="infofile" && !string.IsNullOrEmpty(item.FilePath))
+                fileMetaLookup.TryGetValue(item.FilePath,out meta);
+            string fullName=meta!=null?meta.DisplayName:item.Label.Replace("\u200B",string.Empty);
+            string? badge=meta!=null?meta.KindBadge:(item.Kind=="infoapp"?"APP":null);
+            bool isTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                fullName,boxWidth,maxLabelH,lblFontSize,lblWeight,wraps:true);
+            wedgeVisualsV380.Add((linked,lbl,isTrunc,fullName,badge,midA,outerAnchor,item.Depth+2,item.IsAction));
         }
 
         // Pass 3: Hidden counters for Depth-0 and Depth-1
@@ -1590,6 +2070,19 @@ Swap-R380 @'
         arcCanvas.MouseWheel-=ScrollArc;
         arcCanvas.MouseWheel+=ScrollArc;
         PositionArc();
+        if(keepPill && !string.IsNullOrEmpty(keepHoverKey))
+        {
+            int keepIdx=arcHitZones.FindIndex(z=>z.kind==keepHoverKind &&
+                string.Equals(keepHoverKind=="infofile"?z.filePath:z.appPath,keepHoverKey,StringComparison.OrdinalIgnoreCase));
+            if(keepIdx>=0 && keepIdx<wedgeVisualsV380.Count &&
+               wedgeVisualsV380[keepIdx].IsTruncated &&
+               Math.Abs(wedgeVisualsV380[keepIdx].MidAngle-keepMidAngle)<1.0)
+            {
+                hoveredChild=keepIdx;
+                var kwv=wedgeVisualsV380[keepIdx];
+                calloutPill.Show(arcCanvas,kwv.OuterAnchor,kwv.MidAngle,kwv.FullName,kwv.Badge);
+            }
+        }
     }
     private int SlotAtPoint(Point point)
     {
@@ -1681,17 +2174,30 @@ Swap-R380 @'
     }
     private void EndArcHover()
     {
+        calloutPill.Hide();
         newHoverTimer.Stop();
         CloseTransientPreview();
         if(hoveredChild>=0 && hoveredChild<childWedges.Count)
         {
+            var themeApp=DeskSpaceAppearanceV148.Current;
+            bool hc=SystemParameters.HighContrast;
             for(int i=0;i<childWedges.Count;i++)
             {
                 var z=arcHitZones[i];
                 bool isSelApp=z.kind=="infoapp" && !string.IsNullOrEmpty(activeArcAppPath) &&
                     string.Equals(z.appPath,activeArcAppPath,StringComparison.OrdinalIgnoreCase);
                 bool isAction=z.kind is "manageapps" or "newcollection" or "choosefields";
-                childWedges[i].Fill=isAction?Accent:(isSelApp?ChildHover:ChildIdle);
+                var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,z.depth+2,i,isAction,isSelApp,false);
+                childWedges[i].Fill=vis.Fill;
+                childWedges[i].Stroke=vis.Stroke;
+                childWedges[i].StrokeThickness=vis.StrokeThickness;
+                childWedges[i].Effect=vis.Effect;
+                if(i<wedgeVisualsV380.Count)
+                {
+                    var wv=wedgeVisualsV380[i];
+                    wv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                    DeskSpaceDonutThemeV380.ApplyHoverLift(wv.LinkedVisuals,false,wv.MidAngle,themeApp);
+                }
             }
         }
         hoveredChild=-1;
@@ -1776,6 +2282,7 @@ Swap-R380 @'
         cm.Items.Add(removeItem);
 
         cm.PlacementTarget=arcCanvas;
+        calloutPill.Hide();
         contextMenuOpen=true;
         cm.Closed+=(_,_)=>contextMenuOpen=false;
         cm.IsOpen=true;
@@ -1836,17 +2343,32 @@ Swap-R380 @'
         keyboardIndex=arcApps.Count==0
             ?(sector==arcHitZones.Count-1?all.Count:startIndex+sector)
             :sector;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
         for(int i=0;i<childWedges.Count;i++)
         {
             var w=childWedges[i];
             var z=arcHitZones[i];
-            bool selected=i==sector || (z.kind=="infoapp" && !string.IsNullOrEmpty(activeArcAppPath) &&
-                string.Equals(z.appPath,activeArcAppPath,StringComparison.OrdinalIgnoreCase));
+            bool hov=i==sector;
+            bool isSelApp=z.kind=="infoapp" && !string.IsNullOrEmpty(activeArcAppPath) &&
+                string.Equals(z.appPath,activeArcAppPath,StringComparison.OrdinalIgnoreCase);
             bool isAction=z.kind is "manageapps" or "newcollection" or "choosefields";
-            w.Fill=selected?(isAction?
-                new SolidColorBrush(Color.FromRgb(73,58,153)):ChildHover):
-                (isAction?Accent:ChildIdle);
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,z.depth+2,i,isAction,isSelApp,hov);
+            w.Fill=vis.Fill;
+            w.Stroke=vis.Stroke;
+            w.StrokeThickness=vis.StrokeThickness;
+            w.Effect=vis.Effect;
+            if(i<wedgeVisualsV380.Count)
+            {
+                var wv=wedgeVisualsV380[i];
+                wv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                DeskSpaceDonutThemeV380.ApplyHoverLift(wv.LinkedVisuals,hov,wv.MidAngle,themeApp);
+            }
         }
+        if(sector>=0 && sector<wedgeVisualsV380.Count && wedgeVisualsV380[sector].IsTruncated)
+            calloutPill.Show(arcCanvas,wedgeVisualsV380[sector].OuterAnchor,wedgeVisualsV380[sector].MidAngle,wedgeVisualsV380[sector].FullName,wedgeVisualsV380[sector].Badge);
+        else
+            calloutPill.Hide();
         if(editorActive)return;
         if(zone.kind=="infoapp")
         {
@@ -2659,11 +3181,52 @@ Swap-R380 @'
     }
     private void MaskRevealed()
 '@ 'DeskSpaceInformationV36 clean File Info shelf, Choose Fields, Manage Apps'
+Swap-R380 @'
+        arcCanvas.MouseWheel-=ScrollArc;
+        newHoverTimer.Stop();edgeTimer.Stop();pointerTimer.Stop();lockTimer.Stop();
+        middleScroll.Dispose();
+        vault.Dispose();
+'@ @'
+        arcCanvas.MouseWheel-=ScrollArc;
+        newHoverTimer.Stop();edgeTimer.Stop();pointerTimer.Stop();lockTimer.Stop();
+        calloutPill.Dispose();
+        middleScroll.Dispose();
+        vault.Dispose();
+'@ 'DeskSpaceInformationV36 Dispose calloutPill'
 Finish-Patch $infoPath
 
 # 5. Surgical hook: DeskSpaceApplicationsV55.cs (CI R232 baseline does NOT include r262)
 $appsPath = "$dstRoot/DeskSpaceApplicationsV55.cs"
 Begin-Patch $appsPath
+Swap-R380 @'
+    private readonly List<(Geometry Hit,string Kind,string Path)> hitZones=new();
+    private readonly List<System.Windows.Shapes.Path> fills=new();
+    private readonly List<(string Label,string Kind,string Path,double A,double B,int Depth)> items=new();
+'@ @'
+    private readonly List<(Geometry Hit,string Kind,string Path)> hitZones=new();
+    private readonly List<System.Windows.Shapes.Path> fills=new();
+    private readonly List<(string Label,string Kind,string Path,double A,double B,int Depth)> items=new();
+    private readonly List<(List<UIElement> LinkedVisuals,TextBlock Label,bool IsTruncated,string FullName,string? Badge,double MidAngle,Point OuterAnchor,int Depth,bool IsAction)> wedgeVisualsV380=new();
+    private readonly DeskSpaceDonutThemeV380.SubDonutCalloutPillV380 calloutPill;
+'@ 'DeskSpaceApplicationsV55 calloutPill and wedge visuals'
+Swap-R380 @'
+    private void Render()
+    {
+        items.Clear();hitZones.Clear();fills.Clear();canvas.Children.Clear();hovered=-1;
+'@ @'
+    private void Render()
+    {
+        string? keepHoverKind=(hovered>=0 && hovered<hitZones.Count)?hitZones[hovered].Kind:null;
+        string? keepHoverPath=(hovered>=0 && hovered<hitZones.Count)?hitZones[hovered].Path:null;
+        double keepMidAngle=(hovered>=0 && hovered<wedgeVisualsV380.Count)?wedgeVisualsV380[hovered].MidAngle:double.NaN;
+        bool keepPill=calloutPill.IsVisible && keepHoverKind is "launch" or "launchfile";
+        calloutPill.Hide();
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(themeApp);
+        items.Clear();hitZones.Clear();fills.Clear();wedgeVisualsV380.Clear();canvas.Children.Clear();hovered=-1;
+'@ 'DeskSpaceApplicationsV55 Render theme header'
 Swap-R380 @'
     private const double BaseInner=202,BaseOuter=255,SubInner=257,SubOuter=310;
     private Rect bounds=Rect.Empty;
@@ -2873,6 +3436,7 @@ Swap-R380 @'
             AllowsTransparency=true,StaysOpen=true,Child=canvas};
         DeskSpaceMonitorFenceV153.TrackPopup(owner,arc);
 '@ @'
+        calloutPill=new DeskSpaceDonutThemeV380.SubDonutCalloutPillV380(owner);
         canvas=new Canvas{Width=1,Height=1,Background=null,Focusable=true};
         canvas.MouseMove+=Move;
         canvas.PreviewMouseLeftButtonDown+=Down;
@@ -3054,7 +3618,10 @@ Swap-R380 @'
                 }
             }
         }
-        var shapes=items.Select(x=>AppSector(x.Depth,x.A,x.B)).ToArray();
+        var shapes=items.Select(x=>{
+            double g=(x.B-x.A)>gapInset*2.5?gapInset:0;
+            return AppSector(x.Depth,x.A+g,x.B-g);
+        }).ToArray();
         bounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
         const double margin=10;
         canvas.Width=bounds.Width+margin*2;
@@ -3062,6 +3629,7 @@ Swap-R380 @'
         var clippedGeoms=new Geometry[items.Count];
         var depth1Wedges=new List<System.Windows.Shapes.Path>();
         var depth2FileWedges=new List<System.Windows.Shapes.Path>();
+        var sectorVisuals=new DonutWedgeVisualV380[items.Count];
         // Pass 1: all wedge geometries at Z=1
         for(int i=0;i<items.Count;i++)
         {
@@ -3071,6 +3639,8 @@ Swap-R380 @'
             bool isAction=item.Kind is "add" or "allfiles";
             bool isSelectedApp=item.Kind=="launch" && !string.IsNullOrEmpty(activeAppPath) &&
                 string.Equals(item.Path,activeAppPath,StringComparison.OrdinalIgnoreCase);
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,item.Depth+2,i,isAction,isSelectedApp,false);
+            sectorVisuals[i]=vis;
             ToolTip tip=item.Kind=="launch"
                 ? CreateCompactTooltipV380(item.Label,"Click to open · Right-click for files or Unpin")
                 : item.Kind=="launchfile"
@@ -3089,8 +3659,8 @@ Swap-R380 @'
                             DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(item.Path))
                         : CreateCompactTooltipV380(item.Label);
             var wedge=new System.Windows.Shapes.Path{
-                Data=geometry,Stroke=Brushes.White,StrokeThickness=1.5,
-                Fill=isAction?accent:(isSelectedApp?selected:normal),
+                Data=geometry,Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,
+                Fill=vis.Fill,Effect=vis.Effect,
                 Cursor=Cursors.Hand,ToolTip=tip,Tag=i};
             ToolTipService.SetInitialShowDelay(wedge,item.Kind=="launchfile"?650:850);
             ToolTipService.SetBetweenShowDelay(wedge,200);
@@ -3108,6 +3678,7 @@ Swap-R380 @'
         {
             var item=items[i];
             bool isAction=item.Kind is "add" or "allfiles";
+            var vis=sectorVisuals[i];
             double midR=(AppInner(item.Depth)+AppOuter(item.Depth))/2;
             double midA=(item.A+item.B)/2;
             var p=DeskSpaceSubArcGeometryV48.Polar(midR,midA);
@@ -3121,20 +3692,22 @@ Swap-R380 @'
             var (boxLeft,boxWidth)=InscribedHorizontalSpanV380(
                 clippedGeoms[i],midX,midY,probeHalfH,pad,item.Depth>=2?46:34,maxW,canvas.Width);
             double unitCenterX=boxLeft+boxWidth*.5;
+            double labelFontSize=item.Depth==1?9.5:10;
+            FontWeight labelWeight=isAction?FontWeights.SemiBold:FontWeights.Normal;
             var label=new TextBlock{
                 Text=item.Label,
                 Width=boxWidth,
                 MaxHeight=maxLabelH,
-                FontSize=item.Depth==1?9.5:10,
-                FontWeight=isAction?FontWeights.SemiBold:FontWeights.Normal,
+                FontSize=labelFontSize,
+                FontWeight=labelWeight,
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 TextWrapping=TextWrapping.Wrap,
                 TextAlignment=TextAlignment.Center,
                 IsHitTestVisible=false,
-                Foreground=isAction?Brushes.White:
-                    new SolidColorBrush(Color.FromRgb(37,51,79))};
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush};
             label.Measure(new Size(boxWidth,maxLabelH));
             double actualH=Math.Min(maxLabelH,Math.Max(12,label.DesiredSize.Height));
+            var linked=new List<UIElement>{fills[i],label};
             if(isAppIcon)
             {
                 var iconSource=DeskSpaceApplicationIconsV65.Get(item.Path)!;
@@ -3149,6 +3722,7 @@ Swap-R380 @'
                 canvas.Children.Add(appIcon);
                 Canvas.SetLeft(label,boxLeft);
                 Canvas.SetTop(label,topY+iconSize+gap);
+                linked.Add(appIcon);
             }
             else
             {
@@ -3157,6 +3731,17 @@ Swap-R380 @'
             }
             Panel.SetZIndex(label,10);
             canvas.Children.Add(label);
+
+            PinnedAppFileItemV380? meta=null;
+            if(item.Kind=="launchfile")fileLookup.TryGetValue(item.Path,out meta);
+            string fullName=meta!=null?meta.DisplayName:item.Label.Replace("\u200B",string.Empty);
+            string? badge=meta!=null?meta.KindBadge:(item.Kind=="launch"?"PINNED":null);
+            bool isTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                fullName,boxWidth,maxLabelH,labelFontSize,labelWeight,wraps:true);
+            var outerPt=DeskSpaceSubArcGeometryV48.Polar(AppOuter(item.Depth),midA);
+            Point outerAnchor=new(DeskSpaceSubArcGeometryV48.CX+outerPt.X-bounds.Left+margin,
+                                  DeskSpaceSubArcGeometryV48.CY+outerPt.Y-bounds.Top+margin);
+            wedgeVisualsV380.Add((linked,label,isTrunc,fullName,badge,midA,outerAnchor,item.Depth+2,isAction));
         }
         if(group=="pinned")
         {
@@ -3189,6 +3774,19 @@ Swap-R380 @'
             }
         }
         Position();
+        if(keepPill && !string.IsNullOrEmpty(keepHoverPath))
+        {
+            int keepIdx=hitZones.FindIndex(h=>h.Kind==keepHoverKind &&
+                string.Equals(h.Path,keepHoverPath,StringComparison.OrdinalIgnoreCase));
+            if(keepIdx>=0 && keepIdx<wedgeVisualsV380.Count &&
+               wedgeVisualsV380[keepIdx].IsTruncated &&
+               Math.Abs(wedgeVisualsV380[keepIdx].MidAngle-keepMidAngle)<1.0)
+            {
+                hovered=keepIdx;
+                var kwv=wedgeVisualsV380[keepIdx];
+                calloutPill.Show(canvas,kwv.OuterAnchor,kwv.MidAngle,kwv.FullName,kwv.Badge);
+            }
+        }
     }
 '@ 'DeskSpaceApplicationsV55 inscribed two-pass Z-order depth-2 rendering and hidden counters'
 Swap-R380 @'
@@ -3384,13 +3982,27 @@ Swap-R380 @'
         if(arc.IsOpen&&Activate(e.GetPosition(canvas)))e.Handled=true;
     }
 '@ @'
+    internal void RefreshThemeV380()
+    {
+        if(!disposed && arc.IsOpen)
+            Render();
+    }
     public void Show()
     {
         if(disposed)return;
         group="";childPage=0;ClearActiveAppFilesV380();
         Render();arc.IsOpen=owner.IsVisible;
+        if(arc.IsOpen && !bounds.IsEmpty)
+        {
+            DeskSpaceDonutThemeV380.AnimateOpen(
+                canvas,
+                fills.Cast<FrameworkElement>().ToArray(),
+                DeskSpaceSubArcGeometryV48.CX-bounds.Left+10,
+                DeskSpaceSubArcGeometryV48.CY-bounds.Top+10,
+                ApplicationsParentCenter,isSubArc:true);
+        }
     }
-    public void HideArc(){contextMenuOpen=false;middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
+    public void HideArc(){calloutPill.Hide();contextMenuOpen=false;middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
     private int Slot(Point point)
     {
         for(int i=hitZones.Count-1;i>=0;i--)
@@ -3403,14 +4015,29 @@ Swap-R380 @'
         int i=Slot(point);
         if(i==hovered)return;
         hovered=i;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
         for(int j=0;j<fills.Count;j++)
         {
             bool activeParent=hitZones[j].Kind=="launch" && !string.IsNullOrEmpty(activeAppPath) &&
                 string.Equals(hitZones[j].Path,activeAppPath,StringComparison.OrdinalIgnoreCase);
-            fills[j].Fill=(j==i || activeParent)
-                ?selected
-                :(hitZones[j].Kind is "add" or "allfiles"?accent:normal);
+            bool hov=j==i;
+            var wv=j<wedgeVisualsV380.Count?wedgeVisualsV380[j]:default;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,wv.LinkedVisuals!=null?wv.Depth:2,j,wv.IsAction,activeParent,hov);
+            fills[j].Fill=vis.Fill;
+            fills[j].Stroke=vis.Stroke;
+            fills[j].StrokeThickness=vis.StrokeThickness;
+            fills[j].Effect=vis.Effect;
+            if(wv.Label!=null)
+            {
+                wv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                DeskSpaceDonutThemeV380.ApplyHoverLift(wv.LinkedVisuals,hov,wv.MidAngle,themeApp);
+            }
         }
+        if(i>=0 && i<wedgeVisualsV380.Count && wedgeVisualsV380[i].IsTruncated)
+            calloutPill.Show(canvas,wedgeVisualsV380[i].OuterAnchor,wedgeVisualsV380[i].MidAngle,wedgeVisualsV380[i].FullName,wedgeVisualsV380[i].Badge);
+        else
+            calloutPill.Hide();
         if(i<0)return;
         var kind=hitZones[i].Kind;
         if(kind=="pinned"&&group!=kind)
@@ -3495,6 +4122,7 @@ Swap-R380 @'
         cm.Items.Add(new Separator());
         cm.Items.Add(unpinItem);
         cm.PlacementTarget=canvas;
+        calloutPill.Hide();
         contextMenuOpen=true;
         cm.Closed+=(_,_)=>contextMenuOpen=false;
         cm.IsOpen=true;
@@ -3593,7 +4221,7 @@ Swap-R380 @'
     public void Dispose()
     {
         if(disposed)return;
-        disposed=true;HideArc();middleScroll.Dispose();
+        disposed=true;HideArc();calloutPill.Dispose();middleScroll.Dispose();
         owner.LocationChanged-=Moved;owner.SizeChanged-=Resized;
     }
 '@ 'DeskSpaceApplicationsV55 dispose middleScroll'
@@ -3667,6 +4295,30 @@ Swap-R380 @'
             view.HiddenLeft,view.HiddenRight,()=>move(-1),()=>move(1));
     }
 '@ 'DeskSpaceSubDonutStandardV62 DrawHiddenCountersForWedges'
+Swap-R380 @'
+    internal static void Animate(Canvas canvas,int direction,
+        double centerAngle)
+    {
+        if(direction==0)return;
+        if(!DeskSpaceReducedMotionV209.Enabled())
+        {
+            DeskSpaceReducedMotionV209.Reset(canvas);
+            return;
+        }
+'@ @'
+    internal static void Animate(Canvas canvas,int direction,
+        double centerAngle)
+    {
+        if(direction==0)return;
+        var app=DeskSpaceAppearanceV148.Current;
+        if(!DeskSpaceReducedMotionV209.Enabled() ||
+           !app.MotionScrollGlide ||
+           string.Equals(app.OpenTransition,"Instant",StringComparison.OrdinalIgnoreCase))
+        {
+            DeskSpaceReducedMotionV209.Reset(canvas);
+            return;
+        }
+'@ 'DeskSpaceSubDonutStandardV62 MotionScrollGlide guard'
 Finish-Patch $subDonutPath
 
 # 6. Surgical hook: DeskSpaceFeatureHubV199.cs
@@ -3797,6 +4449,1095 @@ if ($cancelCount -ne 3) {
 $script:code = $script:code.Replace('pending?.Cancel();', 'SafeCancelPendingV380(dispose:false);')
 Finish-Patch $searchPath
 
+# 8c. Surgical hook: DeskSpaceSettingsStudioV148.cs
+$studioPath = "$dstRoot/DeskSpaceSettingsStudioV148.cs"
+Begin-Patch $studioPath
+Swap-R380 @'
+internal sealed class DeskSpaceAppearanceV148
+{
+    public string Style {get;set;}="Modern";
+    public string Mode {get;set;}="Dark";
+    public string Accent {get;set;}="#8291FF";
+    public double Scale {get;set;}=1;
+    public double Opacity {get;set;}=.96;
+    public int Softness {get;set;}=16;
+    private static DeskSpaceAppearanceV148? cached;
+    internal static string PathName=>System.IO.Path.Combine(WorkspaceStore.Root,"appearance-v148.json");
+    internal static DeskSpaceAppearanceV148 Current=>cached??=Load();
+    internal static DeskSpaceAppearanceV148 Load()
+    {
+        try{
+            if(!File.Exists(PathName))return new();
+            var loaded=JsonSerializer.Deserialize<DeskSpaceAppearanceV148>(
+                File.ReadAllText(PathName))??new();
+            return Sanitize(loaded);
+        }catch(Exception ex) when(ex is IOException or JsonException or
+            UnauthorizedAccessException){System.Diagnostics.Debug.WriteLine(ex);return new();}
+    }
+    internal static DeskSpaceAppearanceV148 Sanitize(DeskSpaceAppearanceV148 item)
+    {
+        item.Style=item.Style is "Modern" or "Material" or "Soft"?item.Style:"Modern";
+        item.Mode=new[]{"Light","Dark","System"}.Contains(item.Mode)?item.Mode:"System";
+        item.Accent=TryColor(item.Accent,out _)?item.Accent.ToUpperInvariant():"#7364D3";
+        item.Scale=double.IsFinite(item.Scale)?Math.Clamp(item.Scale,.75,1.25):1;
+        item.Opacity=double.IsFinite(item.Opacity)?Math.Clamp(item.Opacity,.65,1):.96;
+        item.Softness=Math.Clamp(item.Softness,0,32);
+        return item;
+    }
+    internal static bool TryColor(string? value,out Color color)
+    {
+        color=Colors.MediumPurple;
+        if(value==null||value.Length!=7||value[0]!='#')return false;
+        if(!int.TryParse(value.Substring(1),System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture,out int x))return false;
+        color=Color.FromRgb((byte)((x>>16)&255),(byte)((x>>8)&255),(byte)(x&255));
+        return true;
+    }
+    internal static void Save(DeskSpaceAppearanceV148 data)
+    {
+        // Never advertise uncommitted preferences as active if the disk write fails.
+        var next=Sanitize(data);
+        Directory.CreateDirectory(WorkspaceStore.Root);
+        var tmp=PathName+"."+Guid.NewGuid().ToString("N")+".tmp";
+        try{
+            File.WriteAllText(tmp,JsonSerializer.Serialize(next));
+            File.Move(tmp,PathName,true);
+            cached=next;
+        }finally{if(File.Exists(tmp))File.Delete(tmp);}
+    }
+'@ @'
+internal sealed class DeskSpaceAppearanceV148
+{
+    public string Style {get;set;}="Modern";
+    public string Mode {get;set;}="Dark";
+    public string Accent {get;set;}="#8291FF";
+    public double Scale {get;set;}=1;
+    public double Opacity {get;set;}=.96;
+    public int Softness {get;set;}=16;
+    public string DonutStyle {get;set;}="LiquidGlass";
+    public string OpenTransition {get;set;}="SpringBloom";
+    public bool MixGlassFrost {get;set;}=true;
+    public bool MixNeonEdge {get;set;}
+    public bool MixFloatingGaps {get;set;}
+    public bool MixAuroraGradient {get;set;}
+    public bool MixWireframe {get;set;}
+    public bool MotionHoverLift {get;set;}=true;
+    public bool MotionHoverGlow {get;set;}=true;
+    public bool MotionStaggerRipple {get;set;}
+    public bool MotionScrollGlide {get;set;}=true;
+
+    private static DeskSpaceAppearanceV148? cached;
+    private static DateTime cachedStampUtc=DateTime.MinValue;
+    private static DateTime lastReloadProbeUtc=DateTime.MinValue;
+
+    internal static readonly string[] ValidDonutStyles={
+        "LiquidGlass","FloatingPetals","NeonCyber","AuroraGradient","MinimalWireframe","ClassicSynced"
+    };
+    internal static readonly string[] ValidTransitions={
+        "SpringBloom","IrisUnfold","SmoothGlide","RadialPop","SpiralSpin","FadeSlide","Instant"
+    };
+
+    internal static string PathName=>System.IO.Path.Combine(WorkspaceStore.Root,"appearance-v148.json");
+    internal static DeskSpaceAppearanceV148 Current
+    {
+        get
+        {
+            ReloadIfChanged();
+            return cached??=Load();
+        }
+    }
+    internal static void ReloadIfChanged(bool force=false)
+    {
+        var now=DateTime.UtcNow;
+        if(!force && cached!=null && (now-lastReloadProbeUtc).TotalMilliseconds<300)
+            return;
+        lastReloadProbeUtc=now;
+        try
+        {
+            DateTime stamp=File.Exists(PathName)?File.GetLastWriteTimeUtc(PathName):DateTime.MinValue;
+            if(force || cached==null || stamp!=cachedStampUtc)
+            {
+                cached=Load();
+                cachedStampUtc=stamp;
+            }
+        }
+        catch(IOException){}
+        catch(UnauthorizedAccessException){}
+    }
+    internal static DeskSpaceAppearanceV148 Load()
+    {
+        try{
+            if(!File.Exists(PathName))return new();
+            var loaded=JsonSerializer.Deserialize<DeskSpaceAppearanceV148>(
+                File.ReadAllText(PathName))??new();
+            cachedStampUtc=File.GetLastWriteTimeUtc(PathName);
+            return Sanitize(loaded);
+        }catch(Exception ex) when(ex is IOException or JsonException or
+            UnauthorizedAccessException){System.Diagnostics.Debug.WriteLine(ex);return new();}
+    }
+    internal static DeskSpaceAppearanceV148 Sanitize(DeskSpaceAppearanceV148 item)
+    {
+        item.Style=item.Style is "Modern" or "Material" or "Soft"?item.Style:"Modern";
+        item.Mode=new[]{"Light","Dark","System"}.Contains(item.Mode)?item.Mode:"System";
+        item.Accent=TryColor(item.Accent,out _)?item.Accent.ToUpperInvariant():"#7364D3";
+        item.Scale=double.IsFinite(item.Scale)?Math.Clamp(item.Scale,.75,1.25):1;
+        item.Opacity=double.IsFinite(item.Opacity)?Math.Clamp(item.Opacity,.65,1):.96;
+        item.Softness=Math.Clamp(item.Softness,0,32);
+        item.DonutStyle=Array.IndexOf(ValidDonutStyles,item.DonutStyle)>=0?item.DonutStyle:"LiquidGlass";
+        item.OpenTransition=Array.IndexOf(ValidTransitions,item.OpenTransition)>=0?item.OpenTransition:"SpringBloom";
+        return item;
+    }
+    internal static void ApplyDonutPresetDefaults(DeskSpaceAppearanceV148 item,string preset)
+    {
+        item.DonutStyle=Array.IndexOf(ValidDonutStyles,preset)>=0?preset:"LiquidGlass";
+        item.MixGlassFrost=false;
+        item.MixNeonEdge=false;
+        item.MixFloatingGaps=false;
+        item.MixAuroraGradient=false;
+        item.MixWireframe=false;
+        switch(item.DonutStyle)
+        {
+            case "LiquidGlass":
+                item.MixGlassFrost=true;
+                break;
+            case "FloatingPetals":
+                item.MixFloatingGaps=true;
+                break;
+            case "NeonCyber":
+                item.MixNeonEdge=true;
+                break;
+            case "AuroraGradient":
+                item.MixAuroraGradient=true;
+                break;
+            case "MinimalWireframe":
+                item.MixWireframe=true;
+                break;
+            case "ClassicSynced":
+                break;
+        }
+    }
+    internal static DeskSpaceAppearanceV148 Clone(DeskSpaceAppearanceV148 s)=>new()
+    {
+        Style=s.Style,Mode=s.Mode,Accent=s.Accent,
+        Scale=s.Scale,Opacity=s.Opacity,Softness=s.Softness,
+        DonutStyle=s.DonutStyle,OpenTransition=s.OpenTransition,
+        MixGlassFrost=s.MixGlassFrost,MixNeonEdge=s.MixNeonEdge,
+        MixFloatingGaps=s.MixFloatingGaps,MixAuroraGradient=s.MixAuroraGradient,
+        MixWireframe=s.MixWireframe,MotionHoverLift=s.MotionHoverLift,
+        MotionHoverGlow=s.MotionHoverGlow,MotionStaggerRipple=s.MotionStaggerRipple,
+        MotionScrollGlide=s.MotionScrollGlide
+    };
+    internal static bool TryColor(string? value,out Color color)
+    {
+        color=Colors.MediumPurple;
+        if(value==null||value.Length!=7||value[0]!='#')return false;
+        if(!int.TryParse(value.Substring(1),System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture,out int x))return false;
+        color=Color.FromRgb((byte)((x>>16)&255),(byte)((x>>8)&255),(byte)(x&255));
+        return true;
+    }
+    internal static void Save(DeskSpaceAppearanceV148 data)
+    {
+        // Never advertise uncommitted preferences as active if the disk write fails.
+        var next=Sanitize(Clone(data));
+        Directory.CreateDirectory(WorkspaceStore.Root);
+        var tmp=PathName+"."+Guid.NewGuid().ToString("N")+".tmp";
+        try{
+            File.WriteAllText(tmp,JsonSerializer.Serialize(next));
+            File.Move(tmp,PathName,true);
+            cached=next;
+            try{cachedStampUtc=File.GetLastWriteTimeUtc(PathName);}catch{}
+            lastReloadProbeUtc=DateTime.UtcNow;
+        }finally{if(File.Exists(tmp))File.Delete(tmp);}
+    }
+'@ 'DeskSpaceAppearanceV148 styles, mixes, transitions and mtime reload'
+Swap-R380 @'
+internal sealed class DeskSpaceVisualPresetV148
+{
+    public string Name {get;set;}="";
+    public string Style {get;set;}="Modern";
+    public string Mode {get;set;}="Dark";
+    public string Accent {get;set;}="#8291FF";
+    public double Scale {get;set;}=1;
+    public double Opacity {get;set;}=.96;
+    public int Softness {get;set;}=16;
+}
+'@ @'
+internal sealed class DeskSpaceVisualPresetV148
+{
+    public string Name {get;set;}="";
+    public string Style {get;set;}="Modern";
+    public string Mode {get;set;}="Dark";
+    public string Accent {get;set;}="#8291FF";
+    public double Scale {get;set;}=1;
+    public double Opacity {get;set;}=.96;
+    public int Softness {get;set;}=16;
+    public string DonutStyle {get;set;}="LiquidGlass";
+    public string OpenTransition {get;set;}="SpringBloom";
+    public bool MixGlassFrost {get;set;}=true;
+    public bool MixNeonEdge {get;set;}
+    public bool MixFloatingGaps {get;set;}
+    public bool MixAuroraGradient {get;set;}
+    public bool MixWireframe {get;set;}
+    public bool MotionHoverLift {get;set;}=true;
+    public bool MotionHoverGlow {get;set;}=true;
+    public bool MotionStaggerRipple {get;set;}
+    public bool MotionScrollGlide {get;set;}=true;
+}
+'@ 'DeskSpaceVisualPresetV148 preset fields'
+Swap-R380 @'
+    private readonly StackPanel body=new(){Margin=new Thickness(26,25,26,28)};
+    private readonly TextBlock subtitle=new(){FontSize=13,Margin=new Thickness(0,4,0,8)};
+    private readonly TextBlock status=new(){FontSize=12,TextWrapping=TextWrapping.Wrap};
+'@ @'
+    private readonly StackPanel body=new(){Margin=new Thickness(26,25,26,28)};
+    private readonly TextBlock subtitle=new(){FontSize=13,Margin=new Thickness(0,4,0,8)};
+    private readonly TextBlock status=new(){FontSize=12,TextWrapping=TextWrapping.Wrap};
+    private readonly List<FrameworkElement> previewWedges=new();
+'@ 'DeskSpaceSettingsStudioV148 previewWedges field'
+Swap-R380 @'
+    private void ThemePage()
+    {
+        body.Children.Add(new TextBlock{Text=
+            "Colours and settings apply to DeskSpace's existing widget. "+
+            "The preview shows the compact two-ring appearance.",
+            Foreground=Brushes.Gray,TextWrapping=TextWrapping.Wrap});
+        body.Children.Add(Caption("Theme style"));
+        var types=new WrapPanel();
+        types.Children.Add(Button("Modern · immersive",()=>{
+            draft.Style="Modern";ThemePageRefresh();}));
+        types.Children.Add(Button("Soft pastel",()=>{draft.Style="Soft";ThemePageRefresh();}));
+        types.Children.Add(Button("Material tonal",()=>{draft.Style="Material";ThemePageRefresh();}));
+        body.Children.Add(types);
+        body.Children.Add(Caption("Appearance"));
+        var modes=new WrapPanel();
+        foreach(var type in new[]{"System","Light","Dark"}){
+            var local=type;
+            modes.Children.Add(Button(type,()=>{draft.Mode=local;ThemePageRefresh();}));
+        }
+        body.Children.Add(modes);
+        body.Children.Add(Caption("Accent colour"));
+        var swatches=new WrapPanel();
+        foreach(var hex in Swatches){
+            var colour=hex;
+            var b=Button(hex==draft.Accent?"✓":"●",()=>{
+                draft.Accent=colour;ThemePageRefresh();});
+            b.Width=52;b.Height=43;b.Foreground=Brushes.White;
+            b.Background=new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            swatches.Children.Add(b);
+        }
+        body.Children.Add(swatches);
+        var custom=new TextBox{Text=draft.Accent,Width=145,
+            HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,5,0,7)};
+        DeskSpaceDesignV283.Input(custom);
+        custom.LostFocus+=(_,_)=>{
+            try{
+                if(DeskSpaceAppearanceV148.TryColor(custom.Text,out _)){
+                    draft.Accent=custom.Text;Draw();
+                }else{custom.Text=draft.Accent;status.Text="Use a colour like #7364D3.";}
+            }catch(Exception ex){DeskSpaceSettingsDiagnosticsV151.Report("Accent colour",ex);}
+        };
+        body.Children.Add(custom);
+        body.Children.Add(Slider("Widget opacity",.65,1,draft.Opacity,
+            v=>draft.Opacity=v,v=>$"{v:P0}"));
+        body.Children.Add(Slider("Colour softness",0,32,draft.Softness,
+            v=>{draft.Softness=(int)v;Draw();},v=>$"{v:0}"));
+        body.Children.Add(Caption("Preview"));
+        if(donut.Parent is Panel previous)previous.Children.Remove(donut);
+        body.Children.Add(DeskSpaceDesignV283.Card(donut));Draw();
+    }
+'@ @'
+    private void ThemePage()
+    {
+        body.Children.Add(new TextBlock{Text=
+            "Customize the live donut, Applications, Information & Excel sub-donuts together. "+
+            "Pick any preset, or combine 2–3+ mix layers and transitions at once.",
+            Foreground=Brushes.Gray,TextWrapping=TextWrapping.Wrap});
+
+        body.Children.Add(Caption("Donut visual style (6 presets)"));
+        var donutStyles=new WrapPanel();
+        foreach(string id in DeskSpaceAppearanceV148.ValidDonutStyles)
+        {
+            string cap=id;
+            var b=Button(DeskSpaceDonutThemeV380.FriendlyStyleName(cap),()=>{
+                DeskSpaceAppearanceV148.ApplyDonutPresetDefaults(draft,cap);
+                ThemePageRefresh();
+            });
+            DeskSpaceDesignV283.Button(b,string.Equals(draft.DonutStyle,cap,StringComparison.OrdinalIgnoreCase));
+            donutStyles.Children.Add(b);
+        }
+        body.Children.Add(donutStyles);
+
+        body.Children.Add(Caption("Mix style layers (combine any 2–3+ at once)"));
+        var mixPanel=new WrapPanel{Margin=new Thickness(0,0,0,4)};
+        void AddMixCheck(string label,bool isOn,Action<bool> onSet)
+        {
+            var cb=new CheckBox{
+                Content=label,IsChecked=isOn,FontSize=12,Margin=new Thickness(0,2,14,6),
+                Cursor=System.Windows.Input.Cursors.Hand,
+                Foreground=DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Current.Text)};
+            cb.Checked+=(_,_)=>{onSet(true);Draw();};
+            cb.Unchecked+=(_,_)=>{onSet(false);Draw();};
+            mixPanel.Children.Add(cb);
+        }
+        AddMixCheck("Glass Frost",draft.MixGlassFrost,v=>draft.MixGlassFrost=v);
+        AddMixCheck("Neon Edge Glow",draft.MixNeonEdge,v=>draft.MixNeonEdge=v);
+        AddMixCheck("Floating Petals Gaps",draft.MixFloatingGaps,v=>draft.MixFloatingGaps=v);
+        AddMixCheck("Aurora Depth Gradient",draft.MixAuroraGradient,v=>draft.MixAuroraGradient=v);
+        AddMixCheck("Minimal Wireframe",draft.MixWireframe,v=>draft.MixWireframe=v);
+        body.Children.Add(mixPanel);
+
+        body.Children.Add(Caption("Open transition & motion effects"));
+        var transWrap=new WrapPanel();
+        foreach(string tr in DeskSpaceAppearanceV148.ValidTransitions)
+        {
+            string capTr=tr;
+            var b=Button(DeskSpaceDonutThemeV380.FriendlyTransitionName(capTr),()=>{
+                draft.OpenTransition=capTr;
+                ThemePageRefresh();
+                PlayPreviewTransition();
+            });
+            DeskSpaceDesignV283.Button(b,string.Equals(draft.OpenTransition,capTr,StringComparison.OrdinalIgnoreCase));
+            transWrap.Children.Add(b);
+        }
+        var replay=Button("↻ Replay transition",PlayPreviewTransition);
+        transWrap.Children.Add(replay);
+        body.Children.Add(transWrap);
+
+        var motionPanel=new WrapPanel{Margin=new Thickness(0,4,0,4)};
+        AddMotionCheck(motionPanel,"Radial Hover Lift",draft.MotionHoverLift,v=>draft.MotionHoverLift=v);
+        AddMotionCheck(motionPanel,"Hover Accent Glow",draft.MotionHoverGlow,v=>draft.MotionHoverGlow=v);
+        AddMotionCheck(motionPanel,"Staggered Sector Ripple",draft.MotionStaggerRipple,v=>{draft.MotionStaggerRipple=v;PlayPreviewTransition();});
+        AddMotionCheck(motionPanel,"Fluid Scroll Glide",draft.MotionScrollGlide,v=>draft.MotionScrollGlide=v);
+        body.Children.Add(motionPanel);
+
+        body.Children.Add(Caption("Base surface tone & appearance"));
+        var types=new WrapPanel();
+        foreach(var (label,val) in new[]{("Modern · immersive","Modern"),("Soft pastel","Soft"),("Material tonal","Material")})
+        {
+            string cap=val;
+            var b=Button(label,()=>{draft.Style=cap;ThemePageRefresh();});
+            DeskSpaceDesignV283.Button(b,string.Equals(draft.Style,cap,StringComparison.OrdinalIgnoreCase));
+            types.Children.Add(b);
+        }
+        body.Children.Add(types);
+        var modes=new WrapPanel{Margin=new Thickness(0,2,0,0)};
+        foreach(var type in new[]{"System","Light","Dark"}){
+            var local=type;
+            var b=Button(type,()=>{draft.Mode=local;ThemePageRefresh();});
+            DeskSpaceDesignV283.Button(b,string.Equals(draft.Mode,local,StringComparison.OrdinalIgnoreCase));
+            modes.Children.Add(b);
+        }
+        body.Children.Add(modes);
+        body.Children.Add(Caption("Accent colour"));
+        var swatches=new WrapPanel();
+        foreach(var hex in Swatches){
+            var colour=hex;
+            var b=Button(hex==draft.Accent?"✓":"●",()=>{
+                draft.Accent=colour;ThemePageRefresh();});
+            b.Width=52;b.Height=43;b.Foreground=Brushes.White;
+            b.Background=new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            swatches.Children.Add(b);
+        }
+        body.Children.Add(swatches);
+        var custom=new TextBox{Text=draft.Accent,Width=145,
+            HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,5,0,7)};
+        DeskSpaceDesignV283.Input(custom);
+        custom.LostFocus+=(_,_)=>{
+            try{
+                if(DeskSpaceAppearanceV148.TryColor(custom.Text,out _)){
+                    draft.Accent=custom.Text;Draw();
+                }else{custom.Text=draft.Accent;status.Text="Use a colour like #7364D3.";}
+            }catch(Exception ex){DeskSpaceSettingsDiagnosticsV151.Report("Accent colour",ex);}
+        };
+        body.Children.Add(custom);
+        body.Children.Add(Slider("Widget opacity",.65,1,draft.Opacity,
+            v=>draft.Opacity=v,v=>$"{v:P0}"));
+        body.Children.Add(Slider("Colour softness",0,32,draft.Softness,
+            v=>{draft.Softness=(int)v;Draw();},v=>$"{v:0}"));
+        body.Children.Add(Caption("Live main + sub-donut preview"));
+        if(donut.Parent is Panel previous)previous.Children.Remove(donut);
+        body.Children.Add(DeskSpaceDesignV283.Card(donut));Draw();
+    }
+    private void AddMotionCheck(WrapPanel host,string label,bool isOn,Action<bool> onSet)
+    {
+        var cb=new CheckBox{
+            Content=label,IsChecked=isOn,FontSize=12,Margin=new Thickness(0,2,14,6),
+            Cursor=System.Windows.Input.Cursors.Hand,
+            Foreground=DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Current.Text)};
+        cb.Checked+=(_,_)=>onSet(true);
+        cb.Unchecked+=(_,_)=>onSet(false);
+        host.Children.Add(cb);
+    }
+    private void PlayPreviewTransition()
+    {
+        Draw();
+        DeskSpaceDonutThemeV380.AnimateOpen(donut,previewWedges,145,145,-90,isSubArc:false,overrideApp:draft);
+    }
+'@ 'DeskSpaceSettingsStudioV148 ThemePage mixes and transitions'
+Swap-R380 @'
+        body.Children.Add(Button("Save current appearance",()=>{
+            try{
+                DeskSpaceAppearancePresetsV148.Save(new DeskSpaceVisualPresetV148{
+                    Name=name.Text.Trim(),Style=draft.Style,Mode=draft.Mode,
+                    Accent=draft.Accent,Scale=draft.Scale,
+                    Opacity=draft.Opacity,Softness=draft.Softness});
+                Navigate("Presets");status.Text="Appearance preset saved.";
+            }catch(Exception ex){status.Text=ex.Message;}
+        }));
+        foreach(var preset in DeskSpaceAppearancePresetsV148.Load()){
+            var item=preset;
+            body.Children.Add(Button(item.Name+" · "+item.Style+" · "+item.Accent,()=>{
+                draft.Style=item.Style;draft.Mode=item.Mode;draft.Accent=item.Accent;
+                draft.Scale=item.Scale;draft.Opacity=item.Opacity;
+                draft.Softness=item.Softness;Apply();
+                status.Text="Applied preset "+item.Name+".";
+            }));
+        }
+'@ @'
+        body.Children.Add(Button("Save current appearance",()=>{
+            try{
+                DeskSpaceAppearancePresetsV148.Save(new DeskSpaceVisualPresetV148{
+                    Name=name.Text.Trim(),Style=draft.Style,Mode=draft.Mode,
+                    Accent=draft.Accent,Scale=draft.Scale,
+                    Opacity=draft.Opacity,Softness=draft.Softness,
+                    DonutStyle=draft.DonutStyle,OpenTransition=draft.OpenTransition,
+                    MixGlassFrost=draft.MixGlassFrost,MixNeonEdge=draft.MixNeonEdge,
+                    MixFloatingGaps=draft.MixFloatingGaps,MixAuroraGradient=draft.MixAuroraGradient,
+                    MixWireframe=draft.MixWireframe,MotionHoverLift=draft.MotionHoverLift,
+                    MotionHoverGlow=draft.MotionHoverGlow,MotionStaggerRipple=draft.MotionStaggerRipple,
+                    MotionScrollGlide=draft.MotionScrollGlide});
+                Navigate("Presets");status.Text="Appearance preset saved.";
+            }catch(Exception ex){status.Text=ex.Message;}
+        }));
+        foreach(var preset in DeskSpaceAppearancePresetsV148.Load()){
+            var item=preset;
+            body.Children.Add(Button(item.Name+" · "+DeskSpaceDonutThemeV380.FriendlyStyleName(item.DonutStyle)+" · "+item.Accent,()=>{
+                draft.Style=item.Style;draft.Mode=item.Mode;draft.Accent=item.Accent;
+                draft.Scale=item.Scale;draft.Opacity=item.Opacity;draft.Softness=item.Softness;
+                draft.DonutStyle=item.DonutStyle;draft.OpenTransition=item.OpenTransition;
+                draft.MixGlassFrost=item.MixGlassFrost;draft.MixNeonEdge=item.MixNeonEdge;
+                draft.MixFloatingGaps=item.MixFloatingGaps;draft.MixAuroraGradient=item.MixAuroraGradient;
+                draft.MixWireframe=item.MixWireframe;draft.MotionHoverLift=item.MotionHoverLift;
+                draft.MotionHoverGlow=item.MotionHoverGlow;draft.MotionStaggerRipple=item.MotionStaggerRipple;
+                draft.MotionScrollGlide=item.MotionScrollGlide;
+                Apply();
+                status.Text="Applied preset "+item.Name+".";
+            }));
+        }
+'@ 'DeskSpaceSettingsStudioV148 PresetsPage extended fields'
+Swap-R380 @'
+    private void Draw()
+    {
+        donut.Children.Clear();
+        var accent=DeskSpaceAppearanceV148.TryColor(draft.Accent,out var a)?a:Colors.MediumPurple;
+        var dark=DeskSpaceAppearanceV148.IsDarkFor(draft);
+        var backdrop=dark?Color.FromRgb(32,34,49):Colors.White;
+        double blend=draft.Style=="Modern"?.70:
+            draft.Style=="Material"?.78:.88;
+        blend=Math.Clamp(blend+(draft.Softness-16)*.003,.67,.94);
+        var pale=DeskSpaceAppearanceV148.Mix(accent,
+            draft.Style=="Modern"?Color.FromRgb(29,43,75):backdrop,blend);
+        var second=DeskSpaceAppearanceV148.Mix(accent,
+            draft.Style=="Modern"?Color.FromRgb(18,29,51):
+                dark?Color.FromRgb(41,43,56):Colors.White,
+            draft.Style=="Modern"?.84:
+                draft.Style=="Material"?.68:.80);
+        donut.Background=DeskSpaceDesignV283.Solid(
+            draft.Style=="Modern"?Color.FromRgb(13,23,41):
+                dark?Color.FromRgb(27,29,43):
+                    Color.FromRgb(246,246,252));
+        double radius=126*Math.Clamp(draft.Scale,.75,1.25);
+        for(int i=0;i<12;i++)
+        {
+            bool outer=i>=6;int slot=i%6;
+            double inner=outer?radius*.68:radius*.35;
+            double outerRadius=outer?radius:radius*.64;
+            double angle=-120+slot*60;
+            var path=new System.Windows.Shapes.Path{
+                Data=Wedge(145,inner,outerRadius,angle+1,angle+58),
+                Fill=new SolidColorBrush(i%2==0?pale:second),
+                Stroke=dark?
+                    DeskSpaceDesignV283.Solid(Color.FromRgb(58,75,107)):
+                    Brushes.White,
+                StrokeThickness=2};
+            donut.Children.Add(path);
+            var pos=Polar(145,145,(inner+outerRadius)/2,angle+29);
+            var label=new TextBlock{Text=Modules[i],FontSize=outer?10:9,
+                TextAlignment=TextAlignment.Center,Width=76,TextWrapping=TextWrapping.Wrap,
+                Foreground=new SolidColorBrush(dark?
+                    Color.FromRgb(244,242,255):Color.FromRgb(48,43,73))};
+            Canvas.SetLeft(label,pos.X-38);Canvas.SetTop(label,pos.Y-11);
+            donut.Children.Add(label);
+        }
+        var centre=new Ellipse{Width=radius*.65,Height=radius*.65,
+            Fill=draft.Style=="Modern"?
+                DeskSpaceDesignV283.Gradient(
+                    DeskSpaceAppearanceV148.Mix(
+                        accent,Color.FromRgb(37,58,102),.55),
+                    Color.FromRgb(16,27,50),125):
+                new SolidColorBrush(accent),
+            Stroke=draft.Style=="Modern"?
+                DeskSpaceDesignV283.Solid(Color.FromRgb(114,140,205)):
+                Brushes.White,
+            StrokeThickness=3};
+        Canvas.SetLeft(centre,145-radius*.325);Canvas.SetTop(centre,145-radius*.325);
+        donut.Children.Add(centre);
+        var centerText=new TextBlock{Text="DeskSpace",Width=radius*.65,
+            FontSize=12,Foreground=Brushes.White,FontWeight=FontWeights.Bold,
+            TextAlignment=TextAlignment.Center};
+        Canvas.SetLeft(centerText,145-radius*.325);
+        Canvas.SetTop(centerText,137);donut.Children.Add(centerText);
+    }
+'@ @'
+    private void Draw()
+    {
+        donut.Children.Clear();
+        previewWedges.Clear();
+        var dark=DeskSpaceAppearanceV148.IsDarkFor(draft);
+        bool hc=SystemParameters.HighContrast;
+        donut.Background=DeskSpaceDesignV283.Solid(
+            dark || draft.DonutStyle=="NeonCyber"
+                ?Color.FromRgb(13,20,35)
+                :Color.FromRgb(236,241,250));
+        double radius=Math.Clamp(98*Math.Clamp(draft.Scale,.75,1.25),76,104);
+        double gap=DeskSpaceDonutThemeV380.GetMainGapDegrees(draft);
+        double halfAdjust=(gap-1.5)*0.5;
+        for(int i=0;i<12;i++)
+        {
+            bool outer=i>=6;int slot=i%6;
+            double inner=outer?radius*.67:radius*.36;
+            double outerRadius=outer?radius:radius*.63;
+            double a0=-120+slot*60+halfAdjust;
+            double a1=a0+60-gap-0.5;
+            bool isHov=i==6;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(draft,hc,outer?1:0,i,false,false,isHov);
+            var path=new System.Windows.Shapes.Path{
+                Data=Wedge(145,inner,outerRadius,a0,a1),
+                Fill=vis.Fill,Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,Effect=vis.Effect};
+            donut.Children.Add(path);
+            previewWedges.Add(path);
+            var pos=Polar(145,145,(inner+outerRadius)/2,(a0+a1)/2);
+            var label=new TextBlock{Text=Modules[i],FontSize=outer?8.5:7.8,
+                TextAlignment=TextAlignment.Center,Width=62,TextWrapping=TextWrapping.Wrap,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,IsHitTestVisible=false};
+            Canvas.SetLeft(label,pos.X-31);Canvas.SetTop(label,pos.Y-9);
+            donut.Children.Add(label);
+        }
+        // Sample sub-donut arc showing live theme + mix layering on sub-donuts
+        var subItems=new[]{("Alpha Co…",false),("Beta LLP…",false),("⚙ Fields",true)};
+        double subInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(draft);
+        double subStart=-138,subStep=32;
+        for(int s=0;s<subItems.Length;s++)
+        {
+            double sa0=subStart+s*subStep+subInset;
+            double sa1=subStart+(s+1)*subStep-subInset;
+            var sVis=DeskSpaceDonutThemeV380.ResolveWedge(draft,hc,2,s,subItems[s].Item2,false,s==0);
+            var sPath=new System.Windows.Shapes.Path{
+                Data=Wedge(145,radius*1.04,radius*1.32,sa0,sa1),
+                Fill=sVis.Fill,Stroke=sVis.Stroke,StrokeThickness=sVis.StrokeThickness,Effect=sVis.Effect};
+            donut.Children.Add(sPath);
+            previewWedges.Add(sPath);
+            var sp=Polar(145,145,radius*1.18,(sa0+sa1)/2);
+            var sLbl=new TextBlock{Text=subItems[s].Item1,FontSize=8.2,Width=52,
+                FontWeight=subItems[s].Item2?FontWeights.SemiBold:FontWeights.Normal,
+                TextAlignment=TextAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,
+                Foreground=hc?SystemColors.WindowTextBrush:sVis.TextBrush,IsHitTestVisible=false};
+            Canvas.SetLeft(sLbl,sp.X-26);Canvas.SetTop(sLbl,sp.Y-7);
+            donut.Children.Add(sLbl);
+        }
+        var hubVis=DeskSpaceDonutThemeV380.ResolveHub(draft,hc);
+        var centre=new Ellipse{Width=radius*.66,Height=radius*.66,
+            Fill=hubVis.Fill,Stroke=hubVis.Stroke,StrokeThickness=hubVis.StrokeThickness,Effect=hubVis.Effect};
+        Canvas.SetLeft(centre,145-radius*.33);Canvas.SetTop(centre,145-radius*.33);
+        donut.Children.Add(centre);
+        var centerText=new TextBlock{Text="DeskSpace",Width=radius*.66,
+            FontSize=11,Foreground=hc?SystemColors.WindowTextBrush:hubVis.TextBrush,
+            FontWeight=FontWeights.Bold,TextAlignment=TextAlignment.Center,IsHitTestVisible=false};
+        Canvas.SetLeft(centerText,145-radius*.33);
+        Canvas.SetTop(centerText,138);donut.Children.Add(centerText);
+    }
+'@ 'DeskSpaceSettingsStudioV148 Draw live main + sub-donut preview'
+Finish-Patch $studioPath
+
+# 8d. Surgical hook: DeskSpaceExcelWheelV42.cs
+$excelWheelPath = "$dstRoot/DeskSpaceExcelWheelV42.cs"
+Begin-Patch $excelWheelPath
+Swap-R380 @'
+    private readonly List<(int Index,Guid? Id,Geometry Hit)> hitZones=new();
+    private readonly List<System.Windows.Shapes.Path> sectors=new();
+'@ @'
+    private readonly List<(int Index,Guid? Id,Geometry Hit)> hitZones=new();
+    private readonly List<System.Windows.Shapes.Path> sectors=new();
+    private readonly List<(List<UIElement> LinkedVisuals,TextBlock Label,bool IsTruncated,string FullName,string? Badge,double MidAngle,Point OuterAnchor,bool IsAction)> rootWedgeVisualsV380=new();
+    private readonly DeskSpaceDonutThemeV380.SubDonutCalloutPillV380 calloutPill;
+'@ 'DeskSpaceExcelWheelV42 calloutPill and root visuals'
+Swap-R380 @'
+        internal readonly List<Geometry> Zones=new();
+        internal readonly List<System.Windows.Shapes.Path> Wedges=new();
+'@ @'
+        internal readonly List<Geometry> Zones=new();
+        internal readonly List<System.Windows.Shapes.Path> Wedges=new();
+        internal readonly List<(List<UIElement> LinkedVisuals,TextBlock Label,bool IsTruncated,string FullName,string? Badge,double MidAngle,Point OuterAnchor,bool IsAction)> VisualsV380=new();
+'@ 'DeskSpaceExcelWheelV42 ChildRing VisualsV380'
+Swap-R380 @'
+    public bool IsOpen=>arc.IsOpen || shelf.IsOpen ||
+        childRings.Any(r=>r.Popup.IsOpen);
+    public bool IsArcOpen=>arc.IsOpen;
+    public bool IsPasting=>pasting;
+    public int SavedCount=>formats.Count+formatTemplatesV130.Count;
+
+    public DeskSpaceExcelWheelV42(Window window,Action onCommit)
+    {
+        owner=window;collapseParent=onCommit;
+'@ @'
+    public bool IsOpen=>arc.IsOpen || shelf.IsOpen ||
+        childRings.Any(r=>r.Popup.IsOpen);
+    public bool IsArcOpen=>arc.IsOpen;
+    public bool IsPasting=>pasting;
+    public int SavedCount=>formats.Count+formatTemplatesV130.Count;
+
+    internal bool IsPointerNearArc()
+    {
+        if(disposed || !arc.IsOpen || !canvas.IsLoaded)return false;
+        try
+        {
+            var pt=DeskSpaceWheelHoverV35.MouseIn(canvas);
+            if(pt.X>=-26 && pt.X<=canvas.Width+26 && pt.Y>=-26 && pt.Y<=canvas.Height+26)
+                return true;
+            foreach(var ring in childRings.ToArray())
+            {
+                if(!ring.Popup.IsOpen || !ring.Surface.IsLoaded)continue;
+                var rp=DeskSpaceWheelHoverV35.MouseIn(ring.Surface);
+                if(rp.X>=-26 && rp.X<=ring.Surface.Width+26 && rp.Y>=-26 && rp.Y<=ring.Surface.Height+26)
+                    return true;
+            }
+            return false;
+        }
+        catch(InvalidOperationException){return false;}
+    }
+
+    internal void RefreshThemeV380()
+    {
+        if(disposed || !arc.IsOpen)return;
+        var savedRings=childRings.Where(r=>r.Popup.IsOpen).ToList();
+        Render();
+        foreach(var oldRing in savedRings)
+        {
+            if(oldRing.Depth==1)
+            {
+                ExpandRing(oldRing.Depth,oldRing.Group,oldRing.Angle,oldRing.ParentSweep);
+            }
+        }
+    }
+
+    public DeskSpaceExcelWheelV42(Window window,Action onCommit)
+    {
+        owner=window;collapseParent=onCommit;
+        calloutPill=new DeskSpaceDonutThemeV380.SubDonutCalloutPillV380(owner);
+'@ 'DeskSpaceExcelWheelV42 IsPointerNearArc, RefreshThemeV380 and calloutPill ctor'
+Swap-R380 @'
+    private void CloseFrom(int depth)
+    {
+        drillTimer.Stop();drillSlot=-1;drillDepth=-1;
+'@ @'
+    private void CloseFrom(int depth)
+    {
+        calloutPill.Hide();
+        drillTimer.Stop();drillSlot=-1;drillDepth=-1;
+'@ 'DeskSpaceExcelWheelV42 CloseFrom hide pill'
+Swap-R380 @'
+        ring.Popup.IsOpen=true;
+    }
+    private void RenderRing(ChildRing ring)
+    {
+        var all=BranchItems(ring.Group);
+        if(ring.Depth>8)
+            throw new InvalidOperationException(
+                "Deep Excel groups require opening Workspace for editing.");
+        ring.Start=Math.Clamp(ring.Start,0,Math.Max(0,all.Count-PerPage));
+        ring.Items.Clear();
+        ring.Items.AddRange(all.Skip(ring.Start).Take(PerPage));
+        ring.Surface.Children.Clear();ring.Zones.Clear();ring.Wedges.Clear();
+        ring.Hovered=-1;
+        int count=ring.Items.Count;
+        if(count==0)return;
+        // Standard shared five-slot sweep and relative WPF Popup positioning.
+        double half=DeskSpaceSubDonutStandardV62.Plan(
+            count,0,ring.Angle,ring.ParentSweep).Half;
+        double centre=DeskSpaceSubArcGeometryV48.FitAngle(
+            owner,ring.Depth,ring.Angle,half);
+        ring.StartAngle=centre-half;
+        ring.StepAngle=2*half/count;
+        var shapes=new List<Geometry>();
+        for(int i=0;i<count;i++)
+            shapes.Add(DeskSpaceSubArcGeometryV48.Sector(
+                ring.Depth,ring.StartAngle+i*ring.StepAngle,
+                ring.StartAngle+(i+1)*ring.StepAngle));
+        ring.Bounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
+        const double margin=10;
+        ring.OriginX=ring.Bounds.Left;ring.OriginY=ring.Bounds.Top;
+        ring.Surface.Width=ring.Bounds.Width+2*margin;
+        ring.Surface.Height=ring.Bounds.Height+2*margin;
+        for(int i=0;i<count;i++)
+        {
+            var item=ring.Items[i];
+            var hit=DeskSpaceSubArcGeometryV48.Clip(shapes[i],ring.Bounds);
+            var wedge=new System.Windows.Shapes.Path{
+                Data=hit,Stroke=Brushes.White,StrokeThickness=2,
+                Fill=item.Command=="mapping"?Idle:Accent,
+                Cursor=Cursors.Hand,ToolTip=item.Label
+            };
+            ring.Surface.Children.Add(wedge);
+            ring.Wedges.Add(wedge);ring.Zones.Add(hit);
+            double middle=ring.StartAngle+(i+.5)*ring.StepAngle;
+            var p=DeskSpaceSubArcGeometryV48.Polar(
+                (DeskSpaceSubArcGeometryV48.Inner(ring.Depth)+
+                 DeskSpaceSubArcGeometryV48.Outer(ring.Depth))/2,middle);
+            var label=new TextBlock{
+                Text=item.Label,Width=80,FontSize=10,
+                Foreground=item.Command=="mapping"?Ink:Brushes.White,
+                TextAlignment=TextAlignment.Center,
+                TextTrimming=TextTrimming.CharacterEllipsis,
+                ToolTip=item.Label,IsHitTestVisible=false
+            };
+            Canvas.SetLeft(label,DeskSpaceSubArcGeometryV48.CX+p.X-
+                ring.Bounds.Left+margin-40);
+            Canvas.SetTop(label,DeskSpaceSubArcGeometryV48.CY+p.Y-
+                ring.Bounds.Top+margin-9);
+            ring.Surface.Children.Add(label);
+        }
+'@ @'
+        ring.Popup.IsOpen=true;
+        if(!ring.Bounds.IsEmpty)
+        {
+            DeskSpaceDonutThemeV380.AnimateOpen(
+                ring.Surface,
+                ring.Wedges.Cast<FrameworkElement>().ToArray(),
+                DeskSpaceSubArcGeometryV48.CX-ring.Bounds.Left+10,
+                DeskSpaceSubArcGeometryV48.CY-ring.Bounds.Top+10,
+                ring.Angle,isSubArc:true);
+        }
+    }
+    private void RenderRing(ChildRing ring)
+    {
+        calloutPill.Hide();
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(themeApp);
+        var all=BranchItems(ring.Group);
+        if(ring.Depth>8)
+            throw new InvalidOperationException(
+                "Deep Excel groups require opening Workspace for editing.");
+        ring.Start=Math.Clamp(ring.Start,0,Math.Max(0,all.Count-PerPage));
+        ring.Items.Clear();
+        ring.Items.AddRange(all.Skip(ring.Start).Take(PerPage));
+        ring.Surface.Children.Clear();ring.Zones.Clear();ring.Wedges.Clear();ring.VisualsV380.Clear();
+        ring.Hovered=-1;
+        int count=ring.Items.Count;
+        if(count==0)return;
+        // Standard shared five-slot sweep and relative WPF Popup positioning.
+        double half=DeskSpaceSubDonutStandardV62.Plan(
+            count,0,ring.Angle,ring.ParentSweep).Half;
+        double centre=DeskSpaceSubArcGeometryV48.FitAngle(
+            owner,ring.Depth,ring.Angle,half);
+        ring.StartAngle=centre-half;
+        ring.StepAngle=2*half/count;
+        var shapes=new List<Geometry>();
+        for(int i=0;i<count;i++)
+        {
+            double a0=ring.StartAngle+i*ring.StepAngle;
+            double a1=ring.StartAngle+(i+1)*ring.StepAngle;
+            double g=(a1-a0)>gapInset*2.5?gapInset:0;
+            shapes.Add(DeskSpaceSubArcGeometryV48.Sector(ring.Depth,a0+g,a1-g));
+        }
+        ring.Bounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
+        const double margin=10;
+        ring.OriginX=ring.Bounds.Left;ring.OriginY=ring.Bounds.Top;
+        ring.Surface.Width=ring.Bounds.Width+2*margin;
+        ring.Surface.Height=ring.Bounds.Height+2*margin;
+        for(int i=0;i<count;i++)
+        {
+            var item=ring.Items[i];
+            bool isAction=item.Command!="mapping" && item.Command!="format";
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,ring.Depth+2,i,isAction,false,false);
+            var hit=DeskSpaceSubArcGeometryV48.Clip(shapes[i],ring.Bounds);
+            var wedge=new System.Windows.Shapes.Path{
+                Data=hit,Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,
+                Fill=vis.Fill,Effect=vis.Effect,
+                Cursor=Cursors.Hand,ToolTip=item.Label
+            };
+            ring.Surface.Children.Add(wedge);
+            ring.Wedges.Add(wedge);ring.Zones.Add(hit);
+            double middle=ring.StartAngle+(i+.5)*ring.StepAngle;
+            var p=DeskSpaceSubArcGeometryV48.Polar(
+                (DeskSpaceSubArcGeometryV48.Inner(ring.Depth)+
+                 DeskSpaceSubArcGeometryV48.Outer(ring.Depth))/2,middle);
+            FontWeight fw=isAction?FontWeights.SemiBold:FontWeights.Normal;
+            var label=new TextBlock{
+                Text=item.Label,Width=80,FontSize=10,FontWeight=fw,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
+                TextAlignment=TextAlignment.Center,
+                TextTrimming=TextTrimming.CharacterEllipsis,
+                ToolTip=item.Label,IsHitTestVisible=false
+            };
+            Canvas.SetLeft(label,DeskSpaceSubArcGeometryV48.CX+p.X-
+                ring.Bounds.Left+margin-40);
+            Canvas.SetTop(label,DeskSpaceSubArcGeometryV48.CY+p.Y-
+                ring.Bounds.Top+margin-9);
+            ring.Surface.Children.Add(label);
+
+            bool isTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                item.Label,80,20,10,fw,wraps:false);
+            var outerPt=DeskSpaceSubArcGeometryV48.Polar(DeskSpaceSubArcGeometryV48.Outer(ring.Depth),middle);
+            Point outerAnchor=new(DeskSpaceSubArcGeometryV48.CX+outerPt.X-ring.Bounds.Left+margin,
+                                  DeskSpaceSubArcGeometryV48.CY+outerPt.Y-ring.Bounds.Top+margin);
+            string? badge=item.Command=="format"?"FORMAT":(item.Command=="mapping"?"TEMPLATE":null);
+            ring.VisualsV380.Add((new List<UIElement>{wedge,label},label,isTrunc,item.Label,badge,middle,outerAnchor,isAction));
+        }
+'@ 'DeskSpaceExcelWheelV42 ExpandRing AnimateOpen and RenderRing theme'
+Swap-R380 @'
+        ring.Hovered=slot;
+        for(int i=0;i<ring.Wedges.Count;i++)
+            ring.Wedges[i].Fill=i==slot?Selected:
+                (ring.Items[i].Command=="mapping"?Idle:Accent);
+        if(slot<0)return;
+'@ @'
+        ring.Hovered=slot;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        for(int i=0;i<ring.Wedges.Count;i++)
+        {
+            bool hov=i==slot;
+            bool isAction=i<ring.VisualsV380.Count
+                ?ring.VisualsV380[i].IsAction
+                :(ring.Items[i].Command!="mapping" && ring.Items[i].Command!="format");
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,ring.Depth+2,i,isAction,false,hov);
+            ring.Wedges[i].Fill=vis.Fill;
+            ring.Wedges[i].Stroke=vis.Stroke;
+            ring.Wedges[i].StrokeThickness=vis.StrokeThickness;
+            ring.Wedges[i].Effect=vis.Effect;
+            if(i<ring.VisualsV380.Count)
+            {
+                var rv=ring.VisualsV380[i];
+                rv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                DeskSpaceDonutThemeV380.ApplyHoverLift(rv.LinkedVisuals,hov,rv.MidAngle,themeApp);
+            }
+        }
+        if(slot>=0 && slot<ring.VisualsV380.Count && ring.VisualsV380[slot].IsTruncated)
+            calloutPill.Show(ring.Surface,ring.VisualsV380[slot].OuterAnchor,ring.VisualsV380[slot].MidAngle,ring.VisualsV380[slot].FullName,ring.VisualsV380[slot].Badge);
+        else
+            calloutPill.Hide();
+        if(slot<0)return;
+'@ 'DeskSpaceExcelWheelV42 HoverRing theme lift and callout pill'
+Swap-R380 @'
+            Position();
+            arc.IsOpen=true;
+            pointerTimer.Start();
+'@ @'
+            Position();
+            arc.IsOpen=true;
+            if(!rootBounds.IsEmpty)
+            {
+                DeskSpaceDonutThemeV380.AnimateOpen(
+                    canvas,
+                    sectors.Cast<FrameworkElement>().ToArray(),
+                    DeskSpaceSubArcGeometryV48.CX-rootBounds.Left+10,
+                    DeskSpaceSubArcGeometryV48.CY-rootBounds.Top+10,
+                    ArcCenter,isSubArc:true);
+            }
+            pointerTimer.Start();
+'@ 'DeskSpaceExcelWheelV42 Show AnimateOpen'
+Swap-R380 @'
+    public void HideArc()
+    {
+        middleScroll.Stop();
+'@ @'
+    public void HideArc()
+    {
+        calloutPill.Hide();
+        middleScroll.Stop();
+'@ 'DeskSpaceExcelWheelV42 HideArc hide pill'
+Swap-R380 @'
+    private void Render()
+    {
+        drillTimer.Stop();drillSlot=-1;drillDepth=-1;
+        CloseFrom(1);
+        canvas.Children.Clear();sectors.Clear();hitZones.Clear();displayed.Clear();
+        hovered=-1;
+        var all=Entries();
+        start=Math.Clamp(start,0,Math.Max(0,all.Count-PerPage));
+        displayed.AddRange(all.Skip(start).Take(PerPage));
+        int count=displayed.Count;
+        if(count==0)return;
+        // Shared standard root arc, centered on Excel's existing outer wedge.
+        double half=DeskSpaceSubDonutStandardV62.Plan(
+            count,0,ArcCenter).Half;
+        rootStartAngle=ArcCenter-half;
+        rootStep=2*half/count;
+        var shapes=new List<Geometry>();
+        for(int i=0;i<count;i++)
+            shapes.Add(DeskSpaceSubArcGeometryV48.Sector(
+                0,rootStartAngle+i*rootStep,
+                rootStartAngle+(i+1)*rootStep));
+        rootBounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
+        const double margin=10;
+        canvas.Width=rootBounds.Width+2*margin;
+        canvas.Height=rootBounds.Height+2*margin;
+        for(int i=0;i<count;i++)
+        {
+            var item=displayed[i];
+            var hit=DeskSpaceSubArcGeometryV48.Clip(shapes[i],rootBounds);
+            var wedge=new System.Windows.Shapes.Path{
+                Data=hit,Stroke=Brushes.White,StrokeThickness=2,
+                Fill=item.Command=="mapping"?Idle:Accent,
+                Tag=i,Cursor=Cursors.Hand,ToolTip=item.Label
+            };
+            canvas.Children.Add(wedge);sectors.Add(wedge);
+            hitZones.Add((i,item.Id,hit));
+            double angle=rootStartAngle+(i+.5)*rootStep;
+            var p=DeskSpaceSubArcGeometryV48.Polar(
+                (DeskSpaceSubArcGeometryV48.Inner(0)+
+                 DeskSpaceSubArcGeometryV48.Outer(0))/2,angle);
+            var label=new TextBlock{
+                Text=item.Label,Width=80,FontSize=10,
+                Foreground=item.Command=="mapping"?Ink:Brushes.White,
+                TextAlignment=TextAlignment.Center,
+                TextTrimming=TextTrimming.CharacterEllipsis,
+                ToolTip=item.Label,IsHitTestVisible=false
+            };
+            Canvas.SetLeft(label,DeskSpaceSubArcGeometryV48.CX+
+                p.X-rootBounds.Left+margin-40);
+            Canvas.SetTop(label,DeskSpaceSubArcGeometryV48.CY+
+                p.Y-rootBounds.Top+margin-9);
+            canvas.Children.Add(label);
+        }
+'@ @'
+    private void Render()
+    {
+        calloutPill.Hide();
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(themeApp);
+        drillTimer.Stop();drillSlot=-1;drillDepth=-1;
+        CloseFrom(1);
+        canvas.Children.Clear();sectors.Clear();hitZones.Clear();displayed.Clear();rootWedgeVisualsV380.Clear();
+        hovered=-1;
+        var all=Entries();
+        start=Math.Clamp(start,0,Math.Max(0,all.Count-PerPage));
+        displayed.AddRange(all.Skip(start).Take(PerPage));
+        int count=displayed.Count;
+        if(count==0)return;
+        // Shared standard root arc, centered on Excel's existing outer wedge.
+        double half=DeskSpaceSubDonutStandardV62.Plan(
+            count,0,ArcCenter).Half;
+        rootStartAngle=ArcCenter-half;
+        rootStep=2*half/count;
+        var shapes=new List<Geometry>();
+        for(int i=0;i<count;i++)
+        {
+            double a0=rootStartAngle+i*rootStep;
+            double a1=rootStartAngle+(i+1)*rootStep;
+            double g=(a1-a0)>gapInset*2.5?gapInset:0;
+            shapes.Add(DeskSpaceSubArcGeometryV48.Sector(0,a0+g,a1-g));
+        }
+        rootBounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
+        const double margin=10;
+        canvas.Width=rootBounds.Width+2*margin;
+        canvas.Height=rootBounds.Height+2*margin;
+        for(int i=0;i<count;i++)
+        {
+            var item=displayed[i];
+            bool isAction=item.Command!="mapping" && item.Command!="format";
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,2,i,isAction,false,false);
+            var hit=DeskSpaceSubArcGeometryV48.Clip(shapes[i],rootBounds);
+            var wedge=new System.Windows.Shapes.Path{
+                Data=hit,Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,
+                Fill=vis.Fill,Effect=vis.Effect,
+                Tag=i,Cursor=Cursors.Hand,ToolTip=item.Label
+            };
+            canvas.Children.Add(wedge);sectors.Add(wedge);
+            hitZones.Add((i,item.Id,hit));
+            double angle=rootStartAngle+(i+.5)*rootStep;
+            var p=DeskSpaceSubArcGeometryV48.Polar(
+                (DeskSpaceSubArcGeometryV48.Inner(0)+
+                 DeskSpaceSubArcGeometryV48.Outer(0))/2,angle);
+            FontWeight fw=isAction?FontWeights.SemiBold:FontWeights.Normal;
+            var label=new TextBlock{
+                Text=item.Label,Width=80,FontSize=10,FontWeight=fw,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
+                TextAlignment=TextAlignment.Center,
+                TextTrimming=TextTrimming.CharacterEllipsis,
+                ToolTip=item.Label,IsHitTestVisible=false
+            };
+            Canvas.SetLeft(label,DeskSpaceSubArcGeometryV48.CX+
+                p.X-rootBounds.Left+margin-40);
+            Canvas.SetTop(label,DeskSpaceSubArcGeometryV48.CY+
+                p.Y-rootBounds.Top+margin-9);
+            canvas.Children.Add(label);
+
+            bool isTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                item.Label,80,20,10,fw,wraps:false);
+            var outerPt=DeskSpaceSubArcGeometryV48.Polar(DeskSpaceSubArcGeometryV48.Outer(0),angle);
+            Point outerAnchor=new(DeskSpaceSubArcGeometryV48.CX+outerPt.X-rootBounds.Left+margin,
+                                  DeskSpaceSubArcGeometryV48.CY+outerPt.Y-rootBounds.Top+margin);
+            string? badge=item.Command=="format"?"FORMAT":(item.Command=="mapping"?"TEMPLATE":null);
+            rootWedgeVisualsV380.Add((new List<UIElement>{wedge,label},label,isTrunc,item.Label,badge,angle,outerAnchor,isAction));
+        }
+'@ 'DeskSpaceExcelWheelV42 Render themed and callout pill prep'
+Swap-R380 @'
+        hovered=slot;
+        for(int i=0;i<sectors.Count;i++)
+        {
+            bool command=displayed[i].Command!="mapping";
+            sectors[i].Fill=i==slot?Selected:(command?Accent:Idle);
+        }
+        if(slot<0||slot>=displayed.Count)return;
+'@ @'
+        hovered=slot;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        for(int i=0;i<sectors.Count;i++)
+        {
+            bool hov=i==slot;
+            bool isAction=i<rootWedgeVisualsV380.Count
+                ?rootWedgeVisualsV380[i].IsAction
+                :(displayed[i].Command!="mapping" && displayed[i].Command!="format");
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,2,i,isAction,false,hov);
+            sectors[i].Fill=vis.Fill;
+            sectors[i].Stroke=vis.Stroke;
+            sectors[i].StrokeThickness=vis.StrokeThickness;
+            sectors[i].Effect=vis.Effect;
+            if(i<rootWedgeVisualsV380.Count)
+            {
+                var rv=rootWedgeVisualsV380[i];
+                rv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                DeskSpaceDonutThemeV380.ApplyHoverLift(rv.LinkedVisuals,hov,rv.MidAngle,themeApp);
+            }
+        }
+        if(slot>=0 && slot<rootWedgeVisualsV380.Count && rootWedgeVisualsV380[slot].IsTruncated)
+            calloutPill.Show(canvas,rootWedgeVisualsV380[slot].OuterAnchor,rootWedgeVisualsV380[slot].MidAngle,rootWedgeVisualsV380[slot].FullName,rootWedgeVisualsV380[slot].Badge);
+        else
+            calloutPill.Hide();
+        if(slot<0)
+        {
+            foreach(var r in childRings.ToArray())
+                if(r.Hovered>=0)HoverRing(r,new Point(-9999,-9999));
+        }
+        if(slot<0||slot>=displayed.Count)return;
+'@ 'DeskSpaceExcelWheelV42 Hover root theme lift and callout pill'
+Swap-R380 @'
+        CloseFrom(1);
+        arc.IsOpen=false;shelf.IsOpen=false;
+'@ @'
+        CloseFrom(1);
+        calloutPill.Dispose();
+        arc.IsOpen=false;shelf.IsOpen=false;
+'@ 'DeskSpaceExcelWheelV42 Dispose calloutPill'
+Finish-Patch $excelWheelPath
+
 # 9. Post-patch invariants check
 $deckCheck = [IO.File]::ReadAllText("$dstRoot/DeskSpaceDropShelfV15.cs")
 if (([regex]::Matches($deckCheck, 'DeckHeaderButton[(]')).Count -ne 4) {
@@ -3811,7 +5552,8 @@ foreach ($req in @('TextElement.Foreground="#243F5C"', 'Foreground="#1B3A57"', '
 if (!(Test-Path -LiteralPath "$dstRoot/DeskSpaceDesignV283.cs") -or
     !(Test-Path -LiteralPath "$dstRoot/ModernV380/DeskSpacePinnedAppFilesV380.cs") -or
     !(Test-Path -LiteralPath "$dstRoot/ModernV380/DeskSpaceInformationTabV380.cs") -or
-    !(Test-Path -LiteralPath "$dstRoot/ModernV380/DeskSpaceModernHubV380.cs")) {
+    !(Test-Path -LiteralPath "$dstRoot/ModernV380/DeskSpaceModernHubV380.cs") -or
+    !(Test-Path -LiteralPath "$dstRoot/ModernV380/DeskSpaceDonutThemeV380.cs")) {
     throw 'R380 missing copied ModernV380 or DeskSpaceDesignV283 files in target tree'
 }
 

@@ -22,15 +22,63 @@ internal sealed class DeskSpaceAppearanceV148
     public double Scale {get;set;}=1;
     public double Opacity {get;set;}=.96;
     public int Softness {get;set;}=16;
+    public string DonutStyle {get;set;}="LiquidGlass";
+    public string OpenTransition {get;set;}="SpringBloom";
+    public bool MixGlassFrost {get;set;}=true;
+    public bool MixNeonEdge {get;set;}
+    public bool MixFloatingGaps {get;set;}
+    public bool MixAuroraGradient {get;set;}
+    public bool MixWireframe {get;set;}
+    public bool MotionHoverLift {get;set;}=true;
+    public bool MotionHoverGlow {get;set;}=true;
+    public bool MotionStaggerRipple {get;set;}
+    public bool MotionScrollGlide {get;set;}=true;
+
     private static DeskSpaceAppearanceV148? cached;
+    private static DateTime cachedStampUtc=DateTime.MinValue;
+    private static DateTime lastReloadProbeUtc=DateTime.MinValue;
+
+    internal static readonly string[] ValidDonutStyles={
+        "LiquidGlass","FloatingPetals","NeonCyber","AuroraGradient","MinimalWireframe","ClassicSynced"
+    };
+    internal static readonly string[] ValidTransitions={
+        "SpringBloom","IrisUnfold","SmoothGlide","RadialPop","SpiralSpin","FadeSlide","Instant"
+    };
+
     internal static string PathName=>System.IO.Path.Combine(WorkspaceStore.Root,"appearance-v148.json");
-    internal static DeskSpaceAppearanceV148 Current=>cached??=Load();
+    internal static DeskSpaceAppearanceV148 Current
+    {
+        get
+        {
+            ReloadIfChanged();
+            return cached??=Load();
+        }
+    }
+    internal static void ReloadIfChanged(bool force=false)
+    {
+        var now=DateTime.UtcNow;
+        if(!force && cached!=null && (now-lastReloadProbeUtc).TotalMilliseconds<300)
+            return;
+        lastReloadProbeUtc=now;
+        try
+        {
+            DateTime stamp=File.Exists(PathName)?File.GetLastWriteTimeUtc(PathName):DateTime.MinValue;
+            if(force || cached==null || stamp!=cachedStampUtc)
+            {
+                cached=Load();
+                cachedStampUtc=stamp;
+            }
+        }
+        catch(IOException){}
+        catch(UnauthorizedAccessException){}
+    }
     internal static DeskSpaceAppearanceV148 Load()
     {
         try{
             if(!File.Exists(PathName))return new();
             var loaded=JsonSerializer.Deserialize<DeskSpaceAppearanceV148>(
                 File.ReadAllText(PathName))??new();
+            cachedStampUtc=File.GetLastWriteTimeUtc(PathName);
             return Sanitize(loaded);
         }catch(Exception ex) when(ex is IOException or JsonException or
             UnauthorizedAccessException){System.Diagnostics.Debug.WriteLine(ex);return new();}
@@ -43,8 +91,50 @@ internal sealed class DeskSpaceAppearanceV148
         item.Scale=double.IsFinite(item.Scale)?Math.Clamp(item.Scale,.75,1.25):1;
         item.Opacity=double.IsFinite(item.Opacity)?Math.Clamp(item.Opacity,.65,1):.96;
         item.Softness=Math.Clamp(item.Softness,0,32);
+        item.DonutStyle=Array.IndexOf(ValidDonutStyles,item.DonutStyle)>=0?item.DonutStyle:"LiquidGlass";
+        item.OpenTransition=Array.IndexOf(ValidTransitions,item.OpenTransition)>=0?item.OpenTransition:"SpringBloom";
         return item;
     }
+    internal static void ApplyDonutPresetDefaults(DeskSpaceAppearanceV148 item,string preset)
+    {
+        item.DonutStyle=Array.IndexOf(ValidDonutStyles,preset)>=0?preset:"LiquidGlass";
+        item.MixGlassFrost=false;
+        item.MixNeonEdge=false;
+        item.MixFloatingGaps=false;
+        item.MixAuroraGradient=false;
+        item.MixWireframe=false;
+        switch(item.DonutStyle)
+        {
+            case "LiquidGlass":
+                item.MixGlassFrost=true;
+                break;
+            case "FloatingPetals":
+                item.MixFloatingGaps=true;
+                break;
+            case "NeonCyber":
+                item.MixNeonEdge=true;
+                break;
+            case "AuroraGradient":
+                item.MixAuroraGradient=true;
+                break;
+            case "MinimalWireframe":
+                item.MixWireframe=true;
+                break;
+            case "ClassicSynced":
+                break;
+        }
+    }
+    internal static DeskSpaceAppearanceV148 Clone(DeskSpaceAppearanceV148 s)=>new()
+    {
+        Style=s.Style,Mode=s.Mode,Accent=s.Accent,
+        Scale=s.Scale,Opacity=s.Opacity,Softness=s.Softness,
+        DonutStyle=s.DonutStyle,OpenTransition=s.OpenTransition,
+        MixGlassFrost=s.MixGlassFrost,MixNeonEdge=s.MixNeonEdge,
+        MixFloatingGaps=s.MixFloatingGaps,MixAuroraGradient=s.MixAuroraGradient,
+        MixWireframe=s.MixWireframe,MotionHoverLift=s.MotionHoverLift,
+        MotionHoverGlow=s.MotionHoverGlow,MotionStaggerRipple=s.MotionStaggerRipple,
+        MotionScrollGlide=s.MotionScrollGlide
+    };
     internal static bool TryColor(string? value,out Color color)
     {
         color=Colors.MediumPurple;
@@ -57,13 +147,15 @@ internal sealed class DeskSpaceAppearanceV148
     internal static void Save(DeskSpaceAppearanceV148 data)
     {
         // Never advertise uncommitted preferences as active if the disk write fails.
-        var next=Sanitize(data);
+        var next=Sanitize(Clone(data));
         Directory.CreateDirectory(WorkspaceStore.Root);
         var tmp=PathName+"."+Guid.NewGuid().ToString("N")+".tmp";
         try{
             File.WriteAllText(tmp,JsonSerializer.Serialize(next));
             File.Move(tmp,PathName,true);
             cached=next;
+            try{cachedStampUtc=File.GetLastWriteTimeUtc(PathName);}catch{}
+            lastReloadProbeUtc=DateTime.UtcNow;
         }finally{if(File.Exists(tmp))File.Delete(tmp);}
     }
     internal static Color AccentColor
@@ -127,6 +219,17 @@ internal sealed class DeskSpaceVisualPresetV148
     public double Scale {get;set;}=1;
     public double Opacity {get;set;}=.96;
     public int Softness {get;set;}=16;
+    public string DonutStyle {get;set;}="LiquidGlass";
+    public string OpenTransition {get;set;}="SpringBloom";
+    public bool MixGlassFrost {get;set;}=true;
+    public bool MixNeonEdge {get;set;}
+    public bool MixFloatingGaps {get;set;}
+    public bool MixAuroraGradient {get;set;}
+    public bool MixWireframe {get;set;}
+    public bool MotionHoverLift {get;set;}=true;
+    public bool MotionHoverGlow {get;set;}=true;
+    public bool MotionStaggerRipple {get;set;}
+    public bool MotionScrollGlide {get;set;}=true;
 }
 internal static class DeskSpaceAppearancePresetsV148
 {
@@ -170,6 +273,7 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     private readonly StackPanel body=new(){Margin=new Thickness(26,25,26,28)};
     private readonly TextBlock subtitle=new(){FontSize=13,Margin=new Thickness(0,4,0,8)};
     private readonly TextBlock status=new(){FontSize=12,TextWrapping=TextWrapping.Wrap};
+    private readonly List<FrameworkElement> previewWedges=new();
     // Edits stay local to this settings window until Apply is clicked.
     private readonly List<string> pinnedDraft=new();
     private readonly ListBox pinned=new(){Height=230,MinWidth=270};
@@ -400,21 +504,83 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     private void ThemePage()
     {
         body.Children.Add(new TextBlock{Text=
-            "Colours and settings apply to DeskSpace's existing widget. "+
-            "The preview shows the compact two-ring appearance.",
+            "Customize the live donut, Applications, Information & Excel sub-donuts together. "+
+            "Pick any preset, or combine 2–3+ mix layers and transitions at once.",
             Foreground=Brushes.Gray,TextWrapping=TextWrapping.Wrap});
-        body.Children.Add(Caption("Theme style"));
+
+        body.Children.Add(Caption("Donut visual style (6 presets)"));
+        var donutStyles=new WrapPanel();
+        foreach(string id in DeskSpaceAppearanceV148.ValidDonutStyles)
+        {
+            string cap=id;
+            var b=Button(DeskSpaceDonutThemeV380.FriendlyStyleName(cap),()=>{
+                DeskSpaceAppearanceV148.ApplyDonutPresetDefaults(draft,cap);
+                ThemePageRefresh();
+            });
+            DeskSpaceDesignV283.Button(b,string.Equals(draft.DonutStyle,cap,StringComparison.OrdinalIgnoreCase));
+            donutStyles.Children.Add(b);
+        }
+        body.Children.Add(donutStyles);
+
+        body.Children.Add(Caption("Mix style layers (combine any 2–3+ at once)"));
+        var mixPanel=new WrapPanel{Margin=new Thickness(0,0,0,4)};
+        void AddMixCheck(string label,bool isOn,Action<bool> onSet)
+        {
+            var cb=new CheckBox{
+                Content=label,IsChecked=isOn,FontSize=12,Margin=new Thickness(0,2,14,6),
+                Cursor=System.Windows.Input.Cursors.Hand,
+                Foreground=DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Current.Text)};
+            cb.Checked+=(_,_)=>{onSet(true);Draw();};
+            cb.Unchecked+=(_,_)=>{onSet(false);Draw();};
+            mixPanel.Children.Add(cb);
+        }
+        AddMixCheck("Glass Frost",draft.MixGlassFrost,v=>draft.MixGlassFrost=v);
+        AddMixCheck("Neon Edge Glow",draft.MixNeonEdge,v=>draft.MixNeonEdge=v);
+        AddMixCheck("Floating Petals Gaps",draft.MixFloatingGaps,v=>draft.MixFloatingGaps=v);
+        AddMixCheck("Aurora Depth Gradient",draft.MixAuroraGradient,v=>draft.MixAuroraGradient=v);
+        AddMixCheck("Minimal Wireframe",draft.MixWireframe,v=>draft.MixWireframe=v);
+        body.Children.Add(mixPanel);
+
+        body.Children.Add(Caption("Open transition & motion effects"));
+        var transWrap=new WrapPanel();
+        foreach(string tr in DeskSpaceAppearanceV148.ValidTransitions)
+        {
+            string capTr=tr;
+            var b=Button(DeskSpaceDonutThemeV380.FriendlyTransitionName(capTr),()=>{
+                draft.OpenTransition=capTr;
+                ThemePageRefresh();
+                PlayPreviewTransition();
+            });
+            DeskSpaceDesignV283.Button(b,string.Equals(draft.OpenTransition,capTr,StringComparison.OrdinalIgnoreCase));
+            transWrap.Children.Add(b);
+        }
+        var replay=Button("↻ Replay transition",PlayPreviewTransition);
+        transWrap.Children.Add(replay);
+        body.Children.Add(transWrap);
+
+        var motionPanel=new WrapPanel{Margin=new Thickness(0,4,0,4)};
+        AddMotionCheck(motionPanel,"Radial Hover Lift",draft.MotionHoverLift,v=>draft.MotionHoverLift=v);
+        AddMotionCheck(motionPanel,"Hover Accent Glow",draft.MotionHoverGlow,v=>draft.MotionHoverGlow=v);
+        AddMotionCheck(motionPanel,"Staggered Sector Ripple",draft.MotionStaggerRipple,v=>{draft.MotionStaggerRipple=v;PlayPreviewTransition();});
+        AddMotionCheck(motionPanel,"Fluid Scroll Glide",draft.MotionScrollGlide,v=>draft.MotionScrollGlide=v);
+        body.Children.Add(motionPanel);
+
+        body.Children.Add(Caption("Base surface tone & appearance"));
         var types=new WrapPanel();
-        types.Children.Add(Button("Modern · immersive",()=>{
-            draft.Style="Modern";ThemePageRefresh();}));
-        types.Children.Add(Button("Soft pastel",()=>{draft.Style="Soft";ThemePageRefresh();}));
-        types.Children.Add(Button("Material tonal",()=>{draft.Style="Material";ThemePageRefresh();}));
+        foreach(var (label,val) in new[]{("Modern · immersive","Modern"),("Soft pastel","Soft"),("Material tonal","Material")})
+        {
+            string cap=val;
+            var b=Button(label,()=>{draft.Style=cap;ThemePageRefresh();});
+            DeskSpaceDesignV283.Button(b,string.Equals(draft.Style,cap,StringComparison.OrdinalIgnoreCase));
+            types.Children.Add(b);
+        }
         body.Children.Add(types);
-        body.Children.Add(Caption("Appearance"));
-        var modes=new WrapPanel();
+        var modes=new WrapPanel{Margin=new Thickness(0,2,0,0)};
         foreach(var type in new[]{"System","Light","Dark"}){
             var local=type;
-            modes.Children.Add(Button(type,()=>{draft.Mode=local;ThemePageRefresh();}));
+            var b=Button(type,()=>{draft.Mode=local;ThemePageRefresh();});
+            DeskSpaceDesignV283.Button(b,string.Equals(draft.Mode,local,StringComparison.OrdinalIgnoreCase));
+            modes.Children.Add(b);
         }
         body.Children.Add(modes);
         body.Children.Add(Caption("Accent colour"));
@@ -443,9 +609,24 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
             v=>draft.Opacity=v,v=>$"{v:P0}"));
         body.Children.Add(Slider("Colour softness",0,32,draft.Softness,
             v=>{draft.Softness=(int)v;Draw();},v=>$"{v:0}"));
-        body.Children.Add(Caption("Preview"));
+        body.Children.Add(Caption("Live main + sub-donut preview"));
         if(donut.Parent is Panel previous)previous.Children.Remove(donut);
         body.Children.Add(DeskSpaceDesignV283.Card(donut));Draw();
+    }
+    private void AddMotionCheck(WrapPanel host,string label,bool isOn,Action<bool> onSet)
+    {
+        var cb=new CheckBox{
+            Content=label,IsChecked=isOn,FontSize=12,Margin=new Thickness(0,2,14,6),
+            Cursor=System.Windows.Input.Cursors.Hand,
+            Foreground=DeskSpaceDesignV283.Solid(DeskSpaceDesignV283.Current.Text)};
+        cb.Checked+=(_,_)=>onSet(true);
+        cb.Unchecked+=(_,_)=>onSet(false);
+        host.Children.Add(cb);
+    }
+    private void PlayPreviewTransition()
+    {
+        Draw();
+        DeskSpaceDonutThemeV380.AnimateOpen(donut,previewWedges,145,145,-90,isSubArc:false,overrideApp:draft);
     }
     private void ThemePageRefresh(){Navigate("Theme");}
     private static FrameworkElement Slider(string label,double min,double max,
@@ -517,16 +698,28 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
                 DeskSpaceAppearancePresetsV148.Save(new DeskSpaceVisualPresetV148{
                     Name=name.Text.Trim(),Style=draft.Style,Mode=draft.Mode,
                     Accent=draft.Accent,Scale=draft.Scale,
-                    Opacity=draft.Opacity,Softness=draft.Softness});
+                    Opacity=draft.Opacity,Softness=draft.Softness,
+                    DonutStyle=draft.DonutStyle,OpenTransition=draft.OpenTransition,
+                    MixGlassFrost=draft.MixGlassFrost,MixNeonEdge=draft.MixNeonEdge,
+                    MixFloatingGaps=draft.MixFloatingGaps,MixAuroraGradient=draft.MixAuroraGradient,
+                    MixWireframe=draft.MixWireframe,MotionHoverLift=draft.MotionHoverLift,
+                    MotionHoverGlow=draft.MotionHoverGlow,MotionStaggerRipple=draft.MotionStaggerRipple,
+                    MotionScrollGlide=draft.MotionScrollGlide});
                 Navigate("Presets");status.Text="Appearance preset saved.";
             }catch(Exception ex){status.Text=ex.Message;}
         }));
         foreach(var preset in DeskSpaceAppearancePresetsV148.Load()){
             var item=preset;
-            body.Children.Add(Button(item.Name+" · "+item.Style+" · "+item.Accent,()=>{
+            body.Children.Add(Button(item.Name+" · "+DeskSpaceDonutThemeV380.FriendlyStyleName(item.DonutStyle)+" · "+item.Accent,()=>{
                 draft.Style=item.Style;draft.Mode=item.Mode;draft.Accent=item.Accent;
-                draft.Scale=item.Scale;draft.Opacity=item.Opacity;
-                draft.Softness=item.Softness;Apply();
+                draft.Scale=item.Scale;draft.Opacity=item.Opacity;draft.Softness=item.Softness;
+                draft.DonutStyle=item.DonutStyle;draft.OpenTransition=item.OpenTransition;
+                draft.MixGlassFrost=item.MixGlassFrost;draft.MixNeonEdge=item.MixNeonEdge;
+                draft.MixFloatingGaps=item.MixFloatingGaps;draft.MixAuroraGradient=item.MixAuroraGradient;
+                draft.MixWireframe=item.MixWireframe;draft.MotionHoverLift=item.MotionHoverLift;
+                draft.MotionHoverGlow=item.MotionHoverGlow;draft.MotionStaggerRipple=item.MotionStaggerRipple;
+                draft.MotionScrollGlide=item.MotionScrollGlide;
+                Apply();
                 status.Text="Applied preset "+item.Name+".";
             }));
         }
@@ -597,64 +790,69 @@ internal sealed class DeskSpaceSettingsStudioV148:Window
     private void Draw()
     {
         donut.Children.Clear();
-        var accent=DeskSpaceAppearanceV148.TryColor(draft.Accent,out var a)?a:Colors.MediumPurple;
+        previewWedges.Clear();
         var dark=DeskSpaceAppearanceV148.IsDarkFor(draft);
-        var backdrop=dark?Color.FromRgb(32,34,49):Colors.White;
-        double blend=draft.Style=="Modern"?.70:
-            draft.Style=="Material"?.78:.88;
-        blend=Math.Clamp(blend+(draft.Softness-16)*.003,.67,.94);
-        var pale=DeskSpaceAppearanceV148.Mix(accent,
-            draft.Style=="Modern"?Color.FromRgb(29,43,75):backdrop,blend);
-        var second=DeskSpaceAppearanceV148.Mix(accent,
-            draft.Style=="Modern"?Color.FromRgb(18,29,51):
-                dark?Color.FromRgb(41,43,56):Colors.White,
-            draft.Style=="Modern"?.84:
-                draft.Style=="Material"?.68:.80);
+        bool hc=SystemParameters.HighContrast;
         donut.Background=DeskSpaceDesignV283.Solid(
-            draft.Style=="Modern"?Color.FromRgb(13,23,41):
-                dark?Color.FromRgb(27,29,43):
-                    Color.FromRgb(246,246,252));
-        double radius=126*Math.Clamp(draft.Scale,.75,1.25);
+            dark || draft.DonutStyle=="NeonCyber"
+                ?Color.FromRgb(13,20,35)
+                :Color.FromRgb(236,241,250));
+        double radius=Math.Clamp(98*Math.Clamp(draft.Scale,.75,1.25),76,104);
+        double gap=DeskSpaceDonutThemeV380.GetMainGapDegrees(draft);
+        double halfAdjust=(gap-1.5)*0.5;
         for(int i=0;i<12;i++)
         {
             bool outer=i>=6;int slot=i%6;
-            double inner=outer?radius*.68:radius*.35;
-            double outerRadius=outer?radius:radius*.64;
-            double angle=-120+slot*60;
+            double inner=outer?radius*.67:radius*.36;
+            double outerRadius=outer?radius:radius*.63;
+            double a0=-120+slot*60+halfAdjust;
+            double a1=a0+60-gap-0.5;
+            bool isHov=i==6;
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(draft,hc,outer?1:0,i,false,false,isHov);
             var path=new System.Windows.Shapes.Path{
-                Data=Wedge(145,inner,outerRadius,angle+1,angle+58),
-                Fill=new SolidColorBrush(i%2==0?pale:second),
-                Stroke=dark?
-                    DeskSpaceDesignV283.Solid(Color.FromRgb(58,75,107)):
-                    Brushes.White,
-                StrokeThickness=2};
+                Data=Wedge(145,inner,outerRadius,a0,a1),
+                Fill=vis.Fill,Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,Effect=vis.Effect};
             donut.Children.Add(path);
-            var pos=Polar(145,145,(inner+outerRadius)/2,angle+29);
-            var label=new TextBlock{Text=Modules[i],FontSize=outer?10:9,
-                TextAlignment=TextAlignment.Center,Width=76,TextWrapping=TextWrapping.Wrap,
-                Foreground=new SolidColorBrush(dark?
-                    Color.FromRgb(244,242,255):Color.FromRgb(48,43,73))};
-            Canvas.SetLeft(label,pos.X-38);Canvas.SetTop(label,pos.Y-11);
+            previewWedges.Add(path);
+            var pos=Polar(145,145,(inner+outerRadius)/2,(a0+a1)/2);
+            var label=new TextBlock{Text=Modules[i],FontSize=outer?8.5:7.8,
+                TextAlignment=TextAlignment.Center,Width=62,TextWrapping=TextWrapping.Wrap,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,IsHitTestVisible=false};
+            Canvas.SetLeft(label,pos.X-31);Canvas.SetTop(label,pos.Y-9);
             donut.Children.Add(label);
         }
-        var centre=new Ellipse{Width=radius*.65,Height=radius*.65,
-            Fill=draft.Style=="Modern"?
-                DeskSpaceDesignV283.Gradient(
-                    DeskSpaceAppearanceV148.Mix(
-                        accent,Color.FromRgb(37,58,102),.55),
-                    Color.FromRgb(16,27,50),125):
-                new SolidColorBrush(accent),
-            Stroke=draft.Style=="Modern"?
-                DeskSpaceDesignV283.Solid(Color.FromRgb(114,140,205)):
-                Brushes.White,
-            StrokeThickness=3};
-        Canvas.SetLeft(centre,145-radius*.325);Canvas.SetTop(centre,145-radius*.325);
+        // Sample sub-donut arc showing live theme + mix layering on sub-donuts
+        var subItems=new[]{("Alpha Co…",false),("Beta LLP…",false),("⚙ Fields",true)};
+        double subInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(draft);
+        double subStart=-138,subStep=32;
+        for(int s=0;s<subItems.Length;s++)
+        {
+            double sa0=subStart+s*subStep+subInset;
+            double sa1=subStart+(s+1)*subStep-subInset;
+            var sVis=DeskSpaceDonutThemeV380.ResolveWedge(draft,hc,2,s,subItems[s].Item2,false,s==0);
+            var sPath=new System.Windows.Shapes.Path{
+                Data=Wedge(145,radius*1.04,radius*1.32,sa0,sa1),
+                Fill=sVis.Fill,Stroke=sVis.Stroke,StrokeThickness=sVis.StrokeThickness,Effect=sVis.Effect};
+            donut.Children.Add(sPath);
+            previewWedges.Add(sPath);
+            var sp=Polar(145,145,radius*1.18,(sa0+sa1)/2);
+            var sLbl=new TextBlock{Text=subItems[s].Item1,FontSize=8.2,Width=52,
+                FontWeight=subItems[s].Item2?FontWeights.SemiBold:FontWeights.Normal,
+                TextAlignment=TextAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,
+                Foreground=hc?SystemColors.WindowTextBrush:sVis.TextBrush,IsHitTestVisible=false};
+            Canvas.SetLeft(sLbl,sp.X-26);Canvas.SetTop(sLbl,sp.Y-7);
+            donut.Children.Add(sLbl);
+        }
+        var hubVis=DeskSpaceDonutThemeV380.ResolveHub(draft,hc);
+        var centre=new Ellipse{Width=radius*.66,Height=radius*.66,
+            Fill=hubVis.Fill,Stroke=hubVis.Stroke,StrokeThickness=hubVis.StrokeThickness,Effect=hubVis.Effect};
+        Canvas.SetLeft(centre,145-radius*.33);Canvas.SetTop(centre,145-radius*.33);
         donut.Children.Add(centre);
-        var centerText=new TextBlock{Text="DeskSpace",Width=radius*.65,
-            FontSize=12,Foreground=Brushes.White,FontWeight=FontWeights.Bold,
-            TextAlignment=TextAlignment.Center};
-        Canvas.SetLeft(centerText,145-radius*.325);
-        Canvas.SetTop(centerText,137);donut.Children.Add(centerText);
+        var centerText=new TextBlock{Text="DeskSpace",Width=radius*.66,
+            FontSize=11,Foreground=hc?SystemColors.WindowTextBrush:hubVis.TextBrush,
+            FontWeight=FontWeights.Bold,TextAlignment=TextAlignment.Center,IsHitTestVisible=false};
+        Canvas.SetLeft(centerText,145-radius*.33);
+        Canvas.SetTop(centerText,138);donut.Children.Add(centerText);
     }
     private void Apply()
     {

@@ -28,6 +28,8 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     private readonly DeskSpaceMiddleScrollV63.Controller middleScroll;
     private readonly List<(int Index,Guid? Id,Geometry Hit)> hitZones=new();
     private readonly List<System.Windows.Shapes.Path> sectors=new();
+    private readonly List<(List<UIElement> LinkedVisuals,TextBlock Label,bool IsTruncated,string FullName,string? Badge,double MidAngle,Point OuterAnchor,bool IsAction)> rootWedgeVisualsV380=new();
+    private readonly DeskSpaceDonutThemeV380.SubDonutCalloutPillV380 calloutPill;
     // Existing field contains ONLY information/header-value templates.
     private List<DeskSpaceExcelTemplateV16> formats=new();
     private List<DeskSpaceExcelTemplateV16> formatTemplatesV130=new();
@@ -93,6 +95,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         internal readonly List<(string Label,string Command,string Group,Guid? Id)> Items=new();
         internal readonly List<Geometry> Zones=new();
         internal readonly List<System.Windows.Shapes.Path> Wedges=new();
+        internal readonly List<(List<UIElement> LinkedVisuals,TextBlock Label,bool IsTruncated,string FullName,string? Badge,double MidAngle,Point OuterAnchor,bool IsAction)> VisualsV380=new();
         internal int Start,Hovered=-1;
         internal readonly DeskSpaceSubDonutStandardV62.Wheel Wheel=new();
         internal bool SuppressNextUp;
@@ -171,9 +174,44 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     public bool IsPasting=>pasting;
     public int SavedCount=>formats.Count+formatTemplatesV130.Count;
 
+    internal bool IsPointerNearArc()
+    {
+        if(disposed || !arc.IsOpen || !canvas.IsLoaded)return false;
+        try
+        {
+            var pt=DeskSpaceWheelHoverV35.MouseIn(canvas);
+            if(pt.X>=-26 && pt.X<=canvas.Width+26 && pt.Y>=-26 && pt.Y<=canvas.Height+26)
+                return true;
+            foreach(var ring in childRings.ToArray())
+            {
+                if(!ring.Popup.IsOpen || !ring.Surface.IsLoaded)continue;
+                var rp=DeskSpaceWheelHoverV35.MouseIn(ring.Surface);
+                if(rp.X>=-26 && rp.X<=ring.Surface.Width+26 && rp.Y>=-26 && rp.Y<=ring.Surface.Height+26)
+                    return true;
+            }
+            return false;
+        }
+        catch(InvalidOperationException){return false;}
+    }
+
+    internal void RefreshThemeV380()
+    {
+        if(disposed || !arc.IsOpen)return;
+        var savedRings=childRings.Where(r=>r.Popup.IsOpen).ToList();
+        Render();
+        foreach(var oldRing in savedRings)
+        {
+            if(oldRing.Depth==1)
+            {
+                ExpandRing(oldRing.Depth,oldRing.Group,oldRing.Angle,oldRing.ParentSweep);
+            }
+        }
+    }
+
     public DeskSpaceExcelWheelV42(Window window,Action onCommit)
     {
         owner=window;collapseParent=onCommit;
+        calloutPill=new DeskSpaceDonutThemeV380.SubDonutCalloutPillV380(owner);
         canvas=new Canvas{Width=300,Height=240,
             Background=null,Focusable=true};
         canvas.PreviewMouseLeftButtonDown+=OnDown;
@@ -293,6 +331,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
 
     private void CloseFrom(int depth)
     {
+        calloutPill.Hide();
         drillTimer.Stop();drillSlot=-1;drillDepth=-1;
         foreach(var ring in childRings.Where(r=>r.Depth>=depth).ToArray())
         {
@@ -365,9 +404,23 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             e.Handled=true;
         };
         ring.Popup.IsOpen=true;
+        if(!ring.Bounds.IsEmpty)
+        {
+            DeskSpaceDonutThemeV380.AnimateOpen(
+                ring.Surface,
+                ring.Wedges.Cast<FrameworkElement>().ToArray(),
+                DeskSpaceSubArcGeometryV48.CX-ring.Bounds.Left+10,
+                DeskSpaceSubArcGeometryV48.CY-ring.Bounds.Top+10,
+                ring.Angle,isSubArc:true);
+        }
     }
     private void RenderRing(ChildRing ring)
     {
+        calloutPill.Hide();
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(themeApp);
         var all=BranchItems(ring.Group);
         if(ring.Depth>8)
             throw new InvalidOperationException(
@@ -375,7 +428,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         ring.Start=Math.Clamp(ring.Start,0,Math.Max(0,all.Count-PerPage));
         ring.Items.Clear();
         ring.Items.AddRange(all.Skip(ring.Start).Take(PerPage));
-        ring.Surface.Children.Clear();ring.Zones.Clear();ring.Wedges.Clear();
+        ring.Surface.Children.Clear();ring.Zones.Clear();ring.Wedges.Clear();ring.VisualsV380.Clear();
         ring.Hovered=-1;
         int count=ring.Items.Count;
         if(count==0)return;
@@ -388,9 +441,12 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         ring.StepAngle=2*half/count;
         var shapes=new List<Geometry>();
         for(int i=0;i<count;i++)
-            shapes.Add(DeskSpaceSubArcGeometryV48.Sector(
-                ring.Depth,ring.StartAngle+i*ring.StepAngle,
-                ring.StartAngle+(i+1)*ring.StepAngle));
+        {
+            double a0=ring.StartAngle+i*ring.StepAngle;
+            double a1=ring.StartAngle+(i+1)*ring.StepAngle;
+            double g=(a1-a0)>gapInset*2.5?gapInset:0;
+            shapes.Add(DeskSpaceSubArcGeometryV48.Sector(ring.Depth,a0+g,a1-g));
+        }
         ring.Bounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
         const double margin=10;
         ring.OriginX=ring.Bounds.Left;ring.OriginY=ring.Bounds.Top;
@@ -399,10 +455,12 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         for(int i=0;i<count;i++)
         {
             var item=ring.Items[i];
+            bool isAction=item.Command!="mapping" && item.Command!="format";
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,ring.Depth+2,i,isAction,false,false);
             var hit=DeskSpaceSubArcGeometryV48.Clip(shapes[i],ring.Bounds);
             var wedge=new System.Windows.Shapes.Path{
-                Data=hit,Stroke=Brushes.White,StrokeThickness=2,
-                Fill=item.Command=="mapping"?Idle:Accent,
+                Data=hit,Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,
+                Fill=vis.Fill,Effect=vis.Effect,
                 Cursor=Cursors.Hand,ToolTip=item.Label
             };
             ring.Surface.Children.Add(wedge);
@@ -411,9 +469,10 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             var p=DeskSpaceSubArcGeometryV48.Polar(
                 (DeskSpaceSubArcGeometryV48.Inner(ring.Depth)+
                  DeskSpaceSubArcGeometryV48.Outer(ring.Depth))/2,middle);
+            FontWeight fw=isAction?FontWeights.SemiBold:FontWeights.Normal;
             var label=new TextBlock{
-                Text=item.Label,Width=80,FontSize=10,
-                Foreground=item.Command=="mapping"?Ink:Brushes.White,
+                Text=item.Label,Width=80,FontSize=10,FontWeight=fw,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
                 TextAlignment=TextAlignment.Center,
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 ToolTip=item.Label,IsHitTestVisible=false
@@ -423,6 +482,14 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             Canvas.SetTop(label,DeskSpaceSubArcGeometryV48.CY+p.Y-
                 ring.Bounds.Top+margin-9);
             ring.Surface.Children.Add(label);
+
+            bool isTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                item.Label,80,20,10,fw,wraps:false);
+            var outerPt=DeskSpaceSubArcGeometryV48.Polar(DeskSpaceSubArcGeometryV48.Outer(ring.Depth),middle);
+            Point outerAnchor=new(DeskSpaceSubArcGeometryV48.CX+outerPt.X-ring.Bounds.Left+margin,
+                                  DeskSpaceSubArcGeometryV48.CY+outerPt.Y-ring.Bounds.Top+margin);
+            string? badge=item.Command=="format"?"FORMAT":(item.Command=="mapping"?"TEMPLATE":null);
+            ring.VisualsV380.Add((new List<UIElement>{wedge,label},label,isTrunc,item.Label,badge,middle,outerAnchor,isAction));
         }
         var scrollView=DeskSpaceSubDonutStandardV62.Plan(
             all.Count,ring.Start,centre);
@@ -461,9 +528,30 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         // Hovering a sibling only closes deeper descendants of this ring.
         CloseFrom(ring.Depth+1);
         ring.Hovered=slot;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
         for(int i=0;i<ring.Wedges.Count;i++)
-            ring.Wedges[i].Fill=i==slot?Selected:
-                (ring.Items[i].Command=="mapping"?Idle:Accent);
+        {
+            bool hov=i==slot;
+            bool isAction=i<ring.VisualsV380.Count
+                ?ring.VisualsV380[i].IsAction
+                :(ring.Items[i].Command!="mapping" && ring.Items[i].Command!="format");
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,ring.Depth+2,i,isAction,false,hov);
+            ring.Wedges[i].Fill=vis.Fill;
+            ring.Wedges[i].Stroke=vis.Stroke;
+            ring.Wedges[i].StrokeThickness=vis.StrokeThickness;
+            ring.Wedges[i].Effect=vis.Effect;
+            if(i<ring.VisualsV380.Count)
+            {
+                var rv=ring.VisualsV380[i];
+                rv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                DeskSpaceDonutThemeV380.ApplyHoverLift(rv.LinkedVisuals,hov,rv.MidAngle,themeApp);
+            }
+        }
+        if(slot>=0 && slot<ring.VisualsV380.Count && ring.VisualsV380[slot].IsTruncated)
+            calloutPill.Show(ring.Surface,ring.VisualsV380[slot].OuterAnchor,ring.VisualsV380[slot].MidAngle,ring.VisualsV380[slot].FullName,ring.VisualsV380[slot].Badge);
+        else
+            calloutPill.Hide();
         if(slot<0)return;
         var entry=ring.Items[slot];
         if(entry.Command=="group")
@@ -569,6 +657,15 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             Render();
             Position();
             arc.IsOpen=true;
+            if(!rootBounds.IsEmpty)
+            {
+                DeskSpaceDonutThemeV380.AnimateOpen(
+                    canvas,
+                    sectors.Cast<FrameworkElement>().ToArray(),
+                    DeskSpaceSubArcGeometryV48.CX-rootBounds.Left+10,
+                    DeskSpaceSubArcGeometryV48.CY-rootBounds.Top+10,
+                    ArcCenter,isSubArc:true);
+            }
             pointerTimer.Start();
             excelTimer.Start();
             lastExcelState=null;
@@ -581,6 +678,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     public void HideArc()
     {
+        calloutPill.Hide();
         middleScroll.Stop();
         pointerTimer.Stop();edgeTimer.Stop();drillTimer.Stop();excelTimer.Stop();drillSlot=-1;drillDepth=-1;pageDirection=0;
         CloseFrom(1);
@@ -635,9 +733,14 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
     }
     private void Render()
     {
+        calloutPill.Hide();
+        DeskSpaceAppearanceV148.ReloadIfChanged();
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
+        double gapInset=DeskSpaceDonutThemeV380.GetSubArcGapInset(themeApp);
         drillTimer.Stop();drillSlot=-1;drillDepth=-1;
         CloseFrom(1);
-        canvas.Children.Clear();sectors.Clear();hitZones.Clear();displayed.Clear();
+        canvas.Children.Clear();sectors.Clear();hitZones.Clear();displayed.Clear();rootWedgeVisualsV380.Clear();
         hovered=-1;
         var all=Entries();
         start=Math.Clamp(start,0,Math.Max(0,all.Count-PerPage));
@@ -651,9 +754,12 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         rootStep=2*half/count;
         var shapes=new List<Geometry>();
         for(int i=0;i<count;i++)
-            shapes.Add(DeskSpaceSubArcGeometryV48.Sector(
-                0,rootStartAngle+i*rootStep,
-                rootStartAngle+(i+1)*rootStep));
+        {
+            double a0=rootStartAngle+i*rootStep;
+            double a1=rootStartAngle+(i+1)*rootStep;
+            double g=(a1-a0)>gapInset*2.5?gapInset:0;
+            shapes.Add(DeskSpaceSubArcGeometryV48.Sector(0,a0+g,a1-g));
+        }
         rootBounds=DeskSpaceSubArcGeometryV48.Bounds(shapes);
         const double margin=10;
         canvas.Width=rootBounds.Width+2*margin;
@@ -661,10 +767,12 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         for(int i=0;i<count;i++)
         {
             var item=displayed[i];
+            bool isAction=item.Command!="mapping" && item.Command!="format";
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,2,i,isAction,false,false);
             var hit=DeskSpaceSubArcGeometryV48.Clip(shapes[i],rootBounds);
             var wedge=new System.Windows.Shapes.Path{
-                Data=hit,Stroke=Brushes.White,StrokeThickness=2,
-                Fill=item.Command=="mapping"?Idle:Accent,
+                Data=hit,Stroke=vis.Stroke,StrokeThickness=vis.StrokeThickness,
+                Fill=vis.Fill,Effect=vis.Effect,
                 Tag=i,Cursor=Cursors.Hand,ToolTip=item.Label
             };
             canvas.Children.Add(wedge);sectors.Add(wedge);
@@ -673,9 +781,10 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             var p=DeskSpaceSubArcGeometryV48.Polar(
                 (DeskSpaceSubArcGeometryV48.Inner(0)+
                  DeskSpaceSubArcGeometryV48.Outer(0))/2,angle);
+            FontWeight fw=isAction?FontWeights.SemiBold:FontWeights.Normal;
             var label=new TextBlock{
-                Text=item.Label,Width=80,FontSize=10,
-                Foreground=item.Command=="mapping"?Ink:Brushes.White,
+                Text=item.Label,Width=80,FontSize=10,FontWeight=fw,
+                Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush,
                 TextAlignment=TextAlignment.Center,
                 TextTrimming=TextTrimming.CharacterEllipsis,
                 ToolTip=item.Label,IsHitTestVisible=false
@@ -685,6 +794,14 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
             Canvas.SetTop(label,DeskSpaceSubArcGeometryV48.CY+
                 p.Y-rootBounds.Top+margin-9);
             canvas.Children.Add(label);
+
+            bool isTrunc=DeskSpaceDonutThemeV380.SubDonutCalloutPillV380.IsLabelTruncated(
+                item.Label,80,20,10,fw,wraps:false);
+            var outerPt=DeskSpaceSubArcGeometryV48.Polar(DeskSpaceSubArcGeometryV48.Outer(0),angle);
+            Point outerAnchor=new(DeskSpaceSubArcGeometryV48.CX+outerPt.X-rootBounds.Left+margin,
+                                  DeskSpaceSubArcGeometryV48.CY+outerPt.Y-rootBounds.Top+margin);
+            string? badge=item.Command=="format"?"FORMAT":(item.Command=="mapping"?"TEMPLATE":null);
+            rootWedgeVisualsV380.Add((new List<UIElement>{wedge,label},label,isTrunc,item.Label,badge,angle,outerAnchor,isAction));
         }
         var scrollView=DeskSpaceSubDonutStandardV62.Plan(all.Count,start,ArcCenter);
         DeskSpaceSubDonutStandardV62.DrawHiddenCounters(
@@ -743,10 +860,34 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         drillTimer.Stop();drillSlot=-1;drillDepth=-1;
         if(slot>=0)CloseFrom(1);
         hovered=slot;
+        var themeApp=DeskSpaceAppearanceV148.Current;
+        bool hc=SystemParameters.HighContrast;
         for(int i=0;i<sectors.Count;i++)
         {
-            bool command=displayed[i].Command!="mapping";
-            sectors[i].Fill=i==slot?Selected:(command?Accent:Idle);
+            bool hov=i==slot;
+            bool isAction=i<rootWedgeVisualsV380.Count
+                ?rootWedgeVisualsV380[i].IsAction
+                :(displayed[i].Command!="mapping" && displayed[i].Command!="format");
+            var vis=DeskSpaceDonutThemeV380.ResolveWedge(themeApp,hc,2,i,isAction,false,hov);
+            sectors[i].Fill=vis.Fill;
+            sectors[i].Stroke=vis.Stroke;
+            sectors[i].StrokeThickness=vis.StrokeThickness;
+            sectors[i].Effect=vis.Effect;
+            if(i<rootWedgeVisualsV380.Count)
+            {
+                var rv=rootWedgeVisualsV380[i];
+                rv.Label.Foreground=hc?SystemColors.WindowTextBrush:vis.TextBrush;
+                DeskSpaceDonutThemeV380.ApplyHoverLift(rv.LinkedVisuals,hov,rv.MidAngle,themeApp);
+            }
+        }
+        if(slot>=0 && slot<rootWedgeVisualsV380.Count && rootWedgeVisualsV380[slot].IsTruncated)
+            calloutPill.Show(canvas,rootWedgeVisualsV380[slot].OuterAnchor,rootWedgeVisualsV380[slot].MidAngle,rootWedgeVisualsV380[slot].FullName,rootWedgeVisualsV380[slot].Badge);
+        else
+            calloutPill.Hide();
+        if(slot<0)
+        {
+            foreach(var r in childRings.ToArray())
+                if(r.Hovered>=0)HoverRing(r,new Point(-9999,-9999));
         }
         if(slot<0||slot>=displayed.Count)return;
         var item=displayed[slot];
@@ -1079,6 +1220,7 @@ internal sealed class DeskSpaceExcelWheelV42 : IDisposable
         owner.LocationChanged-=OnOwnerMoved;
         owner.SizeChanged-=OnOwnerResized;
         CloseFrom(1);
+        calloutPill.Dispose();
         arc.IsOpen=false;shelf.IsOpen=false;
     }
 }

@@ -460,7 +460,10 @@ internal static class DeskSpaceSubDonutStandardV62
         double centerAngle)
     {
         if(direction==0)return;
-        if(!DeskSpaceReducedMotionV209.Enabled())
+        var app=DeskSpaceAppearanceV148.Current;
+        if(!DeskSpaceReducedMotionV209.Enabled() ||
+           !app.MotionScrollGlide ||
+           string.Equals(app.OpenTransition,"Instant",StringComparison.OrdinalIgnoreCase))
         {
             DeskSpaceReducedMotionV209.Reset(canvas);
             return;
