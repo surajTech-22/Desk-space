@@ -1934,8 +1934,28 @@ internal static class Program
                 string qrJson = extraOnlyOne != null ? $"\"Quarterly_Return\":\"{extraOnlyOne}\"," : "\"Quarterly_Return\":\" \",";
                 row2[30] = $"{{\"Legal_name\":\"{legalName}\",\"Taxpayer_type\":\"{dealerType}\",\"GSTIN\":\"{gstin}\",\"Trade_Name\":\"{tradeName}\",\"State\":\"GSTIN\",\"Mobile_number\":\"{mobile}\",\"EMail_ID\":\"info@example.in\",{qrJson}\"Fin_Year\":\"{fy}\",\"MISPriority\":\"Original\",\"Created_by_PC_User\":\"CA-ADMIN\"}}";
 
+                var rowCmpMfg = new string?[35];
+                rowCmpMfg[0] = "GSTComposition+ 3";
+                rowCmpMfg[1] = "GSTR_CMP_Quarter+1";
+                rowCmpMfg[2] = "Manufacturer / Supplier (other than below)";
+                rowCmpMfg[3] = "1.00";
+                rowCmpMfg[4] = "1";
+                rowCmpMfg[5] = "1,56,300.00";
+                rowCmpMfg[7] = @"\781.50\781.50\\1,563.00\";
+                rowCmpMfg[10] = "5.30.08.00.00.00";
+                rowCmpMfg[24] = "UNHIDE";
+
+                var rowCmpTax = new string?[35];
+                rowCmpTax[0] = "GSTComposition+ 3";
+                rowCmpTax[1] = "GSTR_CMP_Quarter+1";
+                rowCmpTax[2] = "Total Tax payable";
+                rowCmpTax[6] = "14,600.00";
+                rowCmpTax[7] = @"\18,731.50\18,731.50\1,000.00\53,063.00\";
+                rowCmpTax[10] = "5.30.30.00.00.00";
+                rowCmpTax[24] = "UNHIDE";
+
                 using var ms = new MemoryStream();
-                foreach (var r in new[] { row0, row1, row2 })
+                foreach (var r in new[] { row0, row1, row2, rowCmpMfg, rowCmpTax })
                 {
                     byte[] enc = (byte[])buildWinmanRec.Invoke(null, new object[] { r })!;
                     ms.Write(enc, 0, enc.Length);
@@ -1968,6 +1988,9 @@ internal static class Program
             var matchedHeaders = ((IEnumerable)GetProp<object>(pairRes, "MatchedHeaders")).Cast<object>()
                 .Select(h => GetProp<string>(h, "Header"))
                 .ToList();
+            var defaultVisibleHeaders = GetProp<IReadOnlyList<string>>(pairRes, "VisibleHeaders");
+            Check(defaultVisibleHeaders.Count == matchedHeaders.Count,
+                $"All discovered >= 2 matched headers should be visible by default, got {defaultVisibleHeaders.Count}/{matchedHeaders.Count}");
             Check(matchedHeaders.Contains("Legal Name") &&
                   matchedHeaders.Contains("Trade Name") &&
                   matchedHeaders.Contains("GSTIN") &&
@@ -1980,6 +2003,8 @@ internal static class Program
                   matchedHeaders.Contains("Filing Type") &&
                   matchedHeaders.Contains("Mobile Number") &&
                   matchedHeaders.Contains("Email ID") &&
+                  matchedHeaders.Contains("Manufacturer / Supplier (other than below)") &&
+                  matchedHeaders.Contains("Total Tax Payable") &&
                   matchedHeaders.Contains("Created By User") &&
                   !matchedHeaders.Contains("Quarterly Return"),
                 $"Winman GST >= 2 matched headers mismatch: [{string.Join(", ", matchedHeaders)}]");
@@ -1992,8 +2017,11 @@ internal static class Program
                   alphaFields["PAN"] == "AABCA1234F" &&
                   alphaFields["State & State Code"] == "29 · Karnataka" &&
                   alphaFields["Financial Year"] == "2025-2026" &&
-                  alphaFields["Return Form"] == "GSTR-3B",
-                "Inside-file .wgst header decoding must recover Legal Name, Trade Name, GSTIN, PAN, State, Financial Year, and Return Form");
+                  alphaFields["Return Form"] == "GSTR-3B" &&
+                  alphaFields["Manufacturer / Supplier (other than below)"].Contains("1,56,300.00") &&
+                  alphaFields["Manufacturer / Supplier (other than below)"].Contains("Total Tax: 1,563.00") &&
+                  alphaFields["Total Tax Payable"].Contains("53,063.00"),
+                "Inside-file .wgst header decoding must recover Legal Name, Trade Name, GSTIN, PAN, State, Financial Year, Return Form, and inside-file GST schedule breakdowns");
 
             // 4. User header visibility selection persistence and filtering
             var customVisible = new[] { "Legal Name", "GSTIN", "Financial Year" };
@@ -2043,8 +2071,23 @@ internal static class Program
                 r2[10] = "0.01.00.00.00.00";
                 r2[30] = $"{{\"Name\":\"{name}\",\"Father_name\":\"{father}\",\"PAN\":\"{pan}\",\"Status\":\"{status}\",\"Asstyear\":\"{ay}\",\"DOB__DOI__DOF\":\"{dob}\",\"Mobile_Number\":\"{mobile}\",\"City\":\"{city}\",\"Pincode\":\"{pin}\",\"Gross_Total_Income\":\"{gti}\",\"Net_Tax\":\"{netTax}\",\"MISPriority\":\"Original\"}}";
 
+                var rEmp = new string?[35];
+                rEmp[0] = "MAIN";
+                rEmp[1] = "-";
+                rEmp[2] = "Employer-1: Orbit Tech";
+                rEmp[3] = "Entered";
+                rEmp[10] = "1.01.01.00.00.00";
+                rEmp[24] = "-";
+
+                var rStd = new string?[35];
+                rStd[0] = "MAIN";
+                rStd[2] = "Standard deduction u/s 16(ia)";
+                rStd[4] = "50,000";
+                rStd[10] = "1.03.01.00.00.00";
+                rStd[24] = "-";
+
                 using var ms = new MemoryStream();
-                foreach (var r in new[] { r0, r1, r2 })
+                foreach (var r in new[] { r0, r1, r2, rEmp, rStd })
                 {
                     byte[] enc = (byte[])buildWinmanRec.Invoke(null, new object[] { r })!;
                     ms.Write(enc, 0, enc.Length);
@@ -2073,7 +2116,9 @@ internal static class Program
                   taxHeaders.Contains("State") &&
                   taxHeaders.Contains("PIN Code") &&
                   taxHeaders.Contains("Gross Total Income") &&
-                  taxHeaders.Contains("Net Tax"),
+                  taxHeaders.Contains("Net Tax") &&
+                  taxHeaders.Contains("Employer-1") &&
+                  taxHeaders.Contains("Standard deduction u/s 16(ia)"),
                 $"Winman .tax >= 2 matched headers mismatch: [{string.Join(", ", taxHeaders)}]");
         }
         finally

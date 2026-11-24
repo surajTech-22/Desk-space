@@ -111,7 +111,7 @@ internal static class DeskSpaceInformationTabV380
         System.IO.Path.Combine(WorkspaceStore.Root, "information-items-v22.json");
 
     internal static string DefaultAppInfoPreferencesPath =>
-        System.IO.Path.Combine(WorkspaceStore.Root, "app-information-preferences-v380.json");
+        System.IO.Path.Combine(WorkspaceStore.Root, "app-information-preferences-v381.json");
 
     private static readonly object PreferencesLock = new();
 
@@ -724,7 +724,7 @@ internal static class DeskSpaceInformationTabV380
         kindBadge = isGst ? "Winman GST (.WGST)" : "Winman Income Tax (.TAX)";
 
         using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        int toRead = (int)Math.Min(131072, fs.Length);
+        int toRead = (int)Math.Min(4 * 1024 * 1024, fs.Length);
         if (toRead < 70)
             return false;
 
@@ -745,9 +745,11 @@ internal static class DeskSpaceInformationTabV380
 
         var jsonMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var scheduleTotals = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var scheduleRows = new List<KeyValuePair<string, string>>();
         string[]? row9 = null;
+        string currentSection = string.Empty;
 
-        for (int r = 1; r <= 240 && pos + 70 <= totalRead; r++)
+        for (int r = 1; r <= 1200 && pos + 70 <= totalRead; r++)
         {
             if (!TryReadWinmanClientInfoRecord(buf, totalRead, pos, out string[] row, out pos))
                 break;
@@ -766,36 +768,70 @@ internal static class DeskSpaceInformationTabV380
             {
                 row9 = row;
             }
-            else if (r > 2)
+
+            if (r > 2)
             {
                 string idxCode = row[10];
                 string rowLabel = row[2];
                 if (isGst)
                 {
-                    if (idxCode == "5.30.16.00.00.00" && !string.IsNullOrWhiteSpace(row[4]) && row[4] != "-")
-                        scheduleTotals["Outward Supplies"] = row[4];
-                    else if (idxCode == "5.30.28.00.00.00" && !string.IsNullOrWhiteSpace(row[4]) && row[4] != "-")
-                        scheduleTotals["Inward Supplies"] = row[4];
+                    if (idxCode == "5.30.16.00.00.00")
+                    {
+                        string outVal = FormatWinmanGstCmpRowValue(row, isOutward: true, isTaxSummary: false);
+                        if (!string.IsNullOrEmpty(outVal))
+                            scheduleTotals["Outward Supplies"] = outVal;
+                    }
+                    else if (idxCode == "5.30.28.00.00.00")
+                    {
+                        string inVal = FormatWinmanGstCmpRowValue(row, isOutward: false, isTaxSummary: false);
+                        if (!string.IsNullOrEmpty(inVal))
+                            scheduleTotals["Inward Supplies"] = inVal;
+                    }
                     else if (idxCode == "5.30.30.00.00.00" || rowLabel.Equals("Total Tax payable", StringComparison.OrdinalIgnoreCase))
                     {
-                        string taxTot = ExtractLastBackslashCurrency(row[4], row[3]);
+                        string taxTot = FormatWinmanGstCmpRowValue(row, isOutward: false, isTaxSummary: true);
+                        if (string.IsNullOrEmpty(taxTot))
+                            taxTot = ExtractLastBackslashCurrency(row[7], row[6], row[4], row[3]);
                         if (!string.IsNullOrEmpty(taxTot))
                             scheduleTotals["Total Tax Payable"] = taxTot;
                     }
                     else if (idxCode == "5.30.34.00.00.00" || rowLabel.Equals("Tax & Interest payable", StringComparison.OrdinalIgnoreCase))
                     {
-                        string taxInt = ExtractLastBackslashCurrency(row[4], row[3]);
+                        string taxInt = FormatWinmanGstCmpRowValue(row, isOutward: false, isTaxSummary: true);
+                        if (string.IsNullOrEmpty(taxInt))
+                            taxInt = ExtractLastBackslashCurrency(row[7], row[6], row[4], row[3]);
                         if (!string.IsNullOrEmpty(taxInt))
                             scheduleTotals["Tax & Interest Payable"] = taxInt;
                     }
                 }
+
+                TryCollectWinmanScheduleRow(row, isGst, ref currentSection, scheduleRows);
             }
         }
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var mappedJsonKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "FeatureCount", "FilePath1", "Sort_priority", "State"
+        };
+
+        var collectedFields = fields;
+        void AddJsonField(string jsonKey, string headerName)
+        {
+            mappedJsonKeys.Add(jsonKey);
+            if (jsonMap.TryGetValue(jsonKey, out string? jv) && !string.IsNullOrWhiteSpace(jv) && jv != "0")
+                AddFieldIfValid(collectedFields, seen, headerName, jv);
+        }
 
         if (isGst)
         {
+            mappedJsonKeys.UnionWith(new[]
+            {
+                "Legal_name", "Trade_Name", "Taxpayer_type", "GSTIN", "Fin_Year",
+                "MISPriority", "Mobile_number", "EMail_ID", "Address", "Quarterly_Return",
+                "Created_by_PC_User", "Modified_by_PC_User"
+            });
+
             string legalName = jsonMap.TryGetValue("Legal_name", out string? jLegal) && !string.IsNullOrWhiteSpace(jLegal)
                 ? jLegal
                 : row0[15];
@@ -855,6 +891,9 @@ internal static class DeskSpaceInformationTabV380
             foreach (var kv in scheduleTotals)
                 AddFieldIfValid(fields, seen, kv.Key, kv.Value);
 
+            foreach (var kv in scheduleRows)
+                AddFieldIfValid(fields, seen, kv.Key, kv.Value);
+
             string? createdBy = jsonMap.TryGetValue("Created_by_PC_User", out string? jCb) ? jCb : (row9?[14]);
             string? modifiedBy = jsonMap.TryGetValue("Modified_by_PC_User", out string? jMb) ? jMb : (row9?[15]);
             AddFieldIfValid(fields, seen, "Created By User", createdBy);
@@ -865,6 +904,20 @@ internal static class DeskSpaceInformationTabV380
         }
         else
         {
+            mappedJsonKeys.UnionWith(new[]
+            {
+                "Name", "Father_name", "PAN", "Status", "Asstyear", "DOB__DOI__DOF",
+                "Residential_Status", "Mobile_Number", "Telephone_No", "Email_ID",
+                "Aadhar_No", "Address", "Area", "City", "Pincode", "Password_OF_ITR_V",
+                "Due_date", "Tax_audit_case", "Category", "GSTIN", "Salary", "House_Property",
+                "Business", "Capital_Gain", "Other_Sources", "Gross_Total_Income",
+                "Deduction_U__C_VIA", "Total_Income__Loss", "Tax_on_Total_Income",
+                "Rebate_and_Relief", "Net_Tax", "TDS", "Advance_Tax_paid",
+                "Self_asst_tax_paid", "Tax_Payable__Refund",
+                "Gross_Receipts_excluding_44AE_income", "MISPriority",
+                "Created_by_PC_User", "Modified_by_PC_User"
+            });
+
             string assesseeName = jsonMap.TryGetValue("Name", out string? jName) && !string.IsNullOrWhiteSpace(jName)
                 ? jName
                 : row0[15];
@@ -919,6 +972,7 @@ internal static class DeskSpaceInformationTabV380
             AddFieldIfValid(fields, seen, "Assessment Year", asstYear);
             AddFieldIfValid(fields, seen, "Date of Birth / Incorporation", dob);
             AddFieldIfValid(fields, seen, "Residential Status", resStatus);
+            AddJsonField("Senior_Citizen", "Senior Citizen");
             AddFieldIfValid(fields, seen, "Mobile Number", mobile);
             if (jsonMap.TryGetValue("Telephone_No", out string? jTel))
                 AddFieldIfValid(fields, seen, "Telephone Number", jTel);
@@ -934,10 +988,12 @@ internal static class DeskSpaceInformationTabV380
             if (jsonMap.TryGetValue("Password_OF_ITR_V", out string? jItrPw))
                 AddFieldIfValid(fields, seen, "ITR-V Password", jItrPw);
             AddFieldIfValid(fields, seen, "Return Due Date", dueDate);
+            AddJsonField("Tax_Audit", "Tax Audit Applicability");
             if (jsonMap.TryGetValue("Tax_audit_case", out string? jAudit))
                 AddFieldIfValid(fields, seen, "Tax Audit Case", jAudit);
             if (jsonMap.TryGetValue("Category", out string? jCat))
                 AddFieldIfValid(fields, seen, "Audit Category", jCat);
+            AddJsonField("Taxation_under_Old_regime", "Taxation Under Old Regime");
             if (jsonMap.TryGetValue("GSTIN", out string? jGstin))
             {
                 var (cleanGstin, _, _) = ParseGstinComponents(jGstin);
@@ -973,8 +1029,13 @@ internal static class DeskSpaceInformationTabV380
                 AddFieldIfValid(fields, seen, "Self-Assessment Tax Paid", jSa);
             if (jsonMap.TryGetValue("Tax_Payable__Refund", out string? jRef))
                 AddFieldIfValid(fields, seen, "Tax Payable / Refund", jRef);
+            AddJsonField("Net_balance_tax", "Net Balance Tax");
             if (jsonMap.TryGetValue("Gross_Receipts_excluding_44AE_income", out string? jGr))
                 AddFieldIfValid(fields, seen, "Gross Receipts", jGr);
+
+            foreach (var kv in scheduleRows)
+                AddFieldIfValid(fields, seen, kv.Key, kv.Value);
+
             AddFieldIfValid(fields, seen, "Filing Type", filingType);
             if (jsonMap.TryGetValue("Created_by_PC_User", out string? jCb))
                 AddFieldIfValid(fields, seen, "Created By User", jCb);
@@ -985,12 +1046,304 @@ internal static class DeskSpaceInformationTabV380
             AddFieldIfValid(fields, seen, "Winman Version", row0[27]);
         }
 
+        // Include any remaining unmapped JSON summary keys
+        foreach (var kv in jsonMap)
+        {
+            if (mappedJsonKeys.Contains(kv.Key) || kv.Value == "0")
+                continue;
+            string prettyHeader = Regex.Replace(kv.Key.Replace("__", " / ").Replace('_', ' '), @"\s+", " ").Trim();
+            if (prettyHeader.Length >= 2)
+                AddFieldIfValid(fields, seen, prettyHeader, kv.Value);
+        }
+
         return fields.Count >= 2;
     }
 
-    private static string ExtractLastBackslashCurrency(string primary, string fallback)
+    private static readonly HashSet<string> WinmanIgnoredColumnTitleValues = new(StringComparer.OrdinalIgnoreCase)
     {
-        foreach (string candidate in new[] { primary, fallback })
+        "GSTIN", "PAN", "State", "Address", "Tax Rate(%)", "Rate of Tax(%)", "Taxable value",
+        "Total Taxable Value", "IGST", "Central Tax", "State Tax", "Cess", "Total Tax",
+        "Customer Name", "Supplier Name", "State of supply", "State of Supply", "Invoice Date",
+        "Invoice No.", "Invoice Value", "Reverse Charge", "Received", "Exempt", "Taxable",
+        "Gross", "Value", "Recovered", "Net value", "April", "May", "June", "July",
+        "Turnover/Receipts", "Profit", "Interest", "Inter-State", "Within State", "Total",
+        "IGST ITC", "Central Tax ITC", "State Tax ITC", "Cess ITC",
+        "PAN / Aadhaar No.", "% Share in Property", "For PF included ?", "PF %",
+        "Return filing stage", "e-Return Upload", "Prepare online", "Reconcile",
+        "Download GSTR-2A", "Download GSTR-2B", "Entered", "Prepared by", "Approved by",
+        "CAPITAL GAINS", "Old Regime"
+    };
+
+    private static string FormatWinmanGstCmpRowValue(string[] row, bool isOutward, bool isTaxSummary)
+    {
+        string taxable = row[5].Trim();
+        string igst = row[6].Trim();
+        string[] more = row[7].Split('\\');
+        string cgst = more.Length > 1 ? more[1].Trim() : string.Empty;
+        string sgst = more.Length > 2 ? more[2].Trim() : string.Empty;
+        string cess = more.Length > 3 ? more[3].Trim() : string.Empty;
+        string totalTax = more.Length > 4 ? more[4].Trim() : string.Empty;
+        if (string.IsNullOrEmpty(totalTax))
+            totalTax = ExtractLastBackslashCurrency(row[7]);
+
+        var parts = new List<string>();
+        if (!isTaxSummary && !string.IsNullOrEmpty(taxable) && taxable != "-" && char.IsDigit(taxable[0]))
+            parts.Add($"Taxable: {taxable}");
+        if (!isOutward && !string.IsNullOrEmpty(igst) && igst != "-" && (char.IsDigit(igst[0]) || igst[0] == '-'))
+            parts.Add($"IGST: {igst}");
+        if (!string.IsNullOrEmpty(cgst) && cgst != "-" && (char.IsDigit(cgst[0]) || cgst[0] == '-'))
+            parts.Add($"CGST: {cgst}");
+        if (!string.IsNullOrEmpty(sgst) && sgst != "-" && (char.IsDigit(sgst[0]) || sgst[0] == '-'))
+            parts.Add($"SGST: {sgst}");
+        if (!string.IsNullOrEmpty(cess) && cess != "-" && (char.IsDigit(cess[0]) || cess[0] == '-'))
+            parts.Add($"Cess: {cess}");
+        if (!string.IsNullOrEmpty(totalTax) && totalTax != "-" && (char.IsDigit(totalTax[0]) || totalTax[0] == '-'))
+            parts.Add(parts.Count > 0 ? $"Total Tax: {totalTax}" : totalTax);
+
+        if (parts.Count == 1 && parts[0].StartsWith("Taxable: ", StringComparison.Ordinal))
+            return taxable;
+        return string.Join(" · ", parts);
+    }
+
+    private static void TryCollectWinmanScheduleRow(
+        string[] row,
+        bool isGst,
+        ref string currentSection,
+        List<KeyValuePair<string, string>> scheduleRows)
+    {
+        if (string.Equals(row[24], "HIDE", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        string win = row[0].Trim();
+        string sec = row[1].Trim();
+        string rawField = row[2].Trim();
+        string idxCode = row[10].Trim();
+
+        if (string.IsNullOrWhiteSpace(rawField))
+            return;
+
+        if (isGst)
+        {
+            if (!win.StartsWith("GST", StringComparison.OrdinalIgnoreCase) ||
+                win.StartsWith("GSTClintlist", StringComparison.OrdinalIgnoreCase) ||
+                win.StartsWith("GSTSupplierInfo", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            // Skip invoice-level line tables except summary rows
+            if (sec.StartsWith("GSTR1_B2B", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR1_B2CL", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR1_Export", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR1_B2CS", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR1_CRDR", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR1_ADV", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR1_Ecom", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR1_DOC", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR1_Amd", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR4_B2B", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR4_UNREG", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR4_IMPS", StringComparison.OrdinalIgnoreCase) ||
+                sec.StartsWith("GSTR3B_Inward", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (sec.StartsWith("GSTR2A_PR", StringComparison.OrdinalIgnoreCase) &&
+                !idxCode.StartsWith("7.05.03.", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (sec.StartsWith("GSTR1_HSN", StringComparison.OrdinalIgnoreCase) &&
+                !rawField.StartsWith("Supply to ", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+        else
+        {
+            if (!win.Equals("MAIN", StringComparison.OrdinalIgnoreCase) &&
+                !win.StartsWith("Employerinfo", StringComparison.OrdinalIgnoreCase) &&
+                !win.StartsWith("SalaryAllowancesPerquisites", StringComparison.OrdinalIgnoreCase) &&
+                !win.StartsWith("SOPHPDetails", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        string cleanLabel = Regex.Replace(rawField, @"^[\.\-\s]+|[\:\^\s]+$", "").Trim();
+        cleanLabel = Regex.Replace(cleanLabel, @"\s+", " ");
+        if (cleanLabel.Length < 2 ||
+            cleanLabel.StartsWith('{') ||
+            cleanLabel.StartsWith('[') ||
+            cleanLabel.Equals("Footnotes / Pending issues", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("List of documents", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.StartsWith("Annual return filing is not yet started", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.StartsWith("Download GSTR-", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("GSTR-1 & 3B Annual Summary", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("GSTR-1, 2B & 3B comparison", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // Dynamic entity-named labels in .tax MAIN (e.g. "Employer-1: Y.J Private Ltd", "Business-1: Printing & Stationery")
+        if (!isGst && win.Equals("MAIN", StringComparison.OrdinalIgnoreCase))
+        {
+            var entityMatch = Regex.Match(cleanLabel, @"^(Employer-\d+|Property-\d+|Business-\d+|Profession-\d+)\s*:\s*(.+)$", RegexOptions.IgnoreCase);
+            if (entityMatch.Success)
+            {
+                string entHeader = entityMatch.Groups[1].Value.Trim();
+                string entVal = entityMatch.Groups[2].Value.Trim();
+                if (entVal.Length >= 2)
+                    scheduleRows.Add(new KeyValuePair<string, string>(entHeader, entVal));
+                currentSection = entHeader;
+                return;
+            }
+
+            var prefixColonMatch = Regex.Match(cleanLabel, @"^(Income from partnership firm|Minor child's income|Other person's income)\s*:?\s*(.+)$", RegexOptions.IgnoreCase);
+            if (prefixColonMatch.Success)
+                cleanLabel = prefixColonMatch.Groups[1].Value.Trim();
+        }
+
+        if (sec.Equals("SUB", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("Outward Supplies", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("Inward Supplies", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("Salary Income", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("Allowances", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("Profit in lieu of salary", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("Perquisites", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("Summary of Salary", StringComparison.OrdinalIgnoreCase) ||
+            cleanLabel.Equals("ITC Available", StringComparison.OrdinalIgnoreCase))
+        {
+            currentSection = cleanLabel;
+        }
+
+        if (cleanLabel.Equals("Total", StringComparison.OrdinalIgnoreCase))
+        {
+            if (idxCode is "5.30.16.00.00.00" or "5.30.28.00.00.00")
+                return;
+            if (string.IsNullOrWhiteSpace(currentSection))
+                return;
+            cleanLabel = $"{currentSection} - Total";
+        }
+        else if (isGst && sec.StartsWith("GSTR4_Outward", StringComparison.OrdinalIgnoreCase) && cleanLabel.EndsWith('%'))
+        {
+            cleanLabel = $"Outward Supplies ({cleanLabel} Rate)";
+        }
+        else if (isGst && sec.StartsWith("GSTR2A_PR", StringComparison.OrdinalIgnoreCase) && idxCode.StartsWith("7.05.03.", StringComparison.OrdinalIgnoreCase))
+        {
+            if (cleanLabel.Equals("ITC Available", StringComparison.OrdinalIgnoreCase))
+                return;
+            cleanLabel = $"ITC Reconciliation - {cleanLabel}";
+        }
+        else if (!isGst && win.StartsWith("Employerinfo", StringComparison.OrdinalIgnoreCase))
+        {
+            string empNum = win.Contains('2') ? "Employer 2" : "Employer 1";
+            cleanLabel = $"{empNum} - {cleanLabel}";
+        }
+        else if (!isGst && win.StartsWith("SOPHPDetails", StringComparison.OrdinalIgnoreCase))
+        {
+            if (cleanLabel.Equals("Details of the property", StringComparison.OrdinalIgnoreCase) ||
+                cleanLabel.Equals("Details of Owner", StringComparison.OrdinalIgnoreCase) ||
+                cleanLabel.StartsWith("Details of Co-owners", StringComparison.OrdinalIgnoreCase))
+                return;
+            cleanLabel = $"House Property - {cleanLabel}";
+        }
+        else if (!isGst && win.StartsWith("SalaryAllowancesPerquisites", StringComparison.OrdinalIgnoreCase) &&
+                 idxCode.StartsWith("1.50.", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanLabel = $"Salary Summary - {cleanLabel}";
+        }
+
+        // Extract value from row[3..7]
+        string extractedVal = string.Empty;
+        if (isGst && idxCode.StartsWith("5.30.", StringComparison.OrdinalIgnoreCase) &&
+            idxCode != "5.30.01.05.00.00")
+        {
+            bool isOut = idxCode is "5.30.06.00.00.00" or "5.30.08.00.00.00" or "5.30.10.00.00.00" or "5.30.12.00.00.00";
+            bool isTaxSum = idxCode is "5.30.30.00.00.00" or "5.30.32.00.00.00" or "5.30.34.00.00.00" or "5.30.36.00.00.00";
+            extractedVal = FormatWinmanGstCmpRowValue(row, isOut, isTaxSum);
+        }
+        else if (isGst && (sec.StartsWith("GSTR3B_Payable", StringComparison.OrdinalIgnoreCase) ||
+                           sec.StartsWith("GSTR3B_ITC", StringComparison.OrdinalIgnoreCase) ||
+                           sec.StartsWith("GSTR2A_PR", StringComparison.OrdinalIgnoreCase)))
+        {
+            var taxParts = new List<string>();
+            if (IsMeaningfulWinmanCell(row[4])) taxParts.Add($"IGST: {row[4]}");
+            if (IsMeaningfulWinmanCell(row[5])) taxParts.Add($"CGST: {row[5]}");
+            if (IsMeaningfulWinmanCell(row[6])) taxParts.Add($"SGST: {row[6]}");
+            string last7 = ExtractLastBackslashCurrency(row[7]);
+            if (!string.IsNullOrEmpty(last7) && last7 != "1.00")
+                taxParts.Add(taxParts.Count > 0 ? $"Total: {last7}" : last7);
+            extractedVal = taxParts.Count == 1 && taxParts[0].StartsWith("IGST: ", StringComparison.Ordinal) && string.IsNullOrEmpty(row[5]) && string.IsNullOrEmpty(row[6])
+                ? row[4]
+                : string.Join(" · ", taxParts);
+        }
+        else if (isGst && sec.StartsWith("GSTR3B_Tax", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = new List<string>();
+            if (IsMeaningfulWinmanCell(row[4])) parts.Add($"Taxable: {row[4]}");
+            if (IsMeaningfulWinmanCell(row[5])) parts.Add($"IGST: {row[5]}");
+            if (IsMeaningfulWinmanCell(row[6])) parts.Add($"CGST: {row[6]}");
+            string last7 = ExtractLastBackslashCurrency(row[7]);
+            if (!string.IsNullOrEmpty(last7)) parts.Add($"Total Tax: {last7}");
+            extractedVal = parts.Count == 1 && parts[0].StartsWith("Taxable: ", StringComparison.Ordinal)
+                ? row[4]
+                : string.Join(" · ", parts);
+        }
+        else if (!isGst && win.StartsWith("SalaryAllowancesPerquisites", StringComparison.OrdinalIgnoreCase))
+        {
+            string gross = row[4].Trim();
+            string exempt = row[5].Trim();
+            string taxable = row[6].Trim();
+            if (IsMeaningfulWinmanCell(gross) && IsMeaningfulWinmanCell(exempt) && IsMeaningfulWinmanCell(taxable) && gross != taxable)
+                extractedVal = $"Gross: {gross} · Exempt: {exempt} · Taxable: {taxable}";
+            else if (IsMeaningfulWinmanCell(taxable))
+                extractedVal = taxable;
+            else if (IsMeaningfulWinmanCell(gross))
+                extractedVal = gross;
+        }
+
+        if (string.IsNullOrWhiteSpace(extractedVal))
+        {
+            for (int c = 6; c >= 3; c--)
+            {
+                string cell = row[c].Trim();
+                if (IsMeaningfulWinmanCell(cell))
+                {
+                    extractedVal = cell;
+                    break;
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(extractedVal) && !string.IsNullOrWhiteSpace(row[7]))
+        {
+            string from7 = ExtractLastBackslashCurrency(row[7]);
+            if (IsMeaningfulWinmanCell(from7))
+                extractedVal = from7;
+        }
+
+        if (!string.IsNullOrWhiteSpace(extractedVal))
+            scheduleRows.Add(new KeyValuePair<string, string>(cleanLabel, extractedVal));
+    }
+
+    private static bool IsMeaningfulWinmanCell(string? cell)
+    {
+        if (string.IsNullOrWhiteSpace(cell))
+            return false;
+        string t = cell.Trim();
+        if (t is "-" or "0" or "0.00" or ".00" || t.StartsWith('=') || t.StartsWith('`'))
+            return false;
+        if (WinmanIgnoredColumnTitleValues.Contains(t))
+            return false;
+        return true;
+    }
+
+    private static string ExtractLastBackslashCurrency(params string[] candidates)
+    {
+        foreach (string candidate in candidates)
         {
             if (string.IsNullOrWhiteSpace(candidate) || candidate == "-")
                 continue;
@@ -998,8 +1351,12 @@ internal static class DeskSpaceInformationTabV380
             for (int i = tokens.Length - 1; i >= 0; i--)
             {
                 string t = tokens[i].Trim();
-                if (t.Length > 0 && t != "-" && char.IsDigit(t[0]))
+                if (t.Length > 0 && t != "-" && t != "0" && t != "0.00" &&
+                    (char.IsDigit(t[0]) || (t[0] == '-' && t.Length > 1 && char.IsDigit(t[1]))) &&
+                    !t.Contains(':') && !t.Contains(';'))
+                {
                     return t;
+                }
             }
         }
         return string.Empty;
@@ -1188,6 +1545,29 @@ internal static class DeskSpaceInformationTabV380
             AddFieldIfValid(fields, seen, "Data Directory", tallyItem.ParentFolder);
         if (tallyItem.SortTimeUtc > DateTime.MinValue)
             AddFieldIfValid(fields, seen, "Last Modified Date", tallyItem.SortTimeUtc.ToLocalTime().ToString("dd-MM-yyyy", CultureInfo.InvariantCulture));
+        try
+        {
+            var dirFiles = Directory.GetFiles(folderPath);
+            if (dirFiles.Length > 0)
+            {
+                AddFieldIfValid(fields, seen, "Company Data Files", $"{dirFiles.Length} files");
+                long totalBytes = 0;
+                foreach (string df in dirFiles)
+                {
+                    try { totalBytes += new FileInfo(df).Length; } catch { }
+                }
+                if (totalBytes > 0)
+                {
+                    string sizeText = totalBytes >= 1024 * 1024
+                        ? $"{(totalBytes / (1024.0 * 1024.0)):F2} MB"
+                        : $"{(totalBytes / 1024.0):F1} KB";
+                    AddFieldIfValid(fields, seen, "Company Data Size", sizeText);
+                }
+            }
+        }
+        catch
+        {
+        }
 
         return fields.Count >= 2;
     }
@@ -1648,8 +2028,8 @@ internal static class DeskSpaceInformationTabV380
         }
 
         // Recompute exact counts across the qualifying matched files
+        // Show all discovered >= 2-file matching headers by default so the user sees all inside-file details immediately.
         var matchedHeaders = new List<AppInfoHeaderFieldV380>();
-        int defaultVisibleCount = 0;
         foreach (string h in headerOrder)
         {
             if (!qualifyingHeaderSet.Contains(h))
@@ -1657,23 +2037,13 @@ internal static class DeskSpaceInformationTabV380
             int count = matchedFiles.Count(f => f.Fields.ContainsKey(h));
             if (count < 2)
                 continue;
-            bool isDef = (DefaultPriorityHeaders.Contains(h) && defaultVisibleCount < 8) ||
-                         (defaultVisibleCount < 5);
-            if (isDef)
-                defaultVisibleCount++;
 
             matchedHeaders.Add(new AppInfoHeaderFieldV380(
                 Header: h,
                 MatchingFileCount: count,
                 TotalFileCount: matchedFiles.Count,
                 SampleValue: headerSample.TryGetValue(h, out string? sVal) ? sVal : string.Empty,
-                IsDefaultVisible: isDef));
-        }
-
-        if (matchedHeaders.Count > 0 && matchedHeaders.All(h => !h.IsDefaultVisible))
-        {
-            for (int i = 0; i < Math.Min(6, matchedHeaders.Count); i++)
-                matchedHeaders[i] = matchedHeaders[i] with { IsDefaultVisible = true };
+                IsDefaultVisible: true));
         }
 
         var savedVisible = LoadVisibleHeadersPreference(appOrShortcutPath, preferencesPath);
@@ -1683,11 +2053,11 @@ internal static class DeskSpaceInformationTabV380
             var validSet = new HashSet<string>(matchedHeaders.Select(m => m.Header), StringComparer.OrdinalIgnoreCase);
             activeVisible = savedVisible.Where(validSet.Contains).ToList();
             if (activeVisible.Count == 0)
-                activeVisible = matchedHeaders.Where(m => m.IsDefaultVisible).Select(m => m.Header).ToList();
+                activeVisible = matchedHeaders.Select(m => m.Header).ToList();
         }
         else
         {
-            activeVisible = matchedHeaders.Where(m => m.IsDefaultVisible).Select(m => m.Header).ToList();
+            activeVisible = matchedHeaders.Select(m => m.Header).ToList();
         }
 
         string status = $"{eligibility.AppDisplayName} · {matchedFiles.Count} files share {matchedHeaders.Count} verified Header → Value fields ({activeVisible.Count} visible).";
@@ -1719,6 +2089,17 @@ internal static class DeskSpaceInformationTabV380
                 result.Add(new KeyValuePair<string, string>(header, val));
         }
         return result;
+    }
+
+    internal static IReadOnlyList<string> GetSummaryPriorityHeaders(IEnumerable<AppInfoHeaderFieldV380> matchedHeaders)
+    {
+        var list = matchedHeaders
+            .Where(h => DefaultPriorityHeaders.Contains(h.Header))
+            .Select(h => h.Header)
+            .ToList();
+        if (list.Count == 0)
+            list = matchedHeaders.Take(8).Select(h => h.Header).ToList();
+        return list;
     }
 
     internal static string GetAppPreferenceKey(string appOrShortcutPath)
@@ -2225,8 +2606,10 @@ internal static class DeskSpaceInformationTabV380
         bool disposed = false;
 
         // App File Information (Header -> Value) state
-        bool showAppInfoView = false;
+        bool showAppInfoView = true;
         string selectedAppPath = "";
+        string selectedFileFullPath = "";
+        bool showAllFileSpecificFields = true;
         string appFileFilter = "";
         bool isAppScanning = false;
         int appScanGen = 0;
@@ -2260,6 +2643,8 @@ internal static class DeskSpaceInformationTabV380
             if (string.IsNullOrWhiteSpace(appPath))
                 return;
 
+            if (!string.Equals(selectedAppPath, appPath, StringComparison.OrdinalIgnoreCase))
+                selectedFileFullPath = "";
             selectedAppPath = appPath;
             showAppInfoView = true;
 
@@ -2600,11 +2985,23 @@ internal static class DeskSpaceInformationTabV380
                     p,
                     getOwner,
                     selectedAppPath,
+                    selectedFileFullPath,
+                    showAllFileSpecificFields,
                     appFileFilter,
                     isAppScanning,
                     currentAppResult,
                     activeVisibleHeaders,
                     onSelectApp: path => TriggerAppDiscovery(path),
+                    onSelectFile: filePath =>
+                    {
+                        selectedFileFullPath = filePath;
+                        Render();
+                    },
+                    onToggleFileSpecificFields: showAll =>
+                    {
+                        showAllFileSpecificFields = showAll;
+                        Render();
+                    },
                     onFilterChanged: q => appFileFilter = q,
                     onToggleHeader: (hdr, isChecked) =>
                     {
@@ -3431,6 +3828,19 @@ internal static class DeskSpaceInformationTabV380
         renderUi = Render;
         Render();
 
+        host.Loaded += (_, _) =>
+        {
+            if (!disposed && showAppInfoView && string.IsNullOrEmpty(selectedAppPath) && !isAppScanning)
+            {
+                var apps = GetAvailableAppsForInformation();
+                if (apps.Count > 0)
+                {
+                    var preferred = apps.FirstOrDefault(a => a.Label.Contains("Winman", StringComparison.OrdinalIgnoreCase));
+                    TriggerAppDiscovery(!string.IsNullOrEmpty(preferred.Path) ? preferred.Path : apps[0].Path);
+                }
+            }
+        };
+
         Action onThemeChanged = () =>
         {
             if (!disposed)
@@ -3477,11 +3887,15 @@ internal static class DeskSpaceInformationTabV380
         DeskSpaceDesignV283.Palette p,
         Func<Window?> getOwner,
         string selectedAppPath,
+        string selectedFileFullPath,
+        bool showAllFileSpecificFields,
         string appFileFilter,
         bool isAppScanning,
         AppInfoDiscoveryResultV380? result,
         HashSet<string> activeVisibleHeaders,
         Action<string> onSelectApp,
+        Action<string> onSelectFile,
+        Action<bool> onToggleFileSpecificFields,
         Action<string> onFilterChanged,
         Action<string, bool> onToggleHeader,
         Action<IEnumerable<string>> onSetVisibleBatch,
@@ -3604,10 +4018,10 @@ internal static class DeskSpaceInformationTabV380
         // 3. Header Visibility Selection Card (>= 2 Matching Files)
         var headersStack = new StackPanel();
         var headersTopRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 6) };
-        var headerQuickBtns = new StackPanel { Orientation = Orientation.Horizontal };
+        var headerQuickBtns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
         var selectAllBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-            "Select All",
+            $"Select All ({result.MatchedHeaders.Count})",
             () => onSetVisibleBatch(result.MatchedHeaders.Select(h => h.Header)),
             primary: false);
         selectAllBtn.Padding = new Thickness(9, 3, 9, 3);
@@ -3615,16 +4029,26 @@ internal static class DeskSpaceInformationTabV380
         selectAllBtn.FontSize = 11;
         selectAllBtn.Margin = new Thickness(0, 0, 6, 0);
 
-        var defaultFieldsBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-            "Default Key Fields",
-            () => onSetVisibleBatch(result.MatchedHeaders.Where(h => h.IsDefaultVisible).Select(h => h.Header)),
+        var summaryFieldsBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+            "Key Summary",
+            () => onSetVisibleBatch(GetSummaryPriorityHeaders(result.MatchedHeaders)),
             primary: false);
-        defaultFieldsBtn.Padding = new Thickness(9, 3, 9, 3);
-        defaultFieldsBtn.MinHeight = 25;
-        defaultFieldsBtn.FontSize = 11;
+        summaryFieldsBtn.Padding = new Thickness(9, 3, 9, 3);
+        summaryFieldsBtn.MinHeight = 25;
+        summaryFieldsBtn.FontSize = 11;
+        summaryFieldsBtn.Margin = new Thickness(0, 0, 6, 0);
+
+        var clearAllBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+            "Clear All",
+            () => onSetVisibleBatch(Array.Empty<string>()),
+            primary: false);
+        clearAllBtn.Padding = new Thickness(9, 3, 9, 3);
+        clearAllBtn.MinHeight = 25;
+        clearAllBtn.FontSize = 11;
 
         headerQuickBtns.Children.Add(selectAllBtn);
-        headerQuickBtns.Children.Add(defaultFieldsBtn);
+        headerQuickBtns.Children.Add(summaryFieldsBtn);
+        headerQuickBtns.Children.Add(clearAllBtn);
         DockPanel.SetDock(headerQuickBtns, Dock.Right);
         headersTopRow.Children.Add(headerQuickBtns);
 
@@ -3634,9 +4058,24 @@ internal static class DeskSpaceInformationTabV380
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             Foreground = DeskSpaceDesignV283.Solid(p.Muted),
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
         });
         headersStack.Children.Add(headersTopRow);
+
+        var fileSpecificToggle = new CheckBox
+        {
+            IsChecked = showAllFileSpecificFields,
+            Content = "Also show file-specific inside details (all populated schedule/computation rows per file)",
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = DeskSpaceDesignV283.Solid(p.Text),
+            Margin = new Thickness(0, 0, 0, 6),
+            Cursor = Cursors.Hand
+        };
+        fileSpecificToggle.Checked += (_, _) => onToggleFileSpecificFields(true);
+        fileSpecificToggle.Unchecked += (_, _) => onToggleFileSpecificFields(false);
+        headersStack.Children.Add(fileSpecificToggle);
 
         var checkWrap = new WrapPanel();
         foreach (var hdr in result.MatchedHeaders)
@@ -3672,7 +4111,7 @@ internal static class DeskSpaceInformationTabV380
 
         var checkScroll = new ScrollViewer
         {
-            MaxHeight = 115,
+            MaxHeight = 145,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = checkWrap
@@ -3685,8 +4124,59 @@ internal static class DeskSpaceInformationTabV380
         DockPanel.SetDock(headersCard, Dock.Top);
         root.Children.Add(headersCard);
 
-        // 4. Per-File Inside Information Cards (Filtered by Selected Visible Headers)
+        // 4. File Selector & Per-File Inside Information Cards
         var filesOuterDock = new DockPanel { LastChildFill = true };
+
+        var fileSelectorLabel = new TextBlock
+        {
+            Text = "3. Select File (or View All Files) & Inside-File Details",
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = DeskSpaceDesignV283.Solid(p.Muted),
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        DockPanel.SetDock(fileSelectorLabel, Dock.Top);
+        filesOuterDock.Children.Add(fileSelectorLabel);
+
+        var filePillsWrap = new WrapPanel();
+        var allFilesBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+            $"All Files ({result.MatchedFiles.Count})",
+            () => onSelectFile(""),
+            primary: string.IsNullOrEmpty(selectedFileFullPath),
+            tooltip: "Show inside-file details for all matching files");
+        allFilesBtn.Padding = new Thickness(10, 4, 10, 4);
+        allFilesBtn.MinHeight = 27;
+        allFilesBtn.FontSize = 11.5;
+        allFilesBtn.Margin = new Thickness(0, 0, 6, 6);
+        filePillsWrap.Children.Add(allFilesBtn);
+
+        foreach (var mf in result.MatchedFiles)
+        {
+            string capFilePath = mf.FullPath;
+            bool isSelFile = string.Equals(capFilePath, selectedFileFullPath, StringComparison.OrdinalIgnoreCase);
+            var fBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+                mf.DisplayName,
+                () => onSelectFile(capFilePath),
+                primary: isSelFile,
+                tooltip: $"{mf.FullPath} ({mf.OrderedFields.Count} extracted fields)");
+            fBtn.Padding = new Thickness(10, 4, 10, 4);
+            fBtn.MinHeight = 27;
+            fBtn.FontSize = 11.5;
+            fBtn.Margin = new Thickness(0, 0, 6, 6);
+            filePillsWrap.Children.Add(fBtn);
+        }
+
+        var filePillsScroll = new ScrollViewer
+        {
+            MaxHeight = 76,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = filePillsWrap
+        };
+        DockPanel.SetDock(filePillsScroll, Dock.Top);
+        filesOuterDock.Children.Add(filePillsScroll);
+
         var filterBox = new TextBox
         {
             Text = appFileFilter,
@@ -3711,6 +4201,9 @@ internal static class DeskSpaceInformationTabV380
             .Select(h => h.Header)
             .Where(activeVisibleHeaders.Contains)
             .ToList();
+        var matchedHeaderNamesSet = new HashSet<string>(
+            result.MatchedHeaders.Select(h => h.Header),
+            StringComparer.OrdinalIgnoreCase);
 
         void PopulateFilesStack(string queryText)
         {
@@ -3719,6 +4212,11 @@ internal static class DeskSpaceInformationTabV380
 
             var filteredFiles = result.MatchedFiles.Where(f =>
             {
+                if (!string.IsNullOrEmpty(selectedFileFullPath) &&
+                    !string.Equals(f.FullPath, selectedFileFullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
                 if (string.IsNullOrEmpty(q))
                     return true;
                 if (f.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -3733,7 +4231,7 @@ internal static class DeskSpaceInformationTabV380
             {
                 filesStack.Children.Add(new TextBlock
                 {
-                    Text = "Check one or more Header checkboxes above to display inside-file Header : Value information.",
+                    Text = "Check one or more Header checkboxes above (or click Select All) to display inside-file Header : Value information.",
                     FontSize = 13,
                     Foreground = DeskSpaceDesignV283.Solid(p.Muted),
                     Margin = new Thickness(4, 8, 4, 8)
@@ -3743,8 +4241,19 @@ internal static class DeskSpaceInformationTabV380
 
             foreach (var fileRec in filteredFiles)
             {
-                var visiblePairs = GetVisibleFieldsForFile(fileRec, orderedVisibleList);
-                if (visiblePairs.Count == 0)
+                var displayPairs = new List<KeyValuePair<string, string>>(GetVisibleFieldsForFile(fileRec, orderedVisibleList));
+                var seenKeys = new HashSet<string>(displayPairs.Select(kv => kv.Key), StringComparer.OrdinalIgnoreCase);
+
+                if (showAllFileSpecificFields && orderedVisibleList.Count > 0)
+                {
+                    foreach (var kv in fileRec.OrderedFields)
+                    {
+                        if (!matchedHeaderNamesSet.Contains(kv.Key) && seenKeys.Add(kv.Key))
+                            displayPairs.Add(kv);
+                    }
+                }
+
+                if (displayPairs.Count == 0)
                     continue;
 
                 var cardStack = new StackPanel();
@@ -3752,18 +4261,18 @@ internal static class DeskSpaceInformationTabV380
                 var cardBtns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
                 var capturedFile = fileRec;
-                var capturedPairs = visiblePairs;
+                var capturedPairs = displayPairs;
 
                 var copyCardBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
-                    "Copy Visible",
+                    $"Copy All ({capturedPairs.Count})",
                     () =>
                     {
                         string text = string.Join(Environment.NewLine, capturedPairs.Select(kv => $"{kv.Key}: {kv.Value}"));
                         Clipboard.SetText(text);
-                        onStatusToast($"Copied {capturedPairs.Count} visible fields for '{capturedFile.DisplayName}'.", false);
+                        onStatusToast($"Copied {capturedPairs.Count} inside-file fields for '{capturedFile.DisplayName}'.", false);
                     },
                     primary: false,
-                    tooltip: "Copy all visible Header : Value pairs for this file");
+                    tooltip: "Copy all displayed Header : Value pairs for this file");
                 copyCardBtn.Padding = new Thickness(9, 3, 9, 3);
                 copyCardBtn.MinHeight = 26;
                 copyCardBtn.FontSize = 11;
@@ -3809,6 +4318,7 @@ internal static class DeskSpaceInformationTabV380
                     Background = DeskSpaceDesignV283.Solid(p.Navigation),
                     Padding = new Thickness(6, 2, 6, 2),
                     VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 6, 0),
                     Child = new TextBlock
                     {
                         Text = fileRec.KindBadge,
@@ -3817,11 +4327,18 @@ internal static class DeskSpaceInformationTabV380
                         Foreground = DeskSpaceDesignV283.Solid(p.Muted)
                     }
                 });
+                titleWrap.Children.Add(new TextBlock
+                {
+                    Text = $"{displayPairs.Count} fields",
+                    FontSize = 11,
+                    Foreground = DeskSpaceDesignV283.Solid(p.Muted),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
                 cardHeader.Children.Add(titleWrap);
                 cardStack.Children.Add(cardHeader);
 
                 var fieldsGrid = new WrapPanel();
-                foreach (var kv in visiblePairs)
+                foreach (var kv in displayPairs)
                 {
                     string hKey = kv.Key;
                     string hVal = kv.Value;
@@ -3839,6 +4356,7 @@ internal static class DeskSpaceInformationTabV380
                     copyFieldBtn.MinHeight = 22;
                     copyFieldBtn.FontSize = 10.5;
                     copyFieldBtn.Margin = new Thickness(6, 0, 0, 0);
+                    copyFieldBtn.VerticalAlignment = VerticalAlignment.Top;
                     DockPanel.SetDock(copyFieldBtn, Dock.Right);
                     itemDock.Children.Add(copyFieldBtn);
 
@@ -3849,7 +4367,7 @@ internal static class DeskSpaceInformationTabV380
                         FontSize = 10.5,
                         FontWeight = FontWeights.SemiBold,
                         Foreground = DeskSpaceDesignV283.Solid(p.Muted),
-                        TextTrimming = TextTrimming.CharacterEllipsis
+                        TextWrapping = TextWrapping.Wrap
                     });
                     kvStack.Children.Add(new TextBlock
                     {
@@ -3857,14 +4375,14 @@ internal static class DeskSpaceInformationTabV380
                         FontSize = 12.5,
                         FontWeight = FontWeights.SemiBold,
                         Foreground = DeskSpaceDesignV283.Solid(p.Text),
-                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        TextWrapping = TextWrapping.Wrap,
                         ToolTip = hVal
                     });
                     itemDock.Children.Add(kvStack);
 
                     var fieldTile = new Border
                     {
-                        Width = 248,
+                        Width = 272,
                         CornerRadius = new CornerRadius(8),
                         Background = DeskSpaceDesignV283.Solid(p.Raised),
                         BorderBrush = DeskSpaceDesignV283.Solid(p.Border),

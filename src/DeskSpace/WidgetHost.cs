@@ -1914,6 +1914,9 @@ public sealed class WidgetShellWindow : Window
         if(name=="Information")
         {
             OpenInformationArc();
+            informationOverlay?.OpenAppFileInfoShelf();
+            if(ringExpanded)ToggleRing();
+            informationOverlay?.HideArc();
             return;
         }
         if(informationOverlay?.IsEditing==true &&

@@ -371,11 +371,11 @@ jobs:
           if($latest.Major -ne 1 -or $latest.Minor -ne 5){
               throw 'Unexpected DeskSpace stable version family'
           }
-          $nextBuild=1158
+          $nextBuild=1159
           $version="1.5.$nextBuild"
           $existing=(gh api 'repos/surajTech-22/Desk-space/releases?per_page=100' | Out-String | ConvertFrom-Json)
           if($LASTEXITCODE -ne 0){throw 'Could not read current GitHub releases'}
-          foreach($tag in @('v1.5.1158','tester-v1.5.1158')){
+          foreach($tag in @('v1.5.1159','tester-v1.5.1159')){
             if(@($existing | Where-Object {$_.tag_name -eq $tag}).Count -ne 0){
               throw ('Refuse to overwrite existing release: '+$tag)
             }
@@ -609,7 +609,7 @@ jobs:
               $tag=$entry.Tag
               gh release view $tag -R $repo *> $null
               if($LASTEXITCODE -eq 0){throw "Refusing to overwrite release $tag"}
-              $notes="DeskSpace 1.5.1158: Added inside-file Header -> Value Application Information discovery in the Information module and floating Donut Information shelf — checks if a selected application supports structured Header -> Value data (allowing Winman GST .wgst, Winman CA-ERP .tax, Winman TDS, TallyPrime .1800, Tally.ERP 9 .900, and Excel/CSV while blocking unstructured prose/media apps like Word), decodes inside-file Winman .wgst/.tax binary records and embedded JSON summaries (Legal Name, Trade Name, GSTIN, PAN, State, Financial Year, Dealer Type, Return Form, Income/Tax computation totals) and Tally company master tags, enforces the >= 2 similar matching files rule, and lets users check/uncheck which headers should be visible."
+              $notes="DeskSpace 1.5.1159: Direct application selection in Information (floating Donut Information arc/shelf and MainWindow Information tab) with full inside-file Header -> Value detail extraction across Winman GST (.wgst), Winman CA-ERP (.tax), Winman TDS, TallyPrime (.1800), Tally.ERP 9 (.900), and Excel/CSV — all matching headers and populated schedule/computation rows shown immediately with per-file selection and header visibility controls."
               if($entry.Pre){
                   gh release create $tag @assets --prerelease -R $repo --target $env:GITHUB_SHA --title "DeskSpace $version Tester Modern Suite & Pinned App Files" --notes $notes
               }else{
@@ -631,14 +631,14 @@ jobs:
               }
           }
           Write-Host "R377 Excel Preview & Monitor-Aware Widgets release SUCCESS: same SHA256 installer published to Tester and Stable."
-      - name: Send fresh SHA256-verified v1.5.1158 notification hints to both installed channels
+      - name: Send fresh SHA256-verified v1.5.1159 notification hints to both installed channels
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $topic='https://ntfy.sh/deskspace-verified-release-r133-20261026-9a6c412f'
-          foreach($hint in @('stable|v1.5.1158','tester|tester-v1.5.1158')){
+          foreach($hint in @('stable|v1.5.1159','tester|tester-v1.5.1159')){
             try{
-              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1158 available' }
+              $response=Invoke-RestMethod -Uri $topic -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($hint)) -ContentType 'text/plain; charset=utf-8' -TimeoutSec 15 -Headers @{ 'Title'='DeskSpace stable update v1.5.1159 available' }
               if($response.event -ne 'message'){throw ('Relay rejected '+$hint)}
               Write-Host ('ACKNOWLEDGED official release hint: '+$hint)
             }catch{

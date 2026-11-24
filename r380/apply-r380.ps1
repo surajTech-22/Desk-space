@@ -162,12 +162,127 @@ Swap-R380 @'
         DeskSpaceFocusRingV380.AttachToDonutCanvas(canvas);
     }
 '@ 'WidgetHost donut Focus Ring canvas attachment'
+Swap-R380 @'
+        if(name=="Excel Functions")
+        {
+            OpenExcelArc();
+            return; // The circle must NEVER open the large Excel editor.
+        }
+        if(name=="Information")
+        {
+            OpenInformationArc();
+            return;
+        }
+'@ @'
+        if(name=="Excel Functions")
+        {
+            OpenExcelArc();
+            return; // The circle must NEVER open the large Excel editor.
+        }
+        if(name=="Information")
+        {
+            OpenInformationArc();
+            informationOverlay?.OpenAppFileInfoShelf();
+            if(ringExpanded)ToggleRing();
+            informationOverlay?.HideArc();
+            return;
+        }
+'@ 'WidgetHost ClickSegment Information direct App Info shelf'
 Finish-Patch $hostPath
 
 # 4b. Surgical hook: DeskSpaceInformationV36.cs (tight concentric clipped bounds & monitor-aware shelf)
 $infoPath = "$dstRoot/DeskSpaceInformationV36.cs"
 Begin-Patch $infoPath
+Swap-R380 @'
+    private List<Collection> all=new();
+    private bool warmed,warming;
+    private DateTime warmStamp=DateTime.MinValue;
+    private static DateTime CurrentStamp()
+    {
+        var target=File.Exists(CollectionsPath)?CollectionsPath:LegacyPath;
+        try{return File.Exists(target)?File.GetLastWriteTimeUtc(target):
+            DateTime.MinValue;}
+        catch(IOException){return DateTime.MinValue;}
+        catch(UnauthorizedAccessException){return DateTime.MinValue;}
+    }
+    public void WarmStart()
+    {
+        if(disposed||warming)return;
+        warming=true;
+        _=System.Threading.Tasks.Task.Run(()=>{
+            try
+            {
+                var stamp=CurrentStamp();
+                var snapshot=Read().OrderByDescending(x=>x.UpdatedUtc).ToList();
+                owner.Dispatcher.BeginInvoke(new Action(()=>{
+                    if(disposed)return;
+                    all=snapshot;warmStamp=stamp;warmed=true;warming=false;
+                    if(arc.IsOpen){RenderArc();PositionArc();changed();}
+                }));
+            }
+'@ @'
+    private List<Collection> all=new();
+    private List<(string Label, string Path)> arcApps=new();
+    private int ActiveArcTotalCount()=>all.Count>0?all.Count:arcApps.Count;
+    private bool warmed,warming;
+    private DateTime warmStamp=DateTime.MinValue;
+    private static DateTime CurrentStamp()
+    {
+        var target=File.Exists(CollectionsPath)?CollectionsPath:LegacyPath;
+        try{return File.Exists(target)?File.GetLastWriteTimeUtc(target):
+            DateTime.MinValue;}
+        catch(IOException){return DateTime.MinValue;}
+        catch(UnauthorizedAccessException){return DateTime.MinValue;}
+    }
+    public void WarmStart()
+    {
+        if(disposed||warming)return;
+        warming=true;
+        _=System.Threading.Tasks.Task.Run(()=>{
+            try
+            {
+                var stamp=CurrentStamp();
+                var snapshot=Read().OrderByDescending(x=>x.UpdatedUtc).ToList();
+                var appsSnapshot=DeskSpaceInformationTabV380.GetAvailableAppsForInformation();
+                owner.Dispatcher.BeginInvoke(new Action(()=>{
+                    if(disposed)return;
+                    all=snapshot;arcApps=appsSnapshot;warmStamp=stamp;warmed=true;warming=false;
+                    if(arc.IsOpen){RenderArc();PositionArc();changed();}
+                }));
+            }
+'@ 'DeskSpaceInformationV36 arcApps WarmStart'
+Swap-R380 '    public int SavedCount => all.Count;' '    public int SavedCount => ActiveArcTotalCount();' 'DeskSpaceInformationV36 SavedCount'
 Swap-R380 '        arcCanvas=new Canvas{Width=488,Height=222,Focusable=true};' '        arcCanvas=new Canvas{Width=1,Height=1,Focusable=true};' 'DeskSpaceInformationV36 tight initial canvas'
+Swap-R380 '            ()=>all.Count>PageSize,' '            ()=>ActiveArcTotalCount()>PageSize,' 'DeskSpaceInformationV36 middleScroll predicate'
+Swap-R380 @'
+    public void Show()
+    {
+        if(disposed)return;
+        // Returning to Information starts with the wheel, not a previously
+        // selected shelf. Never discard an active unsaved editor.
+        if(shelf.IsOpen && !editorActive)CloseShelf();
+        try
+        {
+            if(!warmed || CurrentStamp()!=warmStamp)
+                WarmStart(); // immediately paint cache, refresh if stale
+            startIndex=Math.Min(startIndex,Math.Max(0,all.Count-4));
+            RenderArc();
+'@ @'
+    public void Show()
+    {
+        if(disposed)return;
+        // Returning to Information starts with the wheel, not a previously
+        // selected shelf. Never discard an active unsaved editor.
+        if(shelf.IsOpen && !editorActive)CloseShelf();
+        try
+        {
+            if(all.Count==0 && arcApps.Count==0)
+                arcApps=DeskSpaceInformationTabV380.GetAvailableAppsForInformation();
+            if(!warmed || CurrentStamp()!=warmStamp)
+                WarmStart(); // immediately paint cache, refresh if stale
+            startIndex=Math.Min(startIndex,Math.Max(0,ActiveArcTotalCount()-4));
+            RenderArc();
+'@ 'DeskSpaceInformationV36 Show app wedges fallback'
 Swap-R380 @'
     // Radially connected wedges instead of R26's detached horizontal
     // arc. Both radii exceed the parent donut's 195-DIP outer edge.
@@ -285,8 +400,12 @@ Swap-R380 @'
         arcCanvas.Children.Clear();
         childWedges.Clear();childLabels.Clear();arcHitZones.Clear();
         hoveredChild=-1;
+        bool usingApps=all.Count==0 && arcApps.Count>0;
         var visible=all.Skip(startIndex).Take(PageSize).ToArray();
-        int count=visible.Length+1;
+        var visibleApps=usingApps?arcApps.Skip(startIndex).Take(PageSize).ToArray():Array.Empty<(string Label,string Path)>();
+        int itemCount=usingApps?visibleApps.Length:visible.Length;
+        int totalItems=usingApps?arcApps.Count:all.Count;
+        int count=itemCount+1;
         var layout=DeskSpaceSubDonutStandardV62.Plan(count,0,-90);
         double halfSweep=layout.Half;
         double start=layout.From(0);
@@ -300,9 +419,11 @@ Swap-R380 @'
         double rMid=(DeskSpaceSubArcGeometryV48.Inner(0)+DeskSpaceSubArcGeometryV48.Outer(0))/2;
         for(int i=0;i<count;i++)
         {
-            bool add=i==visible.Length;
-            Guid? id=add?null:visible[i].Id;
-            string name=add?"+ New":visible[i].Name;
+            bool add=i==itemCount;
+            Guid? id=(add||usingApps)?null:visible[i].Id;
+            string name=add?(usingApps?"+ Apps":"+ New"):(usingApps?visibleApps[i].Label:visible[i].Name);
+            string tip=add?(usingApps?"Select an application or create manual info":"Create a named information collection"):
+                (usingApps?"Inspect "+visibleApps[i].Label+" inside-file details":name);
             double a=start+step*i,b=start+step*(i+1);
             Geometry hit=DeskSpaceSubArcGeometryV48.Clip(rawShapes[i],arcBounds,ArcMargin);
             var sector=new System.Windows.Shapes.Path{
@@ -310,7 +431,7 @@ Swap-R380 @'
                 Stroke=Brushes.White,StrokeThickness=2,
                 Fill=add?Accent:ChildIdle,
                 Tag=i,Cursor=Cursors.Hand,
-                ToolTip=add?"Create a named information collection":name};
+                ToolTip=tip};
             // Every visible sector is a true hit target; a single shared
             // Canvas pointer dispatcher handles all child selection.
             arcCanvas.Children.Add(sector);
@@ -327,7 +448,7 @@ Swap-R380 @'
                 FontSize=11,
                 FontWeight=add?FontWeights.SemiBold:FontWeights.Normal,
                 Foreground=add?Brushes.White:Ink,
-                ToolTip=name,
+                ToolTip=tip,
                 IsHitTestVisible=false};
             Canvas.SetLeft(label,x-31);
             Canvas.SetTop(label,y-9);
@@ -336,8 +457,8 @@ Swap-R380 @'
         // + New is an action and is never the hidden-items divider.
         // Keep hidden counts on the last SAVED wedge's radial edge.
         var countView=new DeskSpaceSubDonutStandardV62.View(
-            all.Count,startIndex,visible.Length,startIndex,
-            Math.Max(0,all.Count-startIndex-visible.Length),
+            totalItems,startIndex,itemCount,startIndex,
+            Math.Max(0,totalItems-startIndex-itemCount),
             -90,halfSweep,step);
         DeskSpaceSubDonutStandardV62.DrawHiddenCounters(
             arcCanvas,countView,arcCanvas.Height/2,Slide);
@@ -346,6 +467,289 @@ Swap-R380 @'
         PositionArc();
     }
 '@ 'DeskSpaceInformationV36 concentric tight RenderArc'
+Swap-R380 @'
+    private void HoverChild(int sector,Guid? id)
+    {
+        if(disposed || !arc.IsOpen)return;
+        bool enteredNewSector=hoveredChild!=sector;
+        if(enteredNewSector)newHoverTimer.Stop();
+        hoveredChild=sector;
+        keyboardIndex=sector==arcHitZones.Count-1?all.Count:startIndex+sector;
+        for(int i=0;i<childWedges.Count;i++)
+        {
+            var w=childWedges[i];
+            bool selected=w.Tag is int tag && tag==sector;
+            bool isNew=i==childWedges.Count-1;
+            w.Fill=selected?(isNew?
+                new SolidColorBrush(Color.FromRgb(73,58,153)):ChildHover):
+                (isNew?Accent:ChildIdle);
+        }
+        if(editorActive)return;
+        if(sector<arcHitZones.Count-1 && id.HasValue)
+        {
+            // Immediately preview the selected wedge, but do not collapse the
+            // donut: the shelf is temporary until a deliberate selection.
+            transientPreview=true;
+            OpenCollection(id.Value);
+        }
+        else
+            CloseTransientPreview();
+    }
+    private void EndChildHover(int sector)
+    {
+        if(hoveredChild!=sector)return;
+        if(sector==arcHitZones.Count-1 && !editorActive)
+        {
+            newHoverTimer.Stop();
+            hoveredChild=-1;
+        }
+    }
+    private void ActivateChild(int sector,Guid? id)
+    {
+        if(disposed || !arc.IsOpen)return;
+        // A click, key activation or completed drag commits the child,
+        // shrinking BOTH parent rings while keeping its shelf/editor.
+        if(sector==arcHitZones.Count-1)
+        {
+            newHoverTimer.Stop();
+            CloseTransientPreview();
+            if(editorActive)return;
+            NewCollection();
+            CommitChildSelection();
+            return;
+        }
+        if(id.HasValue && !editorActive)
+        {
+            transientPreview=false; // an explicit selection persists
+            OpenCollection(id.Value);
+            CommitChildSelection();
+        }
+    }
+'@ @'
+    private void HoverChild(int sector,Guid? id)
+    {
+        if(disposed || !arc.IsOpen)return;
+        bool enteredNewSector=hoveredChild!=sector;
+        if(enteredNewSector)newHoverTimer.Stop();
+        hoveredChild=sector;
+        keyboardIndex=sector==arcHitZones.Count-1?ActiveArcTotalCount():startIndex+sector;
+        for(int i=0;i<childWedges.Count;i++)
+        {
+            var w=childWedges[i];
+            bool selected=w.Tag is int tag && tag==sector;
+            bool isNew=i==childWedges.Count-1;
+            w.Fill=selected?(isNew?
+                new SolidColorBrush(Color.FromRgb(73,58,153)):ChildHover):
+                (isNew?Accent:ChildIdle);
+        }
+        if(editorActive)return;
+        if(all.Count==0 && arcApps.Count>0 && sector>=0 && sector<arcHitZones.Count-1)
+        {
+            int appIdx=startIndex+sector;
+            if(appIdx>=0 && appIdx<arcApps.Count)
+            {
+                transientPreview=true;
+                OpenAppFileInfoShelf(arcApps[appIdx].Path,keepTransient:true);
+                return;
+            }
+        }
+        if(sector<arcHitZones.Count-1 && id.HasValue)
+        {
+            // Immediately preview the selected wedge, but do not collapse the
+            // donut: the shelf is temporary until a deliberate selection.
+            transientPreview=true;
+            OpenCollection(id.Value);
+        }
+        else
+            CloseTransientPreview();
+    }
+    private void EndChildHover(int sector)
+    {
+        if(hoveredChild!=sector)return;
+        if(sector==arcHitZones.Count-1 && !editorActive)
+        {
+            newHoverTimer.Stop();
+            hoveredChild=-1;
+        }
+    }
+    private void ActivateChild(int sector,Guid? id)
+    {
+        if(disposed || !arc.IsOpen)return;
+        // A click, key activation or completed drag commits the child,
+        // shrinking BOTH parent rings while keeping its shelf/editor.
+        if(sector==arcHitZones.Count-1)
+        {
+            newHoverTimer.Stop();
+            CloseTransientPreview();
+            if(editorActive)return;
+            OpenAppFileInfoShelf();
+            CommitChildSelection();
+            return;
+        }
+        if(all.Count==0 && arcApps.Count>0 && sector>=0 && sector<arcHitZones.Count-1 && !editorActive)
+        {
+            int appIdx=startIndex+sector;
+            if(appIdx>=0 && appIdx<arcApps.Count)
+            {
+                transientPreview=false;
+                OpenAppFileInfoShelf(arcApps[appIdx].Path,keepTransient:false);
+                CommitChildSelection();
+                return;
+            }
+        }
+        if(id.HasValue && !editorActive)
+        {
+            transientPreview=false; // an explicit selection persists
+            OpenCollection(id.Value);
+            CommitChildSelection();
+        }
+    }
+'@ 'DeskSpaceInformationV36 HoverChild and ActivateChild app support'
+Swap-R380 @'
+        if(e.Key==Key.Left || e.Key==Key.Right ||
+           e.Key==Key.Up || e.Key==Key.Down)
+        {
+            if(all.Count==0){HoverChild(0,null);e.Handled=true;return;}
+            int delta=e.Key==Key.Left || e.Key==Key.Up?-1:1;
+            keyboardIndex=Math.Clamp(keyboardIndex+delta,0,all.Count);
+            if(keyboardIndex>=all.Count)
+            {
+                HoverChild(arcHitZones.Count-1,null);
+            }
+            else
+            {
+                startIndex=Math.Clamp(keyboardIndex-2,0,Math.Max(0,all.Count-4));
+                RenderArc();
+                HoverChild(keyboardIndex-startIndex,all[keyboardIndex].Id);
+            }
+            e.Handled=true;return;
+        }
+        if(e.Key==Key.Enter || e.Key==Key.Space)
+        {
+            if(keyboardIndex==all.Count)ActivateChild(arcHitZones.Count-1,null);
+            else if(keyboardIndex>=0 && keyboardIndex<all.Count)
+                ActivateChild(keyboardIndex-startIndex,all[keyboardIndex].Id);
+            e.Handled=true;
+        }
+    }
+    private void ScrollArc(object sender,MouseWheelEventArgs e)
+    {
+        int amount=standardWheel.Step(e.Delta);
+        if(amount!=0)Slide(amount);
+        e.Handled=true;
+    }
+    private bool CanPage(int direction) =>
+        direction<0?startIndex>0:startIndex+PageSize<all.Count;
+    private void StartEdgeScroll(int direction)
+    {
+        if(!CanPage(direction)){StopEdgeScroll();return;}
+        if(edgeDirection==direction && edgeTimer.IsEnabled)return;
+        edgeDirection=direction;
+        edgeTimer.Interval=TimeSpan.FromMilliseconds(175);
+        newHoverTimer.Stop();
+        edgeTimer.Start();
+    }
+    private void StopEdgeScroll()
+    {
+        edgeDirection=0;
+        edgeTimer.Stop();
+    }
+    private void Slide(int delta)
+    {
+        CloseTransientPreview();
+        if(!CanPage(delta)){StopEdgeScroll();return;}
+        startIndex=Math.Clamp(startIndex+delta,0,Math.Max(0,all.Count-PageSize));
+        RenderArc();
+        DeskSpaceSubDonutStandardV62.Animate(arcCanvas,delta,-90);
+        if(!CanPage(delta))StopEdgeScroll();
+    }
+'@ @'
+        if(e.Key==Key.Left || e.Key==Key.Right ||
+           e.Key==Key.Up || e.Key==Key.Down)
+        {
+            int total=ActiveArcTotalCount();
+            if(total==0){HoverChild(0,null);e.Handled=true;return;}
+            int delta=e.Key==Key.Left || e.Key==Key.Up?-1:1;
+            keyboardIndex=Math.Clamp(keyboardIndex+delta,0,total);
+            if(keyboardIndex>=total)
+            {
+                HoverChild(arcHitZones.Count-1,null);
+            }
+            else
+            {
+                startIndex=Math.Clamp(keyboardIndex-2,0,Math.Max(0,total-4));
+                RenderArc();
+                Guid? itemId=all.Count>0?all[keyboardIndex].Id:null;
+                HoverChild(keyboardIndex-startIndex,itemId);
+            }
+            e.Handled=true;return;
+        }
+        if(e.Key==Key.Enter || e.Key==Key.Space)
+        {
+            int total=ActiveArcTotalCount();
+            if(keyboardIndex==total)ActivateChild(arcHitZones.Count-1,null);
+            else if(keyboardIndex>=0 && keyboardIndex<total)
+            {
+                Guid? itemId=all.Count>0?all[keyboardIndex].Id:null;
+                ActivateChild(keyboardIndex-startIndex,itemId);
+            }
+            e.Handled=true;
+        }
+    }
+    private void ScrollArc(object sender,MouseWheelEventArgs e)
+    {
+        int amount=standardWheel.Step(e.Delta);
+        if(amount!=0)Slide(amount);
+        e.Handled=true;
+    }
+    private bool CanPage(int direction) =>
+        direction<0?startIndex>0:startIndex+PageSize<ActiveArcTotalCount();
+    private void StartEdgeScroll(int direction)
+    {
+        if(!CanPage(direction)){StopEdgeScroll();return;}
+        if(edgeDirection==direction && edgeTimer.IsEnabled)return;
+        edgeDirection=direction;
+        edgeTimer.Interval=TimeSpan.FromMilliseconds(175);
+        newHoverTimer.Stop();
+        edgeTimer.Start();
+    }
+    private void StopEdgeScroll()
+    {
+        edgeDirection=0;
+        edgeTimer.Stop();
+    }
+    private void Slide(int delta)
+    {
+        CloseTransientPreview();
+        if(!CanPage(delta)){StopEdgeScroll();return;}
+        startIndex=Math.Clamp(startIndex+delta,0,Math.Max(0,ActiveArcTotalCount()-PageSize));
+        RenderArc();
+        DeskSpaceSubDonutStandardV62.Animate(arcCanvas,delta,-90);
+        if(!CanPage(delta))StopEdgeScroll();
+    }
+'@ 'DeskSpaceInformationV36 keyboard and paging app support'
+Swap-R380 @'
+        // Placeholder only: future opt-in website/app association for UI/PW.
+        // Never read URLs, browser windows or passwords automatically yet.
+        shelfBody.Children.Add(new TextBlock{
+            Text="Future: assign a website/app to a UI or PW entry; "+
+                 "when that page is open, suggest the matching entry. "+
+                 "Automatic detection and autofill are not enabled.",
+            FontSize=10,Foreground=Brushes.Gray,
+            TextWrapping=TextWrapping.Wrap,
+            Margin=new Thickness(3,8,3,4),
+            ToolTip="Placeholder only — existing security vault remains unchanged"
+        });
+'@ @'
+        var appInfoEntryBtn=SmallButton("Select App Files (Header → Value)…",()=>{
+            editorActive=false;
+            LeaveEditorKeyboardMode();
+            OpenAppFileInfoShelf();
+        });
+        appInfoEntryBtn.ToolTip="Check an application's supported files for ≥ 2 matching inside-file Header → Value fields";
+        appInfoEntryBtn.Margin=new Thickness(0,4,0,4);
+        shelfBody.Children.Add(appInfoEntryBtn);
+'@ 'DeskSpaceInformationV36 OpenEditor App Info button'
 Swap-R380 @'
         int direction=point.Y>=0 && point.Y<=222 ?
             point.X<=82 && CanPage(-1)?-1:
@@ -432,25 +836,39 @@ Swap-R380 @'
     private void MaskRevealed()
 '@ @'
     private string activeShelfAppPath="";
+    private string activeShelfFilePath="";
     private int shelfAppScanGen;
-    internal void OpenAppFileInfoShelf(string? appPath=null)
+    internal void OpenAppFileInfoShelf(string? appPath=null,bool keepTransient=false)
     {
         if(disposed)return;
-        transientPreview=false;
         editorActive=false;
         shownCollectionId=null;
         LeaveEditorKeyboardMode();
         if(!string.IsNullOrWhiteSpace(appPath))
+        {
+            if(!string.Equals(activeShelfAppPath,appPath,StringComparison.OrdinalIgnoreCase))
+                activeShelfFilePath="";
             activeShelfAppPath=appPath;
+        }
 
         var apps=DeskSpaceInformationTabV380.GetAvailableAppsForInformation();
+        if(!string.IsNullOrWhiteSpace(activeShelfAppPath) &&
+           apps.All(a=>!string.Equals(a.Path,activeShelfAppPath,StringComparison.OrdinalIgnoreCase)))
+        {
+            var customElig=DeskSpaceInformationTabV380.EvaluateAppEligibility(activeShelfAppPath);
+            apps.Insert(0,(customElig.AppDisplayName,activeShelfAppPath));
+        }
         if(string.IsNullOrWhiteSpace(activeShelfAppPath) && apps.Count>0)
-            activeShelfAppPath=apps[0].Path;
+        {
+            var pref=apps.FirstOrDefault(a=>a.Label.Contains("Winman",StringComparison.OrdinalIgnoreCase));
+            activeShelfAppPath=!string.IsNullOrEmpty(pref.Path)?pref.Path:apps[0].Path;
+        }
 
+        transientPreview=keepTransient;
         Shelf("App Info (Header → Value)");
-        shelfBorder.Width=320;
-        shelfBorder.MaxHeight=330;
-        shelfScroll.MaxHeight=255;
+        shelfBorder.Width=420;
+        shelfBorder.MaxHeight=460;
+        shelfScroll.MaxHeight=385;
         UpdateShelfPosition();
 
         var topRow=new WrapPanel{Margin=new Thickness(0,2,0,4)};
@@ -462,6 +880,18 @@ Swap-R380 @'
             if(isSel){btn.Background=Accent;btn.Foreground=Brushes.White;}
             topRow.Children.Add(btn);
         }
+        var browseBtn=SmallButton("+ Browse…",()=>{
+            var dlg=new Microsoft.Win32.OpenFileDialog{
+                Title="Select an application to inspect inside-file Header → Value details",
+                Filter="Applications & Shortcuts|*.exe;*.lnk|All Files|*.*"};
+            if(dlg.ShowDialog(owner)==true)
+                OpenAppFileInfoShelf(dlg.FileName);
+        });
+        browseBtn.ToolTip="Pick any installed .exe or .lnk shortcut";
+        topRow.Children.Add(browseBtn);
+        var manualBtn=SmallButton("+ Manual UI/PW",()=>NewCollection());
+        manualBtn.ToolTip="Create a manual UI / PW Information collection";
+        topRow.Children.Add(manualBtn);
         var fullBtn=SmallButton("Full ↗",()=>DeskSpaceInformationTabV380.SelectOrOpen(owner));
         fullBtn.ToolTip="Open full Application File Information view";
         topRow.Children.Add(fullBtn);
@@ -470,7 +900,7 @@ Swap-R380 @'
         if(string.IsNullOrWhiteSpace(activeShelfAppPath))
         {
             shelfBody.Children.Add(new TextBlock{
-                Text="Pin an application or click Full ↗ to browse an application.",
+                Text="Pin an application or click + Browse… to select an application.",
                 FontSize=11.5,Foreground=Ink,TextWrapping=TextWrapping.Wrap,
                 Margin=new Thickness(2,4,2,4)});
             return;
@@ -520,14 +950,32 @@ Swap-R380 @'
             return;
         }
 
-        var visibleSet=new HashSet<string>(res.VisibleHeaders,StringComparer.OrdinalIgnoreCase);
-        shelfBody.Children.Add(new TextBlock{
-            Text=$"Visible Headers ({res.MatchedHeaders.Count} matched across ≥ 2 files):",
-            FontSize=11,FontWeight=FontWeights.SemiBold,Foreground=Ink,
-            Margin=new Thickness(2,2,2,3)});
+        if(!string.IsNullOrEmpty(activeShelfFilePath) &&
+           res.MatchedFiles.All(f=>!string.Equals(f.FullPath,activeShelfFilePath,StringComparison.OrdinalIgnoreCase)))
+        {
+            activeShelfFilePath="";
+        }
 
-        var checksWrap=new WrapPanel{Margin=new Thickness(0,0,0,6)};
+        // 1. File Selector Strip
+        var fileBar=new WrapPanel{Margin=new Thickness(0,2,0,4)};
+        fileBar.Children.Add(new TextBlock{
+            Text="Select File:",FontSize=11,FontWeight=FontWeights.SemiBold,
+            Foreground=Ink,VerticalAlignment=VerticalAlignment.Center,
+            Margin=new Thickness(2,0,4,0)});
+        var fileBtnEntries=new List<(string Path,Button Btn)>();
         var filesHost=new StackPanel();
+        var visibleSet=new HashSet<string>(res.VisibleHeaders,StringComparer.OrdinalIgnoreCase);
+        var matchedHeaderNames=new HashSet<string>(res.MatchedHeaders.Select(h=>h.Header),StringComparer.OrdinalIgnoreCase);
+
+        void UpdateFileBtnHighlights()
+        {
+            foreach(var (fPath,btn) in fileBtnEntries)
+            {
+                bool isSel=string.Equals(fPath,activeShelfFilePath,StringComparison.OrdinalIgnoreCase);
+                btn.Background=isSel?Accent:Pale;
+                btn.Foreground=isSel?Brushes.White:Ink;
+            }
+        }
 
         void RebuildFilesList()
         {
@@ -536,18 +984,38 @@ Swap-R380 @'
             if(orderedVis.Count==0)
             {
                 filesHost.Children.Add(new TextBlock{
-                    Text="Check at least one header above to display file information.",
+                    Text="Check at least one header above to display inside-file information.",
                     FontSize=11,Foreground=Brushes.Gray,Margin=new Thickness(2,2,2,4)});
                 return;
             }
-            foreach(var file in res.MatchedFiles.Take(15))
+            var targetFiles=string.IsNullOrEmpty(activeShelfFilePath)
+                ? res.MatchedFiles
+                : res.MatchedFiles.Where(f=>string.Equals(f.FullPath,activeShelfFilePath,StringComparison.OrdinalIgnoreCase)).ToList();
+
+            foreach(var file in targetFiles)
             {
-                var pairs=DeskSpaceInformationTabV380.GetVisibleFieldsForFile(file,orderedVis);
+                var pairs=new List<KeyValuePair<string,string>>(DeskSpaceInformationTabV380.GetVisibleFieldsForFile(file,orderedVis));
+                var seenKeys=new HashSet<string>(pairs.Select(kv=>kv.Key),StringComparer.OrdinalIgnoreCase);
+                foreach(var kv in file.OrderedFields)
+                {
+                    if(!matchedHeaderNames.Contains(kv.Key) && seenKeys.Add(kv.Key))
+                        pairs.Add(kv);
+                }
                 if(pairs.Count==0)continue;
-                var cardStack=new StackPanel{Margin=new Thickness(4,3,4,3)};
-                var headDock=new DockPanel{LastChildFill=true,Margin=new Thickness(0,0,0,2)};
+
+                var cardStack=new StackPanel{Margin=new Thickness(5,4,5,4)};
+                var headDock=new DockPanel{LastChildFill=true,Margin=new Thickness(0,0,0,3)};
                 var capturedFile=file;
                 var capturedPairs=pairs;
+                var cardBtns=new StackPanel{Orientation=Orientation.Horizontal};
+
+                var copyAllBtn=SmallButton("Copy",()=>{
+                    Clipboard.SetText(string.Join(Environment.NewLine,capturedPairs.Select(kv=>$"{kv.Key}: {kv.Value}")));
+                    warning.Text=$"Copied {capturedPairs.Count} fields from '{capturedFile.DisplayName}'.";
+                });
+                copyAllBtn.FontSize=10;copyAllBtn.MinHeight=20;copyAllBtn.Padding=new Thickness(5,1,5,1);
+                copyAllBtn.ToolTip="Copy all visible inside-file fields";
+
                 var saveBtn=SmallButton("+ Save",()=>{
                     try
                     {
@@ -568,36 +1036,43 @@ Swap-R380 @'
                     }
                     catch(Exception ex){warning.Text=ex.Message;}
                 });
-                saveBtn.FontSize=10.5;
-                saveBtn.MinHeight=21;
-                saveBtn.Padding=new Thickness(6,1,6,1);
-                DockPanel.SetDock(saveBtn,Dock.Right);
-                headDock.Children.Add(saveBtn);
+                saveBtn.FontSize=10;saveBtn.MinHeight=20;saveBtn.Padding=new Thickness(5,1,5,1);
+
+                var openBtn=SmallButton("↗",()=>DeskSpacePinnedAppFilesV380.TryOpenQuickArcItem(appPath,capturedFile.FullPath,owner));
+                openBtn.FontSize=10;openBtn.MinHeight=20;openBtn.Padding=new Thickness(5,1,5,1);
+                openBtn.ToolTip="Open "+capturedFile.FullPath;
+
+                cardBtns.Children.Add(copyAllBtn);
+                cardBtns.Children.Add(saveBtn);
+                cardBtns.Children.Add(openBtn);
+                DockPanel.SetDock(cardBtns,Dock.Right);
+                headDock.Children.Add(cardBtns);
                 headDock.Children.Add(new TextBlock{
-                    Text=file.DisplayName,FontSize=12,FontWeight=FontWeights.Bold,
+                    Text=$"{file.DisplayName} ({pairs.Count})",FontSize=12,FontWeight=FontWeights.Bold,
                     Foreground=Ink,VerticalAlignment=VerticalAlignment.Center,
                     TextTrimming=TextTrimming.CharacterEllipsis});
                 cardStack.Children.Add(headDock);
 
                 foreach(var kv in pairs)
                 {
-                    var line=new Grid{Margin=new Thickness(0,1,0,1)};
-                    line.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(96)});
+                    var line=new Grid{Margin=new Thickness(0,1.5,0,1.5)};
+                    line.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(132)});
                     line.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
                     line.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
                     line.Children.Add(new TextBlock{
                         Text=kv.Key,FontSize=11,FontWeight=FontWeights.SemiBold,
-                        Foreground=Ink,VerticalAlignment=VerticalAlignment.Center,
-                        TextTrimming=TextTrimming.CharacterEllipsis});
+                        Foreground=Ink,VerticalAlignment=VerticalAlignment.Top,
+                        TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,1,4,0)});
                     var valTb=new TextBlock{
                         Text=kv.Value,FontSize=11,Foreground=Ink,
-                        VerticalAlignment=VerticalAlignment.Center,
-                        TextTrimming=TextTrimming.CharacterEllipsis,
-                        Margin=new Thickness(4,0,4,0),ToolTip=kv.Value};
+                        VerticalAlignment=VerticalAlignment.Top,
+                        TextWrapping=TextWrapping.Wrap,
+                        Margin=new Thickness(2,1,4,0),ToolTip=kv.Value};
                     Grid.SetColumn(valTb,1);line.Children.Add(valTb);
                     string copyVal=kv.Value;
                     var cpBtn=SmallButton("⧉",()=>Clipboard.SetText(copyVal));
-                    cpBtn.FontSize=10.5;cpBtn.MinHeight=20;cpBtn.Padding=new Thickness(5,1,5,1);
+                    cpBtn.FontSize=10;cpBtn.MinHeight=20;cpBtn.Padding=new Thickness(5,1,5,1);
+                    cpBtn.VerticalAlignment=VerticalAlignment.Top;
                     cpBtn.ToolTip="Copy "+kv.Key;
                     Grid.SetColumn(cpBtn,2);line.Children.Add(cpBtn);
                     cardStack.Children.Add(line);
@@ -605,10 +1080,73 @@ Swap-R380 @'
                 filesHost.Children.Add(new Border{
                     BorderBrush=new SolidColorBrush(Color.FromRgb(215,221,240)),
                     BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(7),
-                    Margin=new Thickness(0,0,0,5),Child=cardStack});
+                    Margin=new Thickness(0,0,0,6),Child=cardStack});
             }
         }
 
+        var allFilesBtn=SmallButton($"All ({res.MatchedFiles.Count})",()=>{
+            activeShelfFilePath="";
+            UpdateFileBtnHighlights();
+            RebuildFilesList();
+        });
+        allFilesBtn.FontSize=10.5;allFilesBtn.MinHeight=22;allFilesBtn.Padding=new Thickness(6,2,6,2);
+        fileBtnEntries.Add(("",allFilesBtn));
+        fileBar.Children.Add(allFilesBtn);
+
+        foreach(var mf in res.MatchedFiles)
+        {
+            string capFile=mf.FullPath;
+            var fBtn=SmallButton(mf.DisplayName,()=>{
+                activeShelfFilePath=capFile;
+                UpdateFileBtnHighlights();
+                RebuildFilesList();
+            });
+            fBtn.FontSize=10.5;fBtn.MinHeight=22;fBtn.Padding=new Thickness(6,2,6,2);
+            fBtn.ToolTip=mf.FullPath;
+            fileBtnEntries.Add((capFile,fBtn));
+            fileBar.Children.Add(fBtn);
+        }
+        UpdateFileBtnHighlights();
+        shelfBody.Children.Add(fileBar);
+
+        // 2. Visible Headers + Quick Selection Controls
+        bool suppressHeaderEvents=false;
+        var headerCheckBoxes=new List<(string Header,CheckBox Box)>();
+        void ApplyBatchHeaders(IEnumerable<string> nextSet)
+        {
+            suppressHeaderEvents=true;
+            try
+            {
+                visibleSet.Clear();
+                foreach(string h in nextSet)visibleSet.Add(h);
+                foreach(var (hName,cb) in headerCheckBoxes)
+                    cb.IsChecked=visibleSet.Contains(hName);
+                DeskSpaceInformationTabV380.SaveVisibleHeadersPreference(appPath,visibleSet);
+                RebuildFilesList();
+            }
+            finally{suppressHeaderEvents=false;}
+        }
+
+        var hdrBar=new DockPanel{LastChildFill=true,Margin=new Thickness(0,2,0,3)};
+        var hdrQuick=new StackPanel{Orientation=Orientation.Horizontal};
+        var hAllBtn=SmallButton("All",()=>ApplyBatchHeaders(res.MatchedHeaders.Select(h=>h.Header)));
+        hAllBtn.FontSize=10;hAllBtn.MinHeight=20;hAllBtn.Padding=new Thickness(5,1,5,1);
+        var hSumBtn=SmallButton("Summary",()=>ApplyBatchHeaders(DeskSpaceInformationTabV380.GetSummaryPriorityHeaders(res.MatchedHeaders)));
+        hSumBtn.FontSize=10;hSumBtn.MinHeight=20;hSumBtn.Padding=new Thickness(5,1,5,1);
+        var hClrBtn=SmallButton("Clear",()=>ApplyBatchHeaders(Array.Empty<string>()));
+        hClrBtn.FontSize=10;hClrBtn.MinHeight=20;hClrBtn.Padding=new Thickness(5,1,5,1);
+        hdrQuick.Children.Add(hAllBtn);
+        hdrQuick.Children.Add(hSumBtn);
+        hdrQuick.Children.Add(hClrBtn);
+        DockPanel.SetDock(hdrQuick,Dock.Right);
+        hdrBar.Children.Add(hdrQuick);
+        hdrBar.Children.Add(new TextBlock{
+            Text=$"Visible Headers ({res.MatchedHeaders.Count} matched):",
+            FontSize=11,FontWeight=FontWeights.SemiBold,Foreground=Ink,
+            VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(2,0,0,0)});
+        shelfBody.Children.Add(hdrBar);
+
+        var checksWrap=new WrapPanel{Margin=new Thickness(0,0,0,6)};
         foreach(var hdr in res.MatchedHeaders)
         {
             string hName=hdr.Header;
@@ -619,15 +1157,18 @@ Swap-R380 @'
                 Margin=new Thickness(2,1,6,2),
                 ToolTip=$"Sample: {hdr.SampleValue}"};
             cb.Checked+=(_,_)=>{
+                if(suppressHeaderEvents)return;
                 visibleSet.Add(hName);
                 DeskSpaceInformationTabV380.SaveVisibleHeadersPreference(appPath,visibleSet);
                 RebuildFilesList();
             };
             cb.Unchecked+=(_,_)=>{
+                if(suppressHeaderEvents)return;
                 visibleSet.Remove(hName);
                 DeskSpaceInformationTabV380.SaveVisibleHeadersPreference(appPath,visibleSet);
                 RebuildFilesList();
             };
+            headerCheckBoxes.Add((hName,cb));
             checksWrap.Children.Add(cb);
         }
 
