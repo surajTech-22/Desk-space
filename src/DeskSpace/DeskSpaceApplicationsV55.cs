@@ -200,6 +200,19 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     }
     public bool IsArcOpen=>arc.IsOpen;
     public int PinnedCount=>pinned().Count;
+    private bool contextMenuOpen;
+    internal bool IsContextMenuOpen=>contextMenuOpen;
+    internal bool IsPointerNearArc()
+    {
+        if(contextMenuOpen)return true;
+        if(disposed || !arc.IsOpen || !canvas.IsLoaded)return false;
+        try
+        {
+            var pt=DeskSpaceWheelHoverV35.MouseIn(canvas);
+            return pt.X>=-26 && pt.X<=canvas.Width+26 && pt.Y>=-26 && pt.Y<=canvas.Height+26;
+        }
+        catch(InvalidOperationException){return false;}
+    }
     // Main parent outer slot #4 starts at this physical direction (the
     // center-of-label angle, not the geometric midpoint).
     internal static double ApplicationsParentCenter=>
@@ -619,7 +632,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         group="";childPage=0;ClearActiveAppFilesV380();
         Render();arc.IsOpen=owner.IsVisible;
     }
-    public void HideArc(){middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
+    public void HideArc(){contextMenuOpen=false;middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
     private int Slot(Point point)
     {
         for(int i=hitZones.Count-1;i>=0;i--)
@@ -628,6 +641,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     }
     private void Hover(Point point)
     {
+        if(contextMenuOpen)return;
         int i=Slot(point);
         if(i==hovered)return;
         hovered=i;
@@ -662,7 +676,7 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
     }
     private void Move(object sender,MouseEventArgs e)
     {
-        if(!disposed&&arc.IsOpen)Hover(e.GetPosition(canvas));
+        if(!disposed&&arc.IsOpen&&!contextMenuOpen)Hover(e.GetPosition(canvas));
     }
     internal bool UnpinAppV380(string path)
     {
@@ -723,6 +737,8 @@ internal sealed class DeskSpaceApplicationsV55 : IDisposable
         cm.Items.Add(new Separator());
         cm.Items.Add(unpinItem);
         cm.PlacementTarget=canvas;
+        contextMenuOpen=true;
+        cm.Closed+=(_,_)=>contextMenuOpen=false;
         cm.IsOpen=true;
         e.Handled=true;
     }

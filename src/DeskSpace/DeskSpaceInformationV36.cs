@@ -68,6 +68,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     private readonly StackPanel shelfBody;
     private readonly ScrollViewer shelfScroll;
     private readonly TextBlock shelfTitle;
+    private readonly Button headerAddBtn;
+    private readonly Button headerAppsBtn;
     private int positionTick;
     private readonly TextBlock warning;
     private readonly PasswordBox master;
@@ -89,7 +91,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     private readonly HashSet<string> loadingArcApps=new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string,int> arcAppScanGens=new(StringComparer.OrdinalIgnoreCase);
     private long warmedAppsRev=-1;
-    private bool showAllFileSpecificFields=true;
+    private DateTime warmedConfigStampUtc=DateTime.MinValue;
+    private bool contextMenuOpen;
     private int ActiveArcTotalCount()=>arcApps.Count>0?arcApps.Count:all.Count;
     private bool warmed,warming;
     private DateTime warmStamp=DateTime.MinValue;
@@ -112,10 +115,11 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
                 var snapshot=Read().OrderByDescending(x=>x.UpdatedUtc).ToList();
                 var appsSnapshot=DeskSpaceInformationTabV380.GetSelectedAppsForInformation();
                 long appsRev=DeskSpaceInformationTabV380.InformationAppsRevision;
+                DateTime cfgStamp=DeskSpaceInformationTabV380.GetInformationConfigStampUtc();
                 DeskSpaceInformationTabV380.PrewarmInformationApps(appsSnapshot.Select(a=>a.Path));
                 owner.Dispatcher.BeginInvoke(new Action(()=>{
                     if(disposed)return;
-                    all=snapshot;arcApps=appsSnapshot;warmStamp=stamp;warmedAppsRev=appsRev;warmed=true;warming=false;
+                    all=snapshot;arcApps=appsSnapshot;warmStamp=stamp;warmedAppsRev=appsRev;warmedConfigStampUtc=cfgStamp;warmed=true;warming=false;
                     if(arcApps.Count==1)
                         EnsureAppInfoLoadedForArc(arcApps[0].Path);
                     if(arc.IsOpen){RenderArc();PositionArc();changed();}
@@ -154,6 +158,35 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     public bool IsArcOpen => arc.IsOpen;
     public bool IsEditing => editorActive;
     public int SavedCount => ActiveArcTotalCount();
+    internal bool IsContextMenuOpen => contextMenuOpen;
+    internal bool IsPointerNearArc()
+    {
+        if(contextMenuOpen)return true;
+        if(disposed || !arc.IsOpen || !arcCanvas.IsLoaded)return false;
+        try
+        {
+            var pt=DeskSpaceWheelHoverV35.MouseIn(arcCanvas);
+            return pt.X>=-26 && pt.X<=arcCanvas.Width+26 && pt.Y>=-26 && pt.Y<=arcCanvas.Height+26;
+        }
+        catch(InvalidOperationException){return false;}
+    }
+    internal string CenterSummaryText
+    {
+        get
+        {
+            if(arcApps.Count==1)
+            {
+                var app=arcApps[0];
+                if(DeskSpaceInformationTabV380.TryGetCachedAppInformation(app.Path,out var singleRes) &&
+                   singleRes.MeetsMinimumTwoFilesRule)
+                    return $"{app.Label}\n{singleRes.MatchedFiles.Count} files";
+                return $"{app.Label}\nLoading…";
+            }
+            if(arcApps.Count>=2)
+                return $"Information\n{arcApps.Count} apps";
+            return $"Information\n{all.Count} saved";
+        }
+    }
     public bool ConfirmNavigation()
     {
         if(!editorActive)return true;
@@ -227,6 +260,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         add.MinWidth=29;
         add.Margin=new Thickness(1,2,1,2);
         DockPanel.SetDock(add,Dock.Right);
+        headerAddBtn=add;
         header.Children.Add(add);
         var appsBtn=SmallButton("Apps",()=>OpenAppFileInfoShelf());
         appsBtn.ToolTip="Select an application to inspect inside-file Header → Value information";
@@ -234,6 +268,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         appsBtn.MinWidth=40;
         appsBtn.Margin=new Thickness(1,3,1,3);
         DockPanel.SetDock(appsBtn,Dock.Right);
+        headerAppsBtn=appsBtn;
         header.Children.Add(appsBtn);
         var h=new Border{Padding=new Thickness(9,6,0,0),Child=shelfTitle};
         header.Children.Add(h);
@@ -344,16 +379,20 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         if(shelf.IsOpen && !editorActive)CloseShelf();
         try
         {
-            if(!warmed || CurrentStamp()!=warmStamp || warmedAppsRev!=DeskSpaceInformationTabV380.InformationAppsRevision)
+            DateTime cfgStamp=DeskSpaceInformationTabV380.GetInformationConfigStampUtc();
+            if(!warmed || CurrentStamp()!=warmStamp ||
+               warmedAppsRev!=DeskSpaceInformationTabV380.InformationAppsRevision ||
+               warmedConfigStampUtc!=cfgStamp)
             {
                 arcApps=DeskSpaceInformationTabV380.GetSelectedAppsForInformation();
                 warmedAppsRev=DeskSpaceInformationTabV380.InformationAppsRevision;
+                warmedConfigStampUtc=cfgStamp;
                 DeskSpaceInformationTabV380.PrewarmInformationApps(arcApps.Select(a=>a.Path));
                 WarmStart();
             }
             activeArcAppPath="";
             filePage=0;
-            startIndex=Math.Clamp(startIndex,0,Math.Max(0,Depth0TotalCount()-PageSize));
+            startIndex=Math.Clamp(startIndex,0,Math.Max(0,Depth0TotalCount()-Depth0PageSize()));
             if(arcApps.Count==1)
                 EnsureAppInfoLoadedForArc(arcApps[0].Path);
             RenderArc();
@@ -367,6 +406,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     }
     public void HideArc()
     {
+        contextMenuOpen=false;
         newHoverTimer.Stop();
         middleScroll.Stop();
         pointerTimer.Stop();
@@ -423,9 +463,11 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     }
     private Rect arcBounds=Rect.Empty;
     private const double ArcMargin=6;
-    private const double InfoOuterInner=257,InfoOuterOuter=365;
+    private const double InfoOuterInner=257,InfoOuterOuter=322;
     private const int PageSize=DeskSpaceSubDonutStandardV62.Visible-1;
+    private const int SingleAppFilePageSize=DeskSpaceSubDonutStandardV62.Visible-2;
     private const int FilePageSize=DeskSpaceSubDonutStandardV62.Visible-1;
+    private int Depth0PageSize()=>arcApps.Count==1?SingleAppFilePageSize:PageSize;
     private readonly DeskSpaceSubDonutStandardV62.Wheel standardWheel=new();
     private readonly List<(int index,int depth,string kind,Guid? id,string appPath,string filePath,double midAngle,Geometry hit)> arcHitZones=new();
     private bool arcPressed;
@@ -485,7 +527,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         if(handle!=IntPtr.Zero && GetWindowRect(handle,out var rect) &&
            rect.Right>rect.Left && rect.Bottom>rect.Top)
             centre=new Point((rect.Left+rect.Right)/2.0,(rect.Top+rect.Bottom)/2.0);
-        double[] shifts={0,-8,8,-16,16,-24,24,-32,32};
+        double[] shifts={0,-8,8,-16,16,-24,24,-32,32,-40,40,-48,48};
         double best=preferred,bestScore=double.PositiveInfinity;
         foreach(double shift in shifts)
         {
@@ -634,7 +676,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     }
 
     private bool HasAnyArcOverflow()=>
-        Depth0TotalCount()>PageSize || ActiveDepth1TotalCount()>FilePageSize;
+        Depth0TotalCount()>Depth0PageSize() || ActiveDepth1TotalCount()>FilePageSize;
 
     // Child sectors are placed ONLY across a partial arc centered over the
     // Information parent at the top of the existing outer ring, tightly clipped
@@ -666,10 +708,10 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             {
                 var files=singleRes.MatchedFiles;
                 d0Total=files.Count;
-                startIndex=Math.Clamp(startIndex,0,Math.Max(0,d0Total-PageSize));
-                var slice=files.Skip(startIndex).Take(PageSize).ToArray();
+                startIndex=Math.Clamp(startIndex,0,Math.Max(0,d0Total-SingleAppFilePageSize));
+                var slice=files.Skip(startIndex).Take(SingleAppFilePageSize).ToArray();
                 d0VisibleItems=slice.Length;
-                int count=slice.Length+1;
+                int count=slice.Length+2;
                 var layout=DeskSpaceSubDonutStandardV62.Plan(count,0,-90);
                 for(int i=0;i<slice.Length;i++)
                 {
@@ -679,9 +721,13 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
                         $"{mf.DisplayName}\n{mf.KindBadge} · Click to show selected info · Right-click to manage app",
                         false));
                 }
-                drawItems.Add(("⚙ Apps","manageapps",null,app.Path,"",
+                drawItems.Add(("⚙ Fields","choosefields",null,app.Path,"",
                     layout.From(slice.Length),layout.To(slice.Length),0,
-                    $"{app.Label} · Add/Remove apps or choose visible fields",
+                    $"{app.Label} · Choose visible Header → Value fields",
+                    true));
+                drawItems.Add(("⚙ Apps","manageapps",null,app.Path,"",
+                    layout.From(slice.Length+1),layout.To(slice.Length+1),0,
+                    $"{app.Label} · Add or remove Information applications",
                     true));
             }
             else
@@ -693,7 +739,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
                     layout.From(0),layout.To(0),0,statusTip,false));
                 drawItems.Add(("⚙ Apps","manageapps",null,app.Path,"",
                     layout.From(1),layout.To(1),0,
-                    $"{app.Label} · Add/Remove apps or choose visible fields",true));
+                    $"{app.Label} · Add or remove Information applications",true));
             }
         }
         else if(isMultiAppMode)
@@ -746,7 +792,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
                 d1Entries.Add(("⚙ Fields","choosefields",activeArcAppPath,"",
                     "Choose visible Header → Value fields for this application",true));
 
-                double d1Half=Math.Clamp(d1Entries.Count*6.0,12.0,32.0);
+                double d1Half=Math.Clamp(d1Entries.Count*8.5,16.0,44.0);
                 double d1Center=FitOuterAngle(activeArcAppAngle,d1Half,InfoOuter(1));
                 double d1Start=d1Center-d1Half;
                 double d1Step=(d1Half*2)/d1Entries.Count;
@@ -894,7 +940,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         }
 
         // Pass 3: Hidden counters for Depth-0 and Depth-1
-        if(d0ScrollWedges.Count>0 && d0Total>PageSize)
+        if(d0ScrollWedges.Count>0 && d0Total>Depth0PageSize())
         {
             int hiddenBefore=startIndex;
             int hiddenAfter=Math.Max(0,d0Total-startIndex-d0ScrollWedges.Count);
@@ -960,7 +1006,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             return;
         }
         if(disposed || !arc.IsOpen || !arcCanvas.IsLoaded ||
-           editorActive)return;
+           editorActive || contextMenuOpen)return;
         try
         {
             // All modules use the same DPI-aware wheel cursor source.
@@ -971,15 +1017,15 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     }
     private void OnArcMouseMove(object sender,MouseEventArgs e)
     {
-        if(!arc.IsOpen || disposed)return;
+        if(!arc.IsOpen || disposed || contextMenuOpen)return;
         ProcessWheelPointer(e.GetPosition(arcCanvas));
     }
     private void ProcessWheelPointer(Point point)
     {
-        if(disposed || !arc.IsOpen || editorActive)return;
+        if(disposed || !arc.IsOpen || editorActive || contextMenuOpen)return;
         double cw=arcCanvas.Width,ch=arcCanvas.Height;
         double edgeBand=Math.Min(48,cw*0.14);
-        int direction=point.Y>=0 && point.Y<=ch ?
+        int direction=arcApps.Count==0 && point.Y>=0 && point.Y<=ch ?
             point.X<=edgeBand && CanPage(-1)?-1:
             point.X>=cw-edgeBand && CanPage(1)?1:0:0;
         int overItem=SlotAtPoint(point);
@@ -1100,6 +1146,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         cm.Items.Add(removeItem);
 
         cm.PlacementTarget=arcCanvas;
+        contextMenuOpen=true;
+        cm.Closed+=(_,_)=>contextMenuOpen=false;
         cm.IsOpen=true;
         e.Handled=true;
     }
@@ -1108,6 +1156,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
     {
         arcApps=DeskSpaceInformationTabV380.GetSelectedAppsForInformation();
         warmedAppsRev=DeskSpaceInformationTabV380.InformationAppsRevision;
+        warmedConfigStampUtc=DeskSpaceInformationTabV380.GetInformationConfigStampUtc();
         if(!string.IsNullOrEmpty(removedAppPath) &&
            string.Equals(activeArcAppPath,removedAppPath,StringComparison.OrdinalIgnoreCase))
         {
@@ -1290,7 +1339,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
             }
             else
             {
-                startIndex=Math.Clamp(keyboardIndex-2,0,Math.Max(0,total-4));
+                startIndex=Math.Clamp(keyboardIndex-2,0,Math.Max(0,total-Depth0PageSize()));
                 RenderArc();
                 int slot=keyboardIndex-startIndex;
                 if(slot>=0 && slot<arcHitZones.Count)
@@ -1356,7 +1405,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         if(d0Overflow)Slide(delta);
     }
     private bool CanPage(int direction) =>
-        direction<0?startIndex>0:startIndex+PageSize<Depth0TotalCount();
+        direction<0?startIndex>0:startIndex+Depth0PageSize()<Depth0TotalCount();
     private bool CanPageFiles(int direction) =>
         direction<0?filePage>0:filePage+FilePageSize<ActiveDepth1TotalCount();
     private void StartEdgeScroll(int direction)
@@ -1378,7 +1427,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         CloseTransientPreview();
         if(!CanPage(delta)){StopEdgeScroll();return;}
         if(arcApps.Count>=2){activeArcAppPath="";filePage=0;}
-        startIndex=Math.Clamp(startIndex+delta,0,Math.Max(0,Depth0TotalCount()-PageSize));
+        startIndex=Math.Clamp(startIndex+delta,0,Math.Max(0,Depth0TotalCount()-Depth0PageSize()));
         RenderArc();
         DeskSpaceSubDonutStandardV62.Animate(arcCanvas,delta,-90);
         if(!CanPage(delta))StopEdgeScroll();
@@ -1390,13 +1439,25 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         RenderArc();
         DeskSpaceSubDonutStandardV62.Animate(arcCanvas,delta,activeArcAppAngle);
     }
-    private void Shelf(string title)
+    private void Shelf(string title,double? customWidth=null,double? customMaxHeight=null,double? customScrollMax=null,bool showLegacyHeaderButtons=true)
     {
         MaskRevealed();
         shelfTitle.Text=title;
         shelfBody.Children.Clear();
         warning.Text="";
-        SetCompactShelfLayout(editorActive);
+        headerAddBtn.Visibility=showLegacyHeaderButtons?Visibility.Visible:Visibility.Collapsed;
+        headerAppsBtn.Visibility=showLegacyHeaderButtons?Visibility.Visible:Visibility.Collapsed;
+        if(customWidth.HasValue)
+        {
+            shelfBorder.Width=customWidth.Value;
+            if(customMaxHeight.HasValue)shelfBorder.MaxHeight=customMaxHeight.Value;
+            if(customScrollMax.HasValue)shelfScroll.MaxHeight=customScrollMax.Value;
+            shelfBody.Margin=new Thickness(8,3,8,6);
+        }
+        else
+        {
+            SetCompactShelfLayout(editorActive);
+        }
         UpdateShelfPosition();
         shelf.IsOpen=true;
         // Refresh after visual measurement and after current ring animation.
@@ -1720,12 +1781,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         string fileTitle=System.IO.Path.GetFileNameWithoutExtension(filePath);
         if(string.IsNullOrWhiteSpace(fileTitle))fileTitle=filePath;
 
-        Shelf(fileTitle);
-        shelfBorder.Width=364;
-        shelfBorder.MaxHeight=340;
-        shelfScroll.MaxHeight=268;
-        shelfBody.Margin=new Thickness(8,3,8,6);
-        UpdateShelfPosition();
+        Shelf(fileTitle,364,340,268,showLegacyHeaderButtons:false);
 
         if(DeskSpaceInformationTabV380.TryGetCachedAppInformation(appPath,out var cachedRes))
         {
@@ -1772,19 +1828,8 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
 
         shelfTitle.Text=file.DisplayName;
         var visibleSet=new HashSet<string>(res.VisibleHeaders,StringComparer.OrdinalIgnoreCase);
-        var matchedNames=new HashSet<string>(res.MatchedHeaders.Select(h=>h.Header),StringComparer.OrdinalIgnoreCase);
         var orderedVis=res.MatchedHeaders.Select(h=>h.Header).Where(visibleSet.Contains).ToList();
-
-        var pairs=new List<KeyValuePair<string,string>>(DeskSpaceInformationTabV380.GetVisibleFieldsForFile(file,orderedVis));
-        var seenKeys=new HashSet<string>(pairs.Select(kv=>kv.Key),StringComparer.OrdinalIgnoreCase);
-        if(showAllFileSpecificFields && orderedVis.Count>0)
-        {
-            foreach(var kv in file.OrderedFields)
-            {
-                if(!matchedNames.Contains(kv.Key) && seenKeys.Add(kv.Key))
-                    pairs.Add(kv);
-            }
-        }
+        var pairs=DeskSpaceInformationTabV380.GetVisibleFieldsForFile(file,orderedVis);
 
         var topTools=new DockPanel{LastChildFill=true,Margin=new Thickness(0,2,0,6)};
         var rightBtns=new StackPanel{Orientation=Orientation.Horizontal};
@@ -1872,12 +1917,7 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         LeaveEditorKeyboardMode();
 
         var elig=DeskSpaceInformationTabV380.EvaluateAppEligibility(appPath);
-        Shelf("Fields · "+elig.AppDisplayName);
-        shelfBorder.Width=368;
-        shelfBorder.MaxHeight=360;
-        shelfScroll.MaxHeight=288;
-        shelfBody.Margin=new Thickness(8,3,8,6);
-        UpdateShelfPosition();
+        Shelf("Fields · "+elig.AppDisplayName,368,360,288,showLegacyHeaderButtons:false);
 
         if(DeskSpaceInformationTabV380.TryGetCachedAppInformation(appPath,out var cachedRes))
         {
@@ -1965,15 +2005,6 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         hdrBar.Children.Add(statusLbl);
         shelfBody.Children.Add(hdrBar);
 
-        var fileSpecCb=new CheckBox{
-            IsChecked=showAllFileSpecificFields,
-            Content="Include file-specific schedule/computation rows",
-            FontSize=11,FontWeight=FontWeights.SemiBold,Foreground=Ink,
-            Margin=new Thickness(2,2,2,6),Cursor=Cursors.Hand};
-        fileSpecCb.Checked+=(_,_)=>showAllFileSpecificFields=true;
-        fileSpecCb.Unchecked+=(_,_)=>showAllFileSpecificFields=false;
-        shelfBody.Children.Add(fileSpecCb);
-
         foreach(var hdr in res.MatchedHeaders)
         {
             string hName=hdr.Header;
@@ -2007,15 +2038,11 @@ internal sealed class DeskSpaceInformationV36 : IDisposable
         transientPreview=keepTransient;
         LeaveEditorKeyboardMode();
 
-        Shelf("Information Apps");
-        shelfBorder.Width=364;
-        shelfBorder.MaxHeight=360;
-        shelfScroll.MaxHeight=288;
-        shelfBody.Margin=new Thickness(8,3,8,6);
-        UpdateShelfPosition();
+        Shelf("Information Apps",364,360,288,showLegacyHeaderButtons:false);
 
         arcApps=DeskSpaceInformationTabV380.GetSelectedAppsForInformation();
         warmedAppsRev=DeskSpaceInformationTabV380.InformationAppsRevision;
+        warmedConfigStampUtc=DeskSpaceInformationTabV380.GetInformationConfigStampUtc();
 
         var modeNote=arcApps.Count==1
             ? "1 app selected — Information wheel directly shows its files."

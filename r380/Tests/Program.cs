@@ -2381,7 +2381,7 @@ internal static class Program
             Check(multiHiddenBadges == 1,
                 $"Expected 1 DeskSpaceHiddenCountInline counter on Multi-app Depth-1 overflow, got {multiHiddenBadges}");
 
-            // Single-App (1 app): Depth-0 directly renders infofile wedges + manageapps + overflow counter, 0 Depth-1 wedges
+            // Single-App (1 app): Depth-0 directly renders 3 infofile wedges + choosefields + manageapps + overflow counter, 0 Depth-1 wedges
             arcAppsField.SetValue(info, new List<(string Label, string Path)> { ("Winman GST", wgstLnk) });
             activeAppField.SetValue(info, "");
             startIndexField.SetValue(info, 0);
@@ -2389,22 +2389,32 @@ internal static class Program
             renderArc.Invoke(info, null);
 
             var singleHits = ReadArcHits((IList)arcHitZonesField.GetValue(info)!);
-            Check(singleHits.Count(x => x.Depth == 0 && x.Kind == "infofile") > 0 &&
+            Check(singleHits.Count(x => x.Depth == 0 && x.Kind == "infofile") == 3 &&
+                  singleHits.Count(x => x.Depth == 0 && x.Kind == "choosefields") == 1 &&
                   singleHits.Count(x => x.Depth == 0 && x.Kind == "manageapps") == 1 &&
                   singleHits.Count(x => x.Kind == "infoapp") == 0 &&
                   singleHits.Count(x => x.Depth == 1) == 0,
-                "Single-app Information mode must directly render Depth-0 infofile wedges + manageapps with 0 Depth-1 wedges");
+                "Single-app Information mode must directly render 3 Depth-0 infofile wedges + choosefields + manageapps with 0 Depth-1 wedges");
             int singleHiddenBadges = arcCanvas.Children.OfType<FrameworkElement>()
                 .Count(b => (b.Tag as string) == "DeskSpaceHiddenCountInline");
             Check(singleHiddenBadges == 1,
                 $"Expected 1 DeskSpaceHiddenCountInline counter on Single-app Depth-0 overflow, got {singleHiddenBadges}");
 
-            // Clean Below-Circle Shelf for selected file
+            string centerText = (string)infoType.GetProperty("CenterSummaryText", AnyInstance)!.GetValue(info)!;
+            Check(centerText.Contains("Winman GST", StringComparison.OrdinalIgnoreCase) &&
+                  centerText.Contains("10 files", StringComparison.OrdinalIgnoreCase),
+                $"Single-app CenterSummaryText must display app name and file count, got '{centerText}'");
+
+            // Clean Below-Circle Shelf for selected file (hides legacy '+' and 'Apps' header buttons)
             infoType.GetMethod("OpenSelectedAppFileBelowCircle", AnyInstance)!
                 .Invoke(info, new object[] { wgstLnk, firstWgstFile });
             var shelf = (System.Windows.Controls.Primitives.Popup)infoType.GetField("shelf", AnyInstance)!.GetValue(info)!;
             var shelfBody = (StackPanel)infoType.GetField("shelfBody", AnyInstance)!.GetValue(info)!;
+            var headerAddBtn = (Button)infoType.GetField("headerAddBtn", AnyInstance)!.GetValue(info)!;
+            var headerAppsBtn = (Button)infoType.GetField("headerAppsBtn", AnyInstance)!.GetValue(info)!;
             Check(shelf.IsOpen, "OpenSelectedAppFileBelowCircle must open shelf below circle");
+            Check(headerAddBtn.Visibility == Visibility.Collapsed && headerAppsBtn.Visibility == Visibility.Collapsed,
+                "App file shelf must hide legacy '+' and 'Apps' header buttons");
 
             static void CollectControls(DependencyObject? node, List<System.Windows.Controls.CheckBox> checkBoxes, List<string> texts, HashSet<object> visited)
             {
@@ -2454,6 +2464,184 @@ internal static class Program
         }
     }
 
+    private static void TestNoiseFilteringIsolationAndSyncV380(Assembly asm)
+    {
+        var pinnedFilesType = asm.GetType("DeskSpace.DeskSpacePinnedAppFilesV380", true)!;
+        var infoTabType = asm.GetType("DeskSpace.DeskSpaceInformationTabV380", true)!;
+        var hostType = asm.GetType("DeskSpace.WidgetShellWindow", true)!;
+        var infoType = asm.GetType("DeskSpace.DeskSpaceInformationV36", true)!;
+        var appsType = asm.GetType("DeskSpace.DeskSpaceApplicationsV55", true)!;
+        var settingsType = asm.GetType("DeskSpace.WidgetSettingsV3", true)!;
+
+        var isSampleOrNoise = pinnedFilesType.GetMethod("IsSampleOrNoiseUserPath", AnyStatic)!;
+        var resolveCap = pinnedFilesType.GetMethod("ResolveCapability", AnyStatic)!;
+        var isPathCompatible = infoTabType.GetMethod("IsPathCompatibleWithEligibility", AnyStatic)!;
+        var evalElig = infoTabType.GetMethod("EvaluateAppEligibility", AnyStatic)!;
+        var isValidPair = infoTabType.GetMethod("IsValidHeaderValuePair", AnyStatic)!;
+        var getPrefStamp = infoTabType.GetMethod("GetPreferencesStampUtc", AnyStatic)!;
+
+        // 1. Sample / Backup / Old / Test / Office lock noise filtering
+        Check((bool)isSampleOrNoise.Invoke(null, new object?[] { @"C:\Winman\Sample\Demo.wgst", false })!,
+            "Winman Sample folder must be filtered as noise");
+        Check((bool)isSampleOrNoise.Invoke(null, new object?[] { @"D:\TallyPrime\Data\Backup\10001", true })!,
+            "Tally Backup folder must be filtered as noise");
+        Check((bool)isSampleOrNoise.Invoke(null, new object?[] { @"D:\TallyPrime\Data\OldData\10002", true })!,
+            "Tally OldData folder must be filtered as noise");
+        Check((bool)isSampleOrNoise.Invoke(null, new object?[] { @"C:\Work\~$MonthlyReturn.xlsx", false })!,
+            "Office ~$ lock file must be filtered as noise");
+        Check(!(bool)isSampleOrNoise.Invoke(null, new object?[] { @"C:\Winman\UserData\ClientAlpha.wgst", false })!,
+            "Real Winman UserData file must NOT be filtered as noise");
+
+        string tempRoot = Path.Combine(Path.GetTempPath(), "DeskSpace_R380_FilterSync_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        string? settingsFile = (string?)settingsType.GetField("Filename", AnyStatic)?.GetValue(null);
+        byte[]? origSettingsBytes = null;
+        DateTime origSettingsWrite = default;
+        bool hadSettingsFile = false;
+
+        try
+        {
+            // 2. Winman GST / TDS / CA ERP strict isolation vs bare Winman_Launcher.exe compatibility
+            string caErpLnk = Path.Combine(tempRoot, "Winman CA ERP.lnk");
+            string tdsLnk = Path.Combine(tempRoot, "Winman TDS.lnk");
+            string gstLnk = Path.Combine(tempRoot, "Winman GST.lnk");
+            string bareLauncher = Path.Combine(tempRoot, "Winman_Launcher.exe");
+            string studioExe = Path.Combine(tempRoot, "studio64.exe");
+            File.WriteAllText(caErpLnk, "mock");
+            File.WriteAllText(tdsLnk, "mock");
+            File.WriteAllText(gstLnk, "mock");
+            File.WriteAllText(bareLauncher, "mock");
+            File.WriteAllText(studioExe, "mock");
+
+            string fTax = Path.Combine(tempRoot, "c.tax");
+            string fWgst = Path.Combine(tempRoot, "c.wgst");
+            string f26q = Path.Combine(tempRoot, "c.26q");
+            string f24q = Path.Combine(tempRoot, "c.24q");
+            string fWt = Path.Combine(tempRoot, "c.wt");
+            File.WriteAllText(fTax, "mock");
+            File.WriteAllText(fWgst, "mock");
+            File.WriteAllText(f26q, "mock");
+            File.WriteAllText(f24q, "mock");
+            File.WriteAllText(fWt, "mock");
+
+            object caElig = evalElig.Invoke(null, new object[] { caErpLnk })!;
+            object tdsElig = evalElig.Invoke(null, new object[] { tdsLnk })!;
+            object gstElig = evalElig.Invoke(null, new object[] { gstLnk })!;
+            object bareElig = evalElig.Invoke(null, new object[] { bareLauncher })!;
+            object studioElig = evalElig.Invoke(null, new object[] { studioExe })!;
+
+            object caCap = resolveCap.Invoke(null, new object[] { caErpLnk })!;
+            object tdsCap = resolveCap.Invoke(null, new object[] { tdsLnk })!;
+            object gstCap = resolveCap.Invoke(null, new object[] { gstLnk })!;
+            object bareCap = resolveCap.Invoke(null, new object[] { bareLauncher })!;
+
+            Check((bool)isPathCompatible.Invoke(null, new object[] { fTax, caCap, caElig })! &&
+                  !(bool)isPathCompatible.Invoke(null, new object[] { fWgst, caCap, caElig })! &&
+                  !(bool)isPathCompatible.Invoke(null, new object[] { f24q, caCap, caElig })!,
+                "Winman CA ERP.lnk must accept .tax and reject .wgst / .24q");
+            Check(!(bool)isPathCompatible.Invoke(null, new object[] { fTax, tdsCap, tdsElig })! &&
+                  !(bool)isPathCompatible.Invoke(null, new object[] { fWgst, tdsCap, tdsElig })! &&
+                  !(bool)isPathCompatible.Invoke(null, new object[] { fWt, tdsCap, tdsElig })!,
+                "Winman TDS.lnk Information compatibility must reject .tax, .wgst, and backup .wt");
+            Check((bool)isPathCompatible.Invoke(null, new object[] { fWgst, gstCap, gstElig })! &&
+                  !(bool)isPathCompatible.Invoke(null, new object[] { fTax, gstCap, gstElig })! &&
+                  !(bool)isPathCompatible.Invoke(null, new object[] { f26q, gstCap, gstElig })!,
+                "Winman GST.lnk must accept .wgst and reject .tax / .26q");
+            Check((bool)isPathCompatible.Invoke(null, new object[] { fTax, bareCap, bareElig })! &&
+                  (bool)isPathCompatible.Invoke(null, new object[] { fWgst, bareCap, bareElig })!,
+                "Bare Winman_Launcher.exe must remain compatible with both .tax and .wgst");
+
+            var tdsExts = (HashSet<string>)tdsCap.GetType().GetProperty("Extensions")!.GetValue(tdsCap)!;
+            var caExts = (HashSet<string>)caCap.GetType().GetProperty("Extensions")!.GetValue(caCap)!;
+            var gstExts = (HashSet<string>)gstCap.GetType().GetProperty("Extensions")!.GetValue(gstCap)!;
+            var bareExts = (HashSet<string>)bareCap.GetType().GetProperty("Extensions")!.GetValue(bareCap)!;
+            Check(tdsExts.Contains(".26q") && tdsExts.Contains(".24q") && tdsExts.Contains(".wt") &&
+                  !tdsExts.Contains(".tax") && !tdsExts.Contains(".wgst") &&
+                  caExts.Contains(".tax") && !caExts.Contains(".wgst") && !caExts.Contains(".24q") &&
+                  gstExts.Contains(".wgst") && !gstExts.Contains(".tax") && !gstExts.Contains(".26q") &&
+                  bareExts.Contains(".tax") && bareExts.Contains(".wgst") && bareExts.Contains(".26q"),
+                "PinnedApp ResolveCapability must isolate GST, TDS, and CA ERP shortcuts while keeping bare Winman_Launcher compatible");
+
+            // 3. IDE exclusion in Information eligibility
+            Check(!(bool)GetProp<object>(studioElig, "IsSupported"),
+                "IDE executables (Android Studio) must not be eligible in Information");
+
+            // 4. Fake Excel header rejection vs valid structured headers
+            Check(!(bool)isValidPair.Invoke(null, new object?[] { "29AABCT0000A1Z5", "Alpha Co" })!,
+                "GSTIN value must not be accepted as a Header name");
+            Check(!(bool)isValidPair.Invoke(null, new object?[] { "AABCT0000A", "Alpha Co" })!,
+                "PAN value must not be accepted as a Header name");
+            Check(!(bool)isValidPair.Invoke(null, new object?[] { "01/04/2025 to 31/03/2026", "FY" })!,
+                "Date range string must not be accepted as a Header name");
+            Check(!(bool)isValidPair.Invoke(null, new object?[] { "Demo s/o Sample", "Bengaluru" })!,
+                "Patronymic person string must not be accepted as a Header name");
+            Check(!(bool)isValidPair.Invoke(null, new object?[] { "Status :Individual", "Resident" })!,
+                "Embedded colon key:value row must not be accepted as a Header name");
+            Check((bool)isValidPair.Invoke(null, new object?[] { "GSTIN", "29AABCT0000A1Z5" })! &&
+                  (bool)isValidPair.Invoke(null, new object?[] { "Legal Name", "Synthetic Alpha Traders" })! &&
+                  (bool)isValidPair.Invoke(null, new object?[] { "Taxable Value", "125000.00" })!,
+                "Valid Excel/CSV structured Header -> Value pairs must be preserved");
+
+            // 5. Preferences timestamp detection for cross-process cache invalidation
+            string prefPath = Path.Combine(tempRoot, "prefs.json");
+            File.WriteAllText(prefPath, "{}");
+            DateTime t1 = (DateTime)getPrefStamp.Invoke(null, new object?[] { prefPath })!;
+            File.SetLastWriteTimeUtc(prefPath, t1.AddSeconds(12));
+            DateTime t2 = (DateTime)getPrefStamp.Invoke(null, new object?[] { prefPath })!;
+            Check(t2 > t1, "GetPreferencesStampUtc must advance when preferences file mtime changes");
+
+            // 6. SavePreservingPinnedApps + EnsureInformationOverlay + IsPointerNearArc wiring
+            Check(hostType.GetMethod("EnsureInformationOverlay", AnyInstance) != null,
+                "WidgetHost must expose EnsureInformationOverlay to keep Loaded pre-creation fully wired");
+            Check(infoType.GetMethod("IsPointerNearArc", AnyInstance) != null &&
+                  appsType.GetMethod("IsPointerNearArc", AnyInstance) != null,
+                "Sub-donuts must expose IsPointerNearArc for multi-monitor exit auto-collapse");
+
+            if (!string.IsNullOrEmpty(settingsFile))
+            {
+                if (File.Exists(settingsFile))
+                {
+                    hadSettingsFile = true;
+                    origSettingsBytes = File.ReadAllBytes(settingsFile);
+                    origSettingsWrite = File.GetLastWriteTimeUtc(settingsFile);
+                }
+
+                var diskCopy = Activator.CreateInstance(settingsType)!;
+                var diskPins = (List<string>)settingsType.GetProperty("PinnedApps")!.GetValue(diskCopy)!;
+                string sentinelPin = Path.Combine(tempRoot, "ExternalPin.lnk");
+                diskPins.Add(sentinelPin);
+                settingsType.GetMethod("Save", AnyInstance)!.Invoke(diskCopy, null);
+
+                var staleCopy = Activator.CreateInstance(settingsType)!;
+                settingsType.GetMethod("SavePreservingPinnedApps", AnyInstance)!.Invoke(staleCopy, null);
+                var reloadedPins = (List<string>)settingsType.GetProperty("PinnedApps")!.GetValue(staleCopy)!;
+                Check(reloadedPins.Contains(sentinelPin),
+                    "SavePreservingPinnedApps must preserve PinnedApps written by another process");
+            }
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(settingsFile))
+            {
+                try
+                {
+                    if (hadSettingsFile && origSettingsBytes != null)
+                    {
+                        File.WriteAllBytes(settingsFile, origSettingsBytes);
+                        File.SetLastWriteTimeUtc(settingsFile, origSettingsWrite);
+                    }
+                    else if (!hadSettingsFile && File.Exists(settingsFile))
+                    {
+                        File.Delete(settingsFile);
+                    }
+                }
+                catch { }
+            }
+            try { Directory.Delete(tempRoot, true); } catch { }
+        }
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -2474,6 +2662,7 @@ internal static class Program
             TestAppRemovalAndRadialInformationModesV380(asm);
             TestInformationDonutGeometryAndSectorV380(asm);
             TestInformationTabSyncAndSchemaV380(asm);
+            TestNoiseFilteringIsolationAndSyncV380(asm);
             TestPinnedAppSearchDisposeUnloadV380(asm);
             TestColorPaletteContrastAndHeroV380(asm);
             TestVaultProV380(asm);

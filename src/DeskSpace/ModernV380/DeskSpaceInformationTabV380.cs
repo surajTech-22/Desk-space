@@ -126,13 +126,26 @@ internal static class DeskSpaceInformationTabV380
     private static readonly object PreferencesLock = new();
     private static readonly object InformationAppsLock = new();
     private static readonly object AppInfoCacheLock = new();
-    private static readonly Dictionary<string, (DateTime FetchedUtc, AppInfoDiscoveryResultV380 Result)> AppInfoCache =
+    private static readonly Dictionary<string, (DateTime FetchedUtc, DateTime PrefStampUtc, AppInfoDiscoveryResultV380 Result)> AppInfoCache =
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly object AppInfoInFlightLock = new();
     private static readonly Dictionary<string, Task<AppInfoDiscoveryResultV380>> AppInfoInFlight =
         new(StringComparer.OrdinalIgnoreCase);
 
     internal static long InformationAppsRevision { get; private set; }
+
+    internal static DateTime GetPreferencesStampUtc(string? preferencesPath = null)
+    {
+        string target = string.IsNullOrWhiteSpace(preferencesPath) ? DefaultAppInfoPreferencesPath : preferencesPath;
+        return SafeGetFileWriteTimeUtc(target);
+    }
+
+    internal static DateTime GetInformationConfigStampUtc()
+    {
+        DateTime appsTs = SafeGetFileWriteTimeUtc(DefaultInformationAppsConfigPath);
+        DateTime prefTs = SafeGetFileWriteTimeUtc(DefaultAppInfoPreferencesPath);
+        return appsTs > prefTs ? appsTs : prefTs;
+    }
 
     // Exact 95-character printable ASCII (0x20..0x7E) bijection used by Winman .wgst and .tax records.
     private static readonly (byte Cipher, char Plain)[] WinmanCipherPairs =
@@ -383,6 +396,19 @@ internal static class DeskSpaceInformationTabV380
                 cap.Extensions.OrderBy(e => e, StringComparer.OrdinalIgnoreCase).ToArray());
         }
 
+        // 1b. Explicitly reject Code Editors / IDEs (Android Studio, VS Code, Visual Studio, etc.)
+        if (cap.Kind == PinnedAppKindV380.IdeWorkspace)
+        {
+            return new AppInfoEligibilityV380(
+                appOrShortcutPath,
+                displayName,
+                cap.ExeName ?? string.Empty,
+                false,
+                "Code Editor / IDE (Not Supported)",
+                $"{displayName} opens source code workspaces rather than uniform entity Header → Value records.",
+                cap.Extensions.OrderBy(e => e, StringComparer.OrdinalIgnoreCase).ToArray());
+        }
+
         // 2. TallyPrime & Tally.ERP 9 Accounting Companies (.1800 / .900)
         if (cap.Kind == PinnedAppKindV380.TallyAccounting || cap.IncludesTallyCompanies)
         {
@@ -490,9 +516,9 @@ internal static class DeskSpaceInformationTabV380
                 sheetExts);
         }
 
-        // 5. Generic structured key-value apps (.json / .ini / .cfg / .xml / .yaml / .csproj)
+        // 5. Generic structured key-value apps (strictly tabular/config data extensions — no XML/JSON IDE noise)
         var structuredExts = cap.Extensions
-            .Where(e => e is ".json" or ".ini" or ".cfg" or ".xml" or ".yaml" or ".yml" or ".toml" or ".csproj" or ".csv" or ".tsv" or ".xlsx" or ".wgst" or ".tax")
+            .Where(e => e is ".csv" or ".tsv" or ".xlsx" or ".xlsm" or ".ini" or ".cfg" or ".toml" or ".wgst" or ".tax")
             .OrderBy(e => e, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -520,6 +546,100 @@ internal static class DeskSpaceInformationTabV380
             cap.Extensions.OrderBy(e => e, StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
+    private static bool LooksLikeFakeDataHeader(string header)
+    {
+        if (string.IsNullOrWhiteSpace(header))
+            return true;
+
+        string h = Regex.Replace(header.Trim(), @"\s+", " ");
+        string compact = Regex.Replace(h, @"\s+", "");
+
+        // Reject Indian GSTIN (15-char) and PAN (10-char) appearing as data values in header slots
+        if (Regex.IsMatch(compact, @"^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][0-9A-Za-z]Z[0-9A-Za-z]$") ||
+            Regex.IsMatch(compact, @"^[A-Za-z]{5}[0-9]{4}[A-Za-z]$"))
+        {
+            return true;
+        }
+
+        // Reject literal dates and numeric/month/year ranges (e.g. "April 2025 - April 2025", "01/04/2025 to 31/03/2026", "01-04-2025")
+        if (Regex.IsMatch(h, @"\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b") ||
+            Regex.IsMatch(h, @"\b\d{1,2}[-/\s]+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-/\s]+\d{2,4}\b", RegexOptions.IgnoreCase) ||
+            Regex.IsMatch(h, @"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*(?:[-–]|to)+\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}", RegexOptions.IgnoreCase) ||
+            Regex.IsMatch(h, @"^(?:January|February|March|April|May|June|July|August|September|October|November|December)\b.*\b20\d{2}\b", RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        // Reject person names with honorifics or patronymics (s/o, d/o, w/o, c/o)
+        if (Regex.IsMatch(h, @"\b(?:s/o|d/o|w/o|c/o)\b", RegexOptions.IgnoreCase) ||
+            Regex.IsMatch(h, @"^(?:Sri|Smt|Shri|Mr|Mrs|Ms)\.?\s+[A-Za-z]", RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        // Reject embedded Key:Value cell values masquerading as headers (e.g. "Status :Individual")
+        int colonIdx = h.IndexOf(':');
+        if (colonIdx > 0 && colonIdx < h.Length - 1)
+        {
+            bool leftHasLetter = h.Take(colonIdx).Any(char.IsLetter);
+            bool rightHasLetter = h.Skip(colonIdx + 1).Any(char.IsLetter);
+            if (leftHasLetter && rightHasLetter)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryCleanSpreadsheetHeader(string? raw, bool allowVerticalStrip, out string cleaned)
+    {
+        cleaned = string.Empty;
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        string h = Regex.Replace(raw.Trim(), @"\s+", " ");
+        if (allowVerticalStrip)
+        {
+            h = Regex.Replace(h, @"^\d+\.(?:\([a-z0-9]+\))?\s*", string.Empty, RegexOptions.IgnoreCase).Trim();
+            h = h.TrimEnd(':').Trim();
+        }
+        else if (h.EndsWith(":", StringComparison.Ordinal) ||
+                 Regex.IsMatch(h, @"^\d+\.(?:\([a-z0-9]+\))?", RegexOptions.IgnoreCase))
+        {
+            return false;
+        }
+
+        if (h.Length is < 2 or > 36)
+            return false;
+
+        int words = h.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        if (words > 5)
+            return false;
+
+        if (h.StartsWith('"') || h.StartsWith('(') ||
+            h.Equals("Rs.", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("INR", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        int letters = 0, digits = 0;
+        foreach (char c in h)
+        {
+            if (c == '\uFFFD' || (char.IsControl(c) && c != '\t'))
+                return false;
+            if (char.IsLetter(c)) letters++;
+            else if (char.IsDigit(c)) digits++;
+        }
+        if (letters < 2 || digits > letters)
+            return false;
+
+        if (LooksLikeFakeDataHeader(h))
+            return false;
+
+        cleaned = h;
+        return true;
+    }
+
     internal static bool IsValidHeaderValuePair(string? rawHeader, string? rawValue)
     {
         if (string.IsNullOrWhiteSpace(rawHeader) || string.IsNullOrWhiteSpace(rawValue))
@@ -533,7 +653,7 @@ internal static class DeskSpaceInformationTabV380
         if (value.Length is < 1 or > 180)
             return false;
 
-        // Header must have at least 2 letters and not be a file path, URL, or pure number
+        // Header must have at least 2 letters and not be a file path, URL, or fake data token
         int headerLetters = 0;
         foreach (char c in header)
         {
@@ -547,7 +667,8 @@ internal static class DeskSpaceInformationTabV380
         if (header.Contains(":\\", StringComparison.Ordinal) ||
             header.StartsWith(@"\\", StringComparison.Ordinal) ||
             header.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            header.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            header.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+            LooksLikeFakeDataHeader(header))
         {
             return false;
         }
@@ -1625,17 +1746,53 @@ internal static class DeskSpaceInformationTabV380
         if (rows.Count >= 2 && rows.All(r => r.Length == 2))
         {
             foreach (var r in rows)
-                AddFieldIfValid(fields, seen, r[0], r[1]);
+            {
+                if (TryCleanSpreadsheetHeader(r[0], allowVerticalStrip: true, out string hdr))
+                    AddFieldIfValid(fields, seen, hdr, r[1]);
+            }
         }
 
-        // Mode B: Horizontal table (Row 0 = column headers, Row 1 = first data record)
+        // Mode B: Horizontal table (find first clean header row in top 8 rows -> next non-empty data row)
         if (fields.Count < 2 && rows.Count >= 2)
         {
-            string[] headers = rows[0];
-            string[] firstData = rows[1];
-            int count = Math.Min(headers.Length, Math.Min(firstData.Length, 24));
-            for (int c = 0; c < count; c++)
-                AddFieldIfValid(fields, seen, headers[c], firstData[c]);
+            int maxScan = Math.Min(rows.Count - 1, 8);
+            for (int rIdx = 0; rIdx < maxScan; rIdx++)
+            {
+                string[] headers = rows[rIdx];
+                string[] firstData = rows[rIdx + 1];
+                int nonEmptyHdrs = headers.Count(h => !string.IsNullOrWhiteSpace(h));
+                if (nonEmptyHdrs < 2)
+                    continue;
+
+                int cleanCount = 0;
+                for (int c = 0; c < headers.Length; c++)
+                {
+                    if (TryCleanSpreadsheetHeader(headers[c], allowVerticalStrip: false, out _))
+                        cleanCount++;
+                }
+
+                if (cleanCount * 10 < nonEmptyHdrs * 7)
+                    continue;
+
+                var candidateFields = new List<KeyValuePair<string, string>>();
+                var candSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int count = Math.Min(headers.Length, Math.Min(firstData.Length, 24));
+                for (int c = 0; c < count; c++)
+                {
+                    if (TryCleanSpreadsheetHeader(headers[c], allowVerticalStrip: false, out string cleanHdr) &&
+                        !string.Equals(cleanHdr, firstData[c]?.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        AddFieldIfValid(candidateFields, candSeen, cleanHdr, firstData[c]);
+                    }
+                }
+
+                if (candidateFields.Count >= 2)
+                {
+                    fields.Clear();
+                    fields.AddRange(candidateFields);
+                    break;
+                }
+            }
         }
 
         return fields.Count >= 2;
@@ -1771,29 +1928,67 @@ internal static class DeskSpaceInformationTabV380
                 }
             }
 
-            // Horizontal header row (first non-empty row -> next non-empty row)
+            // 1. Horizontal table header row (scan top 12 non-empty rows for genuine column headers -> next row values)
             var orderedRowNums = rowCells.Keys.OrderBy(k => k).ToList();
             if (orderedRowNums.Count >= 2)
             {
-                var headerRow = rowCells[orderedRowNums[0]];
-                var valueRow = rowCells[orderedRowNums[1]];
-                if (headerRow.Count >= 2)
+                int scanRows = Math.Min(orderedRowNums.Count - 1, 12);
+                for (int rIdx = 0; rIdx < scanRows; rIdx++)
                 {
+                    var headerRow = rowCells[orderedRowNums[rIdx]];
+                    var valueRow = rowCells[orderedRowNums[rIdx + 1]];
+                    if (headerRow.Count < 3)
+                        continue;
+
+                    int cleanCount = 0;
+                    foreach (string rawHdr in headerRow.Values)
+                    {
+                        if (TryCleanSpreadsheetHeader(rawHdr, allowVerticalStrip: false, out _))
+                            cleanCount++;
+                    }
+                    if (cleanCount * 10 < headerRow.Count * 7)
+                        continue;
+
+                    var candidateFields = new List<KeyValuePair<string, string>>();
+                    var candSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var kv in headerRow.OrderBy(k => k.Key))
                     {
-                        if (valueRow.TryGetValue(kv.Key, out string? v))
-                            AddFieldIfValid(fields, seen, kv.Value, v);
+                        if (TryCleanSpreadsheetHeader(kv.Value, allowVerticalStrip: false, out string cleanHdr) &&
+                            valueRow.TryGetValue(kv.Key, out string? v) &&
+                            !string.Equals(cleanHdr, v.Trim(), StringComparison.OrdinalIgnoreCase))
+                        {
+                            AddFieldIfValid(candidateFields, candSeen, cleanHdr, v);
+                        }
+                    }
+                    if (candidateFields.Count >= 2)
+                    {
+                        fields.Clear();
+                        fields.AddRange(candidateFields);
+                        break;
                     }
                 }
 
-                // Vertical 2-column key-value table fallback
+                // 2. Vertical 2-column Key -> Value form fallback (requires >= 3 clean key-value rows)
                 if (fields.Count < 2)
                 {
+                    var vFields = new List<KeyValuePair<string, string>>();
+                    var vSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (int rNum in orderedRowNums)
                     {
                         var rDict = rowCells[rNum];
-                        if (rDict.TryGetValue(1, out string? k) && rDict.TryGetValue(2, out string? v))
-                            AddFieldIfValid(fields, seen, k, v);
+                        if (rDict.Count > 3)
+                            continue;
+                        if (rDict.TryGetValue(1, out string? k) && rDict.TryGetValue(2, out string? v) &&
+                            TryCleanSpreadsheetHeader(k, allowVerticalStrip: true, out string cleanKey) &&
+                            !string.Equals(cleanKey, v.Trim(), StringComparison.OrdinalIgnoreCase))
+                        {
+                            AddFieldIfValid(vFields, vSeen, cleanKey, v);
+                        }
+                    }
+                    if (vFields.Count >= 3)
+                    {
+                        fields.Clear();
+                        fields.AddRange(vFields);
                     }
                 }
             }
@@ -1987,9 +2182,53 @@ internal static class DeskSpaceInformationTabV380
                 : SafeGetFileWriteTimeUtc(candidate);
 
             parsedFiles.Add((disp, candidate, badge, modUtc, pairs));
+        }
 
+        // Deduplicate exact unchanged Tally company clones sharing identical Company GUID & ModifiedUtc
+        if (cap.IncludesTallyCompanies && parsedFiles.Count > 1)
+        {
+            static string? GetGuidValue(List<KeyValuePair<string, string>> ps) =>
+                ps.FirstOrDefault(kv => kv.Key.Equals("Company GUID", StringComparison.OrdinalIgnoreCase)).Value;
+
+            bool IsUnderExplicitRoot(string path) => cap.ExtraDataRoots.Any(r =>
+            {
+                string nr = r.TrimEnd('\\', '/') + "\\";
+                return path.StartsWith(nr, StringComparison.OrdinalIgnoreCase);
+            });
+
+            var deduped = new List<(string DisplayName, string FullPath, string KindBadge, DateTime ModifiedUtc, List<KeyValuePair<string, string>> Pairs)>(parsedFiles.Count);
+            foreach (var pf in parsedFiles)
+            {
+                string? guid = GetGuidValue(pf.Pairs);
+                if (string.IsNullOrWhiteSpace(guid))
+                {
+                    deduped.Add(pf);
+                    continue;
+                }
+                int dupIdx = deduped.FindIndex(x =>
+                    string.Equals(GetGuidValue(x.Pairs), guid, StringComparison.OrdinalIgnoreCase) &&
+                    Math.Abs((x.ModifiedUtc - pf.ModifiedUtc).TotalSeconds) < 2.0);
+                if (dupIdx < 0)
+                {
+                    deduped.Add(pf);
+                }
+                else
+                {
+                    var existing = deduped[dupIdx];
+                    bool newPreferred = IsUnderExplicitRoot(pf.FullPath) && !IsUnderExplicitRoot(existing.FullPath);
+                    bool shorterPath = pf.FullPath.Length < existing.FullPath.Length &&
+                                       IsUnderExplicitRoot(pf.FullPath) == IsUnderExplicitRoot(existing.FullPath);
+                    if (newPreferred || shorterPath)
+                        deduped[dupIdx] = pf;
+                }
+            }
+            parsedFiles = deduped;
+        }
+
+        foreach (var pf in parsedFiles)
+        {
             var uniqueInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in pairs)
+            foreach (var kv in pf.Pairs)
             {
                 if (!uniqueInFile.Add(kv.Key))
                     continue;
@@ -2072,9 +2311,13 @@ internal static class DeskSpaceInformationTabV380
             var validSet = new HashSet<string>(matchedHeaders.Select(m => m.Header), StringComparer.OrdinalIgnoreCase);
             activeVisible = savedVisible.Where(validSet.Contains).ToList();
         }
-        else
+        else if (matchedHeaders.Count <= 25)
         {
             activeVisible = matchedHeaders.Select(m => m.Header).ToList();
+        }
+        else
+        {
+            activeVisible = GetSummaryPriorityHeaders(matchedHeaders).ToList();
         }
 
         string status = $"{eligibility.AppDisplayName} · {matchedFiles.Count} files share {matchedHeaders.Count} verified Header → Value fields ({activeVisible.Count} visible).";
@@ -2225,6 +2468,7 @@ internal static class DeskSpaceInformationTabV380
 
         if (string.IsNullOrWhiteSpace(preferencesPath))
         {
+            DateTime prefStamp = GetPreferencesStampUtc();
             lock (AppInfoCacheLock)
             {
                 foreach (string cKey in AppInfoCache.Keys.ToList())
@@ -2239,7 +2483,7 @@ internal static class DeskSpaceInformationTabV380
                         VisibleHeaders = updatedVis,
                         StatusMessage = $"{entry.Result.Eligibility.AppDisplayName} · {entry.Result.MatchedFiles.Count} files share {entry.Result.MatchedHeaders.Count} verified Header → Value fields ({updatedVis.Count} visible)."
                     };
-                    AppInfoCache[cKey] = (entry.FetchedUtc, updatedRes);
+                    AppInfoCache[cKey] = (entry.FetchedUtc, prefStamp, updatedRes);
                 }
             }
         }
@@ -2254,12 +2498,17 @@ internal static class DeskSpaceInformationTabV380
         {
             if (!cap.IncludesTallyCompanies)
                 return false;
+            if (DeskSpacePinnedAppFilesV380.IsSampleOrNoiseUserPath(fullPath, isDirectory: true))
+                return false;
             return DeskSpacePinnedAppFilesV380.TryParseTallyCompanyFolder(fullPath, out var tItem) &&
                    tItem != null &&
                    DeskSpacePinnedAppFilesV380.IsTallyCompanyCompatibleWithCapability(cap, tItem);
         }
 
         if (!File.Exists(fullPath))
+            return false;
+
+        if (DeskSpacePinnedAppFilesV380.IsSampleOrNoiseUserPath(fullPath, isDirectory: false))
             return false;
 
         string fileName = System.IO.Path.GetFileName(fullPath);
@@ -2312,20 +2561,26 @@ internal static class DeskSpaceInformationTabV380
         foreach (var rec in DeskSpacePinnedAppFilesV380.DiscoverRecentItems(cap))
             AddIfNew(rec.FullPath);
 
-        // Scan ExtraDataRoots and Winman install/data directories
+        // Scan ExtraDataRoots and real Winman data folders (excluding sample/backup folders)
         var roots = new List<string>(cap.ExtraDataRoots);
         if (cap.Kind == PinnedAppKindV380.WinmanAccounting)
         {
-            foreach (string wDir in new[] { @"C:\Winman", @"D:\Winman", @"E:\Winman", @"F:\Winman" })
+            foreach (string wBase in new[]
             {
-                if (Directory.Exists(wDir) && !roots.Contains(wDir, StringComparer.OrdinalIgnoreCase))
-                    roots.Add(wDir);
+                @"C:\Winman_Data", @"D:\Winman_Data", @"E:\Winman_Data", @"F:\Winman_Data",
+                @"C:\Winman\UserData", @"D:\Winman\UserData", @"E:\Winman\UserData", @"F:\Winman\UserData",
+                @"C:\Winman\Data", @"D:\Winman\Data", @"E:\Winman\Data", @"F:\Winman\Data"
+            })
+            {
+                if (Directory.Exists(wBase) && !roots.Contains(wBase, StringComparer.OrdinalIgnoreCase))
+                    roots.Add(wBase);
             }
         }
 
         foreach (string root in roots)
         {
-            if (!Directory.Exists(root))
+            if (!Directory.Exists(root) ||
+                DeskSpacePinnedAppFilesV380.IsSampleOrNoiseUserPath(root, isDirectory: true))
                 continue;
             try
             {
@@ -2333,6 +2588,8 @@ internal static class DeskSpaceInformationTabV380
                 {
                     foreach (string sub in Directory.EnumerateDirectories(root).Take(120))
                     {
+                        if (DeskSpacePinnedAppFilesV380.IsSampleOrNoiseUserPath(sub, isDirectory: true))
+                            continue;
                         if (DeskSpacePinnedAppFilesV380.TryParseTallyCompanyFolder(sub, out var tItem) &&
                             tItem != null &&
                             DeskSpacePinnedAppFilesV380.IsTallyCompanyCompatibleWithCapability(cap, tItem))
@@ -2344,6 +2601,8 @@ internal static class DeskSpaceInformationTabV380
                         {
                             foreach (string nested in Directory.EnumerateDirectories(sub).Take(60))
                             {
+                                if (DeskSpacePinnedAppFilesV380.IsSampleOrNoiseUserPath(nested, isDirectory: true))
+                                    continue;
                                 if (DeskSpacePinnedAppFilesV380.TryParseTallyCompanyFolder(nested, out var nItem) &&
                                     nItem != null &&
                                     DeskSpacePinnedAppFilesV380.IsTallyCompanyCompatibleWithCapability(cap, nItem))
@@ -2365,6 +2624,8 @@ internal static class DeskSpaceInformationTabV380
                             AddIfNew(f);
                         foreach (string sub in Directory.EnumerateDirectories(root).Take(30))
                         {
+                            if (DeskSpacePinnedAppFilesV380.IsSampleOrNoiseUserPath(sub, isDirectory: true))
+                                continue;
                             try
                             {
                                 foreach (string f in Directory.EnumerateFiles(sub, "*" + ext, SearchOption.AllDirectories).Take(40))
@@ -2687,15 +2948,49 @@ internal static class DeskSpaceInformationTabV380
         if (string.IsNullOrEmpty(key))
             return false;
 
+        DateTime diskPrefStamp = GetPreferencesStampUtc();
+        AppInfoDiscoveryResultV380? matched = null;
+        bool needPrefReload = false;
+
         lock (AppInfoCacheLock)
         {
             if (AppInfoCache.TryGetValue(key, out var entry) &&
                 (DateTime.UtcNow - entry.FetchedUtc).TotalSeconds < 180)
             {
-                result = entry.Result;
-                return true;
+                if (entry.PrefStampUtc == diskPrefStamp)
+                {
+                    result = entry.Result;
+                    return true;
+                }
+                matched = entry.Result;
+                needPrefReload = true;
             }
         }
+
+        if (needPrefReload && matched != null)
+        {
+            AppInfoDiscoveryResultV380 refreshed = matched;
+            if (TryLoadVisibleHeadersPreference(key, out var savedPref))
+            {
+                var validSet = new HashSet<string>(matched.MatchedHeaders.Select(h => h.Header), StringComparer.OrdinalIgnoreCase);
+                var updatedVis = savedPref.Where(validSet.Contains).ToList();
+                refreshed = matched with
+                {
+                    VisibleHeaders = updatedVis,
+                    StatusMessage = $"{matched.Eligibility.AppDisplayName} · {matched.MatchedFiles.Count} files share {matched.MatchedHeaders.Count} verified Header → Value fields ({updatedVis.Count} visible)."
+                };
+            }
+
+            lock (AppInfoCacheLock)
+            {
+                if (AppInfoCache.TryGetValue(key, out var current))
+                    AppInfoCache[key] = (current.FetchedUtc, diskPrefStamp, refreshed);
+            }
+
+            result = refreshed;
+            return true;
+        }
+
         return false;
     }
 
@@ -2705,8 +3000,9 @@ internal static class DeskSpaceInformationTabV380
         if (string.IsNullOrEmpty(key) || result == null)
             return;
 
+        DateTime prefStamp = GetPreferencesStampUtc();
         lock (AppInfoCacheLock)
-            AppInfoCache[key] = (DateTime.UtcNow, result);
+            AppInfoCache[key] = (DateTime.UtcNow, prefStamp, result);
     }
 
     internal static Task<AppInfoDiscoveryResultV380> GetAppInformationAsync(string appPath, bool forceRefresh = false)
@@ -2978,11 +3274,13 @@ internal static class DeskSpaceInformationTabV380
         string previewUnsupportedPath = "";
         string selectedFileFullPath = "";
         bool showFieldChooser = false;
-        bool showAllFileSpecificFields = true;
+        string headerSearchQuery = "";
         string appFileFilter = "";
+        int allFilesPageLimit = 15;
         bool isAppScanning = false;
         int appScanGen = 0;
         long loadedAppsRevision = InformationAppsRevision;
+        DateTime loadedConfigStampUtc = GetInformationConfigStampUtc();
         AppInfoDiscoveryResultV380? currentAppResult = null;
         HashSet<string> activeVisibleHeaders = new(StringComparer.OrdinalIgnoreCase);
 
@@ -3014,7 +3312,10 @@ internal static class DeskSpaceInformationTabV380
 
             string activeTarget = !string.IsNullOrEmpty(previewUnsupportedPath) ? previewUnsupportedPath : selectedAppPath;
             if (!string.Equals(activeTarget, appPath, StringComparison.OrdinalIgnoreCase))
+            {
                 selectedFileFullPath = "";
+                allFilesPageLimit = 15;
+            }
 
             if (isUnsupportedPreview)
                 previewUnsupportedPath = appPath;
@@ -3042,6 +3343,8 @@ internal static class DeskSpaceInformationTabV380
                 activeVisibleHeaders = new HashSet<string>(
                     hasPref ? savedPref : cached.VisibleHeaders,
                     StringComparer.OrdinalIgnoreCase);
+                if (string.IsNullOrEmpty(selectedFileFullPath) && cached.MatchedFiles.Count > 0)
+                    selectedFileFullPath = cached.MatchedFiles[0].FullPath;
                 isAppScanning = false;
                 renderUi?.Invoke();
                 return;
@@ -3062,6 +3365,8 @@ internal static class DeskSpaceInformationTabV380
                         return;
                     currentAppResult = discovered;
                     activeVisibleHeaders = new HashSet<string>(discovered.VisibleHeaders, StringComparer.OrdinalIgnoreCase);
+                    if (string.IsNullOrEmpty(selectedFileFullPath) && discovered.MatchedFiles.Count > 0)
+                        selectedFileFullPath = discovered.MatchedFiles[0].FullPath;
                     isAppScanning = false;
                     renderUi?.Invoke();
                 }));
@@ -3364,8 +3669,9 @@ internal static class DeskSpaceInformationTabV380
                     previewUnsupportedPath,
                     selectedFileFullPath,
                     showFieldChooser,
-                    showAllFileSpecificFields,
+                    headerSearchQuery,
                     appFileFilter,
+                    allFilesPageLimit,
                     isAppScanning,
                     currentAppResult,
                     activeVisibleHeaders,
@@ -3375,6 +3681,7 @@ internal static class DeskSpaceInformationTabV380
                         if (TryAddAppToInformation(path, out var elig))
                         {
                             loadedAppsRevision = InformationAppsRevision;
+                            loadedConfigStampUtc = GetInformationConfigStampUtc();
                             bannerMessage = $"Added '{elig.AppDisplayName}' to Information.";
                             bannerIsError = false;
                             TriggerAppDiscovery(path);
@@ -3391,6 +3698,7 @@ internal static class DeskSpaceInformationTabV380
                         var elig = EvaluateAppEligibility(path);
                         RemoveAppFromInformation(path);
                         loadedAppsRevision = InformationAppsRevision;
+                        loadedConfigStampUtc = GetInformationConfigStampUtc();
                         previewUnsupportedPath = "";
                         bannerMessage = $"Removed '{elig.AppDisplayName}' from Information.";
                         bannerIsError = false;
@@ -3399,6 +3707,7 @@ internal static class DeskSpaceInformationTabV380
                             remaining.All(a => !string.Equals(a.Path, selectedAppPath, StringComparison.OrdinalIgnoreCase)))
                         {
                             selectedFileFullPath = "";
+                            allFilesPageLimit = 15;
                             if (remaining.Count > 0)
                             {
                                 TriggerAppDiscovery(remaining[0].Path);
@@ -3416,17 +3725,22 @@ internal static class DeskSpaceInformationTabV380
                         showFieldChooser = !showFieldChooser;
                         Render();
                     },
+                    onHeaderSearchChanged: q => headerSearchQuery = q,
                     onSelectFile: filePath =>
                     {
                         selectedFileFullPath = filePath;
-                        Render();
+                        allFilesPageLimit = 15;
                     },
-                    onToggleFileSpecificFields: showAll =>
+                    onFilterChanged: q =>
                     {
-                        showAllFileSpecificFields = showAll;
+                        appFileFilter = q;
+                        allFilesPageLimit = 15;
+                    },
+                    onShowMoreFiles: () =>
+                    {
+                        allFilesPageLimit += 15;
                         Render();
                     },
-                    onFilterChanged: q => appFileFilter = q,
                     onToggleHeader: (hdr, isChecked) =>
                     {
                         if (isChecked)
@@ -3434,13 +3748,15 @@ internal static class DeskSpaceInformationTabV380
                         else
                             activeVisibleHeaders.Remove(hdr);
                         SaveVisibleHeadersPreference(selectedAppPath, activeVisibleHeaders);
-                        Render();
+                        loadedConfigStampUtc = GetInformationConfigStampUtc();
                     },
                     onSetVisibleBatch: headers =>
                     {
-                        activeVisibleHeaders = new HashSet<string>(headers, StringComparer.OrdinalIgnoreCase);
+                        activeVisibleHeaders.Clear();
+                        foreach (string h in headers)
+                            activeVisibleHeaders.Add(h);
                         SaveVisibleHeadersPreference(selectedAppPath, activeVisibleHeaders);
-                        Render();
+                        loadedConfigStampUtc = GetInformationConfigStampUtc();
                     },
                     onSaveFileToCollections: (fileRecord, visRows) =>
                     {
@@ -4279,14 +4595,17 @@ internal static class DeskSpaceInformationTabV380
                 return;
 
             bool needRender = false;
-            if (InformationAppsRevision != loadedAppsRevision)
+            DateTime currentConfigStamp = GetInformationConfigStampUtc();
+            if (InformationAppsRevision != loadedAppsRevision || currentConfigStamp != loadedConfigStampUtc)
             {
                 loadedAppsRevision = InformationAppsRevision;
+                loadedConfigStampUtc = currentConfigStamp;
                 var latestApps = GetSelectedAppsForInformation();
                 if (!string.IsNullOrEmpty(selectedAppPath) &&
                     latestApps.All(a => !string.Equals(a.Path, selectedAppPath, StringComparison.OrdinalIgnoreCase)))
                 {
                     selectedFileFullPath = "";
+                    allFilesPageLimit = 15;
                     selectedAppPath = latestApps.Count > 0 ? latestApps[0].Path : "";
                     currentAppResult = null;
                     if (!string.IsNullOrEmpty(selectedAppPath))
@@ -4294,6 +4613,11 @@ internal static class DeskSpaceInformationTabV380
                         TriggerAppDiscovery(selectedAppPath);
                         return;
                     }
+                }
+                else if (!string.IsNullOrEmpty(selectedAppPath) &&
+                         TryLoadVisibleHeadersPreference(selectedAppPath, out var diskVis))
+                {
+                    activeVisibleHeaders = new HashSet<string>(diskVis, StringComparer.OrdinalIgnoreCase);
                 }
                 needRender = true;
             }
@@ -4339,8 +4663,9 @@ internal static class DeskSpaceInformationTabV380
         string previewUnsupportedPath,
         string selectedFileFullPath,
         bool showFieldChooser,
-        bool showAllFileSpecificFields,
+        string headerSearchQuery,
         string appFileFilter,
+        int allFilesPageLimit,
         bool isAppScanning,
         AppInfoDiscoveryResultV380? result,
         HashSet<string> activeVisibleHeaders,
@@ -4348,9 +4673,10 @@ internal static class DeskSpaceInformationTabV380
         Action<string> onAddApp,
         Action<string> onRemoveApp,
         Action onToggleFieldChooser,
+        Action<string> onHeaderSearchChanged,
         Action<string> onSelectFile,
-        Action<bool> onToggleFileSpecificFields,
         Action<string> onFilterChanged,
+        Action onShowMoreFiles,
         Action<string, bool> onToggleHeader,
         Action<IEnumerable<string>> onSetVisibleBatch,
         Action<AppInfoFileRecordV380, IReadOnlyList<KeyValuePair<string, string>>> onSaveFileToCollections,
@@ -4559,12 +4885,13 @@ internal static class DeskSpaceInformationTabV380
             return;
         }
 
-        // 3. Compact Summary Bar + Collapsible Header Field Chooser
+        // 3. Compact Summary Bar + Searchable Collapsible Header Field Chooser
         var headersStack = new StackPanel();
         var headersTopRow = new DockPanel { LastChildFill = true };
         var headerRightControls = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
-        var chooseFieldsBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+        Button? chooseFieldsBtn = null;
+        chooseFieldsBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
             showFieldChooser
                 ? $"⚙ Choose Fields ({activeVisibleHeaders.Count}/{result.MatchedHeaders.Count}) ▲"
                 : $"⚙ Choose Fields ({activeVisibleHeaders.Count}/{result.MatchedHeaders.Count}) ▾",
@@ -4578,7 +4905,7 @@ internal static class DeskSpaceInformationTabV380
         DockPanel.SetDock(headerRightControls, Dock.Right);
         headersTopRow.Children.Add(headerRightControls);
 
-        headersTopRow.Children.Add(new TextBlock
+        var headersSummaryTb = new TextBlock
         {
             Text = $"2. {result.Eligibility.AppDisplayName} · {result.MatchedFiles.Count} files share {result.MatchedHeaders.Count} matched fields ({activeVisibleHeaders.Count} visible)",
             FontSize = 12.5,
@@ -4586,16 +4913,62 @@ internal static class DeskSpaceInformationTabV380
             Foreground = DeskSpaceDesignV283.Solid(p.Text),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
-        });
+        };
+        headersTopRow.Children.Add(headersSummaryTb);
         headersStack.Children.Add(headersTopRow);
+
+        Action refreshDetails = () => { };
+
+        void UpdateHeaderCountLabels()
+        {
+            headersSummaryTb.Text = $"2. {result.Eligibility.AppDisplayName} · {result.MatchedFiles.Count} files share {result.MatchedHeaders.Count} matched fields ({activeVisibleHeaders.Count} visible)";
+            if (chooseFieldsBtn != null)
+            {
+                chooseFieldsBtn.Content = showFieldChooser
+                    ? $"⚙ Choose Fields ({activeVisibleHeaders.Count}/{result.MatchedHeaders.Count}) ▲"
+                    : $"⚙ Choose Fields ({activeVisibleHeaders.Count}/{result.MatchedHeaders.Count}) ▾";
+            }
+        }
 
         if (showFieldChooser)
         {
+            var pillEntries = new List<(string Header, Border Pill, CheckBox Box)>();
+            bool suppressHeaderBatchEvents = false;
+
+            void ApplyPillStyle(Border pillBorder, CheckBox box, bool isChecked)
+            {
+                box.Foreground = DeskSpaceDesignV283.Solid(isChecked ? DeskSpaceDesignV283.AccentText(p) : p.Text);
+                box.FontWeight = isChecked ? FontWeights.SemiBold : FontWeights.Normal;
+                pillBorder.Background = DeskSpaceDesignV283.Solid(isChecked ? p.AccentSoft : p.Surface);
+                pillBorder.BorderBrush = DeskSpaceDesignV283.Solid(isChecked ? p.Accent : p.Border);
+            }
+
+            void ApplyBatchInPlace(IEnumerable<string> nextHeaders)
+            {
+                suppressHeaderBatchEvents = true;
+                try
+                {
+                    onSetVisibleBatch(nextHeaders);
+                    foreach (var (hdrName, pillBorder, box) in pillEntries)
+                    {
+                        bool checkedNow = activeVisibleHeaders.Contains(hdrName);
+                        box.IsChecked = checkedNow;
+                        ApplyPillStyle(pillBorder, box, checkedNow);
+                    }
+                    UpdateHeaderCountLabels();
+                }
+                finally
+                {
+                    suppressHeaderBatchEvents = false;
+                }
+                refreshDetails();
+            }
+
             var quickRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 8, 0, 6) };
             var quickBtns = new StackPanel { Orientation = Orientation.Horizontal };
             var selectAllBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
                 $"Select All ({result.MatchedHeaders.Count})",
-                () => onSetVisibleBatch(result.MatchedHeaders.Select(h => h.Header)),
+                () => ApplyBatchInPlace(result.MatchedHeaders.Select(h => h.Header)),
                 primary: false);
             selectAllBtn.Padding = new Thickness(9, 3, 9, 3);
             selectAllBtn.MinHeight = 25;
@@ -4604,7 +4977,7 @@ internal static class DeskSpaceInformationTabV380
 
             var summaryFieldsBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
                 "Key Summary",
-                () => onSetVisibleBatch(GetSummaryPriorityHeaders(result.MatchedHeaders)),
+                () => ApplyBatchInPlace(GetSummaryPriorityHeaders(result.MatchedHeaders)),
                 primary: false);
             summaryFieldsBtn.Padding = new Thickness(9, 3, 9, 3);
             summaryFieldsBtn.MinHeight = 25;
@@ -4613,7 +4986,7 @@ internal static class DeskSpaceInformationTabV380
 
             var clearAllBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
                 "Clear All",
-                () => onSetVisibleBatch(Array.Empty<string>()),
+                () => ApplyBatchInPlace(Array.Empty<string>()),
                 primary: false);
             clearAllBtn.Padding = new Thickness(9, 3, 9, 3);
             clearAllBtn.MinHeight = 25;
@@ -4625,19 +4998,31 @@ internal static class DeskSpaceInformationTabV380
             DockPanel.SetDock(quickBtns, Dock.Right);
             quickRow.Children.Add(quickBtns);
 
-            var fileSpecificToggle = new CheckBox
+            var searchRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 12, 0) };
+            var searchLbl = new TextBlock
             {
-                IsChecked = showAllFileSpecificFields,
-                Content = "Also include file-specific inside schedule rows",
+                Text = "Find header:",
                 FontSize = 11.5,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = DeskSpaceDesignV283.Solid(p.Text),
+                Foreground = DeskSpaceDesignV283.Solid(p.Muted),
                 VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand
+                Margin = new Thickness(0, 0, 8, 0)
             };
-            fileSpecificToggle.Checked += (_, _) => onToggleFileSpecificFields(true);
-            fileSpecificToggle.Unchecked += (_, _) => onToggleFileSpecificFields(false);
-            quickRow.Children.Add(fileSpecificToggle);
+            DockPanel.SetDock(searchLbl, Dock.Left);
+            searchRow.Children.Add(searchLbl);
+
+            var headerSearchBox = new TextBox
+            {
+                Text = headerSearchQuery,
+                MaxWidth = 260,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                MinWidth = 170,
+                ToolTip = "Filter header checkboxes by name"
+            };
+            DeskSpaceDesignV283.Input(headerSearchBox, p);
+            AutomationProperties.SetName(headerSearchBox, "Search headers");
+            searchRow.Children.Add(headerSearchBox);
+            quickRow.Children.Add(searchRow);
             headersStack.Children.Add(quickRow);
 
             var checkWrap = new WrapPanel();
@@ -4649,28 +5034,60 @@ internal static class DeskSpaceInformationTabV380
                 {
                     IsChecked = isChecked,
                     Content = $"{capturedHeader} ({hdr.MatchingFileCount})",
-                    Foreground = DeskSpaceDesignV283.Solid(isChecked ? DeskSpaceDesignV283.AccentText(p) : p.Text),
-                    FontWeight = isChecked ? FontWeights.SemiBold : FontWeights.Normal,
-                    FontSize = 12,
                     VerticalContentAlignment = VerticalAlignment.Center,
+                    FontSize = 12,
                     Cursor = Cursors.Hand,
                     ToolTip = $"Sample: {hdr.SampleValue} · Found in {hdr.MatchingFileCount}/{hdr.TotalFileCount} files"
                 };
-                cb.Checked += (_, _) => onToggleHeader(capturedHeader, true);
-                cb.Unchecked += (_, _) => onToggleHeader(capturedHeader, false);
 
                 var pillBorder = new Border
                 {
                     CornerRadius = new CornerRadius(8),
-                    Background = DeskSpaceDesignV283.Solid(isChecked ? p.AccentSoft : p.Surface),
-                    BorderBrush = DeskSpaceDesignV283.Solid(isChecked ? p.Accent : p.Border),
                     BorderThickness = new Thickness(1),
                     Padding = new Thickness(9, 4, 9, 4),
                     Margin = new Thickness(0, 0, 7, 6),
                     Child = cb
                 };
+                ApplyPillStyle(pillBorder, cb, isChecked);
+
+                cb.Checked += (_, _) =>
+                {
+                    if (suppressHeaderBatchEvents) return;
+                    onToggleHeader(capturedHeader, true);
+                    ApplyPillStyle(pillBorder, cb, true);
+                    UpdateHeaderCountLabels();
+                    refreshDetails();
+                };
+                cb.Unchecked += (_, _) =>
+                {
+                    if (suppressHeaderBatchEvents) return;
+                    onToggleHeader(capturedHeader, false);
+                    ApplyPillStyle(pillBorder, cb, false);
+                    UpdateHeaderCountLabels();
+                    refreshDetails();
+                };
+
+                pillEntries.Add((capturedHeader, pillBorder, cb));
                 checkWrap.Children.Add(pillBorder);
             }
+
+            void ApplyHeaderSearchFilter(string q)
+            {
+                string trimmed = (q ?? string.Empty).Trim();
+                foreach (var (hdrName, pillBorder, _) in pillEntries)
+                {
+                    bool visible = trimmed.Length == 0 ||
+                                   hdrName.Contains(trimmed, StringComparison.OrdinalIgnoreCase);
+                    pillBorder.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                }
+            }
+
+            ApplyHeaderSearchFilter(headerSearchQuery);
+            headerSearchBox.TextChanged += (_, _) =>
+            {
+                onHeaderSearchChanged(headerSearchBox.Text);
+                ApplyHeaderSearchFilter(headerSearchBox.Text);
+            };
 
             var checkScroll = new ScrollViewer
             {
@@ -4735,20 +5152,17 @@ internal static class DeskSpaceInformationTabV380
 
         root.Children.Add(splitGrid);
 
-        var orderedVisibleList = result.MatchedHeaders
-            .Select(h => h.Header)
-            .Where(activeVisibleHeaders.Contains)
-            .ToList();
-        var matchedHeaderNamesSet = new HashSet<string>(
-            result.MatchedHeaders.Select(h => h.Header),
-            StringComparer.OrdinalIgnoreCase);
-
         bool suppressSelectionEvent = false;
         string activeSelectedFile = selectedFileFullPath;
 
         void PopulateRightDetails(List<AppInfoFileRecordV380> queryMatches)
         {
             filesStack.Children.Clear();
+            var orderedVisibleList = result.MatchedHeaders
+                .Select(h => h.Header)
+                .Where(activeVisibleHeaders.Contains)
+                .ToList();
+
             var targetFiles = string.IsNullOrEmpty(activeSelectedFile)
                 ? queryMatches
                 : queryMatches.Where(f => string.Equals(f.FullPath, activeSelectedFile, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -4778,20 +5192,14 @@ internal static class DeskSpaceInformationTabV380
                 return;
             }
 
-            foreach (var fileRec in targetFiles)
+            int renderLimit = string.IsNullOrEmpty(activeSelectedFile)
+                ? Math.Max(15, allFilesPageLimit)
+                : targetFiles.Count;
+            int totalTargets = targetFiles.Count;
+
+            foreach (var fileRec in targetFiles.Take(renderLimit))
             {
-                var displayPairs = new List<KeyValuePair<string, string>>(GetVisibleFieldsForFile(fileRec, orderedVisibleList));
-                var seenKeys = new HashSet<string>(displayPairs.Select(kv => kv.Key), StringComparer.OrdinalIgnoreCase);
-
-                if (showAllFileSpecificFields && orderedVisibleList.Count > 0)
-                {
-                    foreach (var kv in fileRec.OrderedFields)
-                    {
-                        if (!matchedHeaderNamesSet.Contains(kv.Key) && seenKeys.Add(kv.Key))
-                            displayPairs.Add(kv);
-                    }
-                }
-
+                var displayPairs = GetVisibleFieldsForFile(fileRec, orderedVisibleList);
                 if (displayPairs.Count == 0)
                     continue;
 
@@ -4961,6 +5369,19 @@ internal static class DeskSpaceInformationTabV380
                 };
                 filesStack.Children.Add(fileCard);
             }
+
+            if (totalTargets > renderLimit)
+            {
+                int remaining = totalTargets - renderLimit;
+                var moreBtn = DeskSpaceFluentBackdropV380.CreatePillButton(
+                    $"Show {Math.Min(15, remaining)} More Files… ({remaining} remaining)",
+                    onShowMoreFiles,
+                    primary: false,
+                    tooltip: "Load additional files into this comparison view");
+                moreBtn.HorizontalAlignment = HorizontalAlignment.Center;
+                moreBtn.Margin = new Thickness(0, 4, 0, 8);
+                filesStack.Children.Add(moreBtn);
+            }
         }
 
         List<AppInfoFileRecordV380> GetQueryMatches(string queryText)
@@ -4978,6 +5399,8 @@ internal static class DeskSpaceInformationTabV380
                     kv.Value.Contains(q, StringComparison.OrdinalIgnoreCase));
             }).ToList();
         }
+
+        refreshDetails = () => PopulateRightDetails(GetQueryMatches(filterBox.Text));
 
         void PopulateFilesListAndDetails(string queryText)
         {

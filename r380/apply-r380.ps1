@@ -110,10 +110,99 @@ Finish-Patch $mainPath
 $hostPath = "$dstRoot/WidgetHost.cs"
 Begin-Patch $hostPath
 Swap-R380 @'
+    public void Save()
+    {
+        Directory.CreateDirectory(WorkspaceStore.Root);
+        var tmp = Filename + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(this));
+        File.Move(tmp, Filename, true);
+    }
+'@ @'
+    public void Save()
+    {
+        Directory.CreateDirectory(WorkspaceStore.Root);
+        var tmp = Filename + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(this));
+        File.Move(tmp, Filename, true);
+    }
+    public void SavePreservingPinnedApps()
+    {
+        try
+        {
+            if (File.Exists(Filename))
+            {
+                var disk = JsonSerializer.Deserialize<WidgetSettingsV3>(File.ReadAllText(Filename));
+                if (disk?.PinnedApps != null)
+                {
+                    PinnedApps.Clear();
+                    PinnedApps.AddRange(disk.PinnedApps);
+                }
+            }
+        }
+        catch { }
+        Save();
+    }
+'@ 'WidgetHost SavePreservingPinnedApps'
+Swap-R380 @'
+    private DateTime rightClickOpenedUntil = DateTime.MinValue;
+'@ @'
+    private DateTime rightClickOpenedUntil = DateTime.MinValue;
+    private DateTime outsideRingSinceUtc = DateTime.MinValue;
+'@ 'WidgetHost outsideRingSinceUtc field'
+Swap-R380 @'
             if (ringExpanded && informationOverlay?.IsArcOpen!=true && !ringGesture && !draggingGesture &&
 '@ @'
             if (ringExpanded && informationOverlay?.IsArcOpen!=true && appsWheel?.IsArcOpen!=true && excelWheel?.IsArcOpen!=true && !ringGesture && !draggingGesture &&
 '@ 'WidgetHost MouseLeave sub-arc protection'
+Swap-R380 @'
+        Deactivated+=(_,_)=>{
+            if(!keyboardDonutModeV207)return;
+            EndKeyboardDonutV207();
+            if(ringExpanded && activeModule==null)CollapseRing();
+        };
+'@ @'
+        Deactivated+=(_,_)=>{
+            if(!keyboardDonutModeV207 ||
+               informationOverlay?.IsContextMenuOpen==true ||
+               appsWheel?.IsContextMenuOpen==true)return;
+            EndKeyboardDonutV207();
+            if(ringExpanded && activeModule==null)CollapseRing();
+        };
+'@ 'WidgetHost Deactivated context menu guard'
+Swap-R380 @'
+                ()=>new WidgetOptionsWindow(prefs,()=>{
+                    prefs.Save();prefs.ApplyWindowsStartup();
+                }).Show())));
+'@ @'
+                ()=>new WidgetOptionsWindow(prefs,()=>{
+                    prefs.SavePreservingPinnedApps();prefs.ApplyWindowsStartup();
+                }).Show())));
+'@ 'WidgetHost options preserve PinnedApps'
+Swap-R380 @'
+        DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);
+'@ @'
+        DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);
+        DeskSpaceModernHubV380.AttachWidgetHost(this, menu);
+'@ 'WidgetHost tray modern submenu and global hotkeys'
+Swap-R380 @'
+            excelWheel??=new DeskSpaceExcelWheelV42(this,()=>{
+                if(ringExpanded)CollapseRing();
+            });
+            excelWheel.WarmStart();
+            informationOverlay??=new DeskSpaceInformationV36(this,()=>{
+                if(informationOverlay?.IsOpen==true)
+                    content.Text="Information"+Environment.NewLine+
+                        informationOverlay.SavedCount+" saved";
+                else UpdateCenter();
+            });
+            informationOverlay.WarmStart();
+'@ @'
+            excelWheel??=new DeskSpaceExcelWheelV42(this,()=>{
+                if(ringExpanded)CollapseRing();
+            });
+            excelWheel.WarmStart();
+            EnsureInformationOverlay().WarmStart();
+'@ 'WidgetHost Loaded EnsureInformationOverlay with onCommitted'
 Swap-R380 @'
                 UpdateHighlightedSector(p);
                 if(informationOverlay?.IsArcOpen==true)return;
@@ -122,34 +211,28 @@ Swap-R380 @'
                 if(informationOverlay?.IsArcOpen==true || appsWheel?.IsArcOpen==true || excelWheel?.IsArcOpen==true)return;
 '@ 'WidgetHost OnGestureMove sub-arc protection'
 Swap-R380 @'
-        // Leaving Information and moving into any other main sector closes
-        // its old arc and passive shelf. Never discard an active editor.
-        if(selected!=7 && informationOverlay?.IsOpen==true &&
-            informationOverlay.IsEditing==false)informationOverlay.Hide();
-        UpdateHighlightedSector(p);
-        if(selected==7)
-        {
-            mainWheelSector=selected;mainWheelQuick=-1;
-            return; // Information opens its own child wheel immediately
-        }
+        if (selection >= 0)
+            Dispatcher.BeginInvoke(new Action(() => ClickSegment(Segments[selection])));
+        CollapseRing();
 '@ @'
-        // Leaving Information and moving into any other main sector closes
-        // its old arc and passive shelf. Never discard an active editor.
-        if(selected!=6 && informationOverlay?.IsOpen==true &&
-            informationOverlay.IsEditing==false)informationOverlay.Hide();
-        UpdateHighlightedSector(p);
-        if(selected==6 || selected==10 || selected==11)
-        {
-            mainWheelSector=selected;mainWheelQuick=-1;
-            return; // Information, Applications and Excel open their own child arcs immediately
-        }
-'@ 'WidgetHost SampleMainWheel Information sector 6 flicker fix'
+        if (selection >= 0)
+            Dispatcher.BeginInvoke(new Action(() => ClickSegment(Segments[selection])));
+        if (selection is not (6 or 10 or 11))
+            CollapseRing();
+'@ 'WidgetHost OnGestureUp keep sub-donut ring open on sub-arc parent click'
 Swap-R380 @'
-        DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);
+            if(!string.IsNullOrWhiteSpace(stopwatchReturnCenterV371))
+            {
+                prefs.CenterMode=stopwatchReturnCenterV371!;
+                prefs.Save();
+            }
 '@ @'
-        DeskSpaceDeskTouchBridgeV378.AddTraySubmenu(menu, Dispatcher);
-        DeskSpaceModernHubV380.AttachWidgetHost(this, menu);
-'@ 'WidgetHost tray modern submenu and global hotkeys'
+            if(!string.IsNullOrWhiteSpace(stopwatchReturnCenterV371))
+            {
+                prefs.CenterMode=stopwatchReturnCenterV371!;
+                prefs.SavePreservingPinnedApps();
+            }
+'@ 'WidgetHost CompleteModuleReturn preserve PinnedApps'
 Swap-R380 @'
         canvas.Children.Add(content);
         UpdateCenter();
@@ -163,15 +246,202 @@ Swap-R380 @'
     }
 '@ 'WidgetHost donut Focus Ring canvas attachment'
 Swap-R380 @'
-        if (selection >= 0)
-            Dispatcher.BeginInvoke(new Action(() => ClickSegment(Segments[selection])));
-        CollapseRing();
+    private void SavePosition()
+    {
+        if(DeskSpaceMonitorSessionsV154.SavePosition(this,ringExpanded))return;
+        prefs.Left = Left; prefs.Top = Top; prefs.Save();
+    }
+
+    private void KeepOnVisibleDesktop()
+    {
+        if(DeskSpaceMonitorFenceV152.ClampIfBound(this))return;
+        if(DeskSpaceMultiMonitorV151.IsSatellite(this))return;
+        double minX = SystemParameters.VirtualScreenLeft;
+        double minY = SystemParameters.VirtualScreenTop;
+        double maxX = minX + SystemParameters.VirtualScreenWidth - Width;
+        double maxY = minY + SystemParameters.VirtualScreenHeight - Height;
+        Left = Math.Clamp(Left, minX, Math.Max(minX, maxX));
+        Top = Math.Clamp(Top, minY, Math.Max(minY, maxY));
+    }
+
+    private DispatcherTimer? wheelHoverTimer;
+    private int mainWheelSector=-1;
+    private int mainWheelQuick=-1;
+    private DateTime mainWheelEnteredUtc=DateTime.MinValue;
+
+    private void StartWheelHover()
+    {
+        if(wheelHoverTimer==null)
+        {
+            wheelHoverTimer=new DispatcherTimer{
+                Interval=TimeSpan.FromMilliseconds(
+                    DeskSpaceWheelHoverV35.PointerPollMilliseconds)};
+            wheelHoverTimer.Tick+=(_,_)=>SampleMainWheel();
+        }
+        mainWheelSector=-1;mainWheelQuick=-1;
+        mainWheelEnteredUtc=DateTime.MinValue;
+        wheelHoverTimer.Start();
+    }
+    private void StopWheelHover()
+    {
+        wheelHoverTimer?.Stop();
+        mainWheelSector=-1;mainWheelQuick=-1;
+        mainWheelEnteredUtc=DateTime.MinValue;
+    }
+    private void SampleMainWheel()
+    {
+        if(!DeskSpaceMonitorInputV158.IsPointerOnAssignedMonitor(this))return;
+        if(!ringExpanded || activeModule!=null || hiddenAtEdge ||
+            draggingGesture || shortcutMoveInProgress)return;
+        if(ringGesture || Mouse.LeftButton==MouseButtonState.Pressed ||
+            Mouse.RightButton==MouseButtonState.Pressed)
+        {
+            mainWheelSector=-1;mainWheelQuick=-1;
+            return; // drag release still uses existing captured input path
+        }
+        Point p;
+        try{p=DeskSpaceWheelHoverV35.MouseIn(this);}
+        catch(InvalidOperationException){return;}
+        int selected=SectorAt(p);
+        int add=QuickAddHitAt(p);
+        if(selected<0)
+        {
+            mainWheelSector=-1;mainWheelQuick=-1;
+            return;
+        }
+        // Leaving Information and moving into any other main sector closes
+        // its old arc and passive shelf. Never discard an active editor.
+        if(selected!=7 && informationOverlay?.IsOpen==true &&
+            informationOverlay.IsEditing==false)informationOverlay.Hide();
+        UpdateHighlightedSector(p);
+        if(selected==7)
+        {
+            mainWheelSector=selected;mainWheelQuick=-1;
+            return; // Information opens its own child wheel immediately
+        }
 '@ @'
-        if (selection >= 0)
-            Dispatcher.BeginInvoke(new Action(() => ClickSegment(Segments[selection])));
-        if (selection is not (6 or 10 or 11))
-            CollapseRing();
-'@ 'WidgetHost OnGestureUp keep sub-donut ring open on sub-arc parent click'
+    private void SavePosition()
+    {
+        if(DeskSpaceMonitorSessionsV154.SavePosition(this,ringExpanded))return;
+        prefs.Left = Left; prefs.Top = Top; prefs.SavePreservingPinnedApps();
+    }
+
+    private void KeepOnVisibleDesktop()
+    {
+        if(DeskSpaceMonitorFenceV152.ClampIfBound(this))return;
+        if(DeskSpaceMultiMonitorV151.IsSatellite(this))return;
+        double minX = SystemParameters.VirtualScreenLeft;
+        double minY = SystemParameters.VirtualScreenTop;
+        double maxX = minX + SystemParameters.VirtualScreenWidth - Width;
+        double maxY = minY + SystemParameters.VirtualScreenHeight - Height;
+        Left = Math.Clamp(Left, minX, Math.Max(minX, maxX));
+        Top = Math.Clamp(Top, minY, Math.Max(minY, maxY));
+    }
+
+    private DispatcherTimer? wheelHoverTimer;
+    private int mainWheelSector=-1;
+    private int mainWheelQuick=-1;
+    private DateTime mainWheelEnteredUtc=DateTime.MinValue;
+
+    private void StartWheelHover()
+    {
+        if(wheelHoverTimer==null)
+        {
+            wheelHoverTimer=new DispatcherTimer{
+                Interval=TimeSpan.FromMilliseconds(
+                    DeskSpaceWheelHoverV35.PointerPollMilliseconds)};
+            wheelHoverTimer.Tick+=(_,_)=>SampleMainWheel();
+        }
+        mainWheelSector=-1;mainWheelQuick=-1;
+        mainWheelEnteredUtc=DateTime.MinValue;
+        outsideRingSinceUtc=DateTime.MinValue;
+        wheelHoverTimer.Start();
+    }
+    private void StopWheelHover()
+    {
+        wheelHoverTimer?.Stop();
+        mainWheelSector=-1;mainWheelQuick=-1;
+        mainWheelEnteredUtc=DateTime.MinValue;
+        outsideRingSinceUtc=DateTime.MinValue;
+    }
+    private void SampleMainWheel()
+    {
+        if(!ringExpanded || activeModule!=null || hiddenAtEdge ||
+            draggingGesture || shortcutMoveInProgress)return;
+        if(ringGesture || Mouse.LeftButton==MouseButtonState.Pressed ||
+            Mouse.RightButton==MouseButtonState.Pressed)
+        {
+            mainWheelSector=-1;mainWheelQuick=-1;
+            outsideRingSinceUtc=DateTime.MinValue;
+            return; // drag release still uses existing captured input path
+        }
+        Point p;
+        try{p=DeskSpaceWheelHoverV35.MouseIn(this);}
+        catch(InvalidOperationException){return;}
+        int selected=DeskSpaceMonitorInputV158.IsPointerOnAssignedMonitor(this)?SectorAt(p):-1;
+        int add=selected>=0?QuickAddHitAt(p):-1;
+        if(selected<0)
+        {
+            mainWheelSector=-1;mainWheelQuick=-1;
+            bool overMainDonut=DeskSpaceMonitorInputV158.IsPointerOnAssignedMonitor(this) &&
+                (p-new Point(Width/2,Height/2)).Length<=Width*198.0/420.0+14;
+            bool overSubArc=(informationOverlay?.IsPointerNearArc()==true) ||
+                (appsWheel?.IsPointerNearArc()==true) ||
+                (excelWheel?.IsArcOpen==true);
+            if(!overMainDonut && !overSubArc &&
+               DateTime.UtcNow>rightClickOpenedUntil && !keyboardDonutModeV207)
+            {
+                if(outsideRingSinceUtc==DateTime.MinValue)
+                    outsideRingSinceUtc=DateTime.UtcNow;
+                else if((DateTime.UtcNow-outsideRingSinceUtc).TotalMilliseconds>=260)
+                {
+                    outsideRingSinceUtc=DateTime.MinValue;
+                    CollapseRing();
+                }
+            }
+            else
+            {
+                outsideRingSinceUtc=DateTime.MinValue;
+            }
+            return;
+        }
+        outsideRingSinceUtc=DateTime.MinValue;
+        // Leaving Information and moving into any other main sector closes
+        // its old arc and passive shelf. Never discard an active editor.
+        if(selected!=6 && informationOverlay?.IsOpen==true &&
+            informationOverlay.IsEditing==false)informationOverlay.Hide();
+        UpdateHighlightedSector(p);
+        if(selected==6 || selected==10 || selected==11)
+        {
+            mainWheelSector=selected;mainWheelQuick=-1;
+            return; // Information, Applications and Excel open their own child arcs immediately
+        }
+'@ 'WidgetHost SavePosition and SampleMainWheel outside-ring collapse'
+Swap-R380 @'
+    private void ToggleRing()
+    {
+        if(!ringExpanded && activeModule==null) donutHome.Capture(this);
+'@ @'
+    private void ToggleRing()
+    {
+        outsideRingSinceUtc=DateTime.MinValue;
+        if(!ringExpanded && activeModule==null) donutHome.Capture(this);
+'@ 'WidgetHost ToggleRing reset outsideRingSinceUtc'
+Swap-R380 @'
+                else
+                {
+                    prefs.CenterMode=mode;prefs.Save();
+                    if(activeModule==null&&!ringExpanded)BuildCompact();
+                    UpdateCenter();
+                }
+'@ @'
+                else
+                {
+                    prefs.CenterMode=mode;prefs.SavePreservingPinnedApps();
+                    if(activeModule==null&&!ringExpanded)BuildCompact();
+                    UpdateCenter();
+                }
+'@ 'WidgetHost ChooseCenter preserve PinnedApps'
 Swap-R380 @'
     private void OpenApplicationsArc()
     {
@@ -218,11 +488,13 @@ Swap-R380 @'
         appsWheel??=new DeskSpaceApplicationsV55(this,
             ()=>prefs.PinnedApps.ToArray(),
             p=>{
+                SyncPinnedAppsFromDiskV380();
                 if(!prefs.PinnedApps.Any(x=>string.Equals(x,p,
                     StringComparison.OrdinalIgnoreCase)))
                 {prefs.PinnedApps.Add(p);prefs.Save();}
             },
             p=>{
+                SyncPinnedAppsFromDiskV380();
                 var old=prefs.PinnedApps.FirstOrDefault(x=>string.Equals(x,p,
                     StringComparison.OrdinalIgnoreCase));
                 if(old!=null){prefs.PinnedApps.Remove(old);prefs.Save();}
@@ -231,11 +503,101 @@ Swap-R380 @'
             },
             ()=>OpenInWidget("Search"));
 '@ 'WidgetHost OpenApplicationsArc sync pinned apps and live count'
+Swap-R380 @'
+            informationOverlay??=new DeskSpaceInformationV36(this,()=>{
+                if(informationOverlay?.IsArcOpen==true)
+                    content.Text="Information"+Environment.NewLine+
+                        informationOverlay.SavedCount+" saved";
+                else UpdateCenter();
+            },()=>{
+                // A committed child (click, Enter, or drag release)
+                // completes the expanded -> compact transition. Only
+                // hide child arc; keep the selected Information shelf.
+                if(ringExpanded)ToggleRing();
+                informationOverlay?.HideArc();
+                if(informationOverlay?.IsOpen==true)
+                    content.Text="Information"+Environment.NewLine+
+                        informationOverlay.SavedCount+" saved";
+            });
+            informationOverlay.Show();
+            if(informationOverlay.IsOpen)
+                content.Text="Information"+Environment.NewLine+
+                    informationOverlay.SavedCount+" saved";
+'@ @'
+            var overlay=EnsureInformationOverlay();
+            overlay.Show();
+            if(overlay.IsArcOpen)
+                content.Text=overlay.CenterSummaryText;
+'@ 'WidgetHost OpenInformationArc use EnsureInformationOverlay'
+Swap-R380 @'
+    private void OpenInformationArc()
+'@ @'
+    private DeskSpaceInformationV36 EnsureInformationOverlay()
+    {
+        informationOverlay??=new DeskSpaceInformationV36(this,()=>{
+            if(informationOverlay?.IsArcOpen==true)
+                content.Text=informationOverlay.CenterSummaryText;
+            else UpdateCenter();
+        },()=>{
+            // A committed child (click, Enter, or drag release)
+            // completes the expanded -> compact transition. Only
+            // hide child arc; keep the selected Information shelf.
+            if(ringExpanded)ToggleRing();
+            informationOverlay?.HideArc();
+            UpdateCenter();
+        });
+        return informationOverlay;
+    }
+    private void OpenInformationArc()
+'@ 'WidgetHost EnsureInformationOverlay definition'
+Swap-R380 @'
+            prefs.CenterMode="Clock";
+            prefs.Save();CollapseRing();BuildCompact();UpdateCenter();
+'@ @'
+            prefs.CenterMode="Clock";
+            prefs.SavePreservingPinnedApps();CollapseRing();BuildCompact();UpdateCenter();
+'@ 'WidgetHost Clock segment preserve PinnedApps'
+Swap-R380 @'
+    private void ApplySettings()
+    {
+        prefs.Save();prefs.ApplyWindowsStartup();UpdateCenter();
+        if (prefs.ShowWeather) _ = DeskSpaceWeather.RefreshAsync(prefs.WeatherCity);
+    }
+'@ @'
+    private void ApplySettings()
+    {
+        prefs.SavePreservingPinnedApps();prefs.ApplyWindowsStartup();UpdateCenter();
+        if (prefs.ShowWeather) _ = DeskSpaceWeather.RefreshAsync(prefs.WeatherCity);
+    }
+'@ 'WidgetHost ApplySettings preserve PinnedApps'
+Swap-R380 @'
+        if(informationOverlay?.IsOpen==true)
+        {
+            content.Text="Information"+Environment.NewLine+
+                informationOverlay.SavedCount+" saved";
+            return;
+        }
+'@ @'
+        if(informationOverlay?.IsArcOpen==true)
+        {
+            content.Text=informationOverlay.CenterSummaryText;
+            return;
+        }
+'@ 'WidgetHost UpdateCenter active Information arc summary'
 Finish-Patch $hostPath
 
 # 4b. Surgical hook: DeskSpaceInformationV36.cs (tight concentric clipped bounds & monitor-aware shelf)
 $infoPath = "$dstRoot/DeskSpaceInformationV36.cs"
 Begin-Patch $infoPath
+Swap-R380 @'
+    private readonly ScrollViewer shelfScroll;
+    private readonly TextBlock shelfTitle;
+'@ @'
+    private readonly ScrollViewer shelfScroll;
+    private readonly TextBlock shelfTitle;
+    private readonly Button headerAddBtn;
+    private readonly Button headerAppsBtn;
+'@ 'DeskSpaceInformationV36 header button fields'
 Swap-R380 @'
     private List<Collection> all=new();
     private bool warmed,warming;
@@ -272,7 +634,8 @@ Swap-R380 @'
     private readonly HashSet<string> loadingArcApps=new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string,int> arcAppScanGens=new(StringComparer.OrdinalIgnoreCase);
     private long warmedAppsRev=-1;
-    private bool showAllFileSpecificFields=true;
+    private DateTime warmedConfigStampUtc=DateTime.MinValue;
+    private bool contextMenuOpen;
     private int ActiveArcTotalCount()=>arcApps.Count>0?arcApps.Count:all.Count;
     private bool warmed,warming;
     private DateTime warmStamp=DateTime.MinValue;
@@ -295,17 +658,49 @@ Swap-R380 @'
                 var snapshot=Read().OrderByDescending(x=>x.UpdatedUtc).ToList();
                 var appsSnapshot=DeskSpaceInformationTabV380.GetSelectedAppsForInformation();
                 long appsRev=DeskSpaceInformationTabV380.InformationAppsRevision;
+                DateTime cfgStamp=DeskSpaceInformationTabV380.GetInformationConfigStampUtc();
                 DeskSpaceInformationTabV380.PrewarmInformationApps(appsSnapshot.Select(a=>a.Path));
                 owner.Dispatcher.BeginInvoke(new Action(()=>{
                     if(disposed)return;
-                    all=snapshot;arcApps=appsSnapshot;warmStamp=stamp;warmedAppsRev=appsRev;warmed=true;warming=false;
+                    all=snapshot;arcApps=appsSnapshot;warmStamp=stamp;warmedAppsRev=appsRev;warmedConfigStampUtc=cfgStamp;warmed=true;warming=false;
                     if(arcApps.Count==1)
                         EnsureAppInfoLoadedForArc(arcApps[0].Path);
                     if(arc.IsOpen){RenderArc();PositionArc();changed();}
                 }));
             }
 '@ 'DeskSpaceInformationV36 arcApps WarmStart'
-Swap-R380 '    public int SavedCount => all.Count;' '    public int SavedCount => ActiveArcTotalCount();' 'DeskSpaceInformationV36 SavedCount'
+Swap-R380 '    public int SavedCount => all.Count;' @'
+    public int SavedCount => ActiveArcTotalCount();
+    internal bool IsContextMenuOpen => contextMenuOpen;
+    internal bool IsPointerNearArc()
+    {
+        if(contextMenuOpen)return true;
+        if(disposed || !arc.IsOpen || !arcCanvas.IsLoaded)return false;
+        try
+        {
+            var pt=DeskSpaceWheelHoverV35.MouseIn(arcCanvas);
+            return pt.X>=-26 && pt.X<=arcCanvas.Width+26 && pt.Y>=-26 && pt.Y<=arcCanvas.Height+26;
+        }
+        catch(InvalidOperationException){return false;}
+    }
+    internal string CenterSummaryText
+    {
+        get
+        {
+            if(arcApps.Count==1)
+            {
+                var app=arcApps[0];
+                if(DeskSpaceInformationTabV380.TryGetCachedAppInformation(app.Path,out var singleRes) &&
+                   singleRes.MeetsMinimumTwoFilesRule)
+                    return $"{app.Label}\n{singleRes.MatchedFiles.Count} files";
+                return $"{app.Label}\nLoading…";
+            }
+            if(arcApps.Count>=2)
+                return $"Information\n{arcApps.Count} apps";
+            return $"Information\n{all.Count} saved";
+        }
+    }
+'@ 'DeskSpaceInformationV36 SavedCount'
 Swap-R380 '        arcCanvas=new Canvas{Width=488,Height=222,Focusable=true};' '        arcCanvas=new Canvas{Width=1,Height=1,Focusable=true};' 'DeskSpaceInformationV36 tight initial canvas'
 Swap-R380 @'
         middleScroll=new DeskSpaceMiddleScrollV63.Controller(arcCanvas,
@@ -369,16 +764,20 @@ Swap-R380 @'
         if(shelf.IsOpen && !editorActive)CloseShelf();
         try
         {
-            if(!warmed || CurrentStamp()!=warmStamp || warmedAppsRev!=DeskSpaceInformationTabV380.InformationAppsRevision)
+            DateTime cfgStamp=DeskSpaceInformationTabV380.GetInformationConfigStampUtc();
+            if(!warmed || CurrentStamp()!=warmStamp ||
+               warmedAppsRev!=DeskSpaceInformationTabV380.InformationAppsRevision ||
+               warmedConfigStampUtc!=cfgStamp)
             {
                 arcApps=DeskSpaceInformationTabV380.GetSelectedAppsForInformation();
                 warmedAppsRev=DeskSpaceInformationTabV380.InformationAppsRevision;
+                warmedConfigStampUtc=cfgStamp;
                 DeskSpaceInformationTabV380.PrewarmInformationApps(arcApps.Select(a=>a.Path));
                 WarmStart();
             }
             activeArcAppPath="";
             filePage=0;
-            startIndex=Math.Clamp(startIndex,0,Math.Max(0,Depth0TotalCount()-PageSize));
+            startIndex=Math.Clamp(startIndex,0,Math.Max(0,Depth0TotalCount()-Depth0PageSize()));
             if(arcApps.Count==1)
                 EnsureAppInfoLoadedForArc(arcApps[0].Path);
             RenderArc();
@@ -392,6 +791,7 @@ Swap-R380 @'
     }
     public void HideArc()
     {
+        contextMenuOpen=false;
         newHoverTimer.Stop();
         middleScroll.Stop();
         pointerTimer.Stop();
@@ -693,9 +1093,11 @@ Swap-R380 @'
 '@ @'
     private Rect arcBounds=Rect.Empty;
     private const double ArcMargin=6;
-    private const double InfoOuterInner=257,InfoOuterOuter=365;
+    private const double InfoOuterInner=257,InfoOuterOuter=322;
     private const int PageSize=DeskSpaceSubDonutStandardV62.Visible-1;
+    private const int SingleAppFilePageSize=DeskSpaceSubDonutStandardV62.Visible-2;
     private const int FilePageSize=DeskSpaceSubDonutStandardV62.Visible-1;
+    private int Depth0PageSize()=>arcApps.Count==1?SingleAppFilePageSize:PageSize;
     private readonly DeskSpaceSubDonutStandardV62.Wheel standardWheel=new();
     private readonly List<(int index,int depth,string kind,Guid? id,string appPath,string filePath,double midAngle,Geometry hit)> arcHitZones=new();
     private bool arcPressed;
@@ -755,7 +1157,7 @@ Swap-R380 @'
         if(handle!=IntPtr.Zero && GetWindowRect(handle,out var rect) &&
            rect.Right>rect.Left && rect.Bottom>rect.Top)
             centre=new Point((rect.Left+rect.Right)/2.0,(rect.Top+rect.Bottom)/2.0);
-        double[] shifts={0,-8,8,-16,16,-24,24,-32,32};
+        double[] shifts={0,-8,8,-16,16,-24,24,-32,32,-40,40,-48,48};
         double best=preferred,bestScore=double.PositiveInfinity;
         foreach(double shift in shifts)
         {
@@ -904,7 +1306,7 @@ Swap-R380 @'
     }
 
     private bool HasAnyArcOverflow()=>
-        Depth0TotalCount()>PageSize || ActiveDepth1TotalCount()>FilePageSize;
+        Depth0TotalCount()>Depth0PageSize() || ActiveDepth1TotalCount()>FilePageSize;
 
     // Child sectors are placed ONLY across a partial arc centered over the
     // Information parent at the top of the existing outer ring, tightly clipped
@@ -936,10 +1338,10 @@ Swap-R380 @'
             {
                 var files=singleRes.MatchedFiles;
                 d0Total=files.Count;
-                startIndex=Math.Clamp(startIndex,0,Math.Max(0,d0Total-PageSize));
-                var slice=files.Skip(startIndex).Take(PageSize).ToArray();
+                startIndex=Math.Clamp(startIndex,0,Math.Max(0,d0Total-SingleAppFilePageSize));
+                var slice=files.Skip(startIndex).Take(SingleAppFilePageSize).ToArray();
                 d0VisibleItems=slice.Length;
-                int count=slice.Length+1;
+                int count=slice.Length+2;
                 var layout=DeskSpaceSubDonutStandardV62.Plan(count,0,-90);
                 for(int i=0;i<slice.Length;i++)
                 {
@@ -949,9 +1351,13 @@ Swap-R380 @'
                         $"{mf.DisplayName}\n{mf.KindBadge} · Click to show selected info · Right-click to manage app",
                         false));
                 }
-                drawItems.Add(("⚙ Apps","manageapps",null,app.Path,"",
+                drawItems.Add(("⚙ Fields","choosefields",null,app.Path,"",
                     layout.From(slice.Length),layout.To(slice.Length),0,
-                    $"{app.Label} · Add/Remove apps or choose visible fields",
+                    $"{app.Label} · Choose visible Header → Value fields",
+                    true));
+                drawItems.Add(("⚙ Apps","manageapps",null,app.Path,"",
+                    layout.From(slice.Length+1),layout.To(slice.Length+1),0,
+                    $"{app.Label} · Add or remove Information applications",
                     true));
             }
             else
@@ -963,7 +1369,7 @@ Swap-R380 @'
                     layout.From(0),layout.To(0),0,statusTip,false));
                 drawItems.Add(("⚙ Apps","manageapps",null,app.Path,"",
                     layout.From(1),layout.To(1),0,
-                    $"{app.Label} · Add/Remove apps or choose visible fields",true));
+                    $"{app.Label} · Add or remove Information applications",true));
             }
         }
         else if(isMultiAppMode)
@@ -1016,7 +1422,7 @@ Swap-R380 @'
                 d1Entries.Add(("⚙ Fields","choosefields",activeArcAppPath,"",
                     "Choose visible Header → Value fields for this application",true));
 
-                double d1Half=Math.Clamp(d1Entries.Count*6.0,12.0,32.0);
+                double d1Half=Math.Clamp(d1Entries.Count*8.5,16.0,44.0);
                 double d1Center=FitOuterAngle(activeArcAppAngle,d1Half,InfoOuter(1));
                 double d1Start=d1Center-d1Half;
                 double d1Step=(d1Half*2)/d1Entries.Count;
@@ -1164,7 +1570,7 @@ Swap-R380 @'
         }
 
         // Pass 3: Hidden counters for Depth-0 and Depth-1
-        if(d0ScrollWedges.Count>0 && d0Total>PageSize)
+        if(d0ScrollWedges.Count>0 && d0Total>Depth0PageSize())
         {
             int hiddenBefore=startIndex;
             int hiddenAfter=Math.Max(0,d0Total-startIndex-d0ScrollWedges.Count);
@@ -1230,7 +1636,7 @@ Swap-R380 @'
             return;
         }
         if(disposed || !arc.IsOpen || !arcCanvas.IsLoaded ||
-           editorActive)return;
+           editorActive || contextMenuOpen)return;
         try
         {
             // All modules use the same DPI-aware wheel cursor source.
@@ -1241,15 +1647,15 @@ Swap-R380 @'
     }
     private void OnArcMouseMove(object sender,MouseEventArgs e)
     {
-        if(!arc.IsOpen || disposed)return;
+        if(!arc.IsOpen || disposed || contextMenuOpen)return;
         ProcessWheelPointer(e.GetPosition(arcCanvas));
     }
     private void ProcessWheelPointer(Point point)
     {
-        if(disposed || !arc.IsOpen || editorActive)return;
+        if(disposed || !arc.IsOpen || editorActive || contextMenuOpen)return;
         double cw=arcCanvas.Width,ch=arcCanvas.Height;
         double edgeBand=Math.Min(48,cw*0.14);
-        int direction=point.Y>=0 && point.Y<=ch ?
+        int direction=arcApps.Count==0 && point.Y>=0 && point.Y<=ch ?
             point.X<=edgeBand && CanPage(-1)?-1:
             point.X>=cw-edgeBand && CanPage(1)?1:0:0;
         int overItem=SlotAtPoint(point);
@@ -1370,6 +1776,8 @@ Swap-R380 @'
         cm.Items.Add(removeItem);
 
         cm.PlacementTarget=arcCanvas;
+        contextMenuOpen=true;
+        cm.Closed+=(_,_)=>contextMenuOpen=false;
         cm.IsOpen=true;
         e.Handled=true;
     }
@@ -1378,6 +1786,7 @@ Swap-R380 @'
     {
         arcApps=DeskSpaceInformationTabV380.GetSelectedAppsForInformation();
         warmedAppsRev=DeskSpaceInformationTabV380.InformationAppsRevision;
+        warmedConfigStampUtc=DeskSpaceInformationTabV380.GetInformationConfigStampUtc();
         if(!string.IsNullOrEmpty(removedAppPath) &&
            string.Equals(activeArcAppPath,removedAppPath,StringComparison.OrdinalIgnoreCase))
         {
@@ -1594,7 +2003,7 @@ Swap-R380 @'
             }
             else
             {
-                startIndex=Math.Clamp(keyboardIndex-2,0,Math.Max(0,total-4));
+                startIndex=Math.Clamp(keyboardIndex-2,0,Math.Max(0,total-Depth0PageSize()));
                 RenderArc();
                 int slot=keyboardIndex-startIndex;
                 if(slot>=0 && slot<arcHitZones.Count)
@@ -1660,7 +2069,7 @@ Swap-R380 @'
         if(d0Overflow)Slide(delta);
     }
     private bool CanPage(int direction) =>
-        direction<0?startIndex>0:startIndex+PageSize<Depth0TotalCount();
+        direction<0?startIndex>0:startIndex+Depth0PageSize()<Depth0TotalCount();
     private bool CanPageFiles(int direction) =>
         direction<0?filePage>0:filePage+FilePageSize<ActiveDepth1TotalCount();
     private void StartEdgeScroll(int direction)
@@ -1682,7 +2091,7 @@ Swap-R380 @'
         CloseTransientPreview();
         if(!CanPage(delta)){StopEdgeScroll();return;}
         if(arcApps.Count>=2){activeArcAppPath="";filePage=0;}
-        startIndex=Math.Clamp(startIndex+delta,0,Math.Max(0,Depth0TotalCount()-PageSize));
+        startIndex=Math.Clamp(startIndex+delta,0,Math.Max(0,Depth0TotalCount()-Depth0PageSize()));
         RenderArc();
         DeskSpaceSubDonutStandardV62.Animate(arcCanvas,delta,-90);
         if(!CanPage(delta))StopEdgeScroll();
@@ -1695,6 +2104,35 @@ Swap-R380 @'
         DeskSpaceSubDonutStandardV62.Animate(arcCanvas,delta,activeArcAppAngle);
     }
 '@ 'DeskSpaceInformationV36 keyboard and multi-depth paging support'
+Swap-R380 @'
+    private void Shelf(string title)
+    {
+        MaskRevealed();
+        shelfTitle.Text=title;
+        shelfBody.Children.Clear();
+        warning.Text="";
+        SetCompactShelfLayout(editorActive);
+'@ @'
+    private void Shelf(string title,double? customWidth=null,double? customMaxHeight=null,double? customScrollMax=null,bool showLegacyHeaderButtons=true)
+    {
+        MaskRevealed();
+        shelfTitle.Text=title;
+        shelfBody.Children.Clear();
+        warning.Text="";
+        headerAddBtn.Visibility=showLegacyHeaderButtons?Visibility.Visible:Visibility.Collapsed;
+        headerAppsBtn.Visibility=showLegacyHeaderButtons?Visibility.Visible:Visibility.Collapsed;
+        if(customWidth.HasValue)
+        {
+            shelfBorder.Width=customWidth.Value;
+            if(customMaxHeight.HasValue)shelfBorder.MaxHeight=customMaxHeight.Value;
+            if(customScrollMax.HasValue)shelfScroll.MaxHeight=customScrollMax.Value;
+            shelfBody.Margin=new Thickness(8,3,8,6);
+        }
+        else
+        {
+            SetCompactShelfLayout(editorActive);
+        }
+'@ 'DeskSpaceInformationV36 Shelf custom sizing and header button toggle'
 Swap-R380 @'
         // Placeholder only: future opt-in website/app association for UI/PW.
         // Never read URLs, browser windows or passwords automatically yet.
@@ -1779,6 +2217,7 @@ Swap-R380 @'
         add.MinWidth=29;
         add.Margin=new Thickness(1,2,1,2);
         DockPanel.SetDock(add,Dock.Right);
+        headerAddBtn=add;
         header.Children.Add(add);
         var appsBtn=SmallButton("Apps",()=>OpenAppFileInfoShelf());
         appsBtn.ToolTip="Select an application to inspect inside-file Header → Value information";
@@ -1786,6 +2225,7 @@ Swap-R380 @'
         appsBtn.MinWidth=40;
         appsBtn.Margin=new Thickness(1,3,1,3);
         DockPanel.SetDock(appsBtn,Dock.Right);
+        headerAppsBtn=appsBtn;
         header.Children.Add(appsBtn);
 '@ 'DeskSpaceInformationV36 Apps shelf header button'
 Swap-R380 @'
@@ -1807,12 +2247,7 @@ Swap-R380 @'
         string fileTitle=System.IO.Path.GetFileNameWithoutExtension(filePath);
         if(string.IsNullOrWhiteSpace(fileTitle))fileTitle=filePath;
 
-        Shelf(fileTitle);
-        shelfBorder.Width=364;
-        shelfBorder.MaxHeight=340;
-        shelfScroll.MaxHeight=268;
-        shelfBody.Margin=new Thickness(8,3,8,6);
-        UpdateShelfPosition();
+        Shelf(fileTitle,364,340,268,showLegacyHeaderButtons:false);
 
         if(DeskSpaceInformationTabV380.TryGetCachedAppInformation(appPath,out var cachedRes))
         {
@@ -1859,19 +2294,8 @@ Swap-R380 @'
 
         shelfTitle.Text=file.DisplayName;
         var visibleSet=new HashSet<string>(res.VisibleHeaders,StringComparer.OrdinalIgnoreCase);
-        var matchedNames=new HashSet<string>(res.MatchedHeaders.Select(h=>h.Header),StringComparer.OrdinalIgnoreCase);
         var orderedVis=res.MatchedHeaders.Select(h=>h.Header).Where(visibleSet.Contains).ToList();
-
-        var pairs=new List<KeyValuePair<string,string>>(DeskSpaceInformationTabV380.GetVisibleFieldsForFile(file,orderedVis));
-        var seenKeys=new HashSet<string>(pairs.Select(kv=>kv.Key),StringComparer.OrdinalIgnoreCase);
-        if(showAllFileSpecificFields && orderedVis.Count>0)
-        {
-            foreach(var kv in file.OrderedFields)
-            {
-                if(!matchedNames.Contains(kv.Key) && seenKeys.Add(kv.Key))
-                    pairs.Add(kv);
-            }
-        }
+        var pairs=DeskSpaceInformationTabV380.GetVisibleFieldsForFile(file,orderedVis);
 
         var topTools=new DockPanel{LastChildFill=true,Margin=new Thickness(0,2,0,6)};
         var rightBtns=new StackPanel{Orientation=Orientation.Horizontal};
@@ -1959,12 +2383,7 @@ Swap-R380 @'
         LeaveEditorKeyboardMode();
 
         var elig=DeskSpaceInformationTabV380.EvaluateAppEligibility(appPath);
-        Shelf("Fields · "+elig.AppDisplayName);
-        shelfBorder.Width=368;
-        shelfBorder.MaxHeight=360;
-        shelfScroll.MaxHeight=288;
-        shelfBody.Margin=new Thickness(8,3,8,6);
-        UpdateShelfPosition();
+        Shelf("Fields · "+elig.AppDisplayName,368,360,288,showLegacyHeaderButtons:false);
 
         if(DeskSpaceInformationTabV380.TryGetCachedAppInformation(appPath,out var cachedRes))
         {
@@ -2052,15 +2471,6 @@ Swap-R380 @'
         hdrBar.Children.Add(statusLbl);
         shelfBody.Children.Add(hdrBar);
 
-        var fileSpecCb=new CheckBox{
-            IsChecked=showAllFileSpecificFields,
-            Content="Include file-specific schedule/computation rows",
-            FontSize=11,FontWeight=FontWeights.SemiBold,Foreground=Ink,
-            Margin=new Thickness(2,2,2,6),Cursor=Cursors.Hand};
-        fileSpecCb.Checked+=(_,_)=>showAllFileSpecificFields=true;
-        fileSpecCb.Unchecked+=(_,_)=>showAllFileSpecificFields=false;
-        shelfBody.Children.Add(fileSpecCb);
-
         foreach(var hdr in res.MatchedHeaders)
         {
             string hName=hdr.Header;
@@ -2094,15 +2504,11 @@ Swap-R380 @'
         transientPreview=keepTransient;
         LeaveEditorKeyboardMode();
 
-        Shelf("Information Apps");
-        shelfBorder.Width=364;
-        shelfBorder.MaxHeight=360;
-        shelfScroll.MaxHeight=288;
-        shelfBody.Margin=new Thickness(8,3,8,6);
-        UpdateShelfPosition();
+        Shelf("Information Apps",364,360,288,showLegacyHeaderButtons:false);
 
         arcApps=DeskSpaceInformationTabV380.GetSelectedAppsForInformation();
         warmedAppsRev=DeskSpaceInformationTabV380.InformationAppsRevision;
+        warmedConfigStampUtc=DeskSpaceInformationTabV380.GetInformationConfigStampUtc();
 
         var modeNote=arcApps.Count==1
             ? "1 app selected — Information wheel directly shows its files."
@@ -2438,6 +2844,26 @@ Swap-R380 @'
         return (finalL,finalW);
     }
 '@ 'DeskSpaceApplicationsV55 geometry, inscribed bounds and state fields'
+Swap-R380 @'
+    public bool IsArcOpen=>arc.IsOpen;
+    public int PinnedCount=>pinned().Count;
+'@ @'
+    public bool IsArcOpen=>arc.IsOpen;
+    public int PinnedCount=>pinned().Count;
+    private bool contextMenuOpen;
+    internal bool IsContextMenuOpen=>contextMenuOpen;
+    internal bool IsPointerNearArc()
+    {
+        if(contextMenuOpen)return true;
+        if(disposed || !arc.IsOpen || !canvas.IsLoaded)return false;
+        try
+        {
+            var pt=DeskSpaceWheelHoverV35.MouseIn(canvas);
+            return pt.X>=-26 && pt.X<=canvas.Width+26 && pt.Y>=-26 && pt.Y<=canvas.Height+26;
+        }
+        catch(InvalidOperationException){return false;}
+    }
+'@ 'DeskSpaceApplicationsV55 context menu and pointer near arc guards'
 Swap-R380 @'
         canvas=new Canvas{Width=1,Height=1,Background=null};
         canvas.MouseMove+=Move;
@@ -2964,7 +3390,7 @@ Swap-R380 @'
         group="";childPage=0;ClearActiveAppFilesV380();
         Render();arc.IsOpen=owner.IsVisible;
     }
-    public void HideArc(){middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
+    public void HideArc(){contextMenuOpen=false;middleScroll.Stop();arc.IsOpen=false;group="";childPage=0;ClearActiveAppFilesV380();}
     private int Slot(Point point)
     {
         for(int i=hitZones.Count-1;i>=0;i--)
@@ -2973,6 +3399,7 @@ Swap-R380 @'
     }
     private void Hover(Point point)
     {
+        if(contextMenuOpen)return;
         int i=Slot(point);
         if(i==hovered)return;
         hovered=i;
@@ -3007,7 +3434,7 @@ Swap-R380 @'
     }
     private void Move(object sender,MouseEventArgs e)
     {
-        if(!disposed&&arc.IsOpen)Hover(e.GetPosition(canvas));
+        if(!disposed&&arc.IsOpen&&!contextMenuOpen)Hover(e.GetPosition(canvas));
     }
     internal bool UnpinAppV380(string path)
     {
@@ -3068,6 +3495,8 @@ Swap-R380 @'
         cm.Items.Add(new Separator());
         cm.Items.Add(unpinItem);
         cm.PlacementTarget=canvas;
+        contextMenuOpen=true;
+        cm.Closed+=(_,_)=>contextMenuOpen=false;
         cm.IsOpen=true;
         e.Handled=true;
     }

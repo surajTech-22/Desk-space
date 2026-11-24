@@ -199,7 +199,9 @@ internal static class DeskSpaceModernHubV380
             foreach (string appPath in pins)
             {
                 string captured = appPath;
-                string label = System.IO.Path.GetFileNameWithoutExtension(captured);
+                string label = DeskSpacePinnedAppFilesV380.ResolvePinnedAppDisplayName(captured);
+                if (string.IsNullOrWhiteSpace(label))
+                    label = System.IO.Path.GetFileNameWithoutExtension(captured);
                 var appSub = new Forms.ToolStripMenuItem(label);
                 appSub.DropDownItems.Add($"Open {label} Directly", null,
                     (_, _) => owner.Dispatcher.Invoke(() => DeskSpacePinnedAppFilesV380.TryLaunchPinnedAppDirect(captured, owner)));

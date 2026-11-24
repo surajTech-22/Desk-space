@@ -39,6 +39,23 @@ public sealed class WidgetSettingsV3
         File.WriteAllText(tmp, JsonSerializer.Serialize(this));
         File.Move(tmp, Filename, true);
     }
+    public void SavePreservingPinnedApps()
+    {
+        try
+        {
+            if (File.Exists(Filename))
+            {
+                var disk = JsonSerializer.Deserialize<WidgetSettingsV3>(File.ReadAllText(Filename));
+                if (disk?.PinnedApps != null)
+                {
+                    PinnedApps.Clear();
+                    PinnedApps.AddRange(disk.PinnedApps);
+                }
+            }
+        }
+        catch { }
+        Save();
+    }
     public void ApplyWindowsStartup()
     {
         using var run = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
@@ -137,6 +154,7 @@ public sealed class WidgetShellWindow : Window
     private bool ringGesture;
     private bool draggingGesture;
     private DateTime rightClickOpenedUntil = DateTime.MinValue;
+    private DateTime outsideRingSinceUtc = DateTime.MinValue;
     private bool shortcutMoveInProgress;
     private int highlightedSector = -1;
     private readonly List<System.Windows.Shapes.Path> ringPaths = new();
@@ -344,7 +362,9 @@ public sealed class WidgetShellWindow : Window
             }
         };
         Deactivated+=(_,_)=>{
-            if(!keyboardDonutModeV207)return;
+            if(!keyboardDonutModeV207 ||
+               informationOverlay?.IsContextMenuOpen==true ||
+               appsWheel?.IsContextMenuOpen==true)return;
             EndKeyboardDonutV207();
             if(ringExpanded && activeModule==null)CollapseRing();
         };
@@ -372,7 +392,7 @@ public sealed class WidgetShellWindow : Window
             ()=>DeskSpaceSettingsStudioV148.Show(this,prefs,
                 RefreshAppearanceV148,
                 ()=>new WidgetOptionsWindow(prefs,()=>{
-                    prefs.Save();prefs.ApplyWindowsStartup();
+                    prefs.SavePreservingPinnedApps();prefs.ApplyWindowsStartup();
                 }).Show())));
         var deckMenu=new Forms.ToolStripMenuItem("Deck Visibility");
         deckMenu.DropDownOpening+=(_,_)=>{
@@ -445,13 +465,7 @@ public sealed class WidgetShellWindow : Window
                 if(ringExpanded)CollapseRing();
             });
             excelWheel.WarmStart();
-            informationOverlay??=new DeskSpaceInformationV36(this,()=>{
-                if(informationOverlay?.IsOpen==true)
-                    content.Text="Information"+Environment.NewLine+
-                        informationOverlay.SavedCount+" saved";
-                else UpdateCenter();
-            });
-            informationOverlay.WarmStart();
+            EnsureInformationOverlay().WarmStart();
             // Independent Excel-only clipboard, not part of the Files shelf.
             excelClipboardShelf ??= new DeskSpaceExcelClipboardV39(this);
             excelClipboardShelf.Enable();
@@ -1130,7 +1144,7 @@ public sealed class WidgetShellWindow : Window
             if(!string.IsNullOrWhiteSpace(stopwatchReturnCenterV371))
             {
                 prefs.CenterMode=stopwatchReturnCenterV371!;
-                prefs.Save();
+                prefs.SavePreservingPinnedApps();
             }
             stopwatchReturnCenterV371=null;
         }
@@ -1330,7 +1344,7 @@ public sealed class WidgetShellWindow : Window
     private void SavePosition()
     {
         if(DeskSpaceMonitorSessionsV154.SavePosition(this,ringExpanded))return;
-        prefs.Left = Left; prefs.Top = Top; prefs.Save();
+        prefs.Left = Left; prefs.Top = Top; prefs.SavePreservingPinnedApps();
     }
 
     private void KeepOnVisibleDesktop()
@@ -1361,6 +1375,7 @@ public sealed class WidgetShellWindow : Window
         }
         mainWheelSector=-1;mainWheelQuick=-1;
         mainWheelEnteredUtc=DateTime.MinValue;
+        outsideRingSinceUtc=DateTime.MinValue;
         wheelHoverTimer.Start();
     }
     private void StopWheelHover()
@@ -1368,28 +1383,50 @@ public sealed class WidgetShellWindow : Window
         wheelHoverTimer?.Stop();
         mainWheelSector=-1;mainWheelQuick=-1;
         mainWheelEnteredUtc=DateTime.MinValue;
+        outsideRingSinceUtc=DateTime.MinValue;
     }
     private void SampleMainWheel()
     {
-        if(!DeskSpaceMonitorInputV158.IsPointerOnAssignedMonitor(this))return;
         if(!ringExpanded || activeModule!=null || hiddenAtEdge ||
             draggingGesture || shortcutMoveInProgress)return;
         if(ringGesture || Mouse.LeftButton==MouseButtonState.Pressed ||
             Mouse.RightButton==MouseButtonState.Pressed)
         {
             mainWheelSector=-1;mainWheelQuick=-1;
+            outsideRingSinceUtc=DateTime.MinValue;
             return; // drag release still uses existing captured input path
         }
         Point p;
         try{p=DeskSpaceWheelHoverV35.MouseIn(this);}
         catch(InvalidOperationException){return;}
-        int selected=SectorAt(p);
-        int add=QuickAddHitAt(p);
+        int selected=DeskSpaceMonitorInputV158.IsPointerOnAssignedMonitor(this)?SectorAt(p):-1;
+        int add=selected>=0?QuickAddHitAt(p):-1;
         if(selected<0)
         {
             mainWheelSector=-1;mainWheelQuick=-1;
+            bool overMainDonut=DeskSpaceMonitorInputV158.IsPointerOnAssignedMonitor(this) &&
+                (p-new Point(Width/2,Height/2)).Length<=Width*198.0/420.0+14;
+            bool overSubArc=(informationOverlay?.IsPointerNearArc()==true) ||
+                (appsWheel?.IsPointerNearArc()==true) ||
+                (excelWheel?.IsArcOpen==true);
+            if(!overMainDonut && !overSubArc &&
+               DateTime.UtcNow>rightClickOpenedUntil && !keyboardDonutModeV207)
+            {
+                if(outsideRingSinceUtc==DateTime.MinValue)
+                    outsideRingSinceUtc=DateTime.UtcNow;
+                else if((DateTime.UtcNow-outsideRingSinceUtc).TotalMilliseconds>=260)
+                {
+                    outsideRingSinceUtc=DateTime.MinValue;
+                    CollapseRing();
+                }
+            }
+            else
+            {
+                outsideRingSinceUtc=DateTime.MinValue;
+            }
             return;
         }
+        outsideRingSinceUtc=DateTime.MinValue;
         // Leaving Information and moving into any other main sector closes
         // its old arc and passive shelf. Never discard an active editor.
         if(selected!=6 && informationOverlay?.IsOpen==true &&
@@ -1519,6 +1556,7 @@ public sealed class WidgetShellWindow : Window
     }
     private void ToggleRing()
     {
+        outsideRingSinceUtc=DateTime.MinValue;
         if(!ringExpanded && activeModule==null) donutHome.Capture(this);
         if(ringExpanded)
         {
@@ -1783,7 +1821,7 @@ public sealed class WidgetShellWindow : Window
                     OpenStopwatchFromCircleV371();
                 else
                 {
-                    prefs.CenterMode=mode;prefs.Save();
+                    prefs.CenterMode=mode;prefs.SavePreservingPinnedApps();
                     if(activeModule==null&&!ringExpanded)BuildCompact();
                     UpdateCenter();
                 }
@@ -1832,11 +1870,13 @@ public sealed class WidgetShellWindow : Window
         appsWheel??=new DeskSpaceApplicationsV55(this,
             ()=>prefs.PinnedApps.ToArray(),
             p=>{
+                SyncPinnedAppsFromDiskV380();
                 if(!prefs.PinnedApps.Any(x=>string.Equals(x,p,
                     StringComparison.OrdinalIgnoreCase)))
                 {prefs.PinnedApps.Add(p);prefs.Save();}
             },
             p=>{
+                SyncPinnedAppsFromDiskV380();
                 var old=prefs.PinnedApps.FirstOrDefault(x=>string.Equals(x,p,
                     StringComparison.OrdinalIgnoreCase));
                 if(old!=null){prefs.PinnedApps.Remove(old);prefs.Save();}
@@ -1872,6 +1912,22 @@ public sealed class WidgetShellWindow : Window
                 ? "Excel Functions"+Environment.NewLine+excelWheel.SavedCount+" saved"
                 : "Excel Functions"+Environment.NewLine+"Excel is not open";
     }
+    private DeskSpaceInformationV36 EnsureInformationOverlay()
+    {
+        informationOverlay??=new DeskSpaceInformationV36(this,()=>{
+            if(informationOverlay?.IsArcOpen==true)
+                content.Text=informationOverlay.CenterSummaryText;
+            else UpdateCenter();
+        },()=>{
+            // A committed child (click, Enter, or drag release)
+            // completes the expanded -> compact transition. Only
+            // hide child arc; keep the selected Information shelf.
+            if(ringExpanded)ToggleRing();
+            informationOverlay?.HideArc();
+            UpdateCenter();
+        });
+        return informationOverlay;
+    }
     private void OpenInformationArc()
     {
         if(activeModule!=null ||
@@ -1893,25 +1949,10 @@ public sealed class WidgetShellWindow : Window
             // Information arc opens. The R152/R153 native HWND fence already
             // constrains this widget and its popups to the assigned monitor.
             DeskSpaceMonitorFenceV152.ClampNow(this);
-            informationOverlay??=new DeskSpaceInformationV36(this,()=>{
-                if(informationOverlay?.IsArcOpen==true)
-                    content.Text="Information"+Environment.NewLine+
-                        informationOverlay.SavedCount+" saved";
-                else UpdateCenter();
-            },()=>{
-                // A committed child (click, Enter, or drag release)
-                // completes the expanded -> compact transition. Only
-                // hide child arc; keep the selected Information shelf.
-                if(ringExpanded)ToggleRing();
-                informationOverlay?.HideArc();
-                if(informationOverlay?.IsOpen==true)
-                    content.Text="Information"+Environment.NewLine+
-                        informationOverlay.SavedCount+" saved";
-            });
-            informationOverlay.Show();
-            if(informationOverlay.IsOpen)
-                content.Text="Information"+Environment.NewLine+
-                    informationOverlay.SavedCount+" saved";
+            var overlay=EnsureInformationOverlay();
+            overlay.Show();
+            if(overlay.IsArcOpen)
+                content.Text=overlay.CenterSummaryText;
         }
         // Hover opens instantly; only pressed gestures need deferred opening.
         if(ringExpanded)
@@ -1946,7 +1987,7 @@ public sealed class WidgetShellWindow : Window
             // Weather is already built into the Clock centre; combine the
             // duplicate sectors without changing weather or clock behavior.
             prefs.CenterMode="Clock";
-            prefs.Save();CollapseRing();BuildCompact();UpdateCenter();
+            prefs.SavePreservingPinnedApps();CollapseRing();BuildCompact();UpdateCenter();
             return;
         }
         if(name=="Stopwatch")
@@ -1966,7 +2007,7 @@ public sealed class WidgetShellWindow : Window
     }
     private void ApplySettings()
     {
-        prefs.Save();prefs.ApplyWindowsStartup();UpdateCenter();
+        prefs.SavePreservingPinnedApps();prefs.ApplyWindowsStartup();UpdateCenter();
         if (prefs.ShowWeather) _ = DeskSpaceWeather.RefreshAsync(prefs.WeatherCity);
     }
     private void ToggleDetails(bool show=false)
@@ -2015,10 +2056,9 @@ public sealed class WidgetShellWindow : Window
     }
     private void UpdateCenter()
     {
-        if(informationOverlay?.IsOpen==true)
+        if(informationOverlay?.IsArcOpen==true)
         {
-            content.Text="Information"+Environment.NewLine+
-                informationOverlay.SavedCount+" saved";
+            content.Text=informationOverlay.CenterSummaryText;
             return;
         }
         if (!CenterAllowed.Contains(prefs.CenterMode)) prefs.CenterMode="Clock";

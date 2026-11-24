@@ -143,8 +143,52 @@ internal static class DeskSpacePinnedAppFilesV380
     private static readonly HashSet<string> SkipDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "Windows", "Program Files", "Program Files (x86)", "ProgramData", "AppData",
-        "$Recycle.Bin", "System Volume Information", "node_modules", ".git", "bin", "obj", "WinSxS"
+        "$Recycle.Bin", "System Volume Information", "node_modules", ".git", "bin", "obj", "WinSxS",
+        "Sample", "Samples", "Backup", "Backups", "AutoBackup", "Auto Backups",
+        "Template", "Templates"
     };
+
+    private static readonly HashSet<string> NoiseUserFolderNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Sample", "Samples", "Backup", "Backups", "AutoBackup", "Auto Backups",
+        "Template", "Templates", "Old", "OldData", "Old Data",
+        "Archive", "Archives", "Test", "Tests", "Demo", "Demos"
+    };
+
+    internal static bool IsSampleOrNoiseUserPath(string? path, bool isDirectory = false)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return true;
+
+        string trimmed = path.Trim().TrimEnd(
+            System.IO.Path.DirectorySeparatorChar,
+            System.IO.Path.AltDirectorySeparatorChar);
+        if (trimmed.Length == 0)
+            return true;
+
+        if (!isDirectory)
+        {
+            string fileName = System.IO.Path.GetFileName(trimmed);
+            if (fileName.StartsWith("~$", StringComparison.OrdinalIgnoreCase) ||
+                fileName.StartsWith(".~", StringComparison.OrdinalIgnoreCase) ||
+                fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
+                fileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        string[] segments = trimmed.Split(
+            new[] { System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+        int limit = isDirectory ? segments.Length : segments.Length - 1;
+        for (int i = 0; i < limit; i++)
+        {
+            if (NoiseUserFolderNames.Contains(segments[i]))
+                return true;
+        }
+        return false;
+    }
 
     private static readonly string[] CommonProbeExtensions =
     {
@@ -543,6 +587,14 @@ internal static class DeskSpacePinnedAppFilesV380
             !pinnedBaseName.Contains("ca", StringComparison.OrdinalIgnoreCase) &&
             !pinnedBaseName.Contains("erp", StringComparison.OrdinalIgnoreCase) &&
             !pinnedBaseName.Contains("saral", StringComparison.OrdinalIgnoreCase);
+        bool isExplicitWinmanTdsShortcut =
+            pinnedBaseName.Contains("tds", StringComparison.OrdinalIgnoreCase);
+        bool isExplicitWinmanCaErpShortcut =
+            !isExplicitWinmanGstShortcut &&
+            !isExplicitWinmanTdsShortcut &&
+            (pinnedBaseName.Contains("ca", StringComparison.OrdinalIgnoreCase) ||
+             pinnedBaseName.Contains("erp", StringComparison.OrdinalIgnoreCase) ||
+             pinnedBaseName.Contains("saral", StringComparison.OrdinalIgnoreCase));
 
         void ApplyWinmanProfile(string displayTitle, bool tdsPrimary)
         {
@@ -552,10 +604,15 @@ internal static class DeskSpacePinnedAppFilesV380
                 profileDisplayName = "Winman GST";
                 AddExtensions(".wgst", ".wgst.wb");
             }
-            else if (tdsPrimary || pinnedBaseName.Contains("tds", StringComparison.OrdinalIgnoreCase))
+            else if (tdsPrimary || isExplicitWinmanTdsShortcut)
             {
                 profileDisplayName = "Winman TDS";
                 AddExtensions(".24q", ".26q", ".27q", ".27eq", ".7eq", ".wt");
+            }
+            else if (isExplicitWinmanCaErpShortcut)
+            {
+                profileDisplayName = displayTitle;
+                AddExtensions(".tax", ".tax.wb");
             }
             else
             {
@@ -567,10 +624,22 @@ internal static class DeskSpacePinnedAppFilesV380
                 AddRoot(System.IO.Path.Combine(exeDir, "UserData"), requireExisting: true);
                 AddRoot(System.IO.Path.Combine(exeDir, "Data"), requireExisting: true);
             }
-            AddRoot(@"C:\Winman", requireExisting: true);
-            AddRoot(@"D:\Winman", requireExisting: true);
-            AddRoot(@"E:\Winman", requireExisting: true);
-            AddRoot(@"F:\Winman", requireExisting: true);
+            foreach (string baseDir in new[]
+            {
+                @"C:\Winman", @"D:\Winman", @"E:\Winman", @"F:\Winman",
+                @"C:\Winman_Data", @"D:\Winman_Data", @"E:\Winman_Data", @"F:\Winman_Data"
+            })
+            {
+                if (baseDir.EndsWith("_Data", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddRoot(baseDir, requireExisting: true);
+                }
+                else
+                {
+                    AddRoot(System.IO.Path.Combine(baseDir, "UserData"), requireExisting: true);
+                    AddRoot(System.IO.Path.Combine(baseDir, "Data"), requireExisting: true);
+                }
+            }
         }
 
         switch (exeLower)
@@ -667,7 +736,7 @@ internal static class DeskSpacePinnedAppFilesV380
 
             case "excel.exe":
                 profileDisplayName = "Microsoft Excel";
-                AddExtensions(".xlsx", ".xls", ".xlsm", ".xlsb", ".csv", ".tsv", ".ods", ".xltx", ".xltm", ".xlam");
+                AddExtensions(".xlsx", ".xls", ".xlsm", ".xlsb", ".csv", ".tsv", ".ods");
                 break;
 
             case "winman_launcher.exe":
@@ -761,10 +830,13 @@ internal static class DeskSpacePinnedAppFilesV380
         }
 
         // Merge registry & OS association discoveries safely without injecting noisy global extensions
-        // (.xml, .txt, .json, .html, etc.) into structured productivity/accounting apps.
+        // (.xml, .txt, .json, .html, etc.) into structured productivity/accounting apps or bloating
+        // Winman / Tally / curated Office apps with legacy template/macro/module formats.
         bool ideSafe = kind == PinnedAppKindV380.IdeWorkspace;
         bool hasPrimaryNonNoisy = extensions.Any(e => !NoisyGlobalExtensions.Contains(e));
-        if (!isExplicitWinmanGstShortcut)
+        bool skipRegistryMerge = kind is PinnedAppKindV380.WinmanAccounting or PinnedAppKindV380.TallyAccounting ||
+                                 exeLower is "excel.exe" or "winword.exe" or "powerpnt.exe";
+        if (!skipRegistryMerge && !isExplicitWinmanGstShortcut)
         {
             foreach (string regExt in DiscoverRegistryExtensions(exeName))
             {
@@ -810,6 +882,9 @@ internal static class DeskSpacePinnedAppFilesV380
 
             var dirInfo = new DirectoryInfo(fullFolder);
             if ((dirInfo.Attributes & FileAttributes.ReparsePoint) != 0)
+                return false;
+
+            if (IsSampleOrNoiseUserPath(fullFolder, isDirectory: true))
                 return false;
 
             string folderName = System.IO.Path.GetFileName(fullFolder);
@@ -992,7 +1067,7 @@ internal static class DeskSpacePinnedAppFilesV380
             return false;
 
         string full = NormalizeFullPathSafe(filePath);
-        if (string.IsNullOrEmpty(full))
+        if (string.IsNullOrEmpty(full) || IsSampleOrNoiseUserPath(full, isDirectory: false))
             return false;
 
         // Do not surface files living directly inside the app's own install directory
@@ -1127,6 +1202,7 @@ internal static class DeskSpacePinnedAppFilesV380
         var historyEntries = new List<(string FullPath, DateTime LastOpenedUtc)>();
         historyEntries.AddRange(GetRecentLaunches(primaryHistoryKey, historyStoragePath));
         if (string.IsNullOrWhiteSpace(historyStoragePath) &&
+            cap.Kind is not PinnedAppKindV380.WinmanAccounting and not PinnedAppKindV380.TallyAccounting &&
             !string.Equals(primaryHistoryKey, NormalizeExeKey(cap.ExeName), StringComparison.OrdinalIgnoreCase))
         {
             historyEntries.AddRange(GetRecentLaunches(cap.ExeName, null));
@@ -1228,7 +1304,8 @@ internal static class DeskSpacePinnedAppFilesV380
             foreach (var (mruPath, mruTimeUtc) in DiscoverOfficeMruPaths(officeAppSubKey))
             {
                 if (SafeFileExists(mruPath) && !IsReparsePoint(mruPath) &&
-                    IsAllowedForCapability(cap, mruPath, checkExtensionMatch: true))
+                    !IsNoiseSystemPath(mruPath) &&
+                    IsAllowedForSystemCrawl(cap, mruPath, allowBackupArchives: true))
                 {
                     DateTime fileTime = SafeGetFileWriteTimeUtc(mruPath);
                     DateTime bestTime = mruTimeUtc > fileTime ? mruTimeUtc : fileTime;
